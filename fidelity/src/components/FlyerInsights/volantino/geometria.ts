@@ -227,13 +227,145 @@ export function paginaNellImmagine(larghezza: number, altezza: number, proporzio
 
 const percento = (valore: number): string => `${Number(valore.toFixed(4))}%`;
 
+/** Posizione e misure in percentuale del contenitore, per lo stile di un elemento. */
+export interface StilePosizione {
+  left: string;
+  top: string;
+  width: string;
+  height: string;
+}
+
 /**
  * Posizione dell'immagine dentro il riquadro della pagina rifilata: più grande della pagina e
  * spostata, così l'abbondanza resta fuori (il riquadro taglia ciò che sborda).
  */
-export const stileImmagine = (pagina: PaginaNellImmagine): { left: string; top: string; width: string; height: string } => ({
+export const stileImmagine = (pagina: PaginaNellImmagine): StilePosizione => ({
   left: percento((-pagina.x / pagina.w) * 100),
   top: percento((-pagina.y / pagina.h) * 100),
   width: percento(100 / pagina.w),
   height: percento(100 / pagina.h),
+});
+
+/* ---------- Il box com'è stampato ---------- */
+
+/**
+ * Larghezza/altezza del box com'è stampato: il riquadro (in frazioni della pagina) per la
+ * proporzione della pagina. Null senza un riquadro utilizzabile.
+ */
+export const proporzioneRitaglio = (geometria: GeometriaPagina | null, proporzionePagina: number): number | null => {
+  const riquadro = riquadroBox(geometria);
+  if (!riquadro || !proporzioneValida(proporzionePagina)) return null;
+  return (riquadro.w * proporzionePagina) / riquadro.h;
+};
+
+/**
+ * Posizione della pagina rifilata dentro il ritaglio di un box: la pagina è più grande del
+ * ritaglio e spostata, così nel ritaglio resta solo il box (il contenitore taglia il resto). È lo
+ * stesso principio di stileImmagine, con il box al posto della pagina.
+ */
+export const stileRitaglio = (riquadro: GeometriaPagina): StilePosizione => stileImmagine(riquadro);
+
+/* ---------- Zoom ---------- */
+
+/** Ingrandimenti dei passi di Riduci e Ingrandisci, rispetto alle pagine adattate al palco (1). */
+export const LIVELLI_ZOOM: readonly number[] = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
+/** Le pagine adattate allo spazio del palco. */
+export const ZOOM_ADATTA = 1;
+export const ZOOM_MINIMO = LIVELLI_ZOOM[0];
+/**
+ * Lo zoom arriva almeno al 200% anche quando la risoluzione dell'immagine non si conosce ancora
+ * (immagine non caricata, pagina bianca) o è più bassa.
+ */
+export const ZOOM_MASSIMO_MINIMO = 2;
+/** Mai oltre l'800%, anche con immagini molto grandi su schermi piccoli. */
+export const ZOOM_LIMITE = LIVELLI_ZOOM[LIVELLI_ZOOM.length - 1];
+/** Margini del palco intorno alle pagine adattate, in rem: gli stessi del calcolo CSS della larghezza. */
+export const MARGINE_ORIZZONTALE_PALCO = 6;
+export const MARGINE_VERTICALE_PALCO = 1.5;
+
+const ZOOM_TOLLERANZA = 0.001;
+
+/** Lo zoom arrotondato al centesimo: le percentuali si leggono e si confrontano senza sorprese. */
+export const zoomArrotondato = (valore: number): number => Math.round(valore * 100) / 100;
+
+/** Lo zoom dentro i limiti: dal 50% al massimo dato. */
+export const zoomLimitato = (valore: number, massimo: number): number =>
+  Number.isFinite(valore) ? zoomArrotondato(Math.min(Math.max(ZOOM_MINIMO, massimo), Math.max(ZOOM_MINIMO, valore))) : ZOOM_ADATTA;
+
+/**
+ * Altezza in px CSS di una pagina adattata al palco (zoom 100%): il libro aperto è largo quanto il
+ * palco meno i margini, oppure alto quanto il palco meno i margini, il più piccolo dei due. 0
+ * quando il palco non ha ancora misure.
+ */
+export function altezzaAdattata(larghezzaPalco: number, altezzaPalco: number, proporzioneLibro: number, rem = 16): number {
+  if (!(larghezzaPalco > 0 && altezzaPalco > 0 && proporzioneLibro > 0)) return 0;
+  const larghezza = Math.min(larghezzaPalco - MARGINE_ORIZZONTALE_PALCO * rem, (altezzaPalco - MARGINE_VERTICALE_PALCO * rem) * proporzioneLibro);
+  return larghezza > 0 ? larghezza / proporzioneLibro : 0;
+}
+
+/**
+ * Lo zoom massimo: quello a cui un pixel dell'immagine della pagina diventa un pixel dello schermo
+ * (risoluzione reale), mai sotto il 200% né oltre l'800%.
+ *
+ * @param pixelPagina altezza della pagina rifilata nell'immagine, in pixel dell'immagine
+ * @param altezzaPagina altezza della pagina adattata al palco, in px CSS
+ * @param densita pixel dello schermo per px CSS (devicePixelRatio)
+ */
+export function zoomMassimo(pixelPagina: number | null, altezzaPagina: number, densita: number): number {
+  if (!(pixelPagina && pixelPagina > 0 && altezzaPagina > 0)) return ZOOM_MASSIMO_MINIMO;
+  const reale = pixelPagina / (altezzaPagina * (densita > 0 ? densita : 1));
+  // Per difetto: oltre la risoluzione reale l'immagine sgranerebbe
+  return Math.min(ZOOM_LIMITE, Math.max(ZOOM_MASSIMO_MINIMO, Math.floor(reale * 100) / 100));
+}
+
+/**
+ * Lo zoom del passo successivo (verso 1) o precedente (verso -1) per Ingrandisci e Riduci: il
+ * livello vicino dentro i limiti; l'ultimo passo verso l'alto è il massimo stesso, anche fra due
+ * livelli.
+ */
+export function zoomVicino(attuale: number, verso: 1 | -1, massimo: number): number {
+  const tetto = Math.max(ZOOM_MINIMO, massimo);
+  if (verso === 1) {
+    const prossimo = LIVELLI_ZOOM.find(livello => livello > attuale + ZOOM_TOLLERANZA && livello <= tetto + ZOOM_TOLLERANZA);
+    return zoomArrotondato(prossimo ?? Math.max(attuale, tetto));
+  }
+  const precedenti = LIVELLI_ZOOM.filter(livello => livello < attuale - ZOOM_TOLLERANZA && livello <= tetto + ZOOM_TOLLERANZA);
+  return zoomArrotondato(precedenti.length > 0 ? precedenti[precedenti.length - 1] : ZOOM_MINIMO);
+}
+
+/** Lo zoom dopo un giro di rotella con Ctrl, o un pizzico sul touchpad: continuo, più rotella più zoom. */
+export function zoomDallaRotella(attuale: number, deltaY: number, deltaMode: number, massimo: number): number {
+  // Le righe (Firefox) valgono circa 16 px, le pagine un palco
+  const pixel = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 400 : deltaY;
+  const passo = Math.max(-200, Math.min(200, pixel));
+  return zoomLimitato(attuale * Math.exp(-passo * 0.002), massimo);
+}
+
+/** Un rettangolo sullo schermo, come lo dà getBoundingClientRect. */
+export interface Rettangolo {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** Un punto del libro, in frazioni della sua larghezza e altezza. */
+export interface PuntoNelLibro {
+  rx: number;
+  ry: number;
+}
+
+/** Il punto del libro sotto un punto dello schermo. */
+export const puntoNelLibro = (libro: Rettangolo, x: number, y: number): PuntoNelLibro => ({
+  rx: libro.width > 0 ? (x - libro.left) / libro.width : 0.5,
+  ry: libro.height > 0 ? (y - libro.top) / libro.height : 0.5,
+});
+
+/**
+ * Di quanto scorrere il palco perché il punto del libro torni sotto lo stesso punto dello schermo
+ * dopo lo zoom: lo zoom tiene fermo il punto sotto il cursore (o il centro del palco).
+ */
+export const scorrimentoPerPunto = (libro: Rettangolo, punto: PuntoNelLibro, x: number, y: number): { dx: number; dy: number } => ({
+  dx: libro.left + punto.rx * libro.width - x,
+  dy: libro.top + punto.ry * libro.height - y,
 });

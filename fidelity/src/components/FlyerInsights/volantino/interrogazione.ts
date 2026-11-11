@@ -5,8 +5,8 @@ import { normalizzaRicerca, ordineLettura } from "./analisiPagina";
 /**
  * L'interrogazione dei box del volantino (spec insight-volantino, "Interrogazione dei box del
  * volantino"): condizioni su reparto, settore, segmento, tema, ruolo, marca, linea, bolli,
- * meccanica, sottocosto, punti, EAN e origine, e intervalli su prezzo, sconto, spazio, pagine e
- * prodotti del box. Più valori della stessa condizione valgono in alternativa, condizioni diverse
+ * meccanica, sottocosto, punti e origine, l'EAN scritto (anche in parte, uno o più) e intervalli su
+ * prezzo, sconto, spazio, pagine e prodotti del box. Più valori della stessa condizione valgono in alternativa, condizioni diverse
  * tutte insieme. Solo dai box già restituiti dall'API: niente vendite, previsioni, calore o
  * visibilità stimata. Funzioni pure.
  */
@@ -24,8 +24,10 @@ export type IdScelta =
   | "meccanicaOriginale"
   | "sottocosto"
   | "punti"
-  | "ean"
   | "origine";
+
+/** Le condizioni scritte: l'EAN, uno o più, anche solo in parte. */
+export type IdTesto = "ean";
 
 export type IdIntervallo = "prezzo" | "sconto" | "spazio" | "pagine" | "prodotti";
 
@@ -38,6 +40,8 @@ export interface Interrogazione {
   /** Per ogni condizione, le chiavi dei valori scelti: almeno uno deve valere per il box. */
   scelte: Partial<Record<IdScelta, readonly string[]>>;
   intervalli: Partial<Record<IdIntervallo, Intervallo>>;
+  /** Le condizioni scritte: il testo così come l'utente lo scrive. */
+  testi?: Partial<Record<IdTesto, string>>;
 }
 
 export const INTERROGAZIONE_VUOTA: Interrogazione = { scelte: {}, intervalli: {} };
@@ -112,15 +116,6 @@ const DEFINIZIONI: readonly DefinizioneScelta[] = [
   { id: "sottocosto", etichetta: "Sottocosto", valori: voce => siNo(voce.sottocosto, "Sottocosto", "Non sottocosto"), ordine: [SI, NO], serve: chiave => chiave === SI },
   { id: "punti", etichetta: "Punti", valori: voce => siNo(Boolean(voce.punti), "Con punti", "Senza punti"), ordine: [SI, NO], serve: chiave => chiave === SI },
   {
-    id: "ean",
-    etichetta: "EAN",
-    // Con i server non aggiornati i prodotti non arrivano: il dato non c'è, non "senza EAN"
-    valori: voce =>
-      voce.dettaglioProdotti ? siNo(voce.dettaglioProdotti.some(prodotto => prodotto.ean.length > 0), "Con EAN", "Senza EAN") : [],
-    ordine: [SI, NO],
-    serve: chiave => chiave === SI,
-  },
-  {
     id: "origine",
     etichetta: "Origine",
     valori: voce => (voce.origine ? [{ chiave: voce.origine, etichetta: ORIGINE[voce.origine] }] : []),
@@ -174,12 +169,32 @@ const intervalloAttivo = (intervallo: Intervallo | undefined): intervallo is Int
 
 const dentro = (valore: number | null, { da, a }: Intervallo): boolean => valore !== null && (da === null || valore >= da) && (a === null || valore <= a);
 
+/* ---------- EAN scritto ---------- */
+
+/**
+ * Gli EAN scritti dall'utente: separati da virgola, punto e virgola o spazi, ognuno con le sole
+ * cifre (trattini e altri segni non contano). Vuoto se non c'è nessuna cifra.
+ */
+export const eanCercati = (testo: string | null | undefined): string[] =>
+  (testo ?? "")
+    .split(/[\s,;]+/)
+    .map(parte => parte.replace(/\D/g, ""))
+    .filter(Boolean);
+
+/** Il box ha un prodotto il cui EAN contiene uno degli EAN cercati. Senza i prodotti (server non aggiornati) no. */
+const conEan = (voce: Box, cercati: readonly string[]): boolean =>
+  (voce.dettaglioProdotti ?? []).some(prodotto => prodotto.ean.some(ean => cercati.some(cercato => ean.replace(/\D/g, "").includes(cercato))));
+
+/** Il campo EAN si propone solo se qualche box ha prodotti con l'EAN. */
+export const eanDisponibile = (tutti: readonly Box[]): boolean => tutti.some(voce => (voce.dettaglioProdotti ?? []).some(prodotto => prodotto.ean.length > 0));
+
 /* ---------- Interrogazione ---------- */
 
 /** Quante condizioni sono attive: ogni condizione con almeno un valore scelto, ogni intervallo con un limite. */
 export const condizioniAttive = (interrogazione: Interrogazione): number =>
   Object.values(interrogazione.scelte).filter(scelte => (scelte?.length ?? 0) > 0).length +
-  Object.values(interrogazione.intervalli).filter(intervalloAttivo).length;
+  Object.values(interrogazione.intervalli).filter(intervalloAttivo).length +
+  Number(eanCercati(interrogazione.testi?.ean).length > 0);
 
 export const interrogazioneVuota = (interrogazione: Interrogazione): boolean => condizioniAttive(interrogazione) === 0;
 
@@ -193,6 +208,8 @@ export const rispetta = (voce: Box, interrogazione: Interrogazione, escludi?: Id
   for (const [id, intervallo] of Object.entries(interrogazione.intervalli) as Array<[IdIntervallo, Intervallo | undefined]>) {
     if (intervalloAttivo(intervallo) && !dentro(valoreIntervallo(voce, id), intervallo)) return false;
   }
+  const cercati = eanCercati(interrogazione.testi?.ean);
+  if (cercati.length > 0 && !conEan(voce, cercati)) return false;
   return true;
 };
 
@@ -312,10 +329,19 @@ export const togliIntervallo = (interrogazione: Interrogazione, id: IdIntervallo
   intervalli: { ...interrogazione.intervalli, [id]: { da: null, a: null } },
 });
 
+/** Cambia una condizione scritta (l'EAN), così come l'utente la scrive. */
+export const conTesto = (interrogazione: Interrogazione, id: IdTesto, testo: string): Interrogazione => ({
+  ...interrogazione,
+  testi: { ...interrogazione.testi, [id]: testo },
+});
+
+export const togliTesto = (interrogazione: Interrogazione, id: IdTesto): Interrogazione => conTesto(interrogazione, id, "");
+
 /** Le condizioni attive in ordine, per i segni da togliere uno per uno. */
 export type CondizioneAttiva =
   | { tipo: "scelta"; id: IdScelta; etichetta: string; valori: string[] }
-  | { tipo: "intervallo"; id: IdIntervallo; etichetta: string; unita: string; intervallo: Intervallo };
+  | { tipo: "intervallo"; id: IdIntervallo; etichetta: string; unita: string; intervallo: Intervallo }
+  | { tipo: "testo"; id: IdTesto; etichetta: string; valori: string[] };
 
 export function elencoCondizioniAttive(interrogazione: Interrogazione, condizioni: readonly Condizione[]): CondizioneAttiva[] {
   const attive: CondizioneAttiva[] = [];
@@ -334,6 +360,8 @@ export function elencoCondizioniAttive(interrogazione: Interrogazione, condizion
     const intervallo = interrogazione.intervalli[definizione.id];
     if (intervalloAttivo(intervallo)) attive.push({ tipo: "intervallo", id: definizione.id, etichetta: definizione.etichetta, unita: definizione.unita, intervallo });
   }
+  const ean = eanCercati(interrogazione.testi?.ean);
+  if (ean.length > 0) attive.push({ tipo: "testo", id: "ean", etichetta: "EAN", valori: ean });
   return attive;
 }
 

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { altezzaFoglio, tintaCategoria } from "@/components/Grafici";
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import { urlPaginaMateriale } from "@/utils/materiali";
@@ -34,7 +34,16 @@ vi.mock("@/query/flyerInsights", () => ({
   },
 }));
 
-import { misuraMiniatura, paginaNellImmagine, stileImmagine, VolantinoSfogliabile, type VolantinoSfogliabileProps } from ".";
+import {
+  altezzaAdattata,
+  misuraMiniatura,
+  paginaNellImmagine,
+  stileImmagine,
+  VolantinoSfogliabile,
+  zoomMassimo,
+  type VolantinoSfogliabileProps,
+} from ".";
+import { ATTESA_RICERCA, DURATA_BARRA_SOLO } from "./VolantinoSfogliabile";
 
 const A4 = 210 / 297;
 
@@ -103,9 +112,13 @@ const avanti = () => fireEvent.click(screen.getByRole("button", { name: "Gira av
 
 const caricato = (data: unknown) => ({ data, isLoading: false, isError: false, error: null, refetch: vi.fn() });
 
+/** Dove il browser ricorda se il pannello a fianco delle pagine è chiuso. */
+const CHIAVE_PANNELLO = "fidelity.volantino-pannello";
+
 beforeEach(() => {
   finti.viaggio = caricato(undefined);
   finti.richiesteViaggio = [];
+  localStorage.removeItem(CHIAVE_PANNELLO);
 });
 
 describe("VolantinoSfogliabile: geometria dei kit di Istanta e dello storico", () => {
@@ -285,10 +298,12 @@ describe("VolantinoSfogliabile: sfogliare come il volantino stampato", () => {
     }
   });
 
-  it("il palco non è più alto di due terzi dello schermo, con l'indice sotto e lo schermo intero", () => {
+  it("il palco è alto due terzi dello schermo, senza tetto, con l'indice sotto e lo schermo intero", () => {
     disegna();
 
-    expect(screen.getByTestId("lettore-pagine").parentElement).toHaveClass("h-[min(66vh,44rem)]", "min-h-[24rem]");
+    const palco = screen.getByTestId("lettore-pagine").parentElement;
+    expect(palco).toHaveClass("h-[66vh]", "min-h-[24rem]");
+    expect(palco?.className).not.toMatch(/44rem/);
     expect(screen.getByRole("navigation", { name: "Indice delle pagine" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schermo intero" })).toBeInTheDocument();
   });
@@ -494,7 +509,11 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     expect(pulsante).toHaveAttribute("aria-pressed", "true");
     const dati = screen.getByLabelText("Dati del box");
     expect(within(dati).getByText("Sconto in %")).toBeInTheDocument();
-    expect(within(dati).getByText("TP_PERCENTO")).toBeInTheDocument();
+    // La meccanica come la scrive la fonte è un codice tecnico: sta nei dettagli tecnici, chiusi
+    expect(within(dati).queryByText("TP_PERCENTO")).not.toBeInTheDocument();
+    const dettagli = screen.getByTestId("dettagli-tecnici");
+    expect(dettagli).not.toHaveAttribute("open");
+    expect(within(dettagli).getByText("TP_PERCENTO")).toBeInTheDocument();
     expect(within(dati).getByText("LATTICINI (24)")).toBeInTheDocument();
     expect(within(dati).getByText("1 di 5")).toBeInTheDocument();
     // Lo spazio arriva già in percentuale della pagina, per Istanta e per lo storico
@@ -558,7 +577,7 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     expect(within(dati).getByText("Sapori & Dintorni")).toBeInTheDocument();
   });
 
-  it("la scheda elenca i prodotti del box con codice, EAN, settore, tema e ruolo", async () => {
+  it("la scheda elenca i prodotti del box con codice, EAN, settore, tema e ruolo (senza indicazioni della GDO)", async () => {
     disegna({
       box: [
         {
@@ -583,6 +602,46 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     expect(voci[0]).toHaveTextContent("Star");
     expect(voci[1]).toHaveTextContent("Light");
     expect(within(voci[1]).queryByText("EAN")).not.toBeInTheDocument();
+    // Nei dettagli tecnici solo i codici della fonte
+    expect(screen.getByTestId("dettagli-tecnici")).not.toHaveTextContent("MBIS");
+  });
+
+  it("i dati della scheda seguono la configurazione degli insight della GDO", async () => {
+    const configurazione = {
+      volantino: { scheda: { datiProdotto: ["codice", "ean", "settore"], dettagliTecnici: ["meccanicaFonte", "segmento", "tema", "ruolo"] } },
+    } as unknown as FlyerInsightsConfig;
+    disegna({
+      box: [{ ...MOZZARELLA, dettaglioProdotti: [prodotto({ chiave: "c-1", nome: "Mozzarella", codice: "7332163", settore: "Latticini", tema: "MBIS", ruolo: "Star" })] }],
+      configurazione,
+    });
+
+    fireEvent.click(screen.getByTestId("box-a"));
+
+    const prodotti = await screen.findByRole("region", { name: "Prodotti del box" });
+    expect(prodotti).toHaveTextContent("7332163");
+    expect(prodotti).toHaveTextContent("Latticini");
+    expect(prodotti).not.toHaveTextContent("MBIS");
+    expect(screen.getByTestId("dettagli-tecnici")).toHaveTextContent("MBIS");
+    expect(screen.getByTestId("dettagli-tecnici")).toHaveTextContent("TP_PERCENTO");
+  });
+
+  it("chiusa la scheda il box torna come gli altri, e il riquadrino non resta sulla pagina", async () => {
+    disegna({ box: [MOZZARELLA] });
+    const pulsante = screen.getByTestId("box-a");
+
+    fireEvent.mouseMove(pulsante, { clientX: 100, clientY: 100 });
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    fireEvent.click(pulsante);
+    // Aprendo la scheda il riquadrino si chiude
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Mozzarella" })).toBeInTheDocument();
+    expect(riquadro("a")).toHaveClass("opacity-60");
+
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi la scheda" }));
+
+    await waitFor(() => expect(screen.getByTestId("box-a")).toHaveAttribute("aria-pressed", "false"));
+    expect(riquadro("a")).toHaveClass("opacity-0");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 
   it("senza i prodotti del box (server non aggiornato) la scheda non ha la sezione dei prodotti", async () => {
@@ -598,6 +657,27 @@ describe("VolantinoSfogliabile: scheda del box", () => {
 
     fireEvent.click(screen.getByTestId("box-a"));
     expect(within(await screen.findByLabelText("Dati del box")).queryByText("Linea")).not.toBeInTheDocument();
+  });
+
+  it("con il PDF la scheda mostra il box com'è stampato, ritagliato dalla stessa immagine della pagina", async () => {
+    disegna({ pdf: { idOlimpoCloud: "olimpo-1", pagine: 5 }, box: [{ ...MOZZARELLA, foto: ["https://foto.example/mozzarella.jpg"] }] });
+
+    fireEvent.click(screen.getByTestId("box-a"));
+
+    const ritaglio = await screen.findByTestId("box-stampato");
+    expect(ritaglio.querySelector("img")).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
+    // Accanto, la foto del prodotto in grande
+    expect(screen.getByRole("img", { name: "Foto di Mozzarella" })).toHaveAttribute("src", "https://foto.example/mozzarella.jpg");
+    // La marca in evidenza sopra il nome, una volta sola; formato e pagina sotto il nome
+    // La descrizione completa accanto al prezzo, con la marca in evidenza; in cima solo nome e pagina
+    const dialogo = screen.getByRole("dialog");
+    const cartellino = within(dialogo).getByRole("region", { name: "Descrizione e prezzo" });
+    expect(within(cartellino).getByTestId("descrizione-completa")).toHaveTextContent("Mozzarella Granarolo 125 g");
+    expect(within(cartellino).getByTestId("marca-scheda")).toHaveTextContent("Granarolo");
+    expect(within(cartellino).getByText("€ 1,69")).toBeInTheDocument();
+    expect(within(dialogo).getAllByText("Granarolo")).toHaveLength(1);
+    expect(within(dialogo).getByText("pagina 1")).toBeInTheDocument();
+    expect(within(dialogo).queryByText(/125 g · pagina/)).not.toBeInTheDocument();
   });
 
   it("un box indicato all'avvio che non c'è non apre nulla", () => {
@@ -659,34 +739,82 @@ describe("VolantinoSfogliabile: viaggio del prodotto", () => {
   });
 });
 
-describe("VolantinoSfogliabile: zoom e schermo intero", () => {
+describe("VolantinoSfogliabile: zoom", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const zoom = () => screen.getByTestId("zoom");
+  const libro = () => screen.getByTestId("libro");
+
   it("ingrandisce e riduce le pagine a passi, e Adatta torna allo spazio del palco", () => {
     disegna({ box: [boxDi("a")] });
-    const libro = () => screen.getByTestId("libro");
 
-    expect(screen.getByText("100%")).toBeInTheDocument();
+    expect(zoom()).toHaveTextContent("100%");
     expect(screen.getByRole("button", { name: "Adatta allo spazio" })).toHaveAttribute("aria-pressed", "true");
     expect(libro()).toHaveAttribute("data-zoom", "1");
 
     fireEvent.click(screen.getByRole("button", { name: "Ingrandisci" }));
-    expect(screen.getByText("125%")).toBeInTheDocument();
+    expect(zoom()).toHaveTextContent("125%");
     expect(libro()).toHaveAttribute("data-zoom", "1.25");
     expect(screen.getByRole("button", { name: "Adatta allo spazio" })).toHaveAttribute("aria-pressed", "false");
 
-    // Le immagini di Olimpo sono a 150 dpi: lo zoom si ferma al 200%
+    // Senza la misura dell'immagine (pagina bianca, immagine non ancora arrivata) lo zoom si ferma al 200%
     for (let volta = 0; volta < 5; volta++) fireEvent.click(screen.getByRole("button", { name: "Ingrandisci" }));
-    expect(screen.getByText("200%")).toBeInTheDocument();
-    expect(screen.queryByText("300%")).not.toBeInTheDocument();
+    expect(zoom()).toHaveTextContent("200%");
     expect(screen.getByRole("button", { name: "Ingrandisci" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Adatta allo spazio" }));
     expect(libro()).toHaveAttribute("data-zoom", "1");
     fireEvent.click(screen.getByRole("button", { name: "Riduci" }));
     fireEvent.click(screen.getByRole("button", { name: "Riduci" }));
-    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(zoom()).toHaveTextContent("50%");
     expect(screen.getByRole("button", { name: "Riduci" })).toBeDisabled();
     // I riquadri restano sulle pagine a ogni ingrandimento
     expect(screen.getByTestId("box-a")).toBeInTheDocument();
+  });
+
+  it("lo zoom arriva fino alla risoluzione reale dell'immagine della pagina, oltre il 200%", () => {
+    // Palco di 1600×800 px su uno schermo a densità 1, pagina A4 di 2480×3508 pixel
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(1600);
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(800);
+    disegna({ pdf: { idOlimpoCloud: "olimpo-1", pagine: 5 }, box: [boxDi("a")] });
+    const immagine = pagina(1).querySelector("img") as HTMLImageElement;
+    Object.defineProperty(immagine, "naturalWidth", { configurable: true, value: 2480 });
+    Object.defineProperty(immagine, "naturalHeight", { configurable: true, value: 3508 });
+    fireEvent.load(immagine);
+
+    const massimo = zoomMassimo(3508, altezzaAdattata(1600, 800, 2 * A4), 1);
+    expect(massimo).toBeGreaterThan(4);
+    const ingrandisci = screen.getByRole("button", { name: "Ingrandisci" });
+    for (let volta = 0; volta < 10 && !ingrandisci.hasAttribute("disabled"); volta++) fireEvent.click(ingrandisci);
+
+    expect(zoom()).toHaveTextContent(`${Math.round(massimo * 100)}%`);
+    expect(libro()).toHaveAttribute("data-zoom", String(massimo));
+    expect(ingrandisci).toBeDisabled();
+  });
+
+  it("Ctrl + rotella ingrandisce e riduce sul palco; la rotella da sola scorre senza cambiare lo zoom", () => {
+    disegna({ box: [boxDi("a")] });
+    const palco = screen.getByTestId("lettore-pagine");
+
+    // La rotella da sola resta al browser
+    expect(fireEvent.wheel(palco, { deltaY: -100 })).toBe(true);
+    expect(zoom()).toHaveTextContent("100%");
+
+    // Con Ctrl (e col pizzico sul touchpad, che il browser manda così) lo zoom è del palco, non della pagina
+    expect(fireEvent.wheel(palco, { deltaY: -100, ctrlKey: true })).toBe(false);
+    expect(zoom()).toHaveTextContent("122%");
+    expect(libro()).toHaveAttribute("data-zoom", "1.22");
+
+    fireEvent.wheel(palco, { deltaY: 400, ctrlKey: true });
+    expect(Number(libro().getAttribute("data-zoom"))).toBeLessThan(1);
+
+    // Mai sotto il 50%, mai oltre il massimo
+    for (let volta = 0; volta < 10; volta++) fireEvent.wheel(palco, { deltaY: 200, ctrlKey: true });
+    expect(zoom()).toHaveTextContent("50%");
+    for (let volta = 0; volta < 20; volta++) fireEvent.wheel(palco, { deltaY: -200, ctrlKey: true });
+    expect(zoom()).toHaveTextContent("200%");
   });
 
   it("con le pagine ingrandite il trascinamento sposta la vista e non gira pagina", () => {
@@ -700,22 +828,305 @@ describe("VolantinoSfogliabile: zoom e schermo intero", () => {
 
     expect(aperte()).toHaveTextContent("Pagina 1");
   });
+});
 
-  it("lo schermo intero apre lo stesso lettore, con indice e riquadri, e si chiude", async () => {
+describe("VolantinoSfogliabile: pannello e riquadri", () => {
+  const tablist = () => screen.queryByRole("tablist", { name: "Pannello del volantino" });
+
+  it("il pannello si chiude e si riapre, e il browser ricorda la scelta", () => {
+    const { unmount } = disegna({ box: [boxDi("a")] });
+    const comando = screen.getByRole("button", { name: "Pannello" });
+    expect(comando).toHaveAttribute("aria-expanded", "true");
+    expect(tablist()).toBeInTheDocument();
+
+    fireEvent.click(comando);
+    expect(comando).toHaveAttribute("aria-expanded", "false");
+    expect(tablist()).not.toBeInTheDocument();
+    expect(localStorage.getItem(CHIAVE_PANNELLO)).toBe("chiuso");
+
+    // Tornando sul volantino il pannello resta chiuso
+    unmount();
+    disegna({ box: [boxDi("a")] });
+    expect(tablist()).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pannello" }));
+    expect(tablist()).toBeInTheDocument();
+    expect(localStorage.getItem(CHIAVE_PANNELLO)).toBe("aperto");
+  });
+
+  /** I disegni del box sulla pagina: solo il velo, mai un bordo o una cornice. */
+  const disegniDel = (id: string) => [...screen.getByTestId(`box-${id}`).querySelectorAll("rect, path, line, polyline")];
+
+  it("i box sono sempre nascosti e senza bordi: la pagina resta come stampata, il box si vela al passaggio", () => {
+    disegna({ box: [boxDi("a")] });
+
+    // Nessuna scelta per mostrare tutti i box colorati
+    expect(screen.queryByRole("radiogroup", { name: "Riquadri" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Colorati" })).not.toBeInTheDocument();
+    expect(disegniDel("a")).toEqual([riquadro("a")]);
+    // Il velo si accende passando sul box stesso (gruppo "box"), non su un contenitore qualsiasi dell'app
+    expect(riquadro("a")).toHaveClass("opacity-0", "group-hover/box:opacity-25");
+    expect(riquadro("a").getAttribute("class")).not.toMatch(/(^|\s)group-hover:/);
+    expect(screen.getByTestId("box-a")).toHaveClass("group/box");
+    expect(riquadro("a")).not.toHaveAttribute("stroke");
+  });
+
+  it("il box nascosto si apre con un clic e, aperto, si vela del colore scelto con Colora per, senza bordo", async () => {
+    disegna({ box: [MOZZARELLA] });
+    expect(riquadro("a")).toHaveClass("opacity-0");
+    // Colora per decide il colore del velo: anche con lo sconto il box resta nascosto
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Colora per" })).getByRole("radio", { name: "Sconto" }));
+    expect(riquadro("a")).toHaveClass("opacity-0");
+
+    fireEvent.click(screen.getByTestId("box-a"));
+    expect(await screen.findByRole("heading", { name: "Mozzarella" })).toBeInTheDocument();
+    // Scelto, il box nascosto si vela del suo colore, senza bordo
+    expect(riquadro("a")).toHaveClass("opacity-60");
+    expect(disegniDel("a")).toHaveLength(1);
+  });
+
+  it("i box trovati dalla ricerca si velano e gli altri restano nascosti", async () => {
+    disegna({ box: [boxDi("latte", { nome: "Latte" }), boxDi("caffe", { nome: "Caffè", geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 } })] });
+
+    fireEvent.change(screen.getByRole("searchbox", { name: "Cerca prodotto, marca, EAN o codice" }), { target: { value: "latte" } });
+
+    await waitFor(() => expect(screen.getByTestId("box-latte")).toHaveAttribute("data-trovato"));
+    expect(riquadro("latte")).toHaveClass("opacity-30");
+    expect(riquadro("caffe")).toHaveClass("opacity-0");
+  });
+
+  it("solo il volantino: le pagine stampate senza riquadri né i comandi dei box, e si torna indietro", () => {
+    disegna({ box: [MOZZARELLA] });
+    const solo = screen.getByRole("button", { name: "Solo volantino" });
+    expect(solo).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(solo);
+
+    expect(solo).toHaveAttribute("aria-pressed", "true");
+    expect(pagina(1)).toBeInTheDocument();
+    expect(screen.queryByTestId("box-a")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup", { name: "Colora per" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("searchbox", { name: "Cerca prodotto, marca, EAN o codice" })).not.toBeInTheDocument();
+    expect(tablist()).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Pannello" })).not.toBeInTheDocument();
+    // Si sfoglia come sempre
+    expect(screen.getByRole("navigation", { name: "Indice delle pagine" })).toBeInTheDocument();
+    avanti();
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
+
+    fireEvent.click(solo);
+    expect(screen.getByRole("radiogroup", { name: "Colora per" })).toBeInTheDocument();
+    expect(tablist()).toBeInTheDocument();
+    // Tornando alla copertina il box c'è di nuovo
+    fireEvent.click(screen.getByRole("button", { name: "Gira indietro" }));
+    expect(screen.getByTestId("box-a")).toBeInTheDocument();
+  });
+
+  it("un box chiesto da fuori riporta i riquadri anche da solo il volantino", async () => {
+    const props = { idKit: "k1", pdf: null, totalePagine: 5, box: [MOZZARELLA] };
+    const { rerender } = render(
+      <MemoryRouter>
+        <VolantinoSfogliabile {...props} />
+      </MemoryRouter>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Solo volantino" }));
+    expect(screen.queryByTestId("box-a")).not.toBeInTheDocument();
+
+    rerender(
+      <MemoryRouter>
+        <VolantinoSfogliabile {...props} apriBox={{ id: "a", volta: 1 }} />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByRole("heading", { name: "Mozzarella" })).toBeInTheDocument();
+    expect(screen.getByTestId("box-a")).toBeInTheDocument();
+  });
+});
+
+describe("VolantinoSfogliabile: lettura a schermo pieno", () => {
+  const radice = document.documentElement as HTMLElement & { requestFullscreen?: unknown };
+  const documento = document as Document & { exitFullscreen?: unknown };
+  const fullscreen = (elemento: Element | null) => Object.defineProperty(document, "fullscreenElement", { configurable: true, value: elemento });
+
+  afterEach(() => {
+    Reflect.deleteProperty(radice, "requestFullscreen");
+    Reflect.deleteProperty(documento, "exitFullscreen");
+    fullscreen(null);
+  });
+
+  /** Il browser concede lo schermo pieno e avvisa quando si esce. */
+  const browserConSchermoPieno = () => {
+    const richiesta = vi.fn(() => {
+      fullscreen(document.documentElement);
+      document.dispatchEvent(new Event("fullscreenchange"));
+      return Promise.resolve();
+    });
+    const uscita = vi.fn(() => {
+      fullscreen(null);
+      document.dispatchEvent(new Event("fullscreenchange"));
+      return Promise.resolve();
+    });
+    radice.requestFullscreen = richiesta;
+    documento.exitFullscreen = uscita;
+    return { richiesta, uscita };
+  };
+
+  it("chiede lo schermo pieno del browser: solo le pagine, con indice e pannello a richiesta, e si esce sulle stesse pagine", async () => {
+    const { richiesta, uscita } = browserConSchermoPieno();
     disegna({ box: [boxDi("a")], totalePagine: 3 });
 
     fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
 
     const grande = await screen.findByTestId("volantino-schermo-intero");
-    expect(within(grande).getByRole("navigation", { name: "Indice delle pagine" })).toBeInTheDocument();
+    expect(richiesta).toHaveBeenCalledTimes(1);
     expect(within(grande).getByTestId("box-a")).toBeInTheDocument();
     expect(pagineSulPalco(within(grande).getByTestId("libro"))).toEqual(["Pagina 1"]);
+    // Il palco prende tutto lo spazio sotto la barra
+    expect(within(grande).getByTestId("lettore-pagine").parentElement).toHaveClass("h-full");
+    // Indice e pannello sono chiusi: si aprono a richiesta, ognuno nel suo spazio, senza accavallarsi
+    const pagine = within(grande).getByTestId("lettura-pagine");
+    expect(within(grande).queryByRole("navigation", { name: "Indice delle pagine" })).not.toBeInTheDocument();
+    expect(within(grande).queryByTestId("lettura-colonna")).not.toBeInTheDocument();
+    fireEvent.click(within(grande).getByRole("button", { name: "Indice" }));
+    const indice = within(grande).getByRole("navigation", { name: "Indice delle pagine" });
+    // L'indice sta in una striscia sotto le pagine, non sopra
+    expect(pagine).toContainElement(indice);
+    expect(indice.parentElement).not.toHaveClass("absolute");
+    fireEvent.click(within(grande).getByRole("button", { name: "Pannello" }));
+    const colonna = within(grande).getByTestId("lettura-colonna");
+    // Il pannello è una colonna a fianco delle pagine, con i colori e la legenda
+    expect(colonna).not.toHaveClass("absolute");
+    expect(pagine).not.toContainElement(colonna);
+    expect(within(colonna).getByRole("tablist", { name: "Pannello del volantino" })).toBeInTheDocument();
+    expect(within(colonna).getByRole("radiogroup", { name: "Colora per" })).toBeInTheDocument();
 
     fireEvent.click(within(grande).getByRole("button", { name: "Gira avanti" }));
-    fireEvent.click(screen.getByRole("button", { name: "Esci dallo schermo intero" }));
+    fireEvent.click(within(grande).getByRole("button", { name: "Esci dallo schermo intero" }));
+
     await waitFor(() => expect(screen.queryByTestId("volantino-schermo-intero")).not.toBeInTheDocument());
+    expect(uscita).toHaveBeenCalledTimes(1);
     // Si torna al lettore della pagina sulle stesse pagine
     expect(aperte()).toHaveTextContent("Pagine 2-3");
+  });
+
+  it("uscendo dallo schermo pieno del browser (Esc) si esce anche dalla lettura", async () => {
+    browserConSchermoPieno();
+    disegna({ box: [boxDi("a")], totalePagine: 3 });
+    fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
+    await screen.findByTestId("volantino-schermo-intero");
+
+    fullscreen(null);
+    document.dispatchEvent(new Event("fullscreenchange"));
+
+    await waitFor(() => expect(screen.queryByTestId("volantino-schermo-intero")).not.toBeInTheDocument());
+  });
+
+  it("se il browser non concede lo schermo pieno la lettura prende tutta la finestra, ed Esc la chiude", async () => {
+    radice.requestFullscreen = vi.fn(() => Promise.reject(new Error("negato")));
+    disegna({ box: [boxDi("a")], totalePagine: 3 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
+    const grande = await screen.findByTestId("volantino-schermo-intero");
+    expect(grande).toHaveClass("fixed", "inset-0");
+
+    fireEvent.keyDown(within(grande).getByTestId("lettore-pagine"), { key: "Escape" });
+
+    await waitFor(() => expect(screen.queryByTestId("volantino-schermo-intero")).not.toBeInTheDocument());
+  });
+
+  it("nella lettura la scheda del box sta nella colonna a fianco delle pagine, al posto del pannello", async () => {
+    disegna({ box: [MOZZARELLA], totalePagine: 3 });
+    fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
+    const grande = await screen.findByTestId("volantino-schermo-intero");
+    fireEvent.click(within(grande).getByRole("button", { name: "Pannello" }));
+
+    fireEvent.click(within(grande).getByTestId("box-a"));
+
+    const colonna = within(grande).getByTestId("lettura-colonna");
+    expect(colonna).toHaveAccessibleName("Scheda del box");
+    expect(within(colonna).getByRole("heading", { name: "Mozzarella" })).toBeInTheDocument();
+    expect(within(colonna).queryByRole("tablist", { name: "Pannello del volantino" })).not.toBeInTheDocument();
+    // Nessuna finestra sopra la lettura
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+
+    // Chiusa la scheda torna il pannello
+    fireEvent.click(within(colonna).getByRole("button", { name: "Chiudi la scheda" }));
+    expect(within(grande).getByTestId("lettura-colonna")).toHaveAccessibleName("Pannello della lettura");
+  });
+
+  it("solo volantino a schermo pieno: niente barra dei comandi né colonna; in alto una barra con la scritta per tornare o uscire", async () => {
+    disegna({ box: [MOZZARELLA], totalePagine: 3 });
+    fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
+    const grande = await screen.findByTestId("volantino-schermo-intero");
+    fireEvent.click(within(grande).getByRole("button", { name: "Pannello" }));
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(within(grande).getByRole("button", { name: "Solo volantino" }));
+
+      expect(within(grande).queryByRole("toolbar", { name: "Comandi della lettura" })).not.toBeInTheDocument();
+      expect(within(grande).queryByTestId("lettura-colonna")).not.toBeInTheDocument();
+      expect(within(grande).queryByTestId("box-a")).not.toBeInTheDocument();
+      expect(pagineSulPalco(within(grande).getByTestId("libro"))).toEqual(["Pagina 1"]);
+
+      // All'inizio la barra in alto si vede: dove si è, le frecce e i comandi con la scritta
+      const barra = within(grande).getByTestId("barra-solo-volantino");
+      expect(barra).toHaveAttribute("data-visibile", "si");
+      expect(barra).toHaveTextContent("Pagina 1 di 3");
+      expect(within(barra).getByRole("button", { name: "Mostra i comandi" })).toHaveTextContent("Mostra i comandi");
+      expect(within(barra).getByRole("button", { name: "Esci dallo schermo intero" })).toHaveTextContent("Esci dallo schermo intero");
+
+      // Ferma, dopo qualche secondo si nasconde; muovendo il mouse ricompare
+      act(() => vi.advanceTimersByTime(DURATA_BARRA_SOLO + 100));
+      expect(barra).toHaveAttribute("data-visibile", "no");
+      fireEvent.pointerMove(grande, { clientX: 300, clientY: 300 });
+      expect(barra).toHaveAttribute("data-visibile", "si");
+
+      // Con il mouse sopra la barra resta
+      fireEvent.mouseEnter(barra);
+      act(() => vi.advanceTimersByTime(DURATA_BARRA_SOLO + 100));
+      expect(barra).toHaveAttribute("data-visibile", "si");
+      fireEvent.mouseLeave(barra);
+
+      // Le frecce della barra e della tastiera girano pagina
+      fireEvent.click(within(barra).getByRole("button", { name: "Gira avanti" }));
+      expect(pagineSulPalco(within(grande).getByTestId("libro"))).toEqual(["Pagina 2", "Pagina 3"]);
+      expect(barra).toHaveTextContent("Pagine 2-3 di 3");
+      fireEvent.keyDown(within(grande).getByTestId("lettore-pagine"), { key: "ArrowLeft" });
+      expect(pagineSulPalco(within(grande).getByTestId("libro"))).toEqual(["Pagina 1"]);
+
+      fireEvent.click(within(barra).getByRole("button", { name: "Mostra i comandi" }));
+      expect(within(grande).getByRole("toolbar", { name: "Comandi della lettura" })).toBeInTheDocument();
+      expect(within(grande).getByTestId("box-a")).toBeInTheDocument();
+      expect(within(grande).queryByTestId("barra-solo-volantino")).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("i comandi hanno la scritta, nello stesso ordine nella pagina e a schermo intero", async () => {
+    disegna({ box: [MOZZARELLA], totalePagine: 3 });
+    const scritte = (contenitore: HTMLElement) =>
+      within(contenitore)
+        .getAllByRole("button")
+        .map(pulsante => pulsante.textContent?.trim() ?? "")
+        .filter(testo => ["Adatta", "Indice", "Pannello", "Solo volantino", "Schermo intero", "Esci"].includes(testo));
+
+    expect(scritte(screen.getByRole("toolbar", { name: "Comandi del lettore" }))).toEqual(["Adatta", "Pannello", "Solo volantino", "Schermo intero"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
+    const grande = await screen.findByTestId("volantino-schermo-intero");
+    expect(scritte(within(grande).getByRole("toolbar", { name: "Comandi della lettura" }))).toEqual(["Adatta", "Indice", "Pannello", "Solo volantino", "Esci"]);
+  });
+
+  it("nella colonna della lettura la scheda è compatta: i dati in una colonna sola", async () => {
+    disegna({ box: [MOZZARELLA], totalePagine: 3 });
+    fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
+    const grande = await screen.findByTestId("volantino-schermo-intero");
+
+    fireEvent.click(within(grande).getByTestId("box-a"));
+
+    const dati = within(within(grande).getByTestId("lettura-colonna")).getByLabelText("Dati del box");
+    expect(dati.className).not.toMatch(/sm:grid-cols-2/);
   });
 });
 
@@ -862,6 +1273,39 @@ describe("VolantinoSfogliabile: ricerca dei box", () => {
     await waitFor(() => expect(screen.getByTestId("box-caffe")).toHaveAttribute("data-trovato"));
   });
 
+  it("smesso di scrivere il volantino va da solo al primo box trovato, senza Invio, e lo mette in rilievo", async () => {
+    disegna({ box: BOX, totalePagine: 5 });
+
+    cerca("mozzarella");
+
+    await waitFor(() => expect(aperte()).toHaveTextContent("Pagine 4-5"), { timeout: ATTESA_RICERCA * 4 });
+    expect(screen.getByTestId("box-mozzarella")).toHaveAttribute("data-rilievo");
+    expect(esito()).toHaveTextContent("1 di 1 · pagina 4");
+  });
+
+  it("il primo box trovato si cerca dalle pagine guardate in avanti", async () => {
+    disegna({ box: BOX, totalePagine: 5 });
+    avanti();
+    avanti();
+    expect(aperte()).toHaveTextContent("Pagine 4-5");
+
+    cerca("granarolo");
+
+    // Il latte Granarolo a pagina 2 sta prima: si resta sulle pagine 4-5, con la mozzarella in rilievo
+    await waitFor(() => expect(screen.getByTestId("box-mozzarella")).toHaveAttribute("data-rilievo"), { timeout: ATTESA_RICERCA * 4 });
+    expect(aperte()).toHaveTextContent("Pagine 4-5");
+  });
+
+  it("una ricerca senza risultati non sposta le pagine", async () => {
+    disegna({ box: BOX, totalePagine: 5 });
+
+    cerca("biscotti");
+    await waitFor(() => expect(esito()).toHaveTextContent("Nessun box per «biscotti»"));
+    await act(() => new Promise(fine => setTimeout(fine, ATTESA_RICERCA + 200)));
+
+    expect(aperte()).toHaveTextContent("Pagina 1");
+  });
+
   it("senza risultati lo dice e i riquadri restano come prima", async () => {
     disegna({ box: BOX, totalePagine: 5 });
     cerca("biscotti");
@@ -977,6 +1421,33 @@ describe("VolantinoSfogliabile: interrogazione dei box", () => {
     fireEvent.change(screen.getByRole("searchbox", { name: "Cerca prodotto, marca, EAN o codice" }), { target: { value: "salsiccia" } });
 
     await waitFor(() => expect(esito()).toHaveTextContent("1 box in 1 pagina"));
+  });
+
+  it("l'EAN si scrive in un campo di testo, anche in parte, e vale con le altre condizioni", async () => {
+    const conEan = [
+      ...BOX.slice(0, 2),
+      { ...BOX[2], dettaglioProdotti: [prodotto({ chiave: "c-s", nome: "Salsiccia", ean: ["8000500425183"] })] },
+      BOX[3],
+    ];
+    disegna({ box: conEan, totalePagine: 3 });
+    apriInterroga();
+
+    const campo = screen.getByRole("textbox", { name: "EAN" });
+    fireEvent.change(campo, { target: { value: "425183" } });
+
+    // La salsiccia sta a pagina 3: la trova e l'indice segna la sua pagina
+    await waitFor(() => expect(esito()).toHaveTextContent("1 box in 1 pagina"));
+    expect(within(screen.getByRole("navigation", { name: "Indice delle pagine" })).getByTestId("trovati-pagina-3")).toHaveTextContent("1");
+    expect(within(screen.getByRole("list", { name: "Condizioni attive" })).getByText("EAN: 425183")).toBeInTheDocument();
+
+    // Togliendo l'EAN dalle condizioni attive il campo si svuota
+    fireEvent.click(screen.getByRole("button", { name: "Togli EAN: 425183" }));
+    expect(screen.getByRole("textbox", { name: "EAN" })).toHaveValue("");
+
+    // Insieme a un reparto che non c'entra nessun box risponde
+    fireEvent.click(valore("Reparto", /ORTOFRUTTA/));
+    fireEvent.change(screen.getByRole("textbox", { name: "EAN" }), { target: { value: "425183" } });
+    await waitFor(() => expect(screen.getByTestId("sintesi-risultati")).toHaveTextContent("Nessun box corrisponde"));
   });
 
   it("propone solo le condizioni con dati nel volantino, mai vendite, previsioni, calore o visibilità", () => {

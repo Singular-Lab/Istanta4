@@ -66,7 +66,9 @@ async function motivoErrore(errore: unknown): Promise<string> {
 export async function scaricaFileConsultazione(idFile: string, nome?: string): Promise<void> {
   let risposta;
   try {
-    risposta = await axios.get<Blob>(`${ServerCall.getUrl()}${percorsoFileConsultazione(idFile)}`, { responseType: "blob" });
+    // Con il cookie di sessione anche quando l'API sta su un'altra origine (sviluppo: pagina e API su
+    // porte diverse), come ServerCall con credentials: "include": senza, il server risponde 401
+    risposta = await axios.get<Blob>(`${ServerCall.getUrl()}${percorsoFileConsultazione(idFile)}`, { responseType: "blob", withCredentials: true });
   } catch (errore) {
     throw new Error(await motivoErrore(errore));
   }

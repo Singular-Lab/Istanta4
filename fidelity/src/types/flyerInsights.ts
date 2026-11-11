@@ -8,6 +8,7 @@ import type {
   ReferenzaReportStorico
 } from "../../lib/types";
 import type { EstensioneInsight } from "../../lib/insightVolantino/tipi";
+import type { ConfigurazioneVolantino } from "../../lib/insightVolantino/scheda";
 
 export interface ReferenzaPosizione {
   id: string;
@@ -216,6 +217,12 @@ export interface FlyerInsightsConfig {
    * senza maiuscole; senza, gli insight non calcolano la quota delle marche del distributore.
    */
   marche?: { distributore?: string[] };
+  /**
+   * Facoltativa. Cosa mostra la scheda del box del volantino per questa GDO: i dati dei prodotti in
+   * vista e i codici nei "Dettagli tecnici" (lib/insightVolantino/scheda.ts). Senza, quelli
+   * predefiniti.
+   */
+  volantino?: ConfigurazioneVolantino;
 }
 
 // --- Data types ---

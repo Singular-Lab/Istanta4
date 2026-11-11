@@ -23,6 +23,9 @@ import {
   sintesiRisultati,
   togliIntervallo,
   togliScelta,
+  togliTesto,
+  conTesto,
+  eanDisponibile,
   type Condizione,
   type CondizioneAttiva,
   type Interrogazione,
@@ -99,7 +102,7 @@ const formatoLimite = (intervallo: Pick<IntervalloDisponibile, "unita">, valore:
 
 /** Testo di una condizione attiva: "Reparto: Carni, Ortofrutta", "Sconto: da 30% a 50%". */
 export const testoCondizione = (condizione: CondizioneAttiva): string => {
-  if (condizione.tipo === "scelta") return `${condizione.etichetta}: ${condizione.valori.join(", ")}`;
+  if (condizione.tipo === "scelta" || condizione.tipo === "testo") return `${condizione.etichetta}: ${condizione.valori.join(", ")}`;
   const { da, a } = condizione.intervallo;
   const parti = [da !== null ? `da ${formatoLimite(condizione, da)}` : null, a !== null ? `a ${formatoLimite(condizione, a)}` : null].filter(Boolean);
   return `${condizione.etichetta}: ${parti.join(" ")}`;
@@ -278,8 +281,15 @@ export function InterrogaVolantino({
   const ordinati = useMemo(() => (risultati ? ordinaRisultati(risultati, ordine) : []), [risultati, ordine]);
   const mostrati = tutti ? ordinati : ordinati.slice(0, RISULTATI_SUBITO);
 
+  const conEan = useMemo(() => eanDisponibile(box), [box]);
   const togli = (condizione: CondizioneAttiva) =>
-    onCambia(condizione.tipo === "scelta" ? togliScelta(interrogazione, condizione.id) : togliIntervallo(interrogazione, condizione.id));
+    onCambia(
+      condizione.tipo === "scelta"
+        ? togliScelta(interrogazione, condizione.id)
+        : condizione.tipo === "testo"
+          ? togliTesto(interrogazione, condizione.id)
+          : togliIntervallo(interrogazione, condizione.id)
+    );
 
   const tastoRiga = (evento: KeyboardEvent<HTMLButtonElement>) => {
     if (evento.key === "Escape") onRilievo(null);
@@ -346,6 +356,21 @@ export function InterrogaVolantino({
 
       <section aria-label="Condizioni" className="flex flex-col">
         <h5 className="pb-1 text-3xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Condizioni</h5>
+        {/* L'EAN si scrive: uno o più, anche solo in parte, separati da virgola o spazio */}
+        {conEan && (
+          <label className="flex flex-col gap-1 border-b border-slate-100 px-1 py-2 dark:border-darkmode-400">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">EAN</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={interrogazione.testi?.ean ?? ""}
+              onChange={evento => onCambia(conTesto(interrogazione, "ean", evento.target.value))}
+              placeholder="Uno o più EAN, anche in parte…"
+              className="h-8 w-full rounded-control border border-slate-200 bg-white px-2 text-xs tabular-nums text-slate-800 placeholder:text-slate-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-darkmode-400 dark:bg-darkmode-700 dark:text-slate-100"
+            />
+          </label>
+        )}
         {condizioni.map(condizione => (
           <SceltaValori key={condizione.id} condizione={condizione} onAlterna={chiave => onCambia(alternaValore(interrogazione, condizione.id, chiave))} />
         ))}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { urlPaginaMateriale } from "@/utils/materiali";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import {
+  altezzaAdattata,
   aperturaDi,
   aperturaVicina,
   aperture,
@@ -14,9 +15,19 @@ import {
   proporzioneDellaPagina,
   proporzioneDelVolantino,
   PROPORZIONE_PREDEFINITA,
+  proporzioneRitaglio,
+  puntoNelLibro,
   riquadroBox,
+  scorrimentoPerPunto,
   stileImmagine,
+  stileRitaglio,
   testoApertura,
+  ZOOM_LIMITE,
+  ZOOM_MASSIMO_MINIMO,
+  zoomDallaRotella,
+  zoomLimitato,
+  zoomMassimo,
+  zoomVicino,
 } from "./geometria";
 
 // Geometria del lettore del volantino: pagine aperte come nel volantino stampato, proporzioni, riquadri e abbondanza dell'immagine
@@ -193,5 +204,72 @@ describe("compensazione dell'abbondanza dell'immagine della pagina", () => {
       "/olimpo/materiali/getThumbnailMaterialePdfs?id=abc&page=2&width=144&height=204"
     );
     expect(urlPaginaMateriale("abc", 1, { larghezza: 0, altezza: 0.2 })).toMatch(/&width=1&height=1$/);
+  });
+});
+
+describe("geometria: zoom fino alla risoluzione reale", () => {
+  it("la pagina adattata al palco: il libro aperto sta nella larghezza o nell'altezza, tolti i margini", () => {
+    // Palco largo e basso: comanda l'altezza (800 - 24 px), libro di due pagine A4
+    expect(altezzaAdattata(1600, 800, 2 * A4)).toBeCloseTo(776, 6);
+    // Palco stretto: comanda la larghezza (600 - 96 px)
+    expect(altezzaAdattata(600, 800, 2 * A4)).toBeCloseTo(504 / (2 * A4), 6);
+    // Senza misure (palco non ancora disegnato) nessuna altezza
+    expect(altezzaAdattata(0, 0, 2 * A4)).toBe(0);
+  });
+
+  it("il massimo è quello a cui un pixel dell'immagine diventa un pixel dello schermo", () => {
+    // Lo schermo dell'utente: pagina di 648 px CSS, densità 1,25, immagine di Olimpo alta 1890 pixel
+    expect(zoomMassimo(1890, 648, 1.25)).toBe(2.33);
+    // Un portatile a densità 1 con la pagina alta 450 px
+    expect(zoomMassimo(1890, 450, 1)).toBe(4.2);
+  });
+
+  it("mai sotto il 200%, anche senza misure o con immagini piccole; mai oltre l'800%", () => {
+    expect(zoomMassimo(null, 648, 1)).toBe(ZOOM_MASSIMO_MINIMO);
+    expect(zoomMassimo(1890, 0, 1)).toBe(ZOOM_MASSIMO_MINIMO);
+    expect(zoomMassimo(600, 648, 1)).toBe(ZOOM_MASSIMO_MINIMO);
+    expect(zoomMassimo(20000, 300, 1)).toBe(ZOOM_LIMITE);
+  });
+
+  it("i passi di Ingrandisci si fermano al massimo, anche fra due livelli; Riduci torna ai livelli", () => {
+    expect(zoomVicino(1, 1, 4.52)).toBe(1.25);
+    expect(zoomVicino(4, 1, 4.52)).toBe(4.52);
+    expect(zoomVicino(4.52, 1, 4.52)).toBe(4.52);
+    expect(zoomVicino(4.52, -1, 4.52)).toBe(4);
+    expect(zoomVicino(1.22, -1, 4.52)).toBe(1);
+    expect(zoomVicino(0.5, -1, 4.52)).toBe(0.5);
+  });
+
+  it("Ctrl + rotella: verso l'alto ingrandisce, verso il basso riduce, sempre dentro i limiti", () => {
+    expect(zoomDallaRotella(1, -100, 0, 2)).toBe(1.22);
+    expect(zoomDallaRotella(1, 100, 0, 2)).toBe(0.82);
+    // Le righe di Firefox valgono come 16 px
+    expect(zoomDallaRotella(1, -3, 1, 2)).toBe(zoomDallaRotella(1, -48, 0, 2));
+    expect(zoomDallaRotella(1.9, -200, 0, 2)).toBe(2);
+    expect(zoomDallaRotella(0.6, 200, 0, 2)).toBe(0.5);
+    expect(zoomLimitato(Number.NaN, 2)).toBe(1);
+  });
+
+  it("lo zoom tiene fermo il punto sotto il cursore: si scorre di quanto quel punto si è spostato", () => {
+    const prima = { left: 100, top: 50, width: 800, height: 400 };
+    const punto = puntoNelLibro(prima, 300, 150);
+    expect(punto).toEqual({ rx: 0.25, ry: 0.25 });
+    // Raddoppiato il libro (stesso angolo in alto a sinistra) il punto andrebbe a 500, 250
+    const dopo = { left: 100, top: 50, width: 1600, height: 800 };
+    expect(scorrimentoPerPunto(dopo, punto, 300, 150)).toEqual({ dx: 200, dy: 100 });
+  });
+});
+
+describe("geometria: il box com'è stampato", () => {
+  it("il ritaglio ha la proporzione del box stampato", () => {
+    expect(proporzioneRitaglio({ x: 0.1, y: 0.2, w: 0.5, h: 0.25 }, A4)).toBeCloseTo((0.5 * A4) / 0.25, 6);
+    // Un box che sborda si taglia al bordo della pagina
+    expect(proporzioneRitaglio({ x: 0.8, y: 0, w: 0.4, h: 0.5 }, A4)).toBeCloseTo((0.2 * A4) / 0.5, 6);
+    expect(proporzioneRitaglio(null, A4)).toBeNull();
+    expect(proporzioneRitaglio({ x: 0, y: 0, w: 0, h: 0.5 }, A4)).toBeNull();
+  });
+
+  it("nel ritaglio la pagina è più grande e spostata: resta visibile solo il box", () => {
+    expect(stileRitaglio({ x: 0.1, y: 0.2, w: 0.5, h: 0.25 })).toEqual({ left: "-20%", top: "-80%", width: "200%", height: "400%" });
   });
 });

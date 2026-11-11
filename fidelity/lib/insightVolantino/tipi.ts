@@ -111,6 +111,30 @@ export interface BoxInsight {
    * del volantino. Assente nelle risposte dei server non aggiornati.
    */
   dettaglioProdotti?: ProdottoInsight[];
+  /**
+   * La descrizione completa del box per la scheda, come la compone la libreria agenzia del cliente
+   * (di serie nome, marca in evidenza, formato e varianti: descrizione.ts). Assente nelle risposte
+   * dei server non aggiornati: il client la compone allo stesso modo.
+   */
+  descrizione?: ParteDescrizione[];
+}
+
+/** Un pezzo della descrizione completa del box: un testo stampato, eventualmente in evidenza (la marca). */
+export interface ParteDescrizione {
+  testo: string;
+  evidenza?: boolean;
+}
+
+/** I testi stampati con cui la libreria agenzia compone la descrizione completa del box. */
+export interface TestiDescrizioneBox {
+  /** Nome del prodotto pilota (la Descrizione1 di Istanta); null se la fonte non lo dice. */
+  nome: string | null;
+  /** Marca (la Descrizione2). */
+  marca: string | null;
+  /** Formato (la Descrizione4). */
+  formato: string | null;
+  /** Varianti diverse dei prodotti del box (la Descrizione3), nell'ordine dei prodotti. */
+  varianti: string[];
 }
 
 /** Un prodotto del box con i dati che la fonte fornisce (DB1 o Istanta): null quando non li fornisce. */

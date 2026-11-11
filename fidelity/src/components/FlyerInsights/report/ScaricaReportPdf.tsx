@@ -64,9 +64,14 @@ export interface ScaricaReportPdfProps {
   idKit: string;
   titolo: string;
   disabled?: boolean;
+  /**
+   * Il report è disattivato per questo motivo: il pulsante resta visibile, disattivato, e il motivo
+   * compare passandoci sopra. Non genera né scarica nulla.
+   */
+  motivoDisattivato?: string;
 }
 
-export function ScaricaReportPdf({ idKit, titolo, disabled = false }: ScaricaReportPdfProps) {
+export function ScaricaReportPdf({ idKit, titolo, disabled = false, motivoDisattivato }: ScaricaReportPdfProps) {
   const [stato, setStato] = useState<StatoReport>({ fase: "inattivo" });
   const montato = useRef(true);
 
@@ -84,7 +89,7 @@ export function ScaricaReportPdf({ idKit, titolo, disabled = false }: ScaricaRep
   const occupato = inCorso(stato);
 
   const genera = async () => {
-    if (occupato) return;
+    if (occupato || motivoDisattivato) return;
     try {
       aggiorna({ fase: "dati" });
       const report = await passo("dati", () => caricaReportVolantino(idKit));
@@ -111,9 +116,9 @@ export function ScaricaReportPdf({ idKit, titolo, disabled = false }: ScaricaRep
         type="button"
         variant={inErrore ? "outline-danger" : "primary"}
         onClick={() => void genera()}
-        disabled={disabled}
+        disabled={disabled || Boolean(motivoDisattivato)}
         loading={occupato}
-        title={inErrore ? undefined : `Scarica il report PDF di ${titolo}`}
+        title={motivoDisattivato ?? (inErrore ? undefined : `Scarica il report PDF di ${titolo}`)}
       >
         {!occupato &&
           (inErrore ? (

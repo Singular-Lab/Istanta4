@@ -1,6 +1,6 @@
 import Button from "@/components/Base/Button";
 import CampoRicerca from "@/components/Base/CampoRicerca";
-import { Dialog, Slideover } from "@/components/Base/Headless";
+import { Slideover } from "@/components/Base/Headless";
 import Lucide from "@/components/Base/Lucide";
 import Segmenti from "@/components/Base/Segmenti";
 import { Legenda, type VoceLegenda } from "@/components/Grafici";
@@ -8,11 +8,13 @@ import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import { formatNumero } from "@/utils/format";
 import { urlPaginaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
+import { Dialog as DialogHeadless, DialogPanel, DialogTitle } from "@headlessui/react";
 import {
   useCallback,
   useDeferredValue,
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -25,22 +27,44 @@ import {
 import type { BoxInsight, PdfVolantino } from "../../../../lib/insightVolantino/tipi";
 import { AnalisiPagina } from "./AnalisiPagina";
 import { cercaBox, ordineLettura, risultatoVicino } from "./analisiPagina";
-import { marcaFormato, trovaBoxIniziale } from "./box";
-import { coloriReparti, gruppoBox, legendaModo, OPZIONI_COLORE, stileBox, TITOLI_LEGENDA, type GruppoBox, type ModoColore, type StileRiquadro } from "./colori";
+import { trovaBoxIniziale } from "./box";
 import {
+  coloriReparti,
+  gruppoBox,
+  legendaModo,
+  OPZIONI_COLORE,
+  stileBox,
+  TITOLI_LEGENDA,
+  type GruppoBox,
+  type ModoColore,
+  type StileRiquadro,
+} from "./colori";
+import {
+  altezzaAdattata,
   aperturaDi,
   aperturaVicina,
   aperture,
   boxPerPagina,
+  MARGINE_ORIZZONTALE_PALCO,
+  MARGINE_VERTICALE_PALCO,
   paginaRichiesta,
   pagineDaPreparare,
   pagineDaSfogliare,
   proporzioneApertura,
   proporzioneDelVolantino,
   proporzioneDellaPagina,
+  puntoNelLibro,
   riquadroBox,
+  scorrimentoPerPunto,
   testoApertura,
+  ZOOM_ADATTA,
+  ZOOM_MINIMO,
+  zoomDallaRotella,
+  zoomLimitato,
+  zoomMassimo,
+  zoomVicino,
   type Apertura,
+  type PuntoNelLibro,
 } from "./geometria";
 import { IndicePagine, misuraMiniatura, type VoceIndice } from "./IndicePagine";
 import { InterrogaVolantino } from "./InterrogaVolantino";
@@ -69,18 +93,19 @@ export interface VolantinoSfogliabileProps {
 }
 
 /**
- * Ingrandimenti rispetto alle pagine adattate allo spazio del lettore (1). Le immagini di Olimpo
- * sono a 150 dpi: oltre il doppio sgranerebbero.
- */
-export const LIVELLI_ZOOM: readonly number[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
-const ZOOM_ADATTA = LIVELLI_ZOOM.indexOf(1);
-/**
  * Altezza del palco delle pagine nella pagina: due terzi dello schermo, perché sopra restino i
- * comandi e sotto l'indice senza scorrere.
+ * comandi e sotto l'indice senza scorrere. Senza tetto in rem: sugli schermi alti le pagine
+ * crescono con lo schermo. Per leggere in grande c'è la lettura a schermo pieno.
  */
-const ALTEZZA_LETTORE = "h-[min(66vh,44rem)] min-h-[24rem]";
-/** A schermo intero il palco prende lo schermo, tolti titolo, comandi e indice. */
-const ALTEZZA_SCHERMO_INTERO = "h-[calc(100vh-17rem)] min-h-[22rem]";
+const ALTEZZA_LETTORE = "h-[66vh] min-h-[24rem]";
+/** Nella lettura a schermo pieno il palco prende tutto lo spazio sotto la barra dei comandi. */
+const ALTEZZA_SCHERMO_INTERO = "h-full min-h-0";
+/** Dove il browser ricorda se il pannello a fianco delle pagine è chiuso. */
+const CHIAVE_PANNELLO = "fidelity.volantino-pannello";
+/** Smesso di scrivere nella ricerca, dopo questi ms il volantino va da solo al primo box trovato. */
+export const ATTESA_RICERCA = 500;
+/** In "Solo volantino" a schermo pieno la barra in alto si nasconde dopo questi ms senza movimenti. */
+export const DURATA_BARRA_SOLO = 3000;
 /** Da questa larghezza dello schermo le pagine si affiancano come nel volantino aperto. */
 const MEDIA_DOPPIA_PAGINA = "(min-width: 768px)";
 /** Durata del giro di un foglio, a pagine affiancate e a pagina singola, in ms. */
@@ -257,8 +282,24 @@ function Navigazione({ aperta, totale, indietro, avanti, onGira, onVai }: Naviga
   );
 }
 
-/** Adatta allo spazio, riduci e ingrandisci, con la percentuale. */
-function ControlliZoom({ zoom, onZoom }: { zoom: number; onZoom: (indice: number) => void }) {
+/** La scritta di un comando accanto alla sua icona: sugli schermi larghi, dove c'è posto. */
+function Scritta({ children }: { children: ReactNode }) {
+  return <span className="ml-1.5 hidden lg:inline">{children}</span>;
+}
+
+interface ControlliZoomProps {
+  zoom: number;
+  /** Lo zoom massimo: la risoluzione reale dell'immagine, almeno il 200%. */
+  massimo: number;
+  onZoom: (valore: number) => void;
+}
+
+/**
+ * Adatta allo spazio, riduci e ingrandisci, con la percentuale. Ingrandisci si ferma alla
+ * risoluzione reale dell'immagine della pagina: oltre sgranerebbe.
+ */
+function ControlliZoom({ zoom, massimo, onZoom }: ControlliZoomProps) {
+  const alMassimo = zoom >= massimo - 0.001;
   return (
     <div className="flex items-center gap-1.5">
       <Button
@@ -266,26 +307,35 @@ function ControlliZoom({ zoom, onZoom }: { zoom: number; onZoom: (indice: number
         variant="outline-secondary"
         size="sm"
         aria-label="Adatta allo spazio"
-        title="Adatta allo spazio"
+        title="Adatta le pagine allo spazio (100%)"
         aria-pressed={zoom === ZOOM_ADATTA}
         onClick={() => onZoom(ZOOM_ADATTA)}
       >
         <Lucide icon="Expand" aria-hidden="true" className="h-4 w-4" />
+        <Scritta>Adatta</Scritta>
       </Button>
-      <Button type="button" variant="outline-secondary" size="sm" aria-label="Riduci" title="Riduci" disabled={zoom <= 0} onClick={() => onZoom(zoom - 1)}>
+      <Button
+        type="button"
+        variant="outline-secondary"
+        size="sm"
+        aria-label="Riduci"
+        title="Riduci (Ctrl + rotella)"
+        disabled={zoom <= ZOOM_MINIMO}
+        onClick={() => onZoom(zoomVicino(zoom, -1, massimo))}
+      >
         <Lucide icon="Minus" aria-hidden="true" className="h-4 w-4" />
       </Button>
-      <span aria-live="polite" className="min-w-11 text-center text-xs tabular-nums text-slate-600 dark:text-slate-300">
-        {formatNumero(LIVELLI_ZOOM[zoom] * 100)}%
+      <span aria-live="polite" data-testid="zoom" className="min-w-11 text-center text-xs tabular-nums text-slate-600 dark:text-slate-300">
+        {formatNumero(Math.round(zoom * 100))}%
       </span>
       <Button
         type="button"
         variant="outline-secondary"
         size="sm"
         aria-label="Ingrandisci"
-        title="Ingrandisci"
-        disabled={zoom >= LIVELLI_ZOOM.length - 1}
-        onClick={() => onZoom(zoom + 1)}
+        title={alMassimo ? "Risoluzione massima dell'immagine" : "Ingrandisci (Ctrl + rotella)"}
+        disabled={alMassimo}
+        onClick={() => onZoom(zoomVicino(zoom, 1, massimo))}
       >
         <Lucide icon="Plus" aria-hidden="true" className="h-4 w-4" />
       </Button>
@@ -374,13 +424,20 @@ interface PalcoProps {
   successiva: Apertura | null;
   onGira: (passo: 1 | -1) => void;
   onVai: (pagina: number) => void;
+  /** L'ingrandimento rispetto alle pagine adattate al palco (1). */
   zoom: number;
-  onZoom: (indice: number) => void;
+  /** Lo zoom massimo: la risoluzione reale dell'immagine, almeno il 200%. */
+  massimo: number;
+  onZoom: (valore: number) => void;
+  /** Il palco ha cambiato misure: larghezza e altezza in px CSS. */
+  onMisura: (larghezza: number, altezza: number) => void;
   /** Classi dell'altezza del palco. */
   altezza: string;
   pagina: (numero: number, lato: Lato) => ReactNode;
   /** Le immagini delle pagine vicine, da scaricare prima che servano. */
   daPreparare: readonly string[];
+  /** Il palco prende il fuoco all'apertura (lettura a schermo pieno): le frecce girano subito. */
+  autoFocus?: boolean;
 }
 
 /** Lo spessore delle pagine da una parte del volantino aperto, in px: si vede ai bordi. */
@@ -418,11 +475,30 @@ const tra = (valore: number, minimo: number, massimo: number): number => Math.mi
  * sulle pagine sotto e il bordo libero cede un poco. Si gira con i comandi, con le frecce (anche ai
  * lati del palco), con un clic sull'angolo esterno, oppure prendendo la pagina e trascinandola:
  * il foglio segue il puntatore e, lasciato, finisce di girare o torna giù. Ingrandite, le pagine si
- * trascinano per muoversi. Senza animazioni (sistema che le chiede ridotte) la pagina cambia
- * subito. Da tastiera: frecce sinistra e destra (o Pagina su e giù) girano, Home e Fine portano
- * alla copertina e all'ultima, + e - ingrandiscono e riducono, 0 adatta.
+ * trascinano per muoversi. Ctrl + rotella (e il pizzico sul touchpad) ingrandisce e riduce tenendo
+ * fermo il punto sotto il cursore; la rotella da sola scorre come sempre. Senza animazioni
+ * (sistema che le chiede ridotte) la pagina cambia subito. Da tastiera: frecce sinistra e destra
+ * (o Pagina su e giù) girano, Home e Fine portano alla copertina e all'ultima, + e - ingrandiscono
+ * e riducono, 0 adatta.
  */
-function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, onGira, onVai, zoom, onZoom, altezza, pagina, daPreparare }: PalcoProps) {
+function Palco({
+  aperta,
+  doppia,
+  totale,
+  proporzione,
+  precedente,
+  successiva,
+  onGira,
+  onVai,
+  zoom,
+  massimo,
+  onZoom,
+  onMisura,
+  altezza,
+  pagina,
+  daPreparare,
+  autoFocus = false,
+}: PalcoProps) {
   const palco = useRef<HTMLDivElement>(null);
   const libro = useRef<HTMLDivElement>(null);
   const fogliRef = useRef(new Map<number, HTMLDivElement>());
@@ -484,25 +560,86 @@ function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, on
     };
   }, [giro]);
 
-  // Cambiando zoom si resta al centro delle pagine
-  const primoZoom = useRef(true);
+  // Lo zoom tiene fermo un punto delle pagine: quello sotto il cursore con Ctrl + rotella,
+  // altrimenti quello al centro del palco. Il punto al centro si ricorda scorrendo, perché i comandi
+  // dello zoom stanno fuori dal palco e cambiano lo zoom senza dire dove
+  const centro = useRef<PuntoNelLibro>({ rx: 0.5, ry: 0.5 });
+  const ancora = useRef<(PuntoNelLibro & { x: number; y: number }) | null>(null);
+  const ricordaCentro = useCallback(() => {
+    const nodo = palco.current;
+    const pagine = libro.current;
+    if (!nodo || !pagine) return;
+    const rettangolo = nodo.getBoundingClientRect();
+    centro.current = puntoNelLibro(pagine.getBoundingClientRect(), rettangolo.left + nodo.clientWidth / 2, rettangolo.top + nodo.clientHeight / 2);
+  }, []);
+  const zoomMostrato = useRef(zoom);
+  useLayoutEffect(() => {
+    if (zoomMostrato.current === zoom) return;
+    zoomMostrato.current = zoom;
+    const nodo = palco.current;
+    const pagine = libro.current;
+    const fermo = ancora.current;
+    ancora.current = null;
+    if (!nodo || !pagine) return;
+    const rettangolo = nodo.getBoundingClientRect();
+    const x = fermo ? fermo.x : nodo.clientWidth / 2;
+    const y = fermo ? fermo.y : nodo.clientHeight / 2;
+    const { dx, dy } = scorrimentoPerPunto(pagine.getBoundingClientRect(), fermo ?? centro.current, rettangolo.left + x, rettangolo.top + y);
+    nodo.scrollLeft += dx;
+    nodo.scrollTop += dy;
+    ricordaCentro();
+  }, [zoom, ricordaCentro]);
+
+  // Ctrl + rotella, e il pizzico sul touchpad (che il browser manda come rotella con Ctrl):
+  // ascolto nativo non passivo, perché il browser non ingrandisca tutta la pagina
+  const perRotella = useRef({ zoom, massimo, onZoom });
+  useLayoutEffect(() => {
+    perRotella.current = { zoom, massimo, onZoom };
+  });
   useEffect(() => {
-    if (primoZoom.current) {
-      primoZoom.current = false;
-      return;
-    }
     const nodo = palco.current;
     if (!nodo) return;
-    nodo.scrollLeft = Math.max(0, (nodo.scrollWidth - nodo.clientWidth) / 2);
-    nodo.scrollTop = Math.max(0, (nodo.scrollHeight - nodo.clientHeight) / 2);
-  }, [zoom]);
+    const rotella = (evento: WheelEvent) => {
+      if (!evento.ctrlKey && !evento.metaKey) return;
+      evento.preventDefault();
+      const attuale = perRotella.current;
+      const nuovo = zoomDallaRotella(attuale.zoom, evento.deltaY, evento.deltaMode, attuale.massimo);
+      if (nuovo === attuale.zoom) return;
+      const pagine = libro.current;
+      const rettangolo = nodo.getBoundingClientRect();
+      if (pagine) {
+        ancora.current = {
+          ...puntoNelLibro(pagine.getBoundingClientRect(), evento.clientX, evento.clientY),
+          x: evento.clientX - rettangolo.left,
+          y: evento.clientY - rettangolo.top,
+        };
+      }
+      // Più giri prima del disegno successivo si sommano
+      attuale.zoom = nuovo;
+      attuale.onZoom(nuovo);
+    };
+    nodo.addEventListener("wheel", rotella, { passive: false });
+    return () => nodo.removeEventListener("wheel", rotella);
+  }, []);
+
+  // Le misure del palco servono a sapere fin dove si può ingrandire
+  useLayoutEffect(() => {
+    const nodo = palco.current;
+    if (!nodo) return;
+    const misura = () => onMisura(nodo.clientWidth, nodo.clientHeight);
+    misura();
+    if (typeof ResizeObserver === "undefined") return;
+    const osservatore = new ResizeObserver(misura);
+    osservatore.observe(nodo);
+    return () => osservatore.disconnect();
+  }, [onMisura]);
 
   const destinazione = giro ? giro.a : aperta;
   const fogli = giro ? fogliDelGiro(giro) : fogliDi(aperta);
   const { totale: proporzioneLibro, sinistra } = proporzioneApertura(destinazione, proporzione);
   const piega = proporzioneLibro > 0 ? (sinistra / proporzioneLibro) * 100 : 50;
-  const fattore = LIVELLI_ZOOM[zoom];
-  const ingrandite = zoom > ZOOM_ADATTA;
+  const fattore = zoom;
+  const ingrandite = zoom > ZOOM_ADATTA + 0.001;
 
   /**
    * Quanto è girato il foglio (0-1) con il bordo libero sotto il puntatore: il bordo di un foglio
@@ -645,9 +782,9 @@ function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, on
       PageDown: () => onGira(1),
       Home: () => onVai(1),
       End: () => onVai(totale),
-      "+": () => onZoom(zoom + 1),
-      "=": () => onZoom(zoom + 1),
-      "-": () => onZoom(zoom - 1),
+      "+": () => onZoom(zoomVicino(zoom, 1, massimo)),
+      "=": () => onZoom(zoomVicino(zoom, 1, massimo)),
+      "-": () => onZoom(zoomVicino(zoom, -1, massimo)),
       "0": () => onZoom(ZOOM_ADATTA),
     };
     const azione = azioni[evento.key];
@@ -683,7 +820,9 @@ function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, on
         aria-roledescription="volantino da sfogliare"
         aria-keyshortcuts="ArrowLeft ArrowRight Home End + - 0"
         tabIndex={0}
+        data-autofocus={autoFocus ? "" : undefined}
         onKeyDown={tasto}
+        onScroll={ricordaCentro}
         onPointerDown={giu}
         onPointerMove={muovi}
         onPointerUp={su}
@@ -711,7 +850,8 @@ function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, on
             className={twMerge("relative m-auto flex-none select-none", giro && "[&_*]:pointer-events-none")}
             style={{
               aspectRatio: String(proporzioneLibro),
-              width: `calc(min(100cqw - 6rem, (100cqh - 1.5rem) * ${Number(proporzioneLibro.toFixed(4))}) * ${fattore})`,
+              // Gli stessi margini di altezzaAdattata, che calcola lo zoom massimo
+              width: `calc(min(100cqw - ${MARGINE_ORIZZONTALE_PALCO}rem, (100cqh - ${MARGINE_VERTICALE_PALCO}rem) * ${Number(proporzioneLibro.toFixed(4))}) * ${fattore})`,
               perspective: "2200px",
             }}
           >
@@ -807,7 +947,8 @@ function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, on
                 style={{ left: `${piega}%`, zIndex: 2 }}
               />
             )}
-            {/* Gli angoli esterni: un clic gira la pagina, come prenderla per l'angolo */}
+            {/* Gli angoli esterni: un clic gira la pagina, come prenderla per l'angolo. Piccoli, per coprire
+                poco i box, e piegati solo con il puntatore sopra (gruppo "angolo": il layout ha altri group) */}
             {angoloIndietro && (
               <button
                 type="button"
@@ -816,9 +957,9 @@ function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, on
                 data-testid="angolo-indietro"
                 title="Gira indietro"
                 onClick={() => onGira(-1)}
-                className="group absolute bottom-0 left-0 z-[5] h-[11%] w-[9%] cursor-pointer"
+                className="group/angolo absolute bottom-0 left-0 z-[5] h-[7%] w-[5%] cursor-pointer"
               >
-                <span className="absolute inset-0 rounded-bl-control bg-[linear-gradient(225deg,transparent_50%,rgba(15,23,42,0.18)_50%,rgba(255,255,255,0.97)_62%,rgba(226,232,240,0.95)_100%)] opacity-0 shadow-[2px_-2px_6px_-2px_rgba(15,23,42,0.35)] transition-opacity group-hover:opacity-100" />
+                <span className="absolute inset-0 rounded-bl-control bg-[linear-gradient(225deg,transparent_50%,rgba(15,23,42,0.18)_50%,rgba(255,255,255,0.97)_62%,rgba(226,232,240,0.95)_100%)] opacity-0 shadow-[2px_-2px_6px_-2px_rgba(15,23,42,0.35)] transition-opacity group-hover/angolo:opacity-100" />
               </button>
             )}
             {angoloAvanti && (
@@ -829,9 +970,9 @@ function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, on
                 data-testid="angolo-avanti"
                 title="Gira avanti"
                 onClick={() => onGira(1)}
-                className="group absolute bottom-0 right-0 z-[5] h-[11%] w-[9%] cursor-pointer"
+                className="group/angolo absolute bottom-0 right-0 z-[5] h-[7%] w-[5%] cursor-pointer"
               >
-                <span className="absolute inset-0 rounded-br-control bg-[linear-gradient(135deg,transparent_50%,rgba(15,23,42,0.18)_50%,rgba(255,255,255,0.97)_62%,rgba(226,232,240,0.95)_100%)] opacity-0 shadow-[-2px_-2px_6px_-2px_rgba(15,23,42,0.35)] transition-opacity group-hover:opacity-100" />
+                <span className="absolute inset-0 rounded-br-control bg-[linear-gradient(135deg,transparent_50%,rgba(15,23,42,0.18)_50%,rgba(255,255,255,0.97)_62%,rgba(226,232,240,0.95)_100%)] opacity-0 shadow-[-2px_-2px_6px_-2px_rgba(15,23,42,0.35)] transition-opacity group-hover/angolo:opacity-100" />
               </button>
             )}
           </div>
@@ -880,10 +1021,13 @@ function Palco({ aperta, doppia, totale, proporzione, precedente, successiva, on
 /**
  * Il volantino negli insight, da sfogliare come quello stampato: le pagine aperte (la copertina da
  * sola, poi a due a due; una alla volta sugli schermi stretti) con le immagini di Olimpo e sopra i
- * riquadri dei box colorati per reparto, meccanica o sconto. Sotto l'indice delle pagine; a fianco
+ * riquadri dei box, sempre nascosti e senza bordi (la pagina resta come stampata): un box si vela
+ * del colore del reparto, della meccanica o dello sconto solo al passaggio, aperto nella scheda o
+ * trovato dalla ricerca o dall'interrogazione. Sotto l'indice delle pagine; a fianco, richiudibile,
  * l'analisi delle pagine aperte e l'interrogazione dei box; sopra le pagine aperte, "Vai a", la
- * ricerca, lo zoom e lo schermo intero. Un clic (o Invio) su un riquadro apre la scheda del box, e
- * da lì il viaggio del prodotto. Senza PDF le pagine sono bianche.
+ * ricerca, lo zoom fino alla risoluzione reale dell'immagine e la lettura a schermo pieno. Un clic
+ * (o Invio) su un riquadro apre la scheda del box, e da lì il viaggio del prodotto. Senza PDF le
+ * pagine sono bianche.
  */
 export function VolantinoSfogliabile(props: VolantinoSfogliabileProps) {
   // Un altro volantino riparte da capo: pagina, box scelto, scheda, zoom e interrogazione
@@ -891,6 +1035,31 @@ export function VolantinoSfogliabile(props: VolantinoSfogliabileProps) {
 }
 
 type Pannello = "pagine" | "interroga";
+
+/** Il pannello a fianco delle pagine è aperto, salvo che l'utente l'abbia chiuso (lo ricorda il browser). */
+const leggiPannelloAperto = (): boolean => {
+  try {
+    return localStorage.getItem(CHIAVE_PANNELLO) !== "chiuso";
+  } catch {
+    return true;
+  }
+};
+
+const scriviPannelloAperto = (aperto: boolean) => {
+  try {
+    localStorage.setItem(CHIAVE_PANNELLO, aperto ? "aperto" : "chiuso");
+  } catch {
+    // Senza storage la scelta vale finché si resta sulla pagina
+  }
+};
+
+/** Quanti px vale un rem: serve al calcolo dello zoom massimo, come i margini in rem del palco. */
+const pixelPerRem = (): number => {
+  if (typeof window === "undefined" || typeof getComputedStyle !== "function") return 16;
+  return Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+};
+
+const densitaSchermo = (): number => (typeof window !== "undefined" && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1);
 
 function Sfogliabile({
   idKit,
@@ -909,8 +1078,17 @@ function Sfogliabile({
   const [selezionato, setSelezionato] = useState<string | null>(null);
   const [schedaAperta, setSchedaAperta] = useState(false);
   const [viaggioAperto, setViaggioAperto] = useState(false);
-  const [zoom, setZoom] = useState(ZOOM_ADATTA);
+  const [zoomScelto, setZoomScelto] = useState(ZOOM_ADATTA);
   const [schermoIntero, setSchermoIntero] = useState(false);
+  /** Nella lettura a schermo pieno indice e pannello si aprono a richiesta, sopra le pagine. */
+  const [indiceInGrande, setIndiceInGrande] = useState(false);
+  const [pannelloInGrande, setPannelloInGrande] = useState(false);
+  /**
+   * Solo il volantino: le pagine stampate senza riquadri, senza ciò che riguarda i box (colori,
+   * ricerca, legenda, pannello, scheda). Nella lettura a schermo pieno anche senza barra dei comandi.
+   */
+  const [soloVolantino, setSoloVolantino] = useState(false);
+  const [pannelloAperto, setPannelloAperto] = useState(leggiPannelloAperto);
   const [ricerca, setRicerca] = useState("");
   const [interrogazione, setInterrogazione] = useState<Interrogazione>(INTERROGAZIONE_VUOTA);
   const [pannello, setPannello] = useState<Pannello>("pagine");
@@ -918,6 +1096,9 @@ function Sfogliabile({
   const [passaggio, setPassaggio] = useState<{ firma: string; indice: number }>({ firma: "", indice: -1 });
   /** Il box su cui si passa negli elenchi del pannello. */
   const [rilievoElenco, setRilievoElenco] = useState<string | null>(null);
+  /** Altezza della pagina rifilata nelle immagini di Olimpo, in pixel: la più bassa vista. */
+  const [risoluzione, setRisoluzione] = useState<number | null>(null);
+  const [misuraPalco, setMisuraPalco] = useState({ larghezza: 0, altezza: 0 });
   const idPannello = useId();
 
   const doppia = useDoppiaPagina();
@@ -942,12 +1123,13 @@ function Sfogliabile({
     const vicina = passo === 1 ? successiva : precedente;
     if (vicina) vaiAllaPagina(vicina.pagine[0]);
   };
-  const zoomTra = (indice: number) => setZoom(Math.max(0, Math.min(LIVELLI_ZOOM.length - 1, indice)));
 
   const apriBox = useCallback((voce: BoxInsight) => {
     setSelezionato(voce.id);
     setSchedaAperta(true);
     setViaggioAperto(false);
+    // Un box chiesto da fuori (indirizzo, elenco delle referenze) riporta i riquadri
+    setSoloVolantino(false);
   }, []);
 
   // Il box indicato dall'indirizzo: si apre la sua scheda e si va alla sua pagina, una volta sola
@@ -980,6 +1162,19 @@ function Sfogliabile({
   const reparti = useMemo(() => coloriReparti(box, configurazione), [box, configurazione]);
   const senzaPosizione = useMemo(() => box.filter(voce => voce.pagina === null || !riquadroBox(voce.geometria)).length, [box]);
 
+  // Lo zoom arriva fino alla risoluzione reale dell'immagine delle pagine aperte, mai sotto il 200%
+  const rem = useMemo(pixelPerRem, []);
+  const altezzaPagina = altezzaAdattata(misuraPalco.larghezza, misuraPalco.altezza, proporzioneApertura(aperta, proporzione).totale, rem);
+  const massimo = zoomMassimo(risoluzione, altezzaPagina, densitaSchermo());
+  const zoom = zoomLimitato(zoomScelto, massimo);
+  const cambiaZoom = useCallback((valore: number) => setZoomScelto(zoomLimitato(valore, massimo)), [massimo]);
+  const misuraIlPalco = useCallback(
+    (larghezza: number, altezza: number) =>
+      setMisuraPalco(attuale => (attuale.larghezza === larghezza && attuale.altezza === altezza ? attuale : { larghezza, altezza })),
+    []
+  );
+  const segnaRisoluzione = useCallback((pixel: number) => setRisoluzione(attuale => (attuale === null || pixel < attuale ? pixel : attuale)), []);
+
   const stile = useCallback((voce: BoxInsight): StileRiquadro => stileBox(voce, modo, reparti), [modo, reparti]);
   const voci = useMemo<VoceLegenda[]>(() => legendaModo(modo, box, reparti), [box, modo, reparti]);
   const gruppo = useCallback((voce: BoxInsight): GruppoBox => gruppoBox(voce, modo, reparti), [modo, reparti]);
@@ -1008,13 +1203,33 @@ function Sfogliabile({
   }, [risultati]);
   const firma = `${testoCercato}\u0000${JSON.stringify(domanda)}`;
   const attuale = risultati && passaggio.firma === firma && passaggio.indice < risultati.length ? passaggio.indice : -1;
+  /** La ricerca per cui il volantino è già andato al primo box trovato, da solo o con i comandi. */
+  const ricercaPortata = useRef("");
   const passaAlRisultato = (passo: 1 | -1) => {
     if (!risultati || risultati.length === 0) return;
+    // Chi passa da un box all'altro con i comandi non viene poi spostato dalla ricerca
+    ricercaPortata.current = firma;
     const indice = risultatoVicino(risultati, attuale, passo, corrente);
     setPassaggio({ firma, indice });
     const voce = risultati[indice];
     if (voce.pagina !== null) vaiAllaPagina(voce.pagina);
   };
+
+  // Smesso di scrivere, il volantino va da solo al primo box trovato dalle pagine guardate in
+  // avanti e lo mette in rilievo, senza dover premere Invio. Una volta sola per ogni ricerca: poi si
+  // passa da un box all'altro con i comandi. Le condizioni dell'interrogazione non spostano le pagine
+  const primaPagina = aperta.pagine[0];
+  useEffect(() => {
+    if (!testoCercato.trim() || !daTesto || !risultati || risultati.length === 0 || ricercaPortata.current === firma) return;
+    const attesa = setTimeout(() => {
+      ricercaPortata.current = firma;
+      const indice = risultatoVicino(risultati, -1, 1, primaPagina);
+      setPassaggio({ firma, indice });
+      const voce = risultati[indice];
+      if (voce.pagina !== null) vaiAllaPagina(voce.pagina);
+    }, ATTESA_RICERCA);
+    return () => clearTimeout(attesa);
+  }, [testoCercato, daTesto, risultati, firma, primaPagina, vaiAllaPagina]);
 
   // In rilievo il box su cui si passa negli elenchi, altrimenti il risultato raggiunto
   const rilievo = rilievoElenco ?? (attuale >= 0 && risultati ? risultati[attuale].id : null);
@@ -1025,30 +1240,36 @@ function Sfogliabile({
   // Le pagine oltre quelle del PDF restano bianche; pagine 0 vuol dire che Olimpo non le ha contate
   const conImmagine = (numero: number): string | null =>
     pdf && pdf.idOlimpoCloud && (pdf.pagine <= 0 || numero <= pdf.pagine) ? pdf.idOlimpoCloud : null;
-
-  const boxScelto = selezionato ? (box.find(voce => voce.id === selezionato) ?? null) : null;
-
-  const paginaDisegnata = (numero: number, lato: Lato) => {
+  const immagineDellaPagina = (numero: number | null): string | null => {
+    if (numero === null) return null;
     const idOlimpo = conImmagine(numero);
-    return (
-      <PaginaConImmagine
-        numero={numero}
-        lato={lato}
-        proporzione={proporzione(numero)}
-        immagine={idOlimpo ? urlPaginaMateriale(idOlimpo, numero) : null}
-        box={perPagina.get(numero) ?? NESSUN_BOX}
-        stile={stile}
-        selezionato={diQuestaPagina(selezionato, numero)}
-        onSeleziona={apriBox}
-        trovati={trovati}
-        rilievo={diQuestaPagina(rilievo, numero)}
-      />
-    );
+    return idOlimpo ? urlPaginaMateriale(idOlimpo, numero) : null;
   };
 
+  const boxScelto = selezionato ? (box.find(voce => voce.id === selezionato) ?? null) : null;
+  /** Il box la cui scheda è aperta: chiusa la scheda, il box torna come gli altri (nascosto). */
+  const boxAperto = schedaAperta ? selezionato : null;
+
+  const paginaDisegnata = (numero: number, lato: Lato) => (
+    <PaginaConImmagine
+      numero={numero}
+      lato={lato}
+      proporzione={proporzione(numero)}
+      immagine={immagineDellaPagina(numero)}
+      box={perPagina.get(numero) ?? NESSUN_BOX}
+      stile={stile}
+      selezionato={diQuestaPagina(boxAperto, numero)}
+      onSeleziona={apriBox}
+      trovati={trovati}
+      rilievo={diQuestaPagina(rilievo, numero)}
+      senzaRiquadri={soloVolantino}
+      onRisoluzione={segnaRisoluzione}
+    />
+  );
+
   const daPreparare = pagineDaPreparare(corrente, totale, doppia).flatMap(numero => {
-    const idOlimpo = conImmagine(numero);
-    return idOlimpo ? [urlPaginaMateriale(idOlimpo, numero)] : [];
+    const url = immagineDellaPagina(numero);
+    return url ? [url] : [];
   });
 
   // Le miniature dell'indice si chiedono a Olimpo già ridotte: pochi KB l'una
@@ -1061,7 +1282,7 @@ function Sfogliabile({
       proporzione: suaProporzione,
       box: (perPagina.get(numero) ?? NESSUN_BOX).filter(voce => riquadroBox(voce.geometria)).length,
       immagine: idOlimpo ? urlPaginaMateriale(idOlimpo, numero, misuraMiniatura(suaProporzione)) : null,
-      trovati: trovati ? (trovatiPerPagina.get(numero) ?? 0) : null,
+      trovati: trovati && !soloVolantino ? (trovatiPerPagina.get(numero) ?? 0) : null,
     };
   });
 
@@ -1071,6 +1292,66 @@ function Sfogliabile({
     apriBox(voce);
     if (voce.pagina !== null) vaiAllaPagina(voce.pagina);
   };
+
+  const cambiaSoloVolantino = (solo: boolean) => {
+    setSoloVolantino(solo);
+    // Senza riquadri non c'è un box da mostrare
+    if (solo) {
+      setSchedaAperta(false);
+      setViaggioAperto(false);
+    }
+  };
+
+  const cambiaPannelloAperto = () => {
+    setPannelloAperto(aperto => {
+      scriviPannelloAperto(!aperto);
+      return !aperto;
+    });
+  };
+
+  // La lettura a schermo pieno chiede al browser lo schermo pieno dell'intera pagina (come l'icona
+  // nell'intestazione), così i tooltip dei box, che si aprono sopra, restano visibili.
+  // Se il browser non lo permette la lettura prende tutta la finestra. Uscendo dallo schermo pieno
+  // del browser (Esc) si esce anche dalla lettura
+  const schermoChiesto = useRef(false);
+  const apriSchermoIntero = () => {
+    setSchermoIntero(true);
+    setIndiceInGrande(false);
+    setPannelloInGrande(false);
+    const radice = document.documentElement;
+    if (document.fullscreenElement || typeof radice.requestFullscreen !== "function") return;
+    schermoChiesto.current = true;
+    try {
+      radice.requestFullscreen().catch(() => {
+        schermoChiesto.current = false;
+      });
+    } catch {
+      schermoChiesto.current = false;
+    }
+  };
+  const esciDalloSchermoIntero = useCallback(() => {
+    setSchermoIntero(false);
+    if (!schermoChiesto.current) return;
+    schermoChiesto.current = false;
+    if (document.fullscreenElement && typeof document.exitFullscreen === "function") document.exitFullscreen().catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!schermoIntero) return;
+    const cambiato = () => {
+      if (document.fullscreenElement || !schermoChiesto.current) return;
+      schermoChiesto.current = false;
+      setSchermoIntero(false);
+    };
+    document.addEventListener("fullscreenchange", cambiato);
+    return () => document.removeEventListener("fullscreenchange", cambiato);
+  }, [schermoIntero]);
+  // Lasciando il volantino (un'altra pagina dell'app) si lascia anche lo schermo pieno chiesto qui
+  useEffect(
+    () => () => {
+      if (schermoChiesto.current && document.fullscreenElement && typeof document.exitFullscreen === "function") document.exitFullscreen().catch(() => {});
+    },
+    []
+  );
 
   const condizioni = condizioniAttive(interrogazione);
   const schede: Array<{ valore: Pannello; etichetta: string }> = [
@@ -1113,7 +1394,7 @@ function Sfogliabile({
             box={boxAperti}
             gruppo={gruppo}
             titoloRipartizione={TITOLI_LEGENDA[modo]}
-            selezionato={selezionato}
+            selezionato={boxAperto}
             trovati={trovati}
             onRilievo={setRilievoElenco}
             onApri={apriBox}
@@ -1129,7 +1410,7 @@ function Sfogliabile({
               perReparto={perReparto}
               perMeccanica={perMeccanica}
               gruppo={gruppo}
-              selezionato={selezionato}
+              selezionato={boxAperto}
               onRilievo={setRilievoElenco}
               onApri={apriDalPannello}
             />
@@ -1139,30 +1420,46 @@ function Sfogliabile({
     </div>
   );
 
-  const lettore = (inGrande: boolean) => (
+  const palco = (inGrande: boolean) => (
+    <Palco
+      aperta={aperta}
+      doppia={doppia}
+      totale={totale}
+      proporzione={proporzione}
+      precedente={precedente}
+      successiva={successiva}
+      onGira={gira}
+      onVai={vaiAllaPagina}
+      zoom={zoom}
+      massimo={massimo}
+      onZoom={cambiaZoom}
+      onMisura={misuraIlPalco}
+      altezza={inGrande ? ALTEZZA_SCHERMO_INTERO : ALTEZZA_LETTORE}
+      pagina={paginaDisegnata}
+      daPreparare={daPreparare}
+      autoFocus={inGrande}
+    />
+  );
+
+  const indiceDellePagine = <IndicePagine voci={indice} aperture={elencoAperture} aperta={aperta} onVai={vaiAllaPagina} />;
+
+  const legenda = <Legenda voci={voci} titolo={TITOLI_LEGENDA[modo]} />;
+
+  const lettore = (
     <div className="flex min-w-0 flex-col gap-3 xl:flex-row">
       <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <Palco
-          aperta={aperta}
-          doppia={doppia}
-          totale={totale}
-          proporzione={proporzione}
-          precedente={precedente}
-          successiva={successiva}
-          onGira={gira}
-          onVai={vaiAllaPagina}
-          zoom={zoom}
-          onZoom={zoomTra}
-          altezza={inGrande ? ALTEZZA_SCHERMO_INTERO : ALTEZZA_LETTORE}
-          pagina={paginaDisegnata}
-          daPreparare={daPreparare}
-        />
-        <IndicePagine voci={indice} aperture={elencoAperture} aperta={aperta} onVai={vaiAllaPagina} />
+        {palco(false)}
+        {/* La legenda subito sotto le pagine, dove si guarda: sotto l'indice restava fuori vista */}
+        {!soloVolantino && legenda}
+        {indiceDellePagine}
       </div>
-      {/* Sugli schermi larghi il pannello è alto quanto palco e indice e scorre da solo; sotto, segue */}
-      <div className="relative min-w-0 xl:w-96 xl:flex-none">
-        <div className="max-h-[36rem] overflow-y-auto overscroll-contain xl:absolute xl:inset-0 xl:max-h-none">{laterale}</div>
-      </div>
+      {/* Sugli schermi larghi il pannello è alto quanto palco e indice e scorre da solo; sotto, segue.
+          Chiuso, le pagine prendono anche il suo spazio */}
+      {pannelloAperto && !soloVolantino && (
+        <div id={`${idPannello}-laterale`} className="relative min-w-0 xl:w-96 xl:flex-none">
+          <div className="max-h-[36rem] overflow-y-auto overscroll-contain xl:absolute xl:inset-0 xl:max-h-none">{laterale}</div>
+        </div>
+      )}
     </div>
   );
 
@@ -1170,40 +1467,88 @@ function Sfogliabile({
     setSchedaAperta(false);
     setViaggioAperto(false);
   };
+  const conScheda = schedaAperta && boxScelto !== null;
 
-  // La scheda si apre sopra lo schermo intero quando c'è: dentro il suo albero, come dialog annidato
+  /**
+   * Nome del box (o "Viaggio del prodotto") con la pagina sotto, e il comando per chiudere. Marca e
+   * formato stanno nella descrizione completa, accanto al prezzo: qui non si ripetono.
+   */
+  const titoloScheda = (classeTitolo: string) =>
+    boxScelto && (
+      <div className="flex w-full items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className={twMerge(classeTitolo, "[overflow-wrap:anywhere]")}>{viaggioAperto ? "Viaggio del prodotto" : boxScelto.nome || "Box senza nome"}</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {viaggioAperto ? boxScelto.nome : boxScelto.pagina !== null ? `pagina ${formatNumero(boxScelto.pagina)}` : ""}
+          </p>
+        </div>
+        <Button type="button" variant="outline-secondary" size="sm" aria-label="Chiudi la scheda" title="Chiudi" onClick={chiudiScheda}>
+          <Lucide icon="X" aria-hidden="true" className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+
+  /**
+   * La scheda del box, o il viaggio del prodotto: la stessa nella finestra laterale e nella lettura.
+   * Compatta nella colonna stretta della lettura: i dati in una colonna sola, senza parole spezzate.
+   */
+  const corpoScheda = (compatta: boolean) =>
+    boxScelto &&
+    (viaggioAperto ? (
+      <ViaggioProdotto idKit={idKit} chiave={boxScelto.chiave} onIndietro={() => setViaggioAperto(false)} />
+    ) : (
+      <SchedaBox
+        box={boxScelto}
+        totalePagine={totale}
+        immaginePagina={immagineDellaPagina(boxScelto.pagina)}
+        proporzionePagina={boxScelto.pagina !== null ? proporzione(boxScelto.pagina) : proporzioneBase}
+        compatta={compatta}
+        datiProdotto={configurazione?.volantino?.scheda?.datiProdotto}
+        dettagliTecnici={configurazione?.volantino?.scheda?.dettagliTecnici}
+        onViaggio={() => setViaggioAperto(true)}
+      />
+    ));
+
+  // Nella pagina la scheda si apre in una finestra laterale; nella lettura a schermo pieno sta nella
+  // colonna a fianco delle pagine
   const scheda = (
-    <Slideover open={schedaAperta && boxScelto !== null} onClose={chiudiScheda} size="lg">
+    <Slideover open={conScheda} onClose={chiudiScheda} size="xl">
       <Slideover.Panel>
         {boxScelto && (
           <>
-            <Slideover.Title className="py-4">
-              <div className="flex w-full items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="title-section [overflow-wrap:anywhere]">{viaggioAperto ? "Viaggio del prodotto" : boxScelto.nome || "Box senza nome"}</h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {viaggioAperto ? boxScelto.nome : [marcaFormato(boxScelto), boxScelto.pagina !== null ? `pagina ${formatNumero(boxScelto.pagina)}` : null].filter(Boolean).join(" · ")}
-                  </p>
-                </div>
-                <Button type="button" variant="outline-secondary" size="sm" aria-label="Chiudi la scheda" title="Chiudi" onClick={chiudiScheda}>
-                  <Lucide icon="X" aria-hidden="true" className="h-4 w-4" />
-                </Button>
-              </div>
-            </Slideover.Title>
-            <div className="flex-1 overflow-y-auto p-5">
-              {viaggioAperto ? (
-                <ViaggioProdotto idKit={idKit} chiave={boxScelto.chiave} onIndietro={() => setViaggioAperto(false)} />
-              ) : (
-                <SchedaBox box={boxScelto} totalePagine={totale} onViaggio={() => setViaggioAperto(true)} />
-              )}
-            </div>
+            <Slideover.Title className="py-4">{titoloScheda("title-section")}</Slideover.Title>
+            <div className="flex-1 overflow-y-auto p-5">{corpoScheda(false)}</div>
           </>
         )}
       </Slideover.Panel>
     </Slideover>
   );
 
-  const legenda = <Legenda voci={voci} titolo={TITOLI_LEGENDA[modo]} />;
+  const sceltaColore = (
+    <div className="flex items-center gap-2">
+      <span aria-hidden="true" className="text-xs text-slate-500 dark:text-slate-400">
+        Colora per
+      </span>
+      <Segmenti<ModoColore> etichetta="Colora per" opzioni={OPZIONI_COLORE} valore={modo} onChange={setModo} />
+    </div>
+  );
+
+  // I comandi con la scritta, nello stesso ordine della lettura a schermo pieno: zoom, pannello,
+  // solo volantino, schermo intero
+  const comandoSoloVolantino = (
+    <Button
+      type="button"
+      variant={soloVolantino ? "secondary" : "outline-secondary"}
+      size="sm"
+      aria-label="Solo volantino"
+      aria-pressed={soloVolantino}
+      title={soloVolantino ? "Torna ai riquadri dei box e ai loro comandi" : "Solo le pagine stampate, senza riquadri né comandi dei box"}
+      onClick={() => cambiaSoloVolantino(!soloVolantino)}
+    >
+      <Lucide icon="BookOpen" aria-hidden="true" className="h-4 w-4" />
+      <Scritta>Solo volantino</Scritta>
+    </Button>
+  );
 
   const barra = (
     <div
@@ -1213,17 +1558,196 @@ function Sfogliabile({
     >
       <div className="flex flex-wrap items-center gap-3">
         <Navigazione aperta={aperta} totale={totale} indietro={precedente !== null} avanti={successiva !== null} onGira={gira} onVai={vaiAllaPagina} />
-        <RicercaNelVolantino testo={ricerca} onTesto={setRicerca} risultati={risultati} attuale={attuale} onPassa={passaAlRisultato} />
+        {!soloVolantino && <RicercaNelVolantino testo={ricerca} onTesto={setRicerca} risultati={risultati} attuale={attuale} onPassa={passaAlRisultato} />}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <ControlliZoom zoom={zoom} onZoom={zoomTra} />
-        {!schermoIntero && (
-          <Button type="button" variant="outline-secondary" size="sm" aria-label="Schermo intero" title="Schermo intero" onClick={() => setSchermoIntero(true)}>
-            <Lucide icon="Maximize2" aria-hidden="true" className="h-4 w-4" />
+        <ControlliZoom zoom={zoom} massimo={massimo} onZoom={cambiaZoom} />
+        {!soloVolantino && (
+          <Button
+            type="button"
+            variant="outline-secondary"
+            size="sm"
+            aria-label="Pannello"
+            aria-expanded={pannelloAperto}
+            aria-controls={pannelloAperto ? `${idPannello}-laterale` : undefined}
+            title={pannelloAperto ? "Chiudi il pannello: le pagine prendono il suo spazio" : "Apri il pannello delle pagine aperte e dell'interrogazione"}
+            onClick={cambiaPannelloAperto}
+          >
+            <Lucide icon={pannelloAperto ? "PanelRightClose" : "PanelRightOpen"} aria-hidden="true" className="h-4 w-4" />
+            <Scritta>Pannello</Scritta>
           </Button>
         )}
+        {comandoSoloVolantino}
+        <Button type="button" variant="outline-secondary" size="sm" aria-label="Schermo intero" title="Leggi a schermo pieno" onClick={apriSchermoIntero}>
+          <Lucide icon="Maximize2" aria-hidden="true" className="h-4 w-4" />
+          <Scritta>Schermo intero</Scritta>
+        </Button>
       </div>
     </div>
+  );
+
+  // Nella lettura ogni contenuto ha il suo spazio e niente si accavalla: le pagine al centro, sotto
+  // la striscia dell'indice quando è aperta, a destra una colonna con la scheda del box (scegliendo
+  // un box) oppure il pannello. Le pagine si adattano allo spazio che resta
+  const colonna: "scheda" | "pannello" | null = soloVolantino ? null : conScheda ? "scheda" : pannelloInGrande ? "pannello" : null;
+  // In "Solo volantino" a schermo pieno una barra in alto dice dove si è e come tornare ai comandi:
+  // compare all'inizio e a ogni movimento del mouse (o tocco), si nasconde dopo qualche secondo
+  // fermi, ma non finché il puntatore o il fuoco ci sono sopra
+  const [barraSolo, setBarraSolo] = useState(false);
+  const attesaBarraSolo = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const barraSoloTrattenuta = useRef(false);
+  const mostraBarraSolo = useCallback(() => {
+    setBarraSolo(true);
+    if (attesaBarraSolo.current) clearTimeout(attesaBarraSolo.current);
+    attesaBarraSolo.current = setTimeout(() => {
+      if (!barraSoloTrattenuta.current) setBarraSolo(false);
+    }, DURATA_BARRA_SOLO);
+  }, []);
+  const trattieniBarraSolo = (trattenuta: boolean) => {
+    barraSoloTrattenuta.current = trattenuta;
+    if (!trattenuta) mostraBarraSolo();
+  };
+  const leggiSoloVolantino = schermoIntero && soloVolantino;
+  useEffect(() => {
+    if (leggiSoloVolantino) mostraBarraSolo();
+  }, [leggiSoloVolantino, mostraBarraSolo]);
+  useEffect(
+    () => () => {
+      if (attesaBarraSolo.current) clearTimeout(attesaBarraSolo.current);
+    },
+    []
+  );
+
+  const chiudiLettura = () => {
+    // Esc nella lettura (quando il browser non ha lo schermo pieno, che Esc chiude da sé) torna
+    // prima ai comandi e chiude la scheda, poi esce
+    if (soloVolantino) cambiaSoloVolantino(false);
+    else if (conScheda) chiudiScheda();
+    else esciDalloSchermoIntero();
+  };
+
+  const lettura = (
+    <DialogHeadless open={schermoIntero} onClose={chiudiLettura} aria-label={titolo} className="relative z-50">
+      <DialogPanel
+        data-testid="volantino-schermo-intero"
+        onPointerMove={soloVolantino ? mostraBarraSolo : undefined}
+        onPointerDown={soloVolantino ? mostraBarraSolo : undefined}
+        className="fixed inset-0 flex flex-col bg-slate-200 dark:bg-darkmode-900"
+      >
+        {!soloVolantino && (
+          <div
+            role="toolbar"
+            aria-label="Comandi della lettura"
+            className="flex flex-none flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-slate-200 bg-white px-3 py-1.5 dark:border-darkmode-400 dark:bg-darkmode-700"
+          >
+            <DialogTitle className="max-w-[14rem] truncate text-sm font-semibold text-slate-800 dark:text-slate-100" title={titolo}>
+              {titolo}
+            </DialogTitle>
+            <Navigazione aperta={aperta} totale={totale} indietro={precedente !== null} avanti={successiva !== null} onGira={gira} onVai={vaiAllaPagina} />
+            <RicercaNelVolantino testo={ricerca} onTesto={setRicerca} risultati={risultati} attuale={attuale} onPassa={passaAlRisultato} />
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <ControlliZoom zoom={zoom} massimo={massimo} onZoom={cambiaZoom} />
+              <Button
+                type="button"
+                variant={indiceInGrande ? "secondary" : "outline-secondary"}
+                size="sm"
+                aria-label="Indice"
+                aria-expanded={indiceInGrande}
+                title="Indice delle pagine"
+                onClick={() => setIndiceInGrande(aperto => !aperto)}
+              >
+                <Lucide icon="GalleryHorizontal" aria-hidden="true" className="h-4 w-4" />
+                <Scritta>Indice</Scritta>
+              </Button>
+              <Button
+                type="button"
+                variant={pannelloInGrande ? "secondary" : "outline-secondary"}
+                size="sm"
+                aria-label="Pannello"
+                aria-expanded={pannelloInGrande}
+                title="Colori, pagine aperte e interrogazione"
+                onClick={() => setPannelloInGrande(aperto => !aperto)}
+              >
+                <Lucide icon={pannelloInGrande ? "PanelRightClose" : "PanelRightOpen"} aria-hidden="true" className="h-4 w-4" />
+                <Scritta>Pannello</Scritta>
+              </Button>
+              {comandoSoloVolantino}
+              <Button type="button" variant="outline-secondary" size="sm" aria-label="Esci dallo schermo intero" title="Esci (Esc)" onClick={esciDalloSchermoIntero}>
+                <Lucide icon="Minimize2" aria-hidden="true" className="mr-1.5 h-4 w-4" />
+                Esci
+              </Button>
+            </div>
+          </div>
+        )}
+        <div className="flex min-h-0 flex-1">
+          <div data-testid="lettura-pagine" className={twMerge("relative flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-2", soloVolantino && "p-0")}>
+            <div className="min-h-0 flex-1">{schermoIntero && palco(true)}</div>
+            {/* Solo volantino: una barra in alto con le pagine aperte, le frecce e i comandi con la
+                scritta per tornare ai comandi o uscire. Nascosta resta raggiungibile con Tab */}
+            {soloVolantino && (
+              <div
+                role="toolbar"
+                aria-label="Solo volantino"
+                data-testid="barra-solo-volantino"
+                data-visibile={barraSolo ? "si" : "no"}
+                onMouseEnter={() => trattieniBarraSolo(true)}
+                onMouseLeave={() => trattieniBarraSolo(false)}
+                onFocus={() => {
+                  barraSoloTrattenuta.current = true;
+                  setBarraSolo(true);
+                }}
+                onBlur={() => trattieniBarraSolo(false)}
+                className={twMerge(
+                  "absolute left-1/2 top-3 z-20 flex -translate-x-1/2 flex-wrap items-center justify-center gap-2 rounded-control border border-slate-200 bg-white/95 px-3 py-2 shadow-lg transition-opacity duration-300 dark:border-darkmode-400 dark:bg-darkmode-700/95",
+                  barraSolo ? "opacity-100" : "pointer-events-none opacity-0"
+                )}
+              >
+                <Button type="button" variant="outline-secondary" size="sm" aria-label="Gira indietro" title="Gira indietro" disabled={precedente === null} onClick={() => gira(-1)}>
+                  <Lucide icon="ChevronLeft" aria-hidden="true" className="h-4 w-4" />
+                </Button>
+                <span className="min-w-24 text-center text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                  {testoApertura(aperta.pagine)} <span className="font-normal text-slate-500 dark:text-slate-400">di {formatNumero(totale)}</span>
+                </span>
+                <Button type="button" variant="outline-secondary" size="sm" aria-label="Gira avanti" title="Gira avanti" disabled={successiva === null} onClick={() => gira(1)}>
+                  <Lucide icon="ChevronRight" aria-hidden="true" className="h-4 w-4" />
+                </Button>
+                <Button type="button" variant="primary" size="sm" title="Mostra i comandi (Esc)" onClick={() => cambiaSoloVolantino(false)}>
+                  <Lucide icon="SlidersHorizontal" aria-hidden="true" className="mr-1.5 h-4 w-4" />
+                  Mostra i comandi
+                </Button>
+                <Button type="button" variant="outline-secondary" size="sm" title="Esci dallo schermo intero" onClick={esciDalloSchermoIntero}>
+                  <Lucide icon="Minimize2" aria-hidden="true" className="mr-1.5 h-4 w-4" />
+                  Esci dallo schermo intero
+                </Button>
+              </div>
+            )}
+            {indiceInGrande && !soloVolantino && (
+              <div className="flex-none rounded-control border border-slate-200 bg-white px-2 pt-1 dark:border-darkmode-400 dark:bg-darkmode-700">{indiceDellePagine}</div>
+            )}
+          </div>
+          {colonna && (
+            <aside
+              data-testid="lettura-colonna"
+              aria-label={colonna === "scheda" ? "Scheda del box" : "Pannello della lettura"}
+              className="flex w-[28rem] max-w-[45%] flex-none flex-col border-l border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-700"
+            >
+              {colonna === "scheda" ? (
+                <>
+                  <div className="flex-none border-b border-slate-200 px-4 py-3 dark:border-darkmode-400">{titoloScheda("text-base font-semibold text-slate-800 dark:text-slate-100")}</div>
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">{corpoScheda(true)}</div>
+                </>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain p-3">
+                  {sceltaColore}
+                  {legenda}
+                  {laterale}
+                </div>
+              )}
+            </aside>
+          )}
+        </div>
+      </DialogPanel>
+    </DialogHeadless>
   );
 
   return (
@@ -1235,55 +1759,30 @@ function Sfogliabile({
             {formatNumero(totale)} {totale === 1 ? "pagina" : "pagine"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span aria-hidden="true" className="text-xs text-slate-500 dark:text-slate-400">
-            Colora per
-          </span>
-          <Segmenti<ModoColore> etichetta="Colora per" opzioni={OPZIONI_COLORE} valore={modo} onChange={setModo} />
-        </div>
+        {!schermoIntero && !soloVolantino && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{sceltaColore}</div>
+        )}
       </div>
 
       {!schermoIntero && (
         <>
           {barra}
-          {lettore(false)}
+          {lettore}
         </>
       )}
 
-      {legenda}
-
-      {(!pdf || senzaPosizione > 0) && (
+      {(!pdf || (senzaPosizione > 0 && !soloVolantino)) && (
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {!pdf && "Il PDF del volantino non è disponibile: i box sono disegnati su pagine bianche. "}
           {senzaPosizione > 0 &&
+            !soloVolantino &&
             (senzaPosizione === 1 ? "1 box non ha la posizione nella pagina e non è disegnato." : `${formatNumero(senzaPosizione)} box non hanno la posizione nella pagina e non sono disegnati.`)}
         </p>
       )}
 
       {!schermoIntero && scheda}
 
-      <Dialog open={schermoIntero} onClose={() => setSchermoIntero(false)} size="2xl">
-        <Dialog.Panel className="w-[96vw] sm:w-[96vw] lg:w-[96vw] xl:w-[96vw]">
-          <Dialog.Title>
-            <div className="flex w-full flex-wrap items-center justify-between gap-3">
-              <span className="min-w-0 [overflow-wrap:anywhere]">{titolo}</span>
-              <Button type="button" variant="outline-secondary" size="sm" aria-label="Esci dallo schermo intero" title="Esci" onClick={() => setSchermoIntero(false)}>
-                <Lucide icon="Minimize2" aria-hidden="true" className="h-4 w-4" />
-              </Button>
-            </div>
-          </Dialog.Title>
-          <div data-testid="volantino-schermo-intero" className="flex flex-col gap-3 p-4">
-            {schermoIntero && (
-              <>
-                {barra}
-                {lettore(true)}
-              </>
-            )}
-          </div>
-          <div className="border-t border-slate-200/60 px-5 py-3 dark:border-darkmode-400">{legenda}</div>
-          {schermoIntero && scheda}
-        </Dialog.Panel>
-      </Dialog>
+      {lettura}
     </section>
   );
 }

@@ -39,7 +39,8 @@ describe("scaricaFileConsultazione", () => {
 
     await scaricaFileConsultazione("f1", "nome di riserva.pdf");
 
-    expect(get).toHaveBeenCalledWith("/api/consultazione/file/f1", { responseType: "blob" });
+    // Con il cookie di sessione anche con l'API su un'altra origine
+    expect(get).toHaveBeenCalledWith("/api/consultazione/file/f1", { responseType: "blob", withCredentials: true });
     expect(linkCliccati).toEqual([{ href: "blob:file", download: "Volantino Natale è.pdf" }]);
   });
 

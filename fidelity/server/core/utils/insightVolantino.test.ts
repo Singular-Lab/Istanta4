@@ -347,6 +347,33 @@ describe('boxInsight: il box come lo vede la scheda', () => {
     expect(box.dettaglioProdotti?.[1]).toMatchObject({ codice: '7332164', ean: ['8001420012484'], nome: 'Federa', gusto: 'Bianco' });
   });
 
+  it('descrizione completa standard: nome, marca in evidenza, formato e varianti dei prodotti', () => {
+    const [semplice] = boxInsight(boxDi([riga('d1', { data_fields: { descrizione_uno: 'Gelato', descrizione_due: 'Nutella', descrizione_quattro: '230 g' } })]), opzioni());
+    expect(semplice.nome).toBe('Gelato');
+    expect(semplice.descrizione).toEqual([{ testo: 'Gelato' }, { testo: semplice.marca, evidenza: true }, { testo: '230 g' }]);
+
+    // Due prodotti nel box con le loro varianti
+    const [gruppo] = boxInsight(
+      boxDi([
+        riga('d2', {
+          data_fields: { descrizione_uno: 'Mozzarella', descrizione_due: 'Granarolo', descrizione_tre: 'Intera', codice_referenza: '1' },
+          group_elements: [{ codice_referenza: '2', descrizione_uno: 'Mozzarella', descrizione_tre: 'Light' }],
+        }),
+      ]),
+      opzioni()
+    );
+    expect(gruppo.descrizione?.at(-1)).toEqual({ testo: 'Intera, Light' });
+  });
+
+  it('la libreria agenzia del cliente compone la descrizione a modo suo', () => {
+    const [box] = boxInsight(
+      boxDi([riga('d3', { data_fields: { descrizione_uno: 'Gelato', descrizione_due: 'Nutella', descrizione_quattro: '230 g' } })]),
+      opzioni({ descrizioneBox: testi => [{ testo: `${testi.marca} - ${testi.nome}`, evidenza: true }, { testo: testi.formato ?? '' }] })
+    );
+
+    expect(box.descrizione).toEqual([{ testo: `${box.marca} - Gelato`, evidenza: true }, { testo: '230 g' }]);
+  });
+
   it('un prodotto senza EAN ha l\'elenco vuoto, non null', () => {
     const [box] = boxInsight(boxDi([riga('n1', { data_fields: { descrizione_uno: 'Pane' } })]), opzioni());
 

@@ -186,3 +186,46 @@ describe('verificaConfigurazioneInsight: gli errori, in italiano e con il percor
     ]);
   });
 });
+
+describe('verificaConfigurazioneInsight: la scheda del volantino della GDO', () => {
+  // Spec insight-volantino, "Scheda del volantino adattata al cliente e alla GDO"
+  const SCHEDA_CONAD = {
+    datiProdotto: ['codice', 'ean', 'settore'],
+    dettagliTecnici: ['meccanicaFonte', 'origine', 'codiceBox', 'segmento', 'tema', 'ruolo'],
+  };
+
+  it('la sezione volantino con i dati della scheda e\' riconosciuta', () => {
+    expect(verificaConfigurazioneInsight({ ...CONFIG_SEMPLICE, volantino: { scheda: SCHEDA_CONAD } })).toEqual({
+      valida: true,
+      errori: [],
+      sezioni: ['dataMapping', 'volantino'],
+    });
+    // Senza indicazioni sulla scheda va bene lo stesso: valgono quelle predefinite
+    expect(verificaConfigurazioneInsight({ ...CONFIG_SEMPLICE, volantino: {} }).valida).toBe(true);
+  });
+
+  it('un dato sconosciuto si rifiuta dicendo quali sono ammessi; un dato del box non sta fra quelli dei prodotti', () => {
+    const esito = verificaConfigurazioneInsight({
+      ...CONFIG_SEMPLICE,
+      volantino: { scheda: { datiProdotto: ['codice', 'colore', 'origine'], dettagliTecnici: ['tema', 'prezzo'] } },
+    });
+    expect(esito.valida).toBe(false);
+    expect(esito.errori.map(errore => errore.percorso)).toEqual([
+      'volantino.scheda.datiProdotto.1',
+      'volantino.scheda.datiProdotto.2',
+      'volantino.scheda.dettagliTecnici.1',
+    ]);
+    expect(esito.errori[0].messaggio).toBe('deve essere uno di: codice, ean, settore, segmento, tema, ruolo');
+    expect(esito.errori[2].messaggio).toMatch(/^deve essere uno di: codice, .*meccanicaFonte, origine, codiceBox$/);
+  });
+
+  it('un dato in vista e nei dettagli tecnici insieme si rifiuta', () => {
+    const esito = verificaConfigurazioneInsight({
+      ...CONFIG_SEMPLICE,
+      volantino: { scheda: { datiProdotto: ['codice', 'tema'], dettagliTecnici: ['origine', 'tema'] } },
+    });
+    expect(esito.errori).toEqual([
+      { percorso: 'volantino.scheda.dettagliTecnici.1', messaggio: '"tema" e\' gia\' fra i dati in vista (datiProdotto): un dato sta in una lista sola' },
+    ]);
+  });
+});

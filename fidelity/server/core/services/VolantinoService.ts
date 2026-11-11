@@ -4,7 +4,7 @@ import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/e
 import type { RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { FileItemKit } from '../../../lib/types';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
-import type { IAgenziaLib } from '../agenzia_lib/types';
+import type { IAgenziaLib, InsightVolantinoAgenzia } from '../agenzia_lib/types';
 import type { ICatalogoLoghiService, LogoDelCatalogo } from '../interfaces/ICatalogoLoghiService';
 import { log } from '../logger';
 import { regoleLinee, type RegoleLinee, sigleAssegnate, urlImmagineLogo } from '../utils/lineeDistributore';
@@ -27,7 +27,7 @@ import { ReferenzeGruppo } from '../models/referenze_gruppo';
 import { kitNellAmbito, pdfDelKit, righeDelKit } from '../repositories/InsightVolantinoRepository';
 import { boxDelKit } from '../utils/analisiKit';
 import { applicaAnagraficaReparti, leggiAnagraficaReparti, valoreCampo, type PercorsoCampo } from '../utils/campiInsights';
-import { sezioniInsight } from '../utils/insightVolantino';
+import { sezioniInsight, type OpzioniInsight } from '../utils/insightVolantino';
 import { origineStoricoPerReport } from '../utils/origineStorico';
 import { leggiReferenza, percentualeIngombro } from '../utils/referenzaStampata';
 
@@ -71,6 +71,10 @@ function marcheDelDistributore(valore: unknown): string[] {
  * Autonomous VolantinoService with its own implementation.
  * Manages volantino (flyer) file queries and insights.
  */
+/** La composizione della descrizione del box dichiarata dalla libreria agenzia, legata al suo modulo; undefined senza. */
+const descrizioneDellAgenzia = (agenzia: InsightVolantinoAgenzia | undefined): OpzioniInsight['descrizioneBox'] =>
+  agenzia?.descrizioneBox ? testi => agenzia.descrizioneBox!(testi) : undefined;
+
 export class VolantinoService implements IVolantinoService {
   constructor(
     private readonly configService: IConfigService,
@@ -379,7 +383,9 @@ export class VolantinoService implements IVolantinoService {
           urlLogo: (sigla) => {
             const voce = catalogo.get(sigla.trim().toLowerCase());
             return voce ? urlImmagineLogo(voce.guidId) : null;
-          }
+          },
+          // La descrizione completa del box nella scheda, se la libreria agenzia del cliente la compone a modo suo
+          descrizioneBox: descrizioneDellAgenzia(this.agenziaLib.insightVolantino)
         }
       );
 

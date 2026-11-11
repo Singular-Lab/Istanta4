@@ -3,6 +3,15 @@ import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fileInOrdine, NESSUN_FILE, SERVE_IL_PERMESSO } from "./ScaricaVolantino";
+import { REPORT_DISATTIVATO } from "./index";
+
+// jsdom non implementa ResizeObserver, usato da Headless UI all'apertura del menu dei file
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 const finti = vi.hoisted(() => ({
   permessi: new Set<string>(),
@@ -38,10 +47,10 @@ vi.mock("@/query/consultazione", () => ({
 vi.mock("@/utils/scaricaFileConsultazione", () => ({
   useScaricaFileConsultazione: () => ({ inCorso: null, scarica: finti.scarica }),
 }));
-// Il report PDF lo disegna il suo componente (con i suoi test): qui conta dove sta e cosa riceve
+// Il report PDF lo disegna il suo componente (con i suoi test): qui conta dove sta e che è disattivato
 vi.mock("@/components/FlyerInsights/report", () => ({
-  ScaricaReportPdf: ({ idKit, titolo, disabled }: { idKit: string; titolo: string; disabled?: boolean }) => (
-    <button type="button" disabled={disabled}>
+  ScaricaReportPdf: ({ idKit, titolo, disabled, motivoDisattivato }: { idKit: string; titolo: string; disabled?: boolean; motivoDisattivato?: string }) => (
+    <button type="button" disabled={disabled || Boolean(motivoDisattivato)} title={motivoDisattivato}>
       Report PDF di {idKit}: {titolo}
     </button>
   ),
@@ -182,7 +191,7 @@ describe("Dettaglio del volantino", () => {
     finti.scarica.mockReset();
   });
 
-  it("intestazione compatta: titolo, canale, area, periodo e stato del volantino dagli insight, con il report PDF", () => {
+  it("intestazione compatta: titolo, canale, area, periodo e stato del volantino dagli insight, con il report PDF disattivato e Scarica il volantino", () => {
     // Le date vengono dagli insight, non dalla consultazione
     finti.file = caricato(undefined);
     apri();
@@ -194,7 +203,12 @@ describe("Dettaglio del volantino", () => {
     expect(screen.getByTitle("Nord")).toBeInTheDocument();
     expect(screen.getByTitle("1 – 14 gennaio 2020")).toBeInTheDocument();
     expect(screen.getByTitle("Concluso")).toHaveAttribute("data-tono", "neutral");
-    expect(screen.getByRole("button", { name: "Report PDF di k1: Volantino ottobre" })).toBeEnabled();
+    const report = screen.getByRole("button", { name: "Report PDF di k1: Volantino ottobre" });
+    expect(report).toBeDisabled();
+    expect(report).toHaveAttribute("title", REPORT_DISATTIVATO);
+    // Accanto al report si scarica il PDF del volantino
+    const scarica = screen.getByRole("button", { name: /Scarica il volantino/ });
+    expect(report.parentElement).toContainElement(scarica);
   });
 
   it("senza le date negli insight (server non aggiornato) non c'è periodo né stato, ma il resto dell'intestazione sì", () => {
@@ -218,21 +232,16 @@ describe("Dettaglio del volantino", () => {
     expect(screen.getByTitle("Concluso")).toBeInTheDocument();
   });
 
-  it("mette le sezioni nell'ordine: numeri, distribuzione, volantino, marchi del distributore, analisi, referenze, file", () => {
+  it("mette le sezioni nell'ordine: numeri, volantino, distribuzione, marchi del distributore, analisi, referenze; niente file in fondo", () => {
     finti.permessi.add("materiali.scarica");
     finti.insights = caricato({ ...datiInsight, lineeDistributore: LINEE });
     apri();
 
-    expect(titoliSezioni()).toEqual([
-      "Distribuzione nelle pagine",
-      "Il volantino",
-      "Marchi del distributore",
-      "Referenze in volantino · 4",
-      "File del volantino",
-    ]);
-    // I numeri stanno prima della distribuzione, le analisi fra i marchi e le referenze
-    const distribuzione = screen.getByRole("heading", { level: 2, name: "Distribuzione nelle pagine" });
-    expect(numeri().compareDocumentPosition(distribuzione) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(titoliSezioni()).toEqual(["Il volantino", "Distribuzione nelle pagine", "Marchi del distributore", "Referenze in volantino · 4"]);
+    // I numeri stanno prima del volantino, le analisi fra i marchi e le referenze
+    const volantino = screen.getByRole("heading", { level: 2, name: "Il volantino" });
+    expect(numeri().compareDocumentPosition(volantino) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "File del volantino" })).not.toBeInTheDocument();
     const analisi = screen.getByTestId("analisi");
     const marchi = screen.getByRole("heading", { level: 2, name: "Marchi del distributore" });
     const referenze = screen.getByRole("heading", { level: 2, name: "Referenze in volantino · 4" });
@@ -398,33 +407,16 @@ describe("Dettaglio del volantino", () => {
     expect(screen.getByText("Analisi k1")).toBeInTheDocument();
   });
 
-  it("senza materiali.scarica lascia consultare gli insight e non abilita la richiesta dei file", () => {
+  it("senza materiali.scarica lascia consultare gli insight; Scarica il volantino è disattivato e dice che manca il permesso", () => {
     apri();
 
     expect(finti.richiestaFile).toEqual({ idKit: "k1", abilitata: false });
-    expect(screen.getByText(/Per scaricare i file serve il permesso di scaricare volantini e POP/)).toBeInTheDocument();
+    const pulsante = screen.getByRole("button", { name: /Scarica il volantino/ });
+    expect(pulsante).toBeDisabled();
+    expect(pulsante).toHaveAttribute("title", SERVE_IL_PERMESSO);
     expect(screen.queryByRole("region", { name: "File del volantino" })).not.toBeInTheDocument();
   });
 
-  it("con materiali.scarica mostra, filtra e scarica dalla consultazione i file pubblicati", () => {
-    finti.permessi.add("materiali.scarica");
-    finti.file = caricato({
-      ...PUBBLICATO,
-      file: [
-        { id: "f1", nome: "Roma.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: "/mini/roma" },
-        { id: "f2", nome: "MILANO.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: null },
-      ],
-    });
-    apri();
-
-    expect(finti.richiestaFile).toEqual({ idKit: "k1", abilitata: true });
-    fireEvent.change(screen.getByRole("searchbox", { name: "Cerca file" }), { target: { value: "milano" } });
-    expect(screen.getByText("MILANO.pdf")).toBeInTheDocument();
-    expect(screen.queryByText("Roma.pdf")).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Scarica PDF" }));
-    expect(finti.scarica).toHaveBeenCalledWith("f2", "MILANO.pdf");
-  });
 
   it("senza parametro kit segnala l'indirizzo incompleto", () => {
     apri("/volantini/tutti_i_volantini");
@@ -434,7 +426,7 @@ describe("Dettaglio del volantino", () => {
   });
 });
 
-describe("Dettaglio del volantino: report PDF", () => {
+describe("Dettaglio del volantino: report PDF disattivato", () => {
   beforeEach(() => {
     finti.permessi = new Set(["materiali.visualizza"]);
     finti.insights = caricato(datiInsight);
@@ -442,24 +434,82 @@ describe("Dettaglio del volantino: report PDF", () => {
     finti.file = caricato(PUBBLICATO);
   });
 
-  it("mentre gli insight caricano il report non si può scaricare", () => {
+  it("il report PDF si vede ma è sempre disattivato: mentre gli insight caricano e dopo", () => {
     finti.insights = inCaricamento();
-    apri();
+    const { unmount } = apri();
+    expect(screen.getByRole("button", { name: /^Report PDF/ })).toBeDisabled();
+    unmount();
 
-    expect(screen.getByRole("button", { name: "Report PDF di k1: Dettaglio volantino" })).toBeDisabled();
+    finti.insights = caricato(datiInsight);
+    apri();
+    const report = screen.getByRole("button", { name: /^Report PDF/ });
+    expect(report).toBeDisabled();
+    expect(report).toHaveAttribute("title", REPORT_DISATTIVATO);
   });
 
-  it("se gli insight non arrivano non c'è il report", () => {
-    finti.insights = fallito("Volantino non trovato");
+  it("niente rendimento, previsione né simulazione", () => {
     apri();
 
-    expect(screen.queryByRole("button", { name: /^Report PDF/ })).not.toBeInTheDocument();
-  });
-
-  it("accanto al report niente rendimento, previsione né simulazione", () => {
-    apri();
-
-    expect(screen.getByRole("button", { name: /^Report PDF/ })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 2, name: /Rendimento|Previsione|Simulazione/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("Dettaglio del volantino: Scarica il volantino", () => {
+  const VOL = { id: "f1", nome: "Roma.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: "/mini/roma" };
+  const VOL_MILANO = { id: "f2", nome: "MILANO.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 8, anteprima: null };
+  const WEB = { id: "f3", nome: "Banner web.zip", tipoExport: "WEB", mime: "application/zip", pagine: null, anteprima: null };
+  const pulsante = () => screen.getByRole("button", { name: /Scarica il volantino/ });
+
+  beforeEach(() => {
+    finti.permessi = new Set(["materiali.visualizza", "materiali.scarica"]);
+    finti.insights = caricato(datiInsight);
+    finti.configurazione = caricato({});
+    finti.scarica.mockReset();
+  });
+
+  it("con un solo file il pulsante in alto lo scarica con il suo nome", () => {
+    finti.file = caricato({ ...PUBBLICATO, file: [VOL] });
+    apri();
+
+    expect(finti.richiestaFile).toEqual({ idKit: "k1", abilitata: true });
+    expect(pulsante()).toBeEnabled();
+    fireEvent.click(pulsante());
+    expect(finti.scarica).toHaveBeenCalledWith("f1", "Roma.pdf");
+  });
+
+  it("con più file apre l'elenco, il PDF del volantino per primo, e scarica quello scelto", async () => {
+    finti.file = caricato({ ...PUBBLICATO, file: [WEB, VOL, VOL_MILANO] });
+    apri();
+
+    fireEvent.click(pulsante());
+    const voci = await screen.findAllByRole("menuitem");
+    expect(voci.map(voce => voce.textContent)).toEqual(["MILANO.pdf", "Roma.pdf", "Banner web.zip"]);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Roma.pdf" }));
+    expect(finti.scarica).toHaveBeenCalledWith("f1", "Roma.pdf");
+  });
+
+  it("senza file pubblicati, mentre arrivano o se non arrivano il pulsante è disattivato e dice perché", () => {
+    finti.file = caricato({ ...PUBBLICATO, file: [] });
+    const { unmount } = apri();
+    expect(pulsante()).toBeDisabled();
+    expect(pulsante()).toHaveAttribute("title", NESSUN_FILE);
+    unmount();
+
+    finti.file = inCaricamento();
+    const secondo = apri();
+    expect(pulsante()).toBeDisabled();
+    secondo.unmount();
+
+    finti.file = fallito("Volantino non disponibile: non è pubblicato o non è della tua GDO.");
+    apri();
+    expect(pulsante()).toBeDisabled();
+    expect(pulsante()).toHaveAttribute("title", "Volantino non disponibile: non è pubblicato o non è della tua GDO.");
+  });
+
+  it("l'ordine dei file: il PDF dell'export volantino, poi gli altri del volantino, gli altri PDF e il resto", () => {
+    const ALTRO_PDF = { ...WEB, id: "f4", nome: "Locandina.pdf", tipoExport: "POP", mime: "application/pdf" };
+    const VOL_ZIP = { ...WEB, id: "f5", nome: "Sorgenti.zip", tipoExport: "VOL" };
+    expect(fileInOrdine([WEB, ALTRO_PDF, VOL_ZIP, VOL]).map(voce => voce.nome)).toEqual(["Roma.pdf", "Sorgenti.zip", "Locandina.pdf", "Banner web.zip"]);
   });
 });
