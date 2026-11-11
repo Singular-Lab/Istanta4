@@ -121,7 +121,8 @@ test("il salvataggio di primarie e secondarie tiene il ciclo sospeso e segue il 
     //Il box ricostruito si segue dopo le foto e prima del riscaricamento della scheda.
     const segui = gestore.indexOf("me.seguiBoxRicostruito(box);");
     const riscarica = gestore.indexOf("await me.ricaricaDatiScheda(codice_gruppo, idRec);");
-    const foto = gestore.lastIndexOf("FotoPlacer.updateFoto(", riscarica);
+    //I20-1230: le foto si impaginano con impaginaFotoPs, che scarica quelle che mancano nei Links.
+    const foto = Math.max(gestore.lastIndexOf("FotoPlacer.updateFoto(", riscarica), gestore.lastIndexOf("me.impaginaFotoPs(", riscarica));
     assert.ok(foto > 0 && segui > foto && riscarica > segui, "ordine: updateFoto, seguiBoxRicostruito, ricaricaDatiScheda");
     //L'allineamento al box riscaricato resta quello di prima.
     assert.match(gestore, /var esitoAllineamento = await me\.allineaBoxDopoSalvataggioPS\(box, codiceBoxPrecedente\);/);

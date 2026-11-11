@@ -1382,6 +1382,49 @@ const schedaFoto = {
         return true;
     },
 
+    /// I20-1230: impagina nel box la foto di una referenza dopo Applica di Foto P/S. Il pacchetto foto
+    /// porta solo primarie e secondarie: la foto di una referenza appena resa primaria o secondaria
+    /// puo' non essere nei Links. Allora si scarica da sola (assicuraFotoNeiLinks, come Cambia foto) e
+    /// si impagina con un secondo tentativo, se InDesign non vede ancora il file. Con la foto gia' nei
+    /// Links, o per una referenza non selezionata, e' l'impaginazione di prima.
+    async impaginaFotoPs(objItem, box, imgRectangle, noRender) {
+        var stato = objItem.StatoSelezione;
+        var codice = objItem["Referenza.Codice"];
+        var nomeFoto = stato != 3 ? objItem["Foto.Nome"] : null;
+        if (nomeFoto == null || nomeFoto === "" || ReperimentoFoto.fotoPresenteNeiLinks(nomeFoto)) {
+            return FotoPlacer.updateFoto(nomeFoto, box, imgRectangle, codice, stato, noRender);
+        }
+
+        var scaricata = false;
+        showLoading("Scaricamento della foto " + nomeFoto + "...");
+        try {
+            scaricata = await ReperimentoFoto.assicuraFotoNeiLinks(nomeFoto, objItem["Foto.guidid"]);
+        }
+        finally {
+            hideLoading();
+        }
+        if (!scaricata) {
+            messaggioUtente("Code SRF-153 Edit P/S: la foto " + nomeFoto + " della referenza " + codice + " non si e' potuta scaricare, scaricarla dal pulsante di Foto P/S", "warning");
+        }
+        return await ReperimentoFoto.impaginaFotoAppenaDisponibile(nomeFoto, box, imgRectangle, codice, stato, noRender);
+    },
+
+    /// I20-1230: la riga di Foto P/S per una foto nel box con il collegamento rotto. Se nei Links c'e'
+    /// un file con quel nome - un documento arrivato da un'altra postazione punta alle sue cartelle -
+    /// il box va ricollegato a quel file; altrimenti la foto si scarica, come prima.
+    rigaFotoCollegamentoRotto(nomeFoto) {
+        if (nomeFoto != null && nomeFoto !== "" && ReperimentoFoto.fotoPresenteNeiLinks(nomeFoto)) {
+            return {
+                azione: "ricollega",
+                testo: "Errore: la foto è nella cartella Links ma il box non la trova, ricollegarla attraverso il pulsante adiacente"
+            };
+        }
+        return {
+            azione: "scarica",
+            testo: "Errore: la foto non è presente nella cartella, scaricare l'immagine attraverso il pulsante adiacente"
+        };
+    },
+
     /// La schermata di primarie e secondarie.
     async EditFotoPrimarieSecondarie(box) {
         var messageDelivered = false;
@@ -1604,14 +1647,31 @@ const schedaFoto = {
     
                     if (fotoNellaCartellaIsMissing) {
                         var codice = objItem["Referenza.Codice"];
-                        imgSync = $('<img>', { src: "images/download.png", style: "width:30px; cursor:pointer;", 'data-codice': objItem["Foto.guidid"] });
-                        errorText = $('<span>Errore: la foto non è presente nella cartella, scaricare l\'immagine attraverso il pulsante adiacente</span>');
+                        var fotoNomeDato = objItem["Foto.Nome"];
+                        var fotoRectangle = fotoFound.rectangle;
+                        //I20-1230: con il file gia' nei Links il box va solo ricollegato, scaricarlo non basta.
+                        var rigaRotto = me.rigaFotoCollegamentoRotto(fotoNomeDato);
+                        imgSync = $('<img>', { src: rigaRotto.azione == "ricollega" ? "images/impaginazione.png" : "images/download.png", style: "width:30px; cursor:pointer;", 'data-codice': objItem["Foto.guidid"] });
+                        errorText = $('<span></span>').text(rigaRotto.testo);
                         errorText.css({ "font-size": "14px", "color": "yellow" });
-                        imgSync.on('click', function () {
-                            ReperimentoFoto.avviaSyncPacchettoFoto(2, function () {
+                        if (rigaRotto.azione == "ricollega") {
+                            imgSync.on('click', function () {
+                                let result = FotoPlacer.updateFoto(fotoNomeDato, box, fotoRectangle, codice);
+                                box = result.box;
+                                let fotoImpaginata = result.fotoRectangle;
+                                if (fotoPrimaria != null && fotoImpaginata != null && fotoImpaginata.id != fotoPrimaria.rectangle.id) {
+                                    fotoImpaginata.sendToBack(fotoPrimaria.rectangle);
+                                }
                                 me.EditFotoPrimarieSecondarie(box);
-                            }, [codice]);
-                        });
+                            });
+                        }
+                        else {
+                            imgSync.on('click', function () {
+                                ReperimentoFoto.avviaSyncPacchettoFoto(2, function () {
+                                    me.EditFotoPrimarieSecondarie(box);
+                                }, [codice]);
+                            });
+                        }
                     }
                     else if (fotoInMismatch || !hashMatch) {
                         var codice = objItem["Referenza.Codice"];
@@ -1914,8 +1974,8 @@ const schedaFoto = {
                                     }
                                     var fotoFound = listFotoImpaginate.find(f => f.imgName == objItem["Foto.Nome"])
                                     let imgRectangle = fotoFound != null ? fotoFound.rectangle : null;
-                                    //box = me.placeFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione);
-                                    let result = FotoPlacer.updateFoto(objItem.StatoSelezione != 3 ? objItem["Foto.Nome"] : null, box, imgRectangle, objItem["Referenza.Codice"], objItem.StatoSelezione, noRenderSalvato);
+                                    //I20-1230: una foto che non e' nei Links si scarica e si impagina da sola.
+                                    let result = await me.impaginaFotoPs(objItem, box, imgRectangle, noRenderSalvato);
                                     box = result.box;
                                     imgRectangle = result.fotoRectangle;
                                     if(objItem.StatoSelezione == 1){
