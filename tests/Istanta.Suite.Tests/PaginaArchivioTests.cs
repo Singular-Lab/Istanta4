@@ -143,6 +143,77 @@ public class PaginaArchivioTests
         }
     }
 
+    /// I20-1213: il corpo di eseguiRicerca, dove la pagina decide se cercare.
+    private static string CorpoDellaRicerca(string controller)
+    {
+        var inizio = controller.IndexOf("private async Task<IActionResult> eseguiRicerca(", StringComparison.Ordinal);
+        var fine = controller.IndexOf("return View();", controller.IndexOf("ViewBag.kpiSenzaFoto = conteggi.Totale - conteggi.ConFoto;", StringComparison.Ordinal), StringComparison.Ordinal);
+        Assert.True(inizio >= 0 && fine > inizio, "eseguiRicerca non trovata nel controller");
+        return controller.Substring(inizio, fine - inizio);
+    }
+
+    [Fact]
+    public void I20_1213_la_pagina_si_apre_senza_ricerca_con_i_contatori_della_ricerca_a_zero()
+    {
+        var controller = File.ReadAllText(TrovaFile("Istanta/Controllers/ArchivioController.cs"));
+        var corpo = CorpoDellaRicerca(controller);
+
+        //La GET apre senza cercare, Cerca e il cambio pagina (POST) cercano.
+        Assert.Contains("null, null, null, null, null, 0, 0, cerca: false);", controller);
+        Assert.Contains("search_foto, ordinamento, Page, any_changed, cerca: true);", controller);
+
+        //All'apertura: "In archivio" letto, poi i tre contatori a zero, nessun elenco, e si risponde
+        //prima di contare e di leggere la pagina di articoli.
+        var totale = corpo.IndexOf("ViewBag.totaleArchivio = await ctx.Articolis.CountAsync();", StringComparison.Ordinal);
+        var apertura = corpo.IndexOf("if (!cerca)", StringComparison.Ordinal);
+        var conteggi = corpo.IndexOf("Utility.RicercaArchivio.ContaAsync(query)", StringComparison.Ordinal);
+        var pagina = corpo.IndexOf("Utility.RicercaArchivio.PaginaAsync(", StringComparison.Ordinal);
+        Assert.True(totale >= 0 && apertura > totale && conteggi > apertura && pagina > conteggi);
+        var bloccoApertura = corpo.Substring(apertura, conteggi - apertura);
+        bloccoApertura = bloccoApertura.Substring(0, bloccoApertura.IndexOf("return View();", StringComparison.Ordinal));
+        foreach (var riga in new[] { "ViewBag.conteggio = 0;", "ViewBag.kpiConFoto = 0;", "ViewBag.kpiSenzaFoto = 0;", "ViewBag.TotPagine = 0;", "ViewBag.lista_ricerca = null;" })
+        {
+            Assert.Contains(riga, bloccoApertura);
+        }
+
+        //I 27 articoli senza descrizioni restano fuori dalla ricerca, contati solo in "In archivio".
+        Assert.Contains("IQueryable<Articoli> query = ctx.Articolis.Where(a => a.ArticoliDescrizionis!.Any());", corpo);
+    }
+
+    [Fact]
+    public void I20_1213_senza_ricerca_la_vista_non_mostra_elenco_e_lo_zero_di_senza_foto_non_e_in_rosso()
+    {
+        var vista = File.ReadAllText(TrovaFile("Istanta/Views/Archivio/Index.cshtml"));
+
+        Assert.Contains("@if (ViewBag.lista_ricerca != null)", vista);
+        Assert.Contains("((int?)ViewBag.kpiSenzaFoto ?? 0) > 0 ? \"attenzione\"", vista);
+    }
+
+    [Fact]
+    public void I20_1213_i_contatori_si_calcolano_prima_dell_ordinamento()
+    {
+        var corpo = CorpoDellaRicerca(File.ReadAllText(TrovaFile("Istanta/Controllers/ArchivioController.cs")));
+
+        var conteggi = corpo.IndexOf("var conteggi = await Utility.RicercaArchivio.ContaAsync(query);", StringComparison.Ordinal);
+        var ordinamento = corpo.IndexOf("query = Utility.RicercaArchivio.Ordina(ctx, query, ordinamento);", StringComparison.Ordinal);
+        Assert.True(conteggi >= 0 && ordinamento > conteggi, "l'ordinamento deve venire dopo i contatori");
+    }
+
+    [Fact]
+    public void I20_1213_ordinando_per_descrizione_non_si_perdono_gli_articoli_senza_riga_base()
+    {
+        using var ctx = NuovoContesto();
+        var sql = RicercaArchivio.QueryIdPagina(RicercaPerNome(ctx, "descrizione"), 0, 40).ToQueryString();
+
+        //Giunzione esterna con la riga base: un articolo senza la riga base resta nell'elenco.
+        Assert.Contains("LEFT JOIN", sql);
+        Assert.DoesNotContain("INNER JOIN", sql);
+        Assert.Contains("area IS NULL", sql);
+        //In fondo, prima della descrizione si ordina per "manca la descrizione".
+        Assert.Matches(new Regex(@"ORDER BY CASE\s+WHEN"), sql);
+        Assert.Matches(new Regex(@"THEN 1\s+ELSE 0\s+END,\s+\w+\.descrizione_1"), sql);
+    }
+
     private static string TrovaFile(string relativo)
     {
         var cartella = new DirectoryInfo(AppContext.BaseDirectory);
