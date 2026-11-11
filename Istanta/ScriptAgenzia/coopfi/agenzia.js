@@ -1579,8 +1579,14 @@ class Agenzia extends IAgenzia {
         return changes;
     }
 
+    /// TASK-110bdfa0: Coop vuole tema e settore, non piu' il segmento.
     getParametriReport() {
-        return ["segmento", "reparto", "Referenza.Ean"];
+        return ["tema", "settore", "reparto", "Referenza.Ean"];
+    }
+
+    /// TASK-110bdfa0: le colonne del core che Coop non vuole nel report dell'importazione (Promo.colonneCoreDelReport).
+    getColonneCoreEscluseReport() {
+        return ["Alterazioni"];
     }
 
     filtroModePerSingoliOGruppi(mode, currentList) {
