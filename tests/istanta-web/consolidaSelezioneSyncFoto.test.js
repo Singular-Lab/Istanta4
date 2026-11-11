@@ -46,7 +46,8 @@ function conPaginaFinta(prova) {
     const chiamate = [];
     const messaggi = [];
     let risposta = 'ok';
-    global.Call = { do: (ctrl, azione, metodo, obj, me, ok, ko) => { chiamate.push({ ctrl, azione, metodo, obj }); risposta === 'ok' ? ok({ consolidate: 1 }) : ko({ info: { status: 500 } }); } };
+    //TASK-c0dd1af9: l'elenco va in JSON (doWithLargePayload), non come form.
+    global.Call = { doWithLargePayload: (ctrl, azione, metodo, obj, me, ok, ko) => { chiamate.push({ ctrl, azione, metodo, obj }); risposta === 'ok' ? ok({ consolidate: 1 }) : ko({ info: { status: 500 } }); } };
     global.showLoading = () => { };
     global.mostraMessaggio = (testo, tipo) => messaggi.push({ testo, tipo });
     console.error = () => { };
@@ -107,4 +108,31 @@ test('syncZip, finiti i blocchi, consolida l\'elenco della scansione e ogni bloc
 
     assert.match(syncZip, /SyncFoto\.aggiornaFileDellaScansione\(me\.syncOp\.files, item\);/);
     assert.match(syncZip, /this\.consolidaSelezione\(this\.syncOp\.files, \(\) => this\.fineSync\(\)\);/);
+});
+
+test('TASK-c0dd1af9: un pacchetto di 1500 foto parte in una chiamata sola, con tutte le foto', () => {
+    conPaginaFinta(({ chiamate, messaggi }) => {
+        const scansione = [];
+        for (let i = 0; i < 1500; i++) {
+            scansione.push({ filename: `${7000000 + i}_1_T1.psd`, stato: 1, id: 100 + i, idArticolo: 15000 + i, tipo: 1, idRecView: `r${i}` });
+        }
+        const pagina = Object.create(SyncFoto.prototype);
+        let finita = 0;
+
+        pagina.consolidaSelezione(scansione, () => finita++);
+
+        assert.strictEqual(chiamate.length, 1);
+        assert.strictEqual(chiamate[0].obj.files.length, 1500);
+        assert.deepStrictEqual(chiamate[0].obj.files[1499], { filename: '7001499_1_T1.psd', stato: 1, id: 1599, idArticolo: 16499, tipo: 1 });
+        assert.strictEqual(finita, 1);
+        assert.deepStrictEqual(messaggi, []);
+    });
+});
+
+test('TASK-c0dd1af9: i campi numerici mancanti partono come numeri, non come null', () => {
+    //In JSON un null su un intero fa scartare al server l'elenco intero.
+    assert.deepStrictEqual(SyncFoto.fileDaConsolidare([{ filename: 'a.psd', stato: 6, id: null, idArticolo: 15938 }]),
+        [{ filename: 'a.psd', stato: 6, id: 0, idArticolo: 15938, tipo: 1 }]);
+    assert.deepStrictEqual(SyncFoto.fileDaConsolidare([{ filename: 'b.psd', stato: '1', id: '42', idArticolo: '7', tipo: 0 }]),
+        [{ filename: 'b.psd', stato: 1, id: 42, idArticolo: 7, tipo: 0 }]);
 });

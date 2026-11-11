@@ -67,7 +67,8 @@ test('l\'anteprima si chiede dopo il report e quando cambiano spunte, sovrascrit
     //Come startSyncZip: parte la riga selezionata, spuntata, visibile, abilitata e non ancora sincronizzata.
     const anteprima = sorgente.substring(sorgente.indexOf('    aggiornaAnteprima(subito = false) {'), sorgente.indexOf('    consolidaSelezione(files, fine) {'));
     assert.match(anteprima, /riga\.attr\("selezionato"\) == "1" && riga\.attr\("synced"\) != "1"\s*&& riga\.css\("display"\) != "none" && ch\.is\(":checked"\) && !ch\.is\(":disabled"\)/);
-    assert.match(anteprima, /Call\.do\("SyncFoto", "AnteprimaSync", "PUT", \{ files: SyncFoto\.fotoPerAnteprima\(righe\) \}/);
+    //TASK-c0dd1af9: in JSON, come form oltre le 1024 foto il server non leggeva l'elenco.
+    assert.match(anteprima, /Call\.doWithLargePayload\("SyncFoto", "AnteprimaSync", "PUT", \{ files: SyncFoto\.fotoPerAnteprima\(righe\) \}/);
     assert.match(anteprima, /me\._timerAnteprima = setTimeout\(esegui, 300\);/);
 });
 
@@ -112,4 +113,14 @@ test('i comandi del report stanno insieme a destra, alla stessa altezza', () => 
     }
     assert.match(comandi, /<select id="cmbFiltroStato" class="form-select form-select-sm w-auto">/);
     assert.match(comandi, /<button id="btnDownloadPerStato" class="btn btn-sm btn-primary">/);
+});
+
+test('TASK-c0dd1af9: all\'anteprima vanno anche 1500 foto, e un id mancante parte come 0', () => {
+    const righe = [];
+    for (let i = 0; i < 1500; i++) {
+        righe.push({ rec: { filename: `${7000000 + i}_1_T1.psd`, stato: 6, id: i == 0 ? null : 0, idArticolo: 15000 + i, tipo: 1 }, sincronizza: true });
+    }
+    const foto = SyncFoto.fotoPerAnteprima(righe);
+    assert.strictEqual(foto.length, 1500);
+    assert.deepStrictEqual(foto[0], { filename: '7000000_1_T1.psd', stato: 6, id: 0, idArticolo: 15000, tipo: 1, sincronizza: true });
 });

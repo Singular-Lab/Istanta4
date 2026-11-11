@@ -630,7 +630,8 @@ class SyncFoto {
             if (righe.length == 0) {
                 return;
             }
-            Call.do("SyncFoto", "AnteprimaSync", "PUT", { files: SyncFoto.fotoPerAnteprima(righe) }, me, function (result) {
+            //TASK-c0dd1af9: in JSON, come form oltre le 1024 foto il server non leggeva l'elenco.
+            Call.doWithLargePayload("SyncFoto", "AnteprimaSync", "PUT", { files: SyncFoto.fotoPerAnteprima(righe) }, me, function (result) {
                 let esiti = result && result.esiti ? result.esiti : [];
                 righe.forEach((r, i) => r.riga.find("#lab_dopo").text(esiti[i] != null ? esiti[i] : ""));
             }, function (err) {
@@ -655,7 +656,8 @@ class SyncFoto {
             return;
         }
         showLoading("Scelta delle foto in uscita...");
-        Call.do("SyncFoto", "ConsolidaSelezione", "PUT", obj, this, function () {
+        //TASK-c0dd1af9: in JSON, come form oltre le 1024 foto il server non leggeva l'elenco.
+        Call.doWithLargePayload("SyncFoto", "ConsolidaSelezione", "PUT", obj, this, function () {
             fine();
         }, function (err) {
             console.error("Selezione delle foto in uscita non riuscita", err);
@@ -1353,10 +1355,18 @@ class SyncFoto {
     /// TASK-10858197: le foto del report per SyncFoto/AnteprimaSync, nell'ordine delle righe, con i soli campi
     /// che servono e se partiranno nel sync. righe: { rec, sincronizza }.
     static fotoPerAnteprima(righe) {
-        return (righe || []).map(r => ({
-            filename: r.rec.filename, stato: r.rec.stato, id: r.rec.id, idArticolo: r.rec.idArticolo, tipo: r.rec.tipo,
-            sincronizza: r.sincronizza === true
-        }));
+        return (righe || []).map(r => Object.assign(SyncFoto.campiDellaFoto(r.rec), { sincronizza: r.sincronizza === true }));
+    }
+
+    /// TASK-c0dd1af9: i campi di una foto della scansione che servono ad AnteprimaSync e ConsolidaSelezione.
+    /// Vanno in JSON, e un null o un testo su un campo numerico farebbe scartare al server l'elenco intero:
+    /// i numeri mancanti diventano 0, e tipo resta quello della foto del prodotto se manca.
+    static campiDellaFoto(f) {
+        let numero = (v, predefinito) => (v == null || v === "" || isNaN(Number(v))) ? predefinito : Number(v);
+        return {
+            filename: f.filename, stato: numero(f.stato, 0), id: numero(f.id, 0), idArticolo: numero(f.idArticolo, 0),
+            tipo: numero(f.tipo, 1)
+        };
     }
 
     /// TASK-10858197: mostra o nasconde la colonna "Dopo il sync" e ricorda la scelta nel browser. Senza
@@ -1390,7 +1400,7 @@ class SyncFoto {
     static fileDaConsolidare(files) {
         return (files || [])
             .filter(f => f != null && f.idArticolo > 0)
-            .map(f => ({ filename: f.filename, stato: f.stato, id: f.id, idArticolo: f.idArticolo, tipo: f.tipo }));
+            .map(f => SyncFoto.campiDellaFoto(f));
     }
 
     /// I20-1212: lo stato e l'id che il sync di un blocco ha dato a un file, riportati sulla sua riga

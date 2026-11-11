@@ -1641,10 +1641,12 @@ namespace Istanta.Controllers
         /// <summary>
         /// TASK-10858197: l'anteprima del report: gli esiti di EsitiDopoSync, nell'ordine delle foto ricevute.
         /// Niente database e niente Olimpo: la pagina la chiede quando cambiano le scelte.
+        /// TASK-c0dd1af9: l'elenco arriva in JSON nel corpo; come form, oltre le 1024 foto il binder delle
+        /// liste (MaxModelBindingCollectionSize) falliva prima dell'azione.
         /// </summary>
         [HttpPut]
         [Route("SyncFoto/AnteprimaSync")]
-        public IActionResult AnteprimaSync(AnteprimaSyncRequest req)
+        public IActionResult AnteprimaSync([FromBody] AnteprimaSyncRequest req)
         {
             return Ok(new { esiti = EsitiDopoSync(req?.files ?? new List<FotoInAnteprima>(), EstensioniPostProduzione(ext_post_lavorazione)) });
         }
@@ -1654,10 +1656,12 @@ namespace Istanta.Controllers
         /// stato dopo i blocchi) e per ogni articolo la foto che deve prevalere (FotoCheDevonoPrevalere)
         /// torna la foto in uscita: data di modifica adesso, attiva e primaria. Senza Olimpo e senza file:
         /// una query sulle righe coinvolte e un salvataggio. Una riga si tocca solo se e' dell'articolo indicato.
+        /// TASK-c0dd1af9: l'elenco arriva in JSON nel corpo, come per AnteprimaSync: il pacchetto puo' superare
+        /// le 1024 foto.
         /// </summary>
         [HttpPut]
         [Route("SyncFoto/ConsolidaSelezione")]
-        public async Task<IActionResult> ConsolidaSelezione(SyncFileOperation op)
+        public async Task<IActionResult> ConsolidaSelezione([FromBody] SyncFileOperation op)
         {
             try
             {

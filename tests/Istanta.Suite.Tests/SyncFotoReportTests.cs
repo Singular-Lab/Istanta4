@@ -140,4 +140,53 @@ public class SyncFotoReportTests
         Assert.Contains("file.details = $\"Foto {file.filename} non selezionata. Articolo: \" + artArchivio.Codice;", scansione);
         Assert.Contains("non ancora post prodotta) {file.filename} non selezionata.", scansione);
     }
+    /// <summary>
+    /// TASK-c0dd1af9: l'elenco della scansione arriva in JSON, come lo manda syncfoto.js (campiDellaFoto). Come
+    /// form, oltre le 1024 foto il binder delle liste falliva prima dell'azione: colonna "Dopo il sync" vuota e
+    /// foto in uscita non scelta. In JSON arriva intero, e la regola vale anche in fondo al pacchetto.
+    /// </summary>
+    private static string PacchettoInJson(int quante, bool sincronizza)
+    {
+        var foto = new List<object>();
+        for (int i = 0; i < quante; i++)
+        {
+            foto.Add(new { filename = $"{7000000 + i}_1_T1.psd", stato = sincronizza ? 6 : 1, id = sincronizza ? 0 : 100 + i, idArticolo = 15000 + i, tipo = 1, sincronizza });
+        }
+        //L'ultimo articolo ha anche un jpg, dopo il psd: deve prevalere il psd.
+        int ultimo = 15000 + quante - 1;
+        foto.Add(new { filename = $"{7000000 + quante - 1}_1_T1.jpg", stato = sincronizza ? 6 : 1, id = sincronizza ? 0 : 100 + quante, idArticolo = ultimo, tipo = 1, sincronizza });
+        return Newtonsoft.Json.JsonConvert.SerializeObject(new { files = foto });
+    }
+
+    [Fact]
+    public void Un_pacchetto_di_1500_foto_in_JSON_arriva_intero_al_consolidamento()
+    {
+        var op = Newtonsoft.Json.JsonConvert.DeserializeObject<SyncFileOperation>(PacchettoInJson(1500, false))!;
+
+        Assert.Equal(1501, op.files!.Count);
+        var prevalenti = SyncFotoController.FotoCheDevonoPrevalere(op.files, new[] { ".psd" });
+        Assert.Equal(1500, prevalenti.Count);
+        Assert.Equal("7001499_1_T1.psd", prevalenti.Single(p => p.idArticolo == 16499).filename);
+    }
+
+    [Fact]
+    public void Un_pacchetto_di_1500_foto_nuove_in_JSON_ha_un_esito_per_ogni_foto()
+    {
+        var req = Newtonsoft.Json.JsonConvert.DeserializeObject<AnteprimaSyncRequest>(PacchettoInJson(1500, true))!;
+
+        var esiti = SyncFotoController.EsitiDopoSync(req.files!, new[] { ".psd" });
+
+        Assert.Equal(1501, esiti.Count);
+        Assert.All(esiti.Take(1500), e => Assert.Equal("Diverrà selezionata", e));
+        Assert.Equal("Nuova, non selezionata", esiti[1500]);
+    }
+
+    [Fact]
+    public void Anteprima_e_consolidamento_leggono_l_elenco_dal_corpo_JSON()
+    {
+        string sorgente = File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/Controllers/SyncFotoController.cs"));
+
+        Assert.Contains("public IActionResult AnteprimaSync([FromBody] AnteprimaSyncRequest req)", sorgente);
+        Assert.Contains("public async Task<IActionResult> ConsolidaSelezione([FromBody] SyncFileOperation op)", sorgente);
+    }
 }
