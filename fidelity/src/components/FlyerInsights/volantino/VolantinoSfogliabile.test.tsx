@@ -6,12 +6,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { altezzaFoglio, tintaCategoria } from "@/components/Grafici";
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import { urlPaginaMateriale } from "@/utils/materiali";
-import type { BoxInsight, TappaProdotto, ViaggioProdotto } from "../../../../lib/insightVolantino/tipi";
+import type { BoxInsight, ProdottoInsight, TappaProdotto, ViaggioProdotto } from "../../../../lib/insightVolantino/tipi";
 import { percorsoDettaglioVolantino } from "../../../../lib/materiali/periodi";
 
-// Il volantino degli insight: tutte le pagine con le immagini di Olimpo e i riquadri dei box (kit di
-// Istanta e dello storico), indice, colori, ingrandimento, analisi della pagina guardata, ricerca dei
-// box, scheda del box e viaggio del prodotto
+// Il volantino degli insight da sfogliare come quello stampato: le pagine aperte con le immagini di
+// Olimpo e i riquadri dei box (kit di Istanta e dello storico), giro di pagina, indice, colori,
+// ingrandimento, analisi delle pagine aperte, ricerca e interrogazione dei box, scheda del box e
+// viaggio del prodotto
 
 // jsdom non implementa ResizeObserver, usato da Headless UI all'apertura di Dialog e Slideover
 globalThis.ResizeObserver ??= class {
@@ -63,6 +64,22 @@ const boxDi = (id: string, dati: Partial<BoxInsight> = {}): BoxInsight => ({
   ...dati,
 });
 
+const prodotto = (dati: Partial<ProdottoInsight> = {}): ProdottoInsight => ({
+  chiave: "c-p",
+  nome: "Prodotto",
+  marca: null,
+  formato: null,
+  gusto: null,
+  codice: null,
+  ean: [],
+  prezzo: null,
+  settore: null,
+  segmento: null,
+  tema: null,
+  ruolo: null,
+  ...dati,
+});
+
 const disegna = (props: Partial<VolantinoSfogliabileProps> = {}) =>
   render(
     <MemoryRouter>
@@ -74,6 +91,15 @@ const disegna = (props: Partial<VolantinoSfogliabileProps> = {}) =>
 const riquadro = (id: string) => screen.getByTestId(`box-${id}`).querySelector("[data-riquadro]") as SVGRectElement;
 const attributo = (elemento: Element, nome: string) => Number(elemento.getAttribute(nome));
 const pagina = (numero: number) => screen.getByRole("group", { name: `Pagina ${numero}` });
+/** Le pagine sul palco, in ordine. */
+const pagineSulPalco = (contenitore: HTMLElement = screen.getByTestId("libro")) =>
+  within(contenitore)
+    .getAllByRole("group")
+    .map(gruppo => gruppo.getAttribute("aria-label"))
+    .filter(nome => /^Pagina \d+$/.test(nome ?? ""));
+const aperte = () => screen.getByTestId("pagine-aperte");
+const vaiA = () => screen.getByRole("textbox", { name: "Vai alla pagina" });
+const avanti = () => fireEvent.click(screen.getByRole("button", { name: "Gira avanti" }));
 
 const caricato = (data: unknown) => ({ data, isLoading: false, isError: false, error: null, refetch: vi.fn() });
 
@@ -111,91 +137,158 @@ describe("VolantinoSfogliabile: geometria dei kit di Istanta e dello storico", (
   });
 });
 
-describe("VolantinoSfogliabile: lettore con tutte le pagine", () => {
-  const vaiA = () => screen.getByRole("textbox", { name: "Vai alla pagina" });
-
-  it("mostra tutte le pagine una sotto l'altra, dalla copertina all'ultima, senza doppie pagine", () => {
+describe("VolantinoSfogliabile: sfogliare come il volantino stampato", () => {
+  it("apre la copertina da sola, poi le pagine a due a due; i comandi si fermano ai bordi", () => {
     disegna({ totalePagine: 5 });
 
-    const colonna = screen.getByTestId("colonna-pagine");
-    expect(within(colonna).getAllByRole("group").map(pagina => pagina.getAttribute("aria-label"))).toEqual([
-      "Pagina 1",
-      "Pagina 2",
-      "Pagina 3",
-      "Pagina 4",
-      "Pagina 5",
-    ]);
-    expect(screen.queryByText(/Pagine 2-3|Copertina/)).not.toBeInTheDocument();
-    expect(vaiA()).toHaveValue("1");
-    // "di 5" anche nell'analisi della pagina: qui conta quello della barra
-    expect(within(screen.getByRole("toolbar", { name: "Comandi del lettore" })).getByText("di 5")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pagina precedente" })).toBeDisabled();
+    expect(pagineSulPalco()).toEqual(["Pagina 1"]);
+    expect(aperte()).toHaveTextContent("Pagina 1 di 5");
+    expect(screen.getByRole("button", { name: "Gira indietro" })).toBeDisabled();
+
+    avanti();
+    expect(pagineSulPalco()).toEqual(["Pagina 2", "Pagina 3"]);
+    expect(aperte()).toHaveTextContent("Pagine 2-3 di 5");
+
+    avanti();
+    expect(pagineSulPalco()).toEqual(["Pagina 4", "Pagina 5"]);
+    expect(screen.getByRole("button", { name: "Gira avanti" })).toBeDisabled();
+    // Niente più pagine una sotto l'altra
+    expect(screen.queryByTestId("colonna-pagine")).not.toBeInTheDocument();
   });
 
-  it("l'indice elenca le pagine con il numero dei box, segna la corrente e porta alla pagina scelta", () => {
+  it("l'ultima pagina pari senza compagna sta da sola", () => {
+    disegna({ totalePagine: 6, pagina: 6 });
+
+    expect(pagineSulPalco()).toEqual(["Pagina 6"]);
+    expect(aperte()).toHaveTextContent("Pagina 6 di 6");
+  });
+
+  it("le frecce della tastiera, gli angoli delle pagine e le frecce ai lati girano pagina; Home e Fine vanno ai bordi", () => {
+    disegna({ totalePagine: 8 });
+    const palco = screen.getByTestId("lettore-pagine");
+
+    fireEvent.keyDown(palco, { key: "ArrowRight" });
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
+    fireEvent.click(screen.getByTestId("angolo-avanti"));
+    expect(aperte()).toHaveTextContent("Pagine 4-5");
+    fireEvent.click(screen.getByTestId("freccia-avanti"));
+    expect(aperte()).toHaveTextContent("Pagine 6-7");
+    fireEvent.keyDown(palco, { key: "ArrowLeft" });
+    expect(aperte()).toHaveTextContent("Pagine 4-5");
+    fireEvent.click(screen.getByTestId("angolo-indietro"));
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
+    fireEvent.keyDown(palco, { key: "End" });
+    expect(aperte()).toHaveTextContent("Pagina 8");
+    fireEvent.keyDown(palco, { key: "Home" });
+    expect(aperte()).toHaveTextContent("Pagina 1");
+    // In copertina non c'è un angolo per girare indietro
+    expect(screen.queryByTestId("angolo-indietro")).not.toBeInTheDocument();
+  });
+
+  it("trascinando in orizzontale si gira pagina, e il trascinamento non apre il box sotto il puntatore", () => {
+    disegna({ totalePagine: 5, box: [boxDi("a")] });
+    const palco = screen.getByTestId("lettore-pagine");
+
+    fireEvent.pointerDown(palco, { button: 0, clientX: 400, clientY: 200, pointerType: "touch" });
+    fireEvent.pointerMove(palco, { clientX: 250, clientY: 205, pointerType: "touch" });
+    fireEvent.pointerUp(palco, { clientX: 250, clientY: 205, pointerType: "touch" });
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
+
+    fireEvent.pointerDown(palco, { button: 0, clientX: 200, clientY: 200, pointerType: "touch" });
+    fireEvent.pointerMove(palco, { clientX: 320, clientY: 200, pointerType: "touch" });
+    fireEvent.pointerUp(palco, { clientX: 320, clientY: 200, pointerType: "touch" });
+    expect(aperte()).toHaveTextContent("Pagina 1");
+
+    // Un trascinamento che finisce su un box non lo apre
+    fireEvent.pointerDown(screen.getByTestId("box-a"), { button: 0, clientX: 100, clientY: 100, pointerType: "mouse" });
+    fireEvent.pointerMove(palco, { clientX: 100, clientY: 160, pointerType: "mouse" });
+    fireEvent.pointerUp(screen.getByTestId("box-a"), { clientX: 100, clientY: 160, pointerType: "mouse" });
+    fireEvent.click(screen.getByTestId("box-a"));
+    expect(screen.queryByRole("heading", { name: "Prodotto a" })).not.toBeInTheDocument();
+  });
+
+  it("l'indice raggruppa le pagine come si aprono, segna quelle aperte e apre la pagina scelta", () => {
     disegna({ totalePagine: 5, box: [boxDi("a", { pagina: 3 }), boxDi("b", { pagina: 3 }), boxDi("c", { pagina: 1, geometria: null })] });
 
     const indice = screen.getByRole("navigation", { name: "Indice delle pagine" });
+    expect(within(indice).getAllByRole("listitem").map(voce => voce.getAttribute("aria-label"))).toEqual(["Pagina 1", "Pagine 2-3", "Pagine 4-5"]);
     expect(within(indice).getAllByRole("button")).toHaveLength(5);
     // Il box senza posizione non è disegnato e non conta
     expect(within(indice).getByRole("button", { name: "Pagina 1, 0 box" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(indice).getByRole("button", { name: "Pagina 3, 2 box" }));
 
     expect(within(indice).getByRole("button", { name: "Pagina 3, 2 box" })).toHaveAttribute("aria-current", "page");
-    expect(vaiA()).toHaveValue("3");
+    expect(within(indice).getByRole("button", { name: "Pagina 2, 0 box" })).toHaveAttribute("aria-current", "page");
+    expect(within(indice).getByRole("button", { name: "Pagina 1, 0 box" })).not.toHaveAttribute("aria-current");
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
   });
 
-  it("scrivendo un numero si va alla pagina; oltre l'ultima ci si ferma all'ultima, un testo non sposta", () => {
+  it("scrivendo un numero si aprono le pagine che lo contengono; oltre l'ultima ci si ferma all'ultima, un testo non sposta", () => {
     const onCambiaPagina = vi.fn();
     disegna({ totalePagine: 24, onCambiaPagina });
 
     fireEvent.change(vaiA(), { target: { value: "17" } });
     fireEvent.keyDown(vaiA(), { key: "Enter" });
     expect(onCambiaPagina).toHaveBeenLastCalledWith(17);
-    expect(vaiA()).toHaveValue("17");
+    expect(aperte()).toHaveTextContent("Pagine 16-17 di 24");
+    expect(vaiA()).toHaveValue("");
 
     fireEvent.change(vaiA(), { target: { value: "99" } });
     fireEvent.blur(vaiA());
     expect(onCambiaPagina).toHaveBeenLastCalledWith(24);
-    expect(screen.getByRole("button", { name: "Pagina successiva" })).toBeDisabled();
+    expect(aperte()).toHaveTextContent("Pagina 24 di 24");
+    expect(screen.getByRole("button", { name: "Gira avanti" })).toBeDisabled();
 
     fireEvent.change(vaiA(), { target: { value: "copertina" } });
     fireEvent.keyDown(vaiA(), { key: "Enter" });
-    expect(vaiA()).toHaveValue("24");
+    expect(aperte()).toHaveTextContent("Pagina 24 di 24");
   });
 
-  it("precedente e successiva scorrono di una pagina", () => {
-    disegna({ totalePagine: 3 });
-
-    fireEvent.click(screen.getByRole("button", { name: "Pagina successiva" }));
-    fireEvent.click(screen.getByRole("button", { name: "Pagina successiva" }));
-    expect(vaiA()).toHaveValue("3");
-    fireEvent.click(screen.getByRole("button", { name: "Pagina precedente" }));
-    expect(vaiA()).toHaveValue("2");
-  });
-
-  it("con la pagina controllata la segue e avvisa il genitore dei cambi, senza cambiare da sola", () => {
+  it("con la pagina controllata la segue e avvisa il genitore dei giri, senza girare da sola", () => {
     const onCambiaPagina = vi.fn();
     const { rerender } = disegna({ pagina: 5, onCambiaPagina, totalePagine: 8 });
 
-    expect(vaiA()).toHaveValue("5");
-    fireEvent.click(screen.getByRole("button", { name: "Pagina precedente" }));
-    expect(onCambiaPagina).toHaveBeenLastCalledWith(4);
+    expect(aperte()).toHaveTextContent("Pagine 4-5");
+    fireEvent.click(screen.getByRole("button", { name: "Gira indietro" }));
+    expect(onCambiaPagina).toHaveBeenLastCalledWith(2);
     // La pagina la decide il genitore: finché non cambia, si resta dove si è
-    expect(vaiA()).toHaveValue("5");
+    expect(aperte()).toHaveTextContent("Pagine 4-5");
 
     rerender(
       <MemoryRouter>
         <VolantinoSfogliabile idKit="k1" pdf={null} box={[]} totalePagine={8} pagina={7} onCambiaPagina={onCambiaPagina} />
       </MemoryRouter>
     );
-    expect(vaiA()).toHaveValue("7");
+    expect(aperte()).toHaveTextContent("Pagine 6-7");
   });
 
-  it("il lettore è alto quasi quanto lo schermo, con un minimo, e ha sempre indice e schermo intero", () => {
+  it("su uno schermo stretto una pagina alla volta", () => {
+    const originale = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      disegna({ totalePagine: 5 });
+
+      expect(pagineSulPalco()).toEqual(["Pagina 1"]);
+      avanti();
+      // La pagina 2 da sola, non accanto alla 3
+      expect(pagineSulPalco()).toEqual(["Pagina 2"]);
+      avanti();
+      expect(pagineSulPalco()).toEqual(["Pagina 3"]);
+      expect(aperte()).toHaveTextContent("Pagina 3 di 5");
+    } finally {
+      window.matchMedia = originale;
+    }
+  });
+
+  it("il palco non è più alto di due terzi dello schermo, con l'indice sotto e lo schermo intero", () => {
     disegna();
 
-    expect(screen.getByTestId("lettore-pagine").parentElement).toHaveClass("h-[min(92vh,64rem)]", "min-h-[36rem]");
+    expect(screen.getByTestId("lettore-pagine").parentElement).toHaveClass("h-[min(66vh,44rem)]", "min-h-[24rem]");
     expect(screen.getByRole("navigation", { name: "Indice delle pagine" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schermo intero" })).toBeInTheDocument();
   });
@@ -240,7 +333,7 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
     const indice = screen.getByRole("navigation", { name: "Indice delle pagine" });
     const miniatura = indice.querySelector("img");
     expect(miniatura).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1, misuraMiniatura(A4)));
-    expect(miniatura?.getAttribute("src")).toMatch(/&width=144&height=\d+$/);
+    expect(miniatura?.getAttribute("src")).toMatch(/&width=104&height=\d+$/);
   });
 
   it("se Olimpo risponde con il segnaposto quadrato, o l'immagine non arriva, la pagina resta bianca", () => {
@@ -253,6 +346,15 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
     expect(pagina(2)).toHaveAttribute("data-immagine", "bianca");
     expect(pagina(3)).toHaveAttribute("data-immagine", "bianca");
     expect(immagineDi(2)).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("sul palco solo le pagine aperte; si preparano le immagini delle pagine subito prima e subito dopo, non le lontane", () => {
+    disegna({ pdf: { idOlimpoCloud: "olimpo-1", pagine: 12 }, totalePagine: 12, pagina: 5 });
+
+    expect(pagineSulPalco()).toEqual(["Pagina 4", "Pagina 5"]);
+    const pronte = [...screen.getByTestId("pagine-pronte").querySelectorAll("img")].map(img => img.getAttribute("src"));
+    expect(pronte).toEqual([2, 3, 6, 7].map(numero => urlPaginaMateriale("olimpo-1", numero)));
+    expect(screen.queryByRole("group", { name: "Pagina 9" })).not.toBeInTheDocument();
   });
 
   it("le pagine oltre quelle del PDF non chiedono un'immagine", () => {
@@ -456,6 +558,41 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     expect(within(dati).getByText("Sapori & Dintorni")).toBeInTheDocument();
   });
 
+  it("la scheda elenca i prodotti del box con codice, EAN, settore, tema e ruolo", async () => {
+    disegna({
+      box: [
+        {
+          ...MOZZARELLA,
+          dettaglioProdotti: [
+            prodotto({ chiave: "c-1", nome: "Mozzarella", codice: "7332163", ean: ["8033281161575", "8033281162091"], settore: "Latticini", tema: "MBIS", ruolo: "Star" }),
+            prodotto({ chiave: "c-2", nome: "Mozzarella light", gusto: "Light", codice: "7332164" }),
+          ],
+        },
+      ],
+    });
+
+    fireEvent.click(screen.getByTestId("box-a"));
+    const prodotti = await screen.findByRole("region", { name: "Prodotti del box" });
+    const voci = within(prodotti).getAllByRole("listitem");
+    expect(voci).toHaveLength(2);
+    expect(voci[0]).toHaveTextContent("7332163");
+    expect(voci[0]).toHaveTextContent("8033281161575");
+    expect(voci[0]).toHaveTextContent("8033281162091");
+    expect(voci[0]).toHaveTextContent("Latticini");
+    expect(voci[0]).toHaveTextContent("MBIS");
+    expect(voci[0]).toHaveTextContent("Star");
+    expect(voci[1]).toHaveTextContent("Light");
+    expect(within(voci[1]).queryByText("EAN")).not.toBeInTheDocument();
+  });
+
+  it("senza i prodotti del box (server non aggiornato) la scheda non ha la sezione dei prodotti", async () => {
+    disegna({ box: [MOZZARELLA] });
+
+    fireEvent.click(screen.getByTestId("box-a"));
+    await screen.findByLabelText("Dati del box");
+    expect(screen.queryByRole("region", { name: "Prodotti del box" })).not.toBeInTheDocument();
+  });
+
   it("senza linea la scheda non ha la riga della linea", async () => {
     disegna({ box: [MOZZARELLA] });
 
@@ -523,20 +660,18 @@ describe("VolantinoSfogliabile: viaggio del prodotto", () => {
 });
 
 describe("VolantinoSfogliabile: zoom e schermo intero", () => {
-  it("ingrandisce e riduce le pagine a passi, e Adatta torna alla larghezza del lettore", () => {
+  it("ingrandisce e riduce le pagine a passi, e Adatta torna allo spazio del palco", () => {
     disegna({ box: [boxDi("a")] });
-    const colonna = screen.getByTestId("colonna-pagine");
-    const larghezza = () => colonna.style.width;
+    const libro = () => screen.getByTestId("libro");
 
     expect(screen.getByText("100%")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Adatta alla larghezza" })).toHaveAttribute("aria-pressed", "true");
-    const adattata = larghezza();
+    expect(screen.getByRole("button", { name: "Adatta allo spazio" })).toHaveAttribute("aria-pressed", "true");
+    expect(libro()).toHaveAttribute("data-zoom", "1");
 
     fireEvent.click(screen.getByRole("button", { name: "Ingrandisci" }));
     expect(screen.getByText("125%")).toBeInTheDocument();
-    // jsdom riscrive il calc senza lo spazio dopo il segno: conta il fattore
-    expect(larghezza()).toMatch(/\*\s?1\.25\)$/);
-    expect(screen.getByRole("button", { name: "Adatta alla larghezza" })).toHaveAttribute("aria-pressed", "false");
+    expect(libro()).toHaveAttribute("data-zoom", "1.25");
+    expect(screen.getByRole("button", { name: "Adatta allo spazio" })).toHaveAttribute("aria-pressed", "false");
 
     // Le immagini di Olimpo sono a 150 dpi: lo zoom si ferma al 200%
     for (let volta = 0; volta < 5; volta++) fireEvent.click(screen.getByRole("button", { name: "Ingrandisci" }));
@@ -544,14 +679,26 @@ describe("VolantinoSfogliabile: zoom e schermo intero", () => {
     expect(screen.queryByText("300%")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Ingrandisci" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Adatta alla larghezza" }));
-    expect(larghezza()).toBe(adattata);
+    fireEvent.click(screen.getByRole("button", { name: "Adatta allo spazio" }));
+    expect(libro()).toHaveAttribute("data-zoom", "1");
     fireEvent.click(screen.getByRole("button", { name: "Riduci" }));
     fireEvent.click(screen.getByRole("button", { name: "Riduci" }));
     expect(screen.getByText("50%")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Riduci" })).toBeDisabled();
     // I riquadri restano sulle pagine a ogni ingrandimento
     expect(screen.getByTestId("box-a")).toBeInTheDocument();
+  });
+
+  it("con le pagine ingrandite il trascinamento sposta la vista e non gira pagina", () => {
+    disegna({ totalePagine: 5 });
+    fireEvent.click(screen.getByRole("button", { name: "Ingrandisci" }));
+    const palco = screen.getByTestId("lettore-pagine");
+
+    fireEvent.pointerDown(palco, { button: 0, clientX: 400, clientY: 200, pointerType: "mouse" });
+    fireEvent.pointerMove(palco, { clientX: 250, clientY: 200, pointerType: "mouse" });
+    fireEvent.pointerUp(palco, { clientX: 250, clientY: 200, pointerType: "mouse" });
+
+    expect(aperte()).toHaveTextContent("Pagina 1");
   });
 
   it("lo schermo intero apre lo stesso lettore, con indice e riquadri, e si chiude", async () => {
@@ -562,17 +709,17 @@ describe("VolantinoSfogliabile: zoom e schermo intero", () => {
     const grande = await screen.findByTestId("volantino-schermo-intero");
     expect(within(grande).getByRole("navigation", { name: "Indice delle pagine" })).toBeInTheDocument();
     expect(within(grande).getByTestId("box-a")).toBeInTheDocument();
-    expect(within(grande).getAllByRole("group").filter(pagina => /^Pagina \d+$/.test(pagina.getAttribute("aria-label") ?? ""))).toHaveLength(3);
+    expect(pagineSulPalco(within(grande).getByTestId("libro"))).toEqual(["Pagina 1"]);
 
-    fireEvent.click(within(grande).getByRole("button", { name: "Pagina successiva" }));
+    fireEvent.click(within(grande).getByRole("button", { name: "Gira avanti" }));
     fireEvent.click(screen.getByRole("button", { name: "Esci dallo schermo intero" }));
     await waitFor(() => expect(screen.queryByTestId("volantino-schermo-intero")).not.toBeInTheDocument());
-    // Si torna al lettore della pagina sulla stessa pagina
-    expect(screen.getByRole("textbox", { name: "Vai alla pagina" })).toHaveValue("2");
+    // Si torna al lettore della pagina sulle stesse pagine
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
   });
 });
 
-describe("VolantinoSfogliabile: analisi della pagina guardata", () => {
+describe("VolantinoSfogliabile: analisi delle pagine aperte", () => {
   const LATTICINI = { codice: "24", descrizione: "LATTICINI" };
   const CARNI = { codice: "10", descrizione: "CARNI" };
   const BOX = [
@@ -583,7 +730,7 @@ describe("VolantinoSfogliabile: analisi della pagina guardata", () => {
   const pannello = () => screen.getByRole("complementary", { name: "Analisi della pagina" });
   const numero = (etichetta: string) => within(pannello()).getByText(etichetta).closest("div");
 
-  it("segue la pagina guardata: numeri ed elenco dei box dal più grande", () => {
+  it("segue le pagine aperte: numeri ed elenco dei box dal più grande", () => {
     disegna({ box: BOX, totalePagine: 3 });
 
     expect(within(pannello()).getByRole("heading", { name: "Pagina 1" })).toBeInTheDocument();
@@ -595,9 +742,9 @@ describe("VolantinoSfogliabile: analisi della pagina guardata", () => {
     const righe = within(within(pannello()).getByRole("region", { name: "Box della pagina" })).getAllByRole("button");
     expect(righe.map(riga => riga.getAttribute("data-testid"))).toEqual(["riga-box-a", "riga-box-b"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Pagina successiva" }));
+    avanti();
 
-    expect(within(pannello()).getByRole("heading", { name: "Pagina 2" })).toBeInTheDocument();
+    expect(within(pannello()).getByRole("heading", { name: "Pagine 2-3" })).toBeInTheDocument();
     expect(numero("Box")).toHaveTextContent("1");
     expect(within(pannello()).getByTestId("riga-box-c")).toHaveTextContent("Bistecca");
   });
@@ -628,7 +775,7 @@ describe("VolantinoSfogliabile: analisi della pagina guardata", () => {
   });
 
   it("una pagina senza box lo dice", () => {
-    disegna({ box: BOX, totalePagine: 3, pagina: 3 });
+    disegna({ box: BOX, totalePagine: 4, pagina: 4 });
 
     expect(within(pannello()).getByText("Nessun box in questa pagina.")).toBeInTheDocument();
   });
@@ -643,9 +790,8 @@ describe("VolantinoSfogliabile: ricerca dei box", () => {
     boxDi("caffe", { nome: "Caffè macinato", marca: "Lavazza", pagina: 1 }),
     boxDi("pasta", { nome: "Pasta", marca: "Barilla", pagina: 2, geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 } }),
   ];
-  const campo = () => screen.getByRole("searchbox", { name: "Cerca prodotto o marca" });
+  const campo = () => screen.getByRole("searchbox", { name: "Cerca prodotto, marca, EAN o codice" });
   const esito = () => screen.getByTestId("esito-ricerca");
-  const vaiA = () => screen.getByRole("textbox", { name: "Vai alla pagina" });
   const cerca = (testo: string) => fireEvent.change(campo(), { target: { value: testo } });
 
   it("conta i box trovati e le pagine, evidenzia i trovati e attenua gli altri, segna le pagine nell'indice", async () => {
@@ -654,9 +800,9 @@ describe("VolantinoSfogliabile: ricerca dei box", () => {
     cerca("granarolo");
 
     await waitFor(() => expect(esito()).toHaveTextContent("3 box in 2 pagine"));
-    for (const id of ["latte", "mozzarella", "yogurt"]) expect(screen.getByTestId(`box-${id}`)).toHaveAttribute("data-trovato");
-    for (const id of ["caffe", "pasta"]) expect(screen.getByTestId(`box-${id}`)).toHaveAttribute("data-attenuato");
-    expect(riquadro("pasta")).toHaveClass("opacity-0");
+    // In copertina il caffè non è fra i trovati
+    expect(screen.getByTestId("box-caffe")).toHaveAttribute("data-attenuato");
+    expect(riquadro("caffe")).toHaveClass("opacity-0");
 
     const indice = screen.getByRole("navigation", { name: "Indice delle pagine" });
     expect(within(indice).getByTestId("trovati-pagina-2")).toHaveTextContent("1");
@@ -664,28 +810,31 @@ describe("VolantinoSfogliabile: ricerca dei box", () => {
     expect(within(indice).queryByTestId("trovati-pagina-1")).not.toBeInTheDocument();
     expect(within(indice).getByRole("button", { name: "Pagina 4, 2 box, 2 trovati" })).toBeInTheDocument();
     expect(within(indice).getByRole("button", { name: "Pagina 3, 0 box" })).toHaveClass("opacity-40");
+
+    avanti();
+    expect(screen.getByTestId("box-latte")).toHaveAttribute("data-trovato");
+    expect(screen.getByTestId("box-pasta")).toHaveAttribute("data-attenuato");
   });
 
-  it("successivo e precedente portano alla pagina del box trovato e lo mettono in rilievo; Invio e Maiusc+Invio fanno lo stesso", async () => {
+  it("successivo e precedente aprono le pagine del box trovato e lo mettono in rilievo; Invio e Maiusc+Invio fanno lo stesso", async () => {
     disegna({ box: BOX, totalePagine: 5 });
     cerca("granarolo");
     await waitFor(() => expect(esito()).toHaveTextContent("3 box in 2 pagine"));
 
     fireEvent.click(screen.getByRole("button", { name: "Box trovato successivo" }));
-    expect(vaiA()).toHaveValue("2");
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
     expect(screen.getByTestId("box-latte")).toHaveAttribute("data-rilievo");
     expect(esito()).toHaveTextContent("1 di 3 · pagina 2");
 
     fireEvent.keyDown(campo(), { key: "Enter" });
-    expect(vaiA()).toHaveValue("4");
+    expect(aperte()).toHaveTextContent("Pagine 4-5");
     expect(screen.getByTestId("box-mozzarella")).toHaveAttribute("data-rilievo");
-    expect(screen.getByTestId("box-latte")).not.toHaveAttribute("data-rilievo");
 
     fireEvent.keyDown(campo(), { key: "Enter", shiftKey: true });
-    expect(vaiA()).toHaveValue("2");
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
     fireEvent.click(screen.getByRole("button", { name: "Box trovato precedente" }));
     // Dal primo si gira all'ultimo
-    expect(vaiA()).toHaveValue("4");
+    expect(aperte()).toHaveTextContent("Pagine 4-5");
     expect(screen.getByTestId("box-yogurt")).toHaveAttribute("data-rilievo");
   });
 
@@ -695,6 +844,22 @@ describe("VolantinoSfogliabile: ricerca dei box", () => {
 
     await waitFor(() => expect(esito()).toHaveTextContent("1 box in 1 pagina"));
     expect(screen.getByTestId("box-caffe")).toHaveAttribute("data-trovato");
+  });
+
+  it("trova un box dall'EAN, anche parziale, o dal codice di un prodotto del gruppo", async () => {
+    const conProdotti = [
+      boxDi("caffe", { nome: "Caffè", pagina: 1, dettaglioProdotti: [prodotto({ codice: "7332163", ean: ["8001420012484"] })] }),
+      boxDi("te", { nome: "Tè", pagina: 1, geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 }, dettaglioProdotti: [prodotto({ ean: ["8000000000001"] })] }),
+    ];
+    disegna({ box: conProdotti });
+
+    cerca("12484");
+    await waitFor(() => expect(esito()).toHaveTextContent("1 box in 1 pagina"));
+    expect(screen.getByTestId("box-caffe")).toHaveAttribute("data-trovato");
+    expect(screen.getByTestId("box-te")).toHaveAttribute("data-attenuato");
+
+    cerca("7332163");
+    await waitFor(() => expect(screen.getByTestId("box-caffe")).toHaveAttribute("data-trovato"));
   });
 
   it("senza risultati lo dice e i riquadri restano come prima", async () => {
@@ -726,5 +891,101 @@ describe("VolantinoSfogliabile: ricerca dei box", () => {
     expect(esito()).toHaveTextContent("");
     expect(document.querySelector("[data-attenuato]")).toBeNull();
   });
+});
 
+describe("VolantinoSfogliabile: interrogazione dei box", () => {
+  const CARNI = { codice: "10", descrizione: "CARNI" };
+  const ORTO = { codice: "33", descrizione: "ORTOFRUTTA" };
+  const BOX = [
+    boxDi("bistecca", { nome: "Bistecca", reparto: CARNI, pagina: 1, sconto: 35, prezzo: 9.9, meccanica: "fidelity" }),
+    boxDi("pollo", { nome: "Pollo", reparto: CARNI, pagina: 2, sconto: 30, prezzo: 4.5, meccanica: "sconto" }),
+    boxDi("salsiccia", { nome: "Salsiccia", reparto: CARNI, pagina: 3, sconto: 10, prezzo: 3.2, meccanica: "fidelity" }),
+    boxDi("mele", { nome: "Mele", reparto: ORTO, pagina: 3, sconto: 40, prezzo: 1.5, meccanica: "sconto", geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 } }),
+  ];
+  /** Apre la scheda Interroga e tutte le condizioni a tendina, come farebbe l'utente. */
+  const apriInterroga = () => {
+    fireEvent.click(screen.getByRole("tab", { name: /Interroga/ }));
+    for (const dettagli of screen.getAllByTestId(/^condizione-/)) (dettagli as HTMLDetailsElement).open = true;
+  };
+  const valore = (condizione: string, nome: RegExp) => within(screen.getByRole("group", { name: condizione })).getByRole("checkbox", { name: nome });
+  const esito = () => screen.getByTestId("esito-ricerca");
+
+  it("combina reparto e sconto: evidenzia i box, conta box e pagine, segna l'indice e riassume i risultati", async () => {
+    disegna({ box: BOX, totalePagine: 4 });
+    apriInterroga();
+
+    fireEvent.click(valore("Reparto", /^CARNI/));
+    await waitFor(() => expect(esito()).toHaveTextContent("3 box in 3 pagine"));
+    expect(screen.getByRole("tab", { name: /Interroga/ })).toHaveTextContent("1");
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Sconto da" }), { target: { value: "30" } });
+    await waitFor(() => expect(esito()).toHaveTextContent("2 box in 2 pagine"));
+
+    expect(screen.getByTestId("box-bistecca")).toHaveAttribute("data-trovato");
+    const indice = screen.getByRole("navigation", { name: "Indice delle pagine" });
+    expect(within(indice).getByTestId("trovati-pagina-1")).toHaveTextContent("1");
+    expect(within(indice).getByTestId("trovati-pagina-2")).toHaveTextContent("1");
+    expect(within(indice).queryByTestId("trovati-pagina-3")).not.toBeInTheDocument();
+
+    const sintesi = screen.getByRole("region", { name: "Sintesi dei risultati" });
+    expect(within(sintesi).getByText("Box").closest("div")).toHaveTextContent("2");
+    expect(within(sintesi).getByText("Sconto medio").closest("div")).toHaveTextContent("33%");
+    expect(sintesi).toHaveTextContent("Prezzi da € 4,50 a € 9,90");
+    expect(within(screen.getByRole("list", { name: "Condizioni attive" })).getByText("Reparto: CARNI")).toBeInTheDocument();
+  });
+
+  it("accanto ai valori quanti box hanno con le altre condizioni; i valori senza box non si scelgono", async () => {
+    disegna({ box: BOX, totalePagine: 4 });
+    apriInterroga();
+
+    fireEvent.click(valore("Meccanica", /^Prezzo Fidelity/));
+
+    await waitFor(() => expect(valore("Reparto", /^ORTOFRUTTA/)).toBeDisabled());
+    expect(valore("Reparto", /^CARNI/).closest("label")).toHaveTextContent("CARNI2");
+  });
+
+  it("dai box trovati si aprono le pagine e la scheda del box", async () => {
+    disegna({ box: BOX, totalePagine: 4 });
+    apriInterroga();
+    fireEvent.click(valore("Reparto", /^ORTOFRUTTA/));
+
+    fireEvent.click(await screen.findByTestId("risultato-mele"));
+
+    expect(aperte()).toHaveTextContent("Pagine 2-3");
+    expect(await screen.findByRole("heading", { name: "Mele" })).toBeInTheDocument();
+  });
+
+  it("condizioni che nessun box soddisfa lo dicono e i riquadri restano come prima; Togli tutte riparte da capo", async () => {
+    disegna({ box: BOX, totalePagine: 4 });
+    apriInterroga();
+
+    fireEvent.change(screen.getByRole("textbox", { name: "Prezzo da" }), { target: { value: "100" } });
+
+    await waitFor(() => expect(esito()).toHaveTextContent("Nessun box corrisponde"));
+    expect(screen.getByRole("region", { name: "Sintesi dei risultati" })).toHaveTextContent("Nessun box corrisponde");
+    expect(document.querySelector("[data-attenuato]")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Togli tutte" }));
+    await waitFor(() => expect(esito()).toHaveTextContent(""));
+    expect(screen.getByRole("textbox", { name: "Prezzo da" })).toHaveValue("");
+  });
+
+  it("ricerca e condizioni valgono insieme", async () => {
+    disegna({ box: BOX, totalePagine: 4 });
+    apriInterroga();
+    fireEvent.click(valore("Meccanica", /^Prezzo Fidelity/));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Cerca prodotto, marca, EAN o codice" }), { target: { value: "salsiccia" } });
+
+    await waitFor(() => expect(esito()).toHaveTextContent("1 box in 1 pagina"));
+  });
+
+  it("propone solo le condizioni con dati nel volantino, mai vendite, previsioni, calore o visibilità", () => {
+    disegna({ box: BOX, totalePagine: 4 });
+    apriInterroga();
+
+    const condizioni = screen.getByRole("region", { name: "Condizioni" });
+    expect(within(condizioni).queryByRole("group", { name: "Settore" })).not.toBeInTheDocument();
+    expect(within(condizioni).queryByRole("group", { name: "Linea del distributore" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("interroga-volantino")).not.toHaveTextContent(/vendit|prevision|calore|visibilit/i);
+  });
 });

@@ -306,6 +306,54 @@ describe('boxInsight: il box come lo vede la scheda', () => {
     expect(istanta).not.toHaveProperty('origine');
   });
 
+  it('prodotti del box con i dati anagrafici: EAN separati, codice, settore, tema e ruolo, anche per il gruppo', () => {
+    const righe = [
+      riga('p1', {
+        data_fields: {
+          codice_referenza: '7332163',
+          ean_referenza: '8033281161575_8033281162091',
+          descrizione_uno: 'Completo letto',
+          descrizione_due: 'Alviero Martini',
+          descrizione_tre: 'Python',
+          descrizione_quattro: '2 piazze',
+          descrizione_settore: 'TESSILE CASA',
+          segmento: 'Letto',
+          tema: 'EXCONVENIENTE',
+          ruolo: 'BASE',
+          prezzo: '29,90',
+        },
+        group_elements: [{ codice_referenza: '7332164', ean_referenza: '8001420012484', descrizione_uno: 'Federa', descrizione_tre: 'Bianco' }],
+      }),
+    ];
+
+    const [box] = boxInsight(boxDi(righe), opzioni());
+
+    expect(box.prodotti).toBe(2);
+    expect(box.dettaglioProdotti).toHaveLength(2);
+    expect(box.dettaglioProdotti?.[0]).toMatchObject({
+      chiave: 'c-7332163',
+      nome: 'Completo letto',
+      marca: 'Alviero Martini',
+      formato: '2 piazze',
+      gusto: 'Python',
+      codice: '7332163',
+      ean: ['8033281161575', '8033281162091'],
+      prezzo: 29.9,
+      settore: 'Tessile casa',
+      segmento: 'Letto',
+      tema: 'EXCONVENIENTE',
+      ruolo: 'Base',
+    });
+    expect(box.dettaglioProdotti?.[1]).toMatchObject({ codice: '7332164', ean: ['8001420012484'], nome: 'Federa', gusto: 'Bianco' });
+  });
+
+  it('un prodotto senza EAN ha l\'elenco vuoto, non null', () => {
+    const [box] = boxInsight(boxDi([riga('n1', { data_fields: { descrizione_uno: 'Pane' } })]), opzioni());
+
+    expect(box.dettaglioProdotti?.[0].ean).toEqual([]);
+    expect(box.dettaglioProdotti?.[0].codice).toBeNull();
+  });
+
   it('reparto: quello della config prima della lettura generica, che si riconduce all\'anagrafica se puo\'', () => {
     const righe = [
       // La config dice 24: vale lei, anche se i dati scrivono un'altra descrizione

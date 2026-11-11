@@ -234,10 +234,12 @@ describe("ReferenzeVolantino", () => {
     expect(screen.queryByRole("button", { name: /Mostra altre/ })).not.toBeInTheDocument();
   });
 
-  it("le intestazioni restano ferme mentre la tabella scorre", () => {
+  it("le intestazioni restano ferme mentre la tabella scorre, e la tabella non allunga la pagina", () => {
     disegna();
 
-    expect(screen.getByTestId("scorrimento-referenze")).toHaveClass("overflow-auto");
+    // Posizionato: il testo nascosto delle righe (sr-only, assoluto) resta nel riquadro che scorre
+    // invece di allungare la pagina fino al fondo della tabella intera
+    expect(screen.getByTestId("scorrimento-referenze")).toHaveClass("overflow-auto", "relative");
     expect(within(tabella()).getByRole("columnheader", { name: "Prodotto" })).toHaveClass("sticky", "top-0");
   });
 

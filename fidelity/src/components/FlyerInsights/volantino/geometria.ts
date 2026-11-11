@@ -1,8 +1,8 @@
 import type { BoxInsight, GeometriaPagina } from "../../../../lib/insightVolantino/tipi";
 
 /**
- * Geometria del lettore del volantino: pagine in scorrimento, proporzioni delle pagine, riquadri dei
- * box e allineamento dell'immagine della pagina. Funzioni pure.
+ * Geometria del lettore del volantino: pagine aperte come nel volantino stampato, proporzioni delle
+ * pagine, riquadri dei box e allineamento dell'immagine della pagina. Funzioni pure.
  *
  * La geometria dei box arriva dal server già relativa alla pagina (da 0 a 1, origine in alto a
  * sinistra) sia per i kit di Istanta sia per quelli dello storico: qui non si fanno più calcoli
@@ -26,45 +26,91 @@ const SCARTO_TRASCURABILE = 0.002;
 const proporzioneValida = (valore: number | null | undefined): valore is number =>
   typeof valore === "number" && Number.isFinite(valore) && valore > 0.2 && valore < 5;
 
-/* ---------- Pagine in scorrimento ---------- */
+/* ---------- Pagine aperte, come nel volantino stampato ---------- */
 
-/** Dove sta una pagina nello scorrimento del lettore, in pixel dall'inizio del contenuto. */
-export interface PosizionePagina {
-  numero: number;
-  inizio: number;
-  fine: number;
+/**
+ * Le pagine aperte davanti all'utente: a doppia pagina la sinistra (pari) e la destra (dispari),
+ * come nel volantino stampato; la copertina sta da sola a destra, l'ultima pagina pari senza
+ * compagna da sola a sinistra. A pagina singola (schermi stretti) una pagina sola, al centro.
+ */
+export interface Apertura {
+  /** Identifica l'apertura: la prima pagina che contiene. */
+  chiave: number;
+  sinistra: number | null;
+  destra: number | null;
+  /** Le pagine dell'apertura, in ordine. */
+  pagine: number[];
 }
 
-/** La pagina corrente è quella che attraversa questa linea del lettore, a un terzo dall'alto. */
-export const LINEA_PAGINA_CORRENTE = 0.35;
-/** Si disegnano le pagine fino a questa distanza dalla parte visibile, in altezze del lettore. */
-export const MARGINE_DISEGNO = 1.5;
+const apertura = (sinistra: number | null, destra: number | null): Apertura => {
+  const pagine = [sinistra, destra].filter((numero): numero is number => numero !== null);
+  return { chiave: pagine[0], sinistra, destra, pagine };
+};
 
-export interface PagineInVista {
-  /** La pagina che l'utente sta guardando; null quando non si può dire (nessuna misura). */
-  corrente: number | null;
-  /** Le pagine da disegnare, vicine alla parte visibile; null: tutte (lettore non ancora misurato). */
-  vicine: Set<number> | null;
+const limitata = (pagina: number, totale: number): number => Math.min(Math.max(1, totale), Math.max(1, Math.floor(pagina) || 1));
+
+/**
+ * L'apertura che contiene la pagina. A doppia pagina: la copertina da sola, poi 2-3, 4-5...;
+ * l'ultima pagina, se è pari, da sola. A pagina singola: la pagina stessa.
+ */
+export function aperturaDi(pagina: number, totale: number, doppia: boolean): Apertura {
+  const numero = limitata(pagina, totale);
+  if (!doppia) return { chiave: numero, sinistra: null, destra: null, pagine: [numero] };
+  if (numero === 1) return apertura(null, 1);
+  const sinistra = numero % 2 === 0 ? numero : numero - 1;
+  return apertura(sinistra, sinistra + 1 <= totale ? sinistra + 1 : null);
+}
+
+/** Tutte le aperture del volantino, dalla copertina all'ultima. */
+export function aperture(totale: number, doppia: boolean): Apertura[] {
+  const elenco: Apertura[] = [];
+  let pagina = 1;
+  const ultima = Math.max(1, Math.floor(totale) || 1);
+  while (pagina <= ultima) {
+    const corrente = aperturaDi(pagina, ultima, doppia);
+    elenco.push(corrente);
+    pagina = corrente.pagine[corrente.pagine.length - 1] + 1;
+  }
+  return elenco;
+}
+
+/** L'apertura prima (passo -1) o dopo (passo 1) di quella della pagina; null oltre la copertina o l'ultima. */
+export function aperturaVicina(pagina: number, totale: number, doppia: boolean, passo: 1 | -1): Apertura | null {
+  const attuale = aperturaDi(pagina, totale, doppia);
+  const confine = passo === 1 ? attuale.pagine[attuale.pagine.length - 1] + 1 : attuale.pagine[0] - 1;
+  if (confine < 1 || confine > Math.max(1, Math.floor(totale) || 1)) return null;
+  return aperturaDi(confine, totale, doppia);
 }
 
 /**
- * Dalle posizioni delle pagine (in ordine) e dallo scorrimento del lettore alto `altezza`: la pagina
- * corrente, la prima che arriva oltre la linea a un terzo dall'alto (fra due pagine vale la
- * successiva), e le pagine da disegnare, quelle entro MARGINE_DISEGNO altezze dalla parte visibile.
+ * Le pagine di cui scaricare l'immagine prima che servano: quelle delle aperture subito prima e
+ * subito dopo, perché girando pagina siano già pronte. Le pagine aperte non ci sono: si scaricano
+ * già.
  */
-export function pagineInVista(posizioni: readonly PosizionePagina[], scorrimento: number, altezza: number): PagineInVista {
-  if (!(altezza > 0) || posizioni.every(posizione => posizione.fine <= posizione.inizio)) return { corrente: null, vicine: null };
-  const linea = scorrimento + altezza * LINEA_PAGINA_CORRENTE;
-  const da = scorrimento - altezza * MARGINE_DISEGNO;
-  const a = scorrimento + altezza * (1 + MARGINE_DISEGNO);
-  let corrente: number | null = null;
-  const vicine = new Set<number>();
-  for (const posizione of posizioni) {
-    if (posizione.fine > da && posizione.inizio < a) vicine.add(posizione.numero);
-    if (corrente === null && posizione.fine > linea) corrente = posizione.numero;
+export function pagineDaPreparare(pagina: number, totale: number, doppia: boolean): number[] {
+  return [aperturaVicina(pagina, totale, doppia, -1), aperturaVicina(pagina, totale, doppia, 1)].flatMap(vicina => vicina?.pagine ?? []);
+}
+
+/** "Pagina 1", "Pagine 4-5": le pagine aperte, per l'indicatore e per le tecnologie assistive. */
+export const testoApertura = (pagine: readonly number[]): string =>
+  pagine.length === 1 ? `Pagina ${pagine[0]}` : `Pagine ${pagine[0]}-${pagine[pagine.length - 1]}`;
+
+/**
+ * Larghezza/altezza dell'apertura e dove sta la sua parte sinistra: la somma delle due pagine,
+ * anche quando una manca (copertina, ultima pagina pari): il posto resta, come nel volantino aperto.
+ * A pagina singola, la pagina sola.
+ */
+export function proporzioneApertura(
+  aperta: Apertura,
+  proporzione: (pagina: number) => number
+): { totale: number; sinistra: number } {
+  if (aperta.sinistra === null && aperta.destra === null) {
+    const sola = proporzione(aperta.pagine[0]);
+    return { totale: sola, sinistra: 0 };
   }
-  // Oltre l'ultima pagina (il fondo del lettore): l'ultima
-  return { corrente: corrente ?? posizioni[posizioni.length - 1]?.numero ?? null, vicine };
+  const sinistra = proporzione(aperta.sinistra ?? aperta.destra ?? 1);
+  const destra = proporzione(aperta.destra ?? aperta.sinistra ?? 1);
+  return { totale: sinistra + destra, sinistra };
 }
 
 /** Il numero di pagina scritto dall'utente, dentro il volantino; null se non è un numero. */

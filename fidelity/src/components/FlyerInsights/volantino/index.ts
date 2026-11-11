@@ -1,7 +1,7 @@
 /**
- * Il volantino degli insight come lettore: tutte le pagine con le immagini di Olimpo e i riquadri dei
- * box, indice delle pagine, zoom, colori, ricerca dei box, analisi della pagina guardata, scheda del
- * box e viaggio del prodotto.
+ * Il volantino degli insight da sfogliare come quello stampato: le pagine aperte con le immagini di
+ * Olimpo e i riquadri dei box, indice delle pagine, zoom, colori, ricerca e interrogazione dei box,
+ * analisi delle pagine aperte, scheda del box e viaggio del prodotto.
  */
 export { default, VolantinoSfogliabile, LIVELLI_ZOOM, type VolantinoSfogliabileProps } from "./VolantinoSfogliabile";
 export { PaginaConImmagine, type PaginaConImmagineProps } from "./PaginaConImmagine";
@@ -37,13 +37,17 @@ export {
   type StileRiquadro,
 } from "./colori";
 export {
+  aperturaDi,
+  aperture,
+  aperturaVicina,
   paginaNellImmagine,
   paginaRichiesta,
-  pagineInVista,
+  pagineDaPreparare,
   PROPORZIONE_PREDEFINITA,
   riquadroBox,
   stileImmagine,
+  testoApertura,
+  type Apertura,
   type PaginaNellImmagine,
-  type PosizionePagina,
 } from "./geometria";
 export { IndicePagine, misuraMiniatura, type IndicePagineProps, type VoceIndice } from "./IndicePagine";

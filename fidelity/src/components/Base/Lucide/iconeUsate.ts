@@ -1,5 +1,5 @@
 // File generato da scripts/generaIconeLucide.mjs: non modificarlo a mano.
-// Icone Lucide nominate come stringa nel codice (367): <Lucide> le risolve senza caricare la
+// Icone Lucide nominate come stringa nel codice (366): <Lucide> le risolve senza caricare la
 // mappa completa di lucide-react. Rigenera con `node scripts/generaIconeLucide.mjs`.
 export {
   Activity,
@@ -229,7 +229,6 @@ export {
   MousePointer2,
   MousePointerClick,
   Move,
-  MoveHorizontal,
   Network,
   Newspaper,
   Notebook,
