@@ -4948,8 +4948,13 @@ namespace AgenziaLib
                             }
                             else
                             {
+                                //TASK-f434bd2f: la riga si fonde nell'esistente solo nei casi voluti qui sotto; negli altri
+                                //va persa, e il codice si segnala come doppio. Non e' doppia la riga stessa, che ritrova se
+                                //stessa quando lo stesso canale e' ripetuto in canaliList.
+                                bool fusa = false;
                                 if (tema.Contains("PIU VALORE NEW CLIENTI"))
                                 {
+                                    fusa = true;
                                     dictExist["txt_sconto_soci_doppia"] = dictObj["txt_sconto_soci_doppia"];
                                     dictExist["prezzo_promo_soci_doppia"] = dictObj["prezzo_promo_soci_doppia"];
                                     dictExist["prezzo_promo_kgl_soci_doppia"] = dictObj["prezzo_promo_kgl_soci_doppia"];
@@ -4957,6 +4962,7 @@ namespace AgenziaLib
                                 }
                                 else if (tema.Contains("PIU VALORE NEW SOCI") || tema.Contains("PIU VALORE SOCI"))
                                 {
+                                    fusa = true;
                                     //Deve ereditare le brciature
                                     dictExist["N_pezzi_soci"] = dictObj["N_pezzi_soci"];
                                     dictExist["pezzi_soci"] = dictObj["pezzi_soci"];
@@ -4970,6 +4976,7 @@ namespace AgenziaLib
                                     string tipo_evento_esistente = dictExist["tipo_evento"].ToString();
                                     if (tipo_evento_esistente.Contains("FID WAITING FOR"))
                                     {
+                                        fusa = true;
                                         //Perfetto, il FIDELITY ha il suo PROMO. Puo tornare ad essere il tipo_evento FIDELITY
                                         dictExist["tipo_evento"] = "FIDELITY";
 
@@ -4986,6 +4993,7 @@ namespace AgenziaLib
                                     string tipo_evento_esistente = dictExist["tipo_evento"].ToString();
                                     if (tipo_evento_esistente.Contains("PROMO"))
                                     {
+                                        fusa = true;
                                         //Ereditiamo da MONOPRODOTTO il prezzo contnuo e il prezzo offerta
                                         dictExist["N_punti"] = dictObj["N_punti"].ToString();
                                     }
@@ -5003,6 +5011,7 @@ namespace AgenziaLib
                                     string tipo_evento_esistente = dictExist["tipo_evento"].ToString();
                                     if (tipo_evento_esistente.Contains("FID WAITING FOR"))
                                     {
+                                        fusa = true;
                                         //Perfetto, il FIDELITY ha il suo PROMO. Puo tornare ad essere il tipo_evento FIDELITY
                                         dictExist["tipo_evento"] = "FIDELITY";
 
@@ -5015,6 +5024,10 @@ namespace AgenziaLib
 
                                 }
 
+                                if (!fusa && !ReferenceEquals(dictExist, dictObj))
+                                {
+                                    impResult.codiciDoppi.Add(new CodiceDoppio { codice = codiceArticolo, canale = cItem.sigla, area = aItem.sigla });
+                                }
                             }
                         }
                     }

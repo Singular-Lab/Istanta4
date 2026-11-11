@@ -370,6 +370,11 @@ class Promo {
                     '</div>'
                 );
 
+                //TASK-f434bd2f: importazione ferma per codici doppi: "Importa" mostra prima l'avviso.
+                if (rec.codiciDoppi) {
+                    Promo.segnaCodiciDoppi($("#attivita_" + rec.id));
+                }
+
                 promoEl.find(".btnAttivitaImport").on("click", function () {
                     promoCtrl.eseguiAttivitaPending($(this).attr("id_attivita"), $(this));
                 });
@@ -602,7 +607,7 @@ class Promo {
         
     }
 
-    async eseguiAttivitaPending(id_attivita, senderButton)
+    async eseguiAttivitaPending(id_attivita, senderButton, ignoraDoppioni = false)
     {
 
         //showLoading();
@@ -621,8 +626,13 @@ class Promo {
             persistent = true;
         }
 
+        //TASK-f434bd2f: un'importazione ferma per codici doppi riparte solo dopo l'avviso, con "Continua".
+        if (!ignoraDoppioni && senderButton.attr("codici_doppi") == "1") {
+            this.mostraAvvisoCodiciDoppi(id_attivita);
+            return;
+        }
 
-        Call.do("api", "attivita/confermaAttivitaByUtente/" + id_attivita + "/" + persistent + "/" + askReport, "GET", null, this, function (result, sender) {
+        Call.do("api", Promo.indirizzoConferma(id_attivita, persistent, askReport, ignoraDoppioni), "GET", null, this, function (result, sender) {
             if (result.esito) {
                 senderButton.attr("disabled", true);
                 $("#progress_" + id_attivita).css("display", "block");
@@ -679,6 +689,21 @@ class Promo {
     }
 
     onAttivitaChageStatus(id_attivita, stato) {
+
+        //TASK-f434bd2f: l'importazione si e' fermata prima di salvare per codici doppi nella lista.
+        if (stato == 8) {
+            let rowParent = $("#attivita_" + id_attivita);
+            delete this.codaProcessi["act_" + id_attivita];
+            rowParent.parent().find(".progressBar").each(function () {
+                if ($(this).attr("id_attivita") == id_attivita)
+                    $(this).css("display", "none");
+            });
+            Promo.segnaCodiciDoppi(rowParent);
+            rowParent.find("#btnAttivitaImport").prop("disabled", false);
+            hideLoading();
+            this.mostraAvvisoCodiciDoppi(id_attivita);
+            return;
+        }
         
         if (stato == 6 || stato == 7 || stato == 9) {
             //Refresh pagina
@@ -747,6 +772,70 @@ class Promo {
 
             //console.log("FINE");
         }
+    }
+
+    /// TASK-f434bd2f: l'avviso bloccante dei codici doppi di un'importazione ferma. "Annulla" (consigliato)
+    /// scarta l'importazione; "Continua" la rilancia con la modalita' scelta nella riga e ignoraDoppioni.
+    mostraAvvisoCodiciDoppi(id_attivita) {
+        let me = this;
+        Call.do("Tracciati", "codiciDoppiAttivita/" + id_attivita, "GET", null, this, function (codici) {
+            if (!Array.isArray(codici) || codici.length == 0) {
+                //Non e' (piu') ferma per codici doppi: si importa come sempre.
+                let bottone = $("#attivita_" + id_attivita).find("#btnAttivitaImport");
+                bottone.attr("codici_doppi", "0");
+                me.eseguiAttivitaPending(id_attivita, bottone, true);
+                return;
+            }
+            let modal = $("#AvvisoCodiciDoppi");
+            modal.find(".modal-body").html(Promo.testoAvvisoCodiciDoppi(codici));
+            modal.find("#btnAnnullaCodiciDoppi").off("click").on("click", function () {
+                modal.modal("hide");
+                me.scartaAttivitaPending(id_attivita);
+            });
+            modal.find("#btnContinuaCodiciDoppi").off("click").on("click", function () {
+                modal.modal("hide");
+                let riga = $("#attivita_" + id_attivita);
+                riga.find("#badgeCodiciDoppi").remove();
+                riga.find("#btnAttivitaImport").attr("codici_doppi", "0");
+                me.eseguiAttivitaPending(id_attivita, riga.find("#btnAttivitaImport"), true);
+            });
+            modal.modal("show");
+        }, function (err) {
+            console.error("Codici doppi dell'attivita' non letti", err);
+        });
+    }
+
+    /// TASK-f434bd2f: la riga di un'importazione ferma per codici doppi: segno rosso e "Importa" che passa
+    /// dall'avviso.
+    static segnaCodiciDoppi(riga) {
+        riga.find("#btnAttivitaImport").attr("codici_doppi", "1");
+        riga.find("#badgeCodiciDoppi").remove();
+        riga.find("#file_attivita").prepend("<span id=\"badgeCodiciDoppi\" class=\"badge bg-danger me-2 align-self-center\">Codici doppi</span>");
+    }
+
+    static indirizzoConferma(id_attivita, persistent, askReport, ignoraDoppioni) {
+        return "attivita/confermaAttivitaByUtente/" + id_attivita + "/" + persistent + "/" + askReport + (ignoraDoppioni ? "?ignoraDoppioni=true" : "");
+    }
+
+    /// TASK-f434bd2f: il testo dell'avviso: i codici doppi raggruppati per etichetta, canale e area.
+    static testoAvvisoCodiciDoppi(codici) {
+        let gruppi = [];
+        (codici || []).forEach(c => {
+            let gruppo = gruppi.find(g => g.label == c.label && g.canale == c.canale && g.area == c.area);
+            if (gruppo == null) {
+                gruppo = { label: c.label, canale: c.canale, area: c.area, codici: [] };
+                gruppi.push(gruppo);
+            }
+            gruppo.codici.push(c.codice);
+        });
+        let righe = gruppi.map(g => "<li>I prodotti <strong>" + g.codici.map(Promo.html).join(", ") + "</strong> appaiono più volte in lista con etichetta <strong>"
+            + Promo.html(g.label) + "</strong>, canale <strong>" + Promo.html(g.canale) + "</strong> e area <strong>" + Promo.html(g.area) + "</strong>.</li>");
+        return "<p class=\"text-danger fw-bold\">La lista è sbagliata.</p><ul>" + righe.join("") + "</ul>"
+            + "<p>Vuoi annullare l'importazione e correggere la lista, oppure procedere lo stesso?</p>";
+    }
+
+    static html(testo) {
+        return String(testo == null ? "" : testo).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
     }
 
     esporta(sender) {
@@ -1177,4 +1266,9 @@ class Promo {
             hideLoading();
         });
     }
+}
+
+//TASK-f434bd2f: per i test sotto Node; nel browser module non c'e' e non cambia niente.
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = Promo;
 }

@@ -159,7 +159,8 @@
                 console.log("Callback stato attività")
                 console.log(attivita);
 
-                if (attivita.stato == 6 || attivita.stato == 7 || attivita.stato == 9) {
+                //TASK-f434bd2f: 8 = l'importazione si e' fermata per codici doppi e aspetta l'operatore.
+                if (attivita.stato == 6 || attivita.stato == 7 || attivita.stato == 8 || attivita.stato == 9) {
                     //Elimino proc dalla lista di controllo
                     sender.codaProcessi.splice(sender.codaProcessi.findIndex(f => f == procId), 1);
                     ctrl.find(".progressMsg").text(attivita.statoMsg);

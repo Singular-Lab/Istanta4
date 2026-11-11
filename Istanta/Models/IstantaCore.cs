@@ -708,6 +708,8 @@ namespace Istanta.Models
 
         public bool persistent { get; set; } = false;//se true salva su db
         public bool askReport { get; set; } = false;//se true chiede report sulle alterazioni
+        //TASK-f434bd2f: l'operatore ha scelto di importare anche con codici doppi nella lista: non si chiede piu'.
+        public bool ignoraDoppioni { get; set; } = false;
 
         public string getFieldByKey(string key)
         {
@@ -786,6 +788,23 @@ namespace Istanta.Models
     {
         public string errors = "";
         public List<Dictionary<string, object>>? liste;
+        /// <summary>
+        /// TASK-f434bd2f: i codici di cui l'agenzia ha scartato righe doppie (stesso canale e area). Una
+        /// libreria d'agenzia che non lo conosce non lo manda: resta null.
+        /// </summary>
+        public List<CodiceDoppioInLista>? codiciDoppi;
+    }
+
+    /// <summary>
+    /// TASK-f434bd2f: un codice presente piu' volte nella lista importata con la stessa label, nello stesso
+    /// canale e nella stessa area (sigle). Va nel CodiciDoppi.json dell'attivita' e nell'avviso all'operatore.
+    /// </summary>
+    public class CodiceDoppioInLista
+    {
+        public string codice { get; set; } = "";
+        public string label { get; set; } = "";
+        public string canale { get; set; } = "";
+        public string area { get; set; } = "";
     }
     public class TracciatoResult
     {
