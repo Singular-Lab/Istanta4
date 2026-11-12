@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fileInOrdine, NESSUN_FILE, SERVE_IL_PERMESSO } from "./ScaricaVolantino";
 import { REPORT_DISATTIVATO } from "./index";
@@ -423,6 +423,81 @@ describe("Dettaglio del volantino", () => {
 
     expect(screen.getByText("Volantino non indicato")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Report PDF/ })).not.toBeInTheDocument();
+  });
+});
+
+/** L'indirizzo corrente, per vedere dove porta il ritorno. */
+function Indirizzo() {
+  const { pathname, search } = useLocation();
+  return <output aria-label="Indirizzo">{`${pathname}${search}`}</output>;
+}
+
+/** La pagina del volantino dentro un router con le pagine da cui si apre: `cronologia` finisce sul volantino. */
+const apriDa = (cronologia: string[]) => {
+  const router = createMemoryRouter(
+    [
+      { path: "/volantini/tutti_i_volantini", element: <TuttiIVolantini /> },
+      { path: "*", element: <Indirizzo /> },
+    ],
+    { initialEntries: cronologia, initialIndex: cronologia.length - 1 }
+  );
+  render(<RouterProvider router={router} />);
+  return router;
+};
+
+const indirizzo = () => screen.getByRole("status", { name: "Indirizzo" }).textContent;
+
+describe("Dettaglio del volantino: ritorno", () => {
+  beforeEach(() => {
+    finti.permessi = new Set(["materiali.visualizza"]);
+    finti.insights = caricato(datiInsight);
+    finti.configurazione = caricato({});
+    finti.file = caricato(PUBBLICATO);
+  });
+
+  it("aperto dallo Storico volantini torna lì, con la stessa pagina e gli stessi filtri, non ai volantini attivi", async () => {
+    apriDa(["/storico-volantini?area=a-nord&pagina=3", "/volantini/tutti_i_volantini?kit=k1"]);
+
+    expect(screen.queryByRole("link", { name: "Torna ai volantini attivi" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Torna indietro" }));
+
+    expect(await screen.findByRole("status", { name: "Indirizzo" })).toBeInTheDocument();
+    expect(indirizzo()).toBe("/storico-volantini?area=a-nord&pagina=3");
+  });
+
+  it("aperto dal dettaglio di una promozione archiviata torna al dettaglio, con i suoi filtri", async () => {
+    apriDa(["/volantini/storico", "/volantini/promozioni/p1?area=a-toscana", "/volantini/tutti_i_volantini?kit=k1"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Torna indietro" }));
+
+    expect(await screen.findByRole("status", { name: "Indirizzo" })).toBeInTheDocument();
+    expect(indirizzo()).toBe("/volantini/promozioni/p1?area=a-toscana");
+  });
+
+  it("aperto direttamente, senza una pagina prima, porta al dettaglio della sua promozione", async () => {
+    apriDa(["/volantini/tutti_i_volantini?kit=k1"]);
+
+    const ritorno = screen.getByRole("link", { name: "Torna alla promozione" });
+    expect(ritorno).toHaveAttribute("href", "/volantini/promozioni/p1");
+    fireEvent.click(ritorno);
+
+    expect(await screen.findByRole("status", { name: "Indirizzo" })).toBeInTheDocument();
+    expect(indirizzo()).toBe("/volantini/promozioni/p1");
+  });
+
+  it("aperto direttamente prima che si sappia la promozione porta ai volantini attivi", () => {
+    // Senza kit nell'indirizzo gli insight non partono; con il kit, finché non arrivano
+    finti.insights = inCaricamento();
+    apriDa(["/volantini/tutti_i_volantini"]);
+    expect(screen.getByRole("link", { name: "Torna ai volantini attivi" })).toHaveAttribute("href", "/volantini/attivi");
+  });
+
+  it("anche quando gli insight non si caricano il ritorno segue la pagina di prima", () => {
+    finti.insights = fallito("Servizio non raggiungibile");
+    apriDa(["/volantini/storico", "/volantini/tutti_i_volantini?kit=k1"]);
+
+    expect(screen.getByText("Insight non caricati")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Torna indietro" })).toBeInTheDocument();
   });
 });
 

@@ -3284,9 +3284,6 @@
   "src/pages/StoricoVolantini/index.tsx": {
     "no-console": {
       "count": 2
-    },
-    "react-hooks/exhaustive-deps": {
-      "count": 1
     }
   },
   "src/pages/SuperadminDashboard/SuperadminDashboard.test.tsx": {
