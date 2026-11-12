@@ -21,6 +21,12 @@ function sorgente(percorso) {
     return fs.readFileSync(path.join(__dirname, '..', '..', percorso), 'utf8');
 }
 
+//Le sezioni delle foto stanno nella parziale condivisa con il revisore (Views/Shared/_GestioneFoto.cshtml),
+//che la scheda articolo include: la pagina che arriva al browser e' l'una dentro l'altra.
+function vistaSchedaArticolo() {
+    return sorgente('Istanta/Views/SchedaArticolo/Index.cshtml') + '\n' + sorgente('Istanta/Views/Shared/_GestioneFoto.cshtml');
+}
+
 /* Un psd finto, col minimo che serve: intestazione, blocco colori vuoto e le risorse chieste.
    Ogni risorsa e' 8BIM, identificativo, nome vuoto, dimensione e dati; la miniatura porta 28
    byte di descrizione prima dei byte dell'immagine. */
@@ -181,7 +187,7 @@ test('e\' il browser a dire se sa disegnare il file', () => {
 });
 
 test('le foto non selezionate stanno in una tendina chiusa', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     assert.ok(vista.includes('data-bs-target="#altreFotoArticolo"'), 'serve il comando che la apre');
     assert.ok(vista.includes('id="altreFotoArticolo"') && vista.includes('class="collapse mt-2"'),

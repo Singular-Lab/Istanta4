@@ -191,6 +191,10 @@ class Archivio {
             ME.CollegaFotoExtra($(this).attr("data-tipo"), $(this).attr("data-nometipo"));
         });
 
+        pagina.on("click", "[data-azione='chiudiCollegaFotoExtra']", function () {
+            ME.ChiudiCollegaFotoExtra();
+        });
+
         pagina.on("change", "[data-azione='fileFotoExtraScelto']", function () {
             ME.CaricaNuovaFotoExtra($(this));
         });
@@ -427,6 +431,42 @@ class Archivio {
             idRec: 0,
             uploadMethod: 0
         };
+    }
+
+    /// La sezione delle foto (Views/Shared/_GestioneFoto.cshtml): nella Scheda articolo o nella
+    /// finestra del revisore. Ce n'e' una alla volta: la finestra si riempie a ogni apertura.
+    static sezioneFoto() {
+        return $(".gestioneFoto");
+    }
+
+    /// Il codice su cui agiscono le azioni della sezione: una referenza o un codice gruppo
+    /// ("123,456"). Viene dalla sezione e non dal campo Codice della scheda, che nel revisore non c'e'.
+    static codiceDellaSezioneFoto() {
+        var codice = Archivio.sezioneFoto().attr("data-codice-foto");
+        return codice != null && codice !== "" ? codice : $("#Codice").val();
+    }
+
+    /// L'indirizzo dell'attiva/disattiva di una foto extra. Il codice dice su quali referenze: lo
+    /// stesso logo collegato a piu' articoli ha lo stesso GUID, e senza codice il server cambiava la
+    /// prima riga che trovava, anche di un altro articolo.
+    static indirizzoAttivaFotoExtra(guidId, attiva, codice) {
+        return "attivaDisattivaFotoExtra/" + guidId + "/" + attiva + "?codice=" + encodeURIComponent(codice || "");
+    }
+
+    /// Il codice da cui aprire le foto di una riga del revisore: quello della referenza, o il codice
+    /// gruppo per un gruppo (che una scheda articolo non ce l'ha).
+    static codiceDellaRigaRevisore(eGruppo, codiceReferenza, codiceGruppo) {
+        return eGruppo ? (codiceGruppo || "") : (codiceReferenza || "");
+    }
+
+    /// Dopo una modifica: nella Scheda articolo si ricarica la pagina, come sempre; nel revisore la
+    /// sola finestra, perche' ricaricare il revisore farebbe perdere il punto in cui si era.
+    DopoModificaFoto() {
+        if (Archivio.sezioneFoto().attr("data-in-finestra") === "true") {
+            this.RicaricaGestioneFoto();
+            return;
+        }
+        location.reload();
     }
 
     /// I20-985: apre la scelta del file per una foto nuova del prodotto.
@@ -787,7 +827,7 @@ class Archivio {
 
         var dati = {
             idFoto: gruppo.attr("data-idfoto"),
-            codice: $("#Codice").val(),
+            codice: Archivio.codiceDellaSezioneFoto(),
             area: destinazione.area,
             canale: destinazione.canale
         };
@@ -817,7 +857,7 @@ class Archivio {
             return;
         }
 
-        var dati = Archivio.datiNuovaFotoArticolo($("#Codice").val(), file.name, destinazione);
+        var dati = Archivio.datiNuovaFotoArticolo(Archivio.codiceDellaSezioneFoto(), file.name, destinazione);
 
         var fd = new FormData();
         fd.append("file", file);
@@ -837,7 +877,7 @@ class Archivio {
             }
 
             ME.AnnullaFotoArticolo();
-            location.reload();
+            ME.DopoModificaFoto();
         });
     }
 
@@ -856,7 +896,8 @@ class Archivio {
             return;
         }
 
-        var dati = Archivio.datiNuovaFotoExtra($("#Codice").val(), campo.attr("tipo"), file.name);
+        var dati = Archivio.datiNuovaFotoExtra(Archivio.codiceDellaSezioneFoto(), campo.attr("tipo"), file.name);
+        let ME = this;
 
         var fd = new FormData();
         fd.append("file", file);
@@ -875,18 +916,23 @@ class Archivio {
                 return;
             }
 
-            location.reload();
+            ME.DopoModificaFoto();
         });
     }
 
-    /// Mostra il catalogo delle immagini a sistema per quel tipo e collega quella scelta.
+    /// Mostra il catalogo delle immagini a sistema per quel tipo e collega quella scelta. Il catalogo
+    /// prende il posto delle sezioni, con Indietro per tornarci: nel revisore la sezione e' gia' in una
+    /// finestra, e una finestra sopra l'altra Bootstrap non la gestisce bene.
     CollegaFotoExtra(tipo, nomeTipo) {
         let ME = this;
-        var corpo = $("#collegaFotoExtraBody");
+        var sezione = Archivio.sezioneFoto();
+        var pannello = sezione.find(".pannelloCollegaFotoExtra");
+        var corpo = pannello.find(".corpoCollegaFotoExtra");
 
-        $("#collegaFotoExtraModalLabel").text("Collega " + (nomeTipo || "") + " a immagine a sistema");
+        pannello.find(".titoloCollegaFotoExtra").text("Collega " + (nomeTipo || "") + " a immagine a sistema");
         corpo.html("<div>Caricamento...</div>");
-        new bootstrap.Modal(document.getElementById("collegaFotoExtraModal")).show();
+        sezione.find(".sezioniFoto").hide();
+        pannello.show();
 
         Call.do("FicoProcess", "getLoghiBolli", "GET", null, this, function (result, sender) {
             var catalogo = result != null && result.content != null ? result.content : [];
@@ -915,10 +961,19 @@ class Archivio {
         });
     }
 
-    /// Le foto extra gia' sulla pagina, lette dai riquadri disegnati dalla vista.
+    ChiudiCollegaFotoExtra() {
+        var sezione = Archivio.sezioneFoto();
+        sezione.find(".pannelloCollegaFotoExtra").hide();
+        sezione.find(".corpoCollegaFotoExtra").empty();
+        sezione.find(".sezioniFoto").show();
+    }
+
+    /// Le foto extra gia' sulla pagina, lette dai riquadri disegnati dalla vista. Per classe: con
+    /// l'id, ripetuto su ogni riquadro, il browser ne restituiva solo la prima, e il catalogo
+    /// proponeva da collegare immagini che l'articolo aveva gia'.
     fotoExtraDellaPagina() {
         var elenco = [];
-        $("#fotoExtra").each(function () {
+        Archivio.sezioneFoto().find(".fotoExtraDati").each(function () {
             try {
                 elenco.push(JSON.parse($(this).attr("data")));
             }
@@ -930,11 +985,12 @@ class Archivio {
     }
 
     collegaImmagineScelta(immagine, tipo) {
+        let ME = this;
         var dati = {
             guidId: immagine.guidId,
             nomeReale: immagine.nome,
             fileHash: immagine.hash || immagine.fileHash || "",
-            codiceReferenza: $("#Codice").val(),
+            codiceReferenza: Archivio.codiceDellaSezioneFoto(),
             tipo: Number(tipo)
         };
 
@@ -947,7 +1003,7 @@ class Archivio {
                 return;
             }
 
-            location.reload();
+            ME.DopoModificaFoto();
         });
     }
 
@@ -957,7 +1013,7 @@ class Archivio {
         var attiva = casella.is(":checked");
 
         showLoading();
-        Call.do("SyncFoto", "attivaDisattivaFotoExtra/" + guidId + "/" + attiva, "GET", null, this, function (result, sender) {
+        Call.do("SyncFoto", Archivio.indirizzoAttivaFotoExtra(guidId, attiva, Archivio.codiceDellaSezioneFoto()), "GET", null, this, function (result, sender) {
             hideLoading();
 
             if (result != null && result.esito === false) {
@@ -969,13 +1025,13 @@ class Archivio {
     }
 
     EliminaFotoExtra(button) {
-        const el = button.closest(".col").find('#fotoExtra');
+        const el = button.closest(".col").find('.fotoExtraDati');
         const item = JSON.parse(el.attr("data"));
 
         let ME = this;
         let data = {
             nomeFile: item.NomeReale,
-            codice: $("#Codice").val(),
+            codice: Archivio.codiceDellaSezioneFoto(),
             idLavorazione: 0,
             tipo: item.Tipo,
             guidId: item.GuidId
@@ -985,7 +1041,7 @@ class Archivio {
         Call.do("SyncFoto", "RimuoviFoto/" + 0, "PUT", data, ME, function (result, sender) {
             console.log(result);
             hideLoading();
-            location.reload();
+            ME.DopoModificaFoto();
 
         });
     }
@@ -1089,14 +1145,96 @@ class Archivio {
 
 
     AggiornaPrimario(guidId) {
-        let codice = $("#Codice").val();
+        let ME = this;
+        let codice = Archivio.codiceDellaSezioneFoto();
         let data = {
             guidId: guidId,
             codice: codice
         }
         Call.do("SchedaArticolo", "AggiornaPrimario", "PUT", data, this, function (result, sender) {
-            location.reload();
+            //Nel revisore la miniatura della riga deve mostrare la primaria nuova.
+            ME.AggiornaMiniaturaRigaRevisore(guidId);
+            ME.DopoModificaFoto();
         });
+    }
+
+    /* ---- la finestra delle foto nel revisore ---- */
+
+    /// Aggancia il pulsante delle foto delle righe del revisore. Si aggancia sul documento: le righe
+    /// si disegnano dopo, e l'intestazione di un gruppo non dichiarato in lista la costruisce il
+    /// revisore senza passare dai gestori delle righe.
+    collegaGestioneFotoRevisore() {
+        let ME = this;
+        var pagina = $(document);
+
+        pagina.on("click", "[data-azione='apriGestioneFoto']", function () {
+            var riga = $(this).closest(".record-revisione");
+            var eGruppo = riga.attr("is_gruppo") === "true";
+            var codice = Archivio.codiceDellaRigaRevisore(eGruppo, riga.attr("referenzaCodice"), riga.attr("codice_gruppo"));
+            ME.ApriGestioneFoto(codice, riga);
+        });
+
+        //L'anteprima grande delle immagini, come nella Scheda articolo.
+        pagina.on("mouseenter", "#gestioneFotoModal .img-preview-hover", function () {
+            $("#image-hover-preview img").attr("src", $(this).data("bigimg"));
+            $("#image-hover-preview").css("display", "flex");
+        });
+        pagina.on("mouseleave", "#gestioneFotoModal .img-preview-hover", function () {
+            $("#image-hover-preview").hide();
+            $("#image-hover-preview img").attr("src", "");
+        });
+    }
+
+    ApriGestioneFoto(codice, riga) {
+        if (!codice) {
+            alert("Codice della riga non trovato");
+            return;
+        }
+
+        this.codiceGestioneFoto = codice;
+        this.rigaGestioneFoto = riga;
+
+        $("#gestioneFotoModalLabel").text("Foto di " + (codice.length > 60 ? codice.slice(0, 60) + "..." : codice));
+        $("#gestioneFotoBody").html("<div>Caricamento...</div>");
+        bootstrap.Modal.getOrCreateInstance(document.getElementById("gestioneFotoModal")).show();
+
+        this.RicaricaGestioneFoto();
+    }
+
+    /// Ridisegna la finestra con la sezione delle foto letta di nuovo dal server.
+    RicaricaGestioneFoto() {
+        let ME = this;
+        var codice = this.codiceGestioneFoto;
+        var indirizzo = "/" + getWebAppRootFolder() + "SchedaArticolo/GestioneFoto?codice=" + encodeURIComponent(codice || "");
+
+        showLoading();
+        $.ajax({
+            type: "GET",
+            url: indirizzo,
+            dataType: "html",
+            success: function (html) {
+                hideLoading();
+                //Il file scelto e le aree lette dalla sezione di prima non valgono per quella nuova.
+                ME.fileNuovaFotoArticolo = null;
+                ME.opzioniAreaFotoArticolo = null;
+                $("#gestioneFotoBody").html(html);
+                ME.InizializzaDestinazioniFotoEsistenti();
+            },
+            error: function (risposta) {
+                hideLoading();
+                $("#gestioneFotoBody").html($('<div class="alert alert-danger"></div>')
+                    .text("Foto non caricate: " + (risposta != null && risposta.status ? "errore " + risposta.status : "Istanta non risponde")));
+            }
+        });
+    }
+
+    /// La miniatura della riga del revisore da cui si e' aperta la finestra, dopo una nuova primaria.
+    AggiornaMiniaturaRigaRevisore(guidId) {
+        if (this.rigaGestioneFoto == null || !guidId) {
+            return;
+        }
+        var olimpo = $("#ipOlympus").val();
+        this.rigaGestioneFoto.find("#img_principale").attr("src", olimpo + "/foto/getThumbNailOnDemand?width=40&guidId=" + guidId);
     }
 
 

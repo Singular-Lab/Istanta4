@@ -74,9 +74,78 @@ namespace Istanta.Controllers
             }
             ViewBag.ipOlympus = olympusServerUrl;
             ViewBag.extPostProduzione = ext_post_lavorazione;
-            destinazioniFoto();
+
+            //La sezione delle foto e' la stessa che il revisore apre in una finestra (GestioneFoto).
+            if (ViewBag.Item is Articoli articolo)
+            {
+                var sezione = NuovaGestioneFoto(articolo.Codice ?? "", false);
+                sezione.Foto = articolo.ArticoliFotos?.ToList() ?? new List<ArticoliFoto>();
+                sezione.Extra = FotoExtraDiPiuArticoli.DiUnArticolo(articolo.ArticoliFotos);
+                ViewBag.GestioneFoto = sezione;
+            }
 
             return View();
+        }
+
+        /// La sezione delle foto della Scheda articolo per una referenza o per un gruppo, da aprire in
+        /// una finestra del revisore. Una referenza ha le foto del prodotto e le sue foto extra; un
+        /// gruppo, che non ha una scheda articolo, solo le foto extra comuni a tutte le sue referenze.
+        [HttpGet]
+        [Route("SchedaArticolo/GestioneFoto")]
+        public async Task<IActionResult> GestioneFoto(string codice)
+        {
+            var codici = FotoExtraDiPiuArticoli.Codici(codice);
+            var sezione = NuovaGestioneFoto(string.Join(",", codici), true);
+            sezione.Gruppo = codici.Count > 1;
+            sezione.Referenze = codici.Count;
+
+            if (codici.Count == 0)
+            {
+                sezione.Errore = "Nessun codice indicato.";
+                return PartialView("_GestioneFoto", sezione);
+            }
+
+            var articoli = await this.ctx.Articolis.Include(a => a.ArticoliFotos)
+                .Where(a => codici.Contains(a.Codice!))
+                .ToListAsync();
+
+            //Nell'ordine del codice: la prima referenza da' l'ordine delle foto extra del gruppo.
+            var inOrdine = codici.Select(c => articoli.FirstOrDefault(a => a.Codice == c)).ToList();
+            sezione.CodiciSenzaArticolo = codici.Where((c, i) => inOrdine[i] == null).ToList();
+
+            if (!sezione.Gruppo)
+            {
+                if (inOrdine[0] == null)
+                {
+                    sezione.Errore = "La referenza " + codici[0] + " non e' in archivio.";
+                    return PartialView("_GestioneFoto", sezione);
+                }
+
+                sezione.Foto = inOrdine[0]!.ArticoliFotos?.ToList() ?? new List<ArticoliFoto>();
+                sezione.Extra = FotoExtraDiPiuArticoli.DiUnArticolo(inOrdine[0]!.ArticoliFotos);
+                return PartialView("_GestioneFoto", sezione);
+            }
+
+            //Una referenza che non c'e' non ha foto extra: una foto che manca a lei non e' comune.
+            //La sezione lo dice, e caricando o collegando le si scrive solo dove l'articolo c'e'.
+            sezione.Extra = FotoExtraDiPiuArticoli.ComuniAlGruppo(
+                inOrdine.Select(a => (IEnumerable<ArticoliFoto>?)a?.ArticoliFotos).ToList());
+
+            return PartialView("_GestioneFoto", sezione);
+        }
+
+        private GestioneFoto NuovaGestioneFoto(string codice, bool inFinestra)
+        {
+            var sezione = new GestioneFoto
+            {
+                Codice = codice,
+                InFinestra = inFinestra,
+                OlimpoIp = olympusServerUrl,
+                ExtPostProduzione = ext_post_lavorazione ?? Array.Empty<string>(),
+                Referenze = 1,
+            };
+            destinazioniFoto(sezione);
+            return sezione;
         }
 
         /// I20-985: dove si puo' mandare una foto caricata dalla scheda.
@@ -86,7 +155,7 @@ namespace Istanta.Controllers
         /// attive. Qui non se ne inventano altre, altrimenti la scheda offrirebbe destinazioni
         /// che nel resto del sistema non esistono. Si mandano le sigle perche' e' la sigla che
         /// il server scrive nella foto, come fa il Plugin.
-        private void destinazioniFoto()
+        private void destinazioniFoto(GestioneFoto sezione)
         {
             var aree = new List<Area>();
             var canali = new List<Canale>();
@@ -110,9 +179,9 @@ namespace Istanta.Controllers
                 _logger.LogError(ex, "Aree e canali non leggibili per la scheda articolo");
             }
 
-            ViewBag.areeFoto = aree;
-            ViewBag.canaliFoto = canali;
-            ViewBag.combinazioniFoto = combinazioni;
+            sezione.Aree = aree;
+            sezione.Canali = canali;
+            sezione.Combinazioni = combinazioni;
         }
 
         [HttpGet]

@@ -23,6 +23,12 @@ function sorgente(percorso) {
     return fs.readFileSync(path.join(__dirname, '..', '..', percorso), 'utf8');
 }
 
+//Le sezioni delle foto stanno nella parziale condivisa con il revisore (Views/Shared/_GestioneFoto.cshtml),
+//che la scheda articolo include: la pagina che arriva al browser e' l'una dentro l'altra.
+function vistaSchedaArticolo() {
+    return sorgente('Istanta/Views/SchedaArticolo/Index.cshtml') + '\n' + sorgente('Istanta/Views/Shared/_GestioneFoto.cshtml');
+}
+
 function foto(nome, tipo, guid) {
     return { NomeReale: nome, Tipo: tipo, GuidId: guid || ('guid-' + nome) };
 }
@@ -122,7 +128,7 @@ test('il tipo viaggia come numero anche se arriva dall\'attributo di un elemento
 /* ---- come la pagina e' costruita ---- */
 
 test('la pagina ha le quattro sezioni con i loro due pulsanti', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     for (const tipo of ['Bollino', 'Logo', 'Ambientata', 'Sfondo']) {
         assert.ok(vista.includes('IstantaLib.TipoFoto.' + tipo), 'manca la sezione ' + tipo);
@@ -137,13 +143,13 @@ test('la pagina ha le quattro sezioni con i loro due pulsanti', () => {
 // Era disegnata gia' spuntata o no, quindi diceva il vero, ma cliccarla non faceva niente:
 // al ricaricamento tornava com'era.
 test('la casella Attiva ora chiama il server', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
     const js = sorgente('Istanta/wwwroot/js/archivio.js');
 
     assert.ok(vista.includes('data-azione="attivaFotoExtra"'),
         'senza gestore la casella resta un comando finto');
-    assert.ok(js.includes('"attivaDisattivaFotoExtra/" + guidId + "/" + attiva'),
-        'e\' l\'endpoint che usa anche il Plugin');
+    assert.ok(js.includes('"attivaDisattivaFotoExtra/" + guidId + "/" + attiva + "?codice="'),
+        'e\' l\'endpoint che usa anche il Plugin, con il codice delle referenze da cambiare');
     assert.ok(js.includes('casella.prop("checked", !attiva);'),
         'se il server rifiuta, la casella deve tornare com\'era invece di mentire');
 });
@@ -155,7 +161,7 @@ test('la casella Attiva ora chiama il server', () => {
 // rifiuta i gestori scritti come attributo, e i pulsanti non fanno niente. Valeva gia' per
 // Seleziona, Elimina, Salva e Cronologia, che erano inerti da sempre.
 test('nel markup della scheda articolo non restano gestori inline', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     //I blocchi commentati non arrivano al browser e non contano.
     const attivo = vista.replace(/@\*[\s\S]*?\*@/g, '');
@@ -167,7 +173,7 @@ test('nel markup della scheda articolo non restano gestori inline', () => {
 });
 
 test('ogni azione della pagina ha il suo aggancio da JavaScript', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
     const js = sorgente('Istanta/wwwroot/js/archivio.js');
 
     const azioni = [...vista.matchAll(/data-azione="([a-zA-Z]+)"/g)].map(t => t[1]);
@@ -180,7 +186,7 @@ test('ogni azione della pagina ha il suo aggancio da JavaScript', () => {
 });
 
 test('gli agganci partono all\'apertura della pagina', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     const creazione = vista.indexOf('ArchivioItem = new Archivio();');
     const aggancio = vista.indexOf('ArchivioItem.collegaGestoriSchedaArticolo();');
@@ -236,7 +242,7 @@ test('non si decide piu\' dall\'estensione cosa e\' mostrabile', () => {
 });
 
 test('si vede cosa si sta per archiviare prima di scrivere', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
     const js = sorgente('Istanta/wwwroot/js/archivio.js');
 
     assert.ok(vista.includes('data-azione="aggiungiFotoArticolo"'), 'serve il comando per iniziare');
@@ -255,7 +261,7 @@ test('si vede cosa si sta per archiviare prima di scrivere', () => {
 // Le miniature arrivano da Olimpo con la sola larghezza fissata: senza un riquadro di misura
 // fissa ogni scheda veniva alta in modo diverso.
 test('le foto del prodotto stanno in un riquadro quadrato, senza tagli', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
     const css = sorgente('Istanta/wwwroot/css/site.css');
 
     assert.strictEqual((vista.match(/riquadroFotoArticolo/g) || []).length >= 2, true,

@@ -1859,25 +1859,37 @@ namespace Istanta.Controllers
             return risposta;
         }
 
+        /// Attiva o disattiva una foto extra. Con codice (una referenza o un codice gruppo, in query)
+        /// cambia solo le righe di quelle referenze: lo stesso logo collegato a piu' articoli ha lo
+        /// stesso GUID, e senza codice si cambiava la prima riga trovata, anche di un altro articolo.
+        /// Senza codice resta il comportamento di prima, per i Plugin non ancora aggiornati.
         [HttpGet]
         [Route("SyncFoto/attivaDisattivaFotoExtra/{guidId}/{attiva}")]
-        public async Task<IActionResult> attivaDisattivaFotoExtra(string guidId, bool attiva)
+        public async Task<IActionResult> attivaDisattivaFotoExtra(string guidId, bool attiva, [FromQuery] string? codice = null)
         {
             BoolResult result = new BoolResult();
             try
             {
-                var foto = this.ctx.ArticoliFotos.Where(f => f.GuidId == guidId).FirstOrDefault();
-                if(foto == null)
+                var codici = FotoExtraDiPiuArticoli.Codici(codice);
+                var righeDelGuid = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation)
+                    .Where(f => f.GuidId == guidId && (codici.Count == 0 || codici.Contains(f.IdArticoloNavigation.Codice!)))
+                    .ToList();
+                var daCambiare = FotoExtraDiPiuArticoli.DaAttivare(righeDelGuid, f => f.IdArticoloNavigation?.Codice, codice);
+
+                if(daCambiare.Count == 0)
                 {
-                    throw new Exception("Foto con guidId ("+guidId+")non trovata nel Database");
+                    throw new Exception("Foto con guidId ("+guidId+")non trovata nel Database" + (codici.Count > 0 ? " per " + string.Join(",", codici) : ""));
                 }
 
-                if(foto.Tipo == (byte)TipoFoto.Foto)
+                if(daCambiare.Any(f => f.Tipo == (byte)TipoFoto.Foto))
                 {
                     throw new Exception("L'operazione può essere effettuata solo per foto Extra");
                 }
 
-                foto.Attiva = attiva;
+                foreach (var foto in daCambiare)
+                {
+                    foto.Attiva = attiva;
+                }
                 this.ctx.SaveChanges();
                 result.Esito = true;
             }
@@ -2591,32 +2603,51 @@ namespace Istanta.Controllers
                     throw new Exception("Errore nel tentativo di effettuare il link al guidId: " + guidId + ". " + logoBolloResult.error);
                 }
 
-                Articoli? articolo = this.ctx.Articolis.Include(f => f.ArticoliFotos).Where(f => f.Codice == codiceReferenza).FirstOrDefault();
+                //Un codice gruppo ("123,456") collega l'immagine su tutte le referenze del gruppo, come
+                //fanno gia' caricamento ed eliminazione; una referenza che l'ha gia' resta com'e'.
+                var codici = FotoExtraDiPiuArticoli.Codici(codiceReferenza);
+                var articoli = this.ctx.Articolis.Include(f => f.ArticoliFotos).Where(f => codici.Contains(f.Codice!)).ToList();
 
-                // Il collegamento non ha area ne' canale: e' nell'ambito generale dell'articolo.
-                var logoGiaAssociato = RegistroFotoArticolo.GiaRegistrata(articolo!.ArticoliFotos!, guidId, null, null);
+                if (articoli.Count == 0)
+                {
+                    throw new Exception("Articolo " + codiceReferenza + " non trovato in archivio");
+                }
 
-                if(logoGiaAssociato != null)
+                ArticoliFoto? primaCollegata = null;
+                foreach (var articolo in articoli)
+                {
+                    // Il collegamento non ha area ne' canale: e' nell'ambito generale dell'articolo.
+                    var logoGiaAssociato = RegistroFotoArticolo.GiaRegistrata(articolo!.ArticoliFotos!, guidId, null, null);
+
+                    if(logoGiaAssociato != null)
+                    {
+                        continue;
+                    }
+
+                    ArticoliFoto nuovaFoto = new ArticoliFoto();
+                    nuovaFoto.IdArticolo = articolo.Id;
+                    nuovaFoto.NomeReale = nomeReale;
+                    nuovaFoto.PathFoto = logoBolloResult.item.sigla;
+                    nuovaFoto.StatoSelezione = (byte)StatoSelezioneFoto.Primaria;
+                    nuovaFoto.Attiva = true;
+                    nuovaFoto.Hash = fileHash;
+                    nuovaFoto.DataInserimento = DateTime.Now;
+                    nuovaFoto.DataModifica = DateTime.Now;
+                    nuovaFoto.GuidId = guidId;
+                    nuovaFoto.Tipo = (Byte)logoBolloResult.item.tipo;
+                    nuovaFoto.Puntatore = true;
+
+                    articolo.ArticoliFotos.Add(nuovaFoto);
+                    primaCollegata ??= nuovaFoto;
+                }
+
+                if (primaCollegata == null)
                 {
                     throw new Exception("Immagine già associata al prodotto");
                 }
 
-                ArticoliFoto nuovaFoto = new ArticoliFoto();
-                nuovaFoto.IdArticolo = articolo!.Id;
-                nuovaFoto.NomeReale = nomeReale;
-                nuovaFoto.PathFoto = logoBolloResult.item.sigla;
-                nuovaFoto.StatoSelezione = (byte)StatoSelezioneFoto.Primaria;
-                nuovaFoto.Attiva = true;
-                nuovaFoto.Hash = fileHash;
-                nuovaFoto.DataInserimento = DateTime.Now;
-                nuovaFoto.DataModifica = DateTime.Now;
-                nuovaFoto.GuidId = guidId;
-                nuovaFoto.Tipo = (Byte)logoBolloResult.item.tipo;
-                nuovaFoto.Puntatore = true;
-
-                articolo.ArticoliFotos.Add(nuovaFoto);
                 this.ctx.SaveChanges();
-                result = nuovaFoto;
+                result = primaCollegata;
             }
             catch (Exception ex)
             {

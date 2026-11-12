@@ -21,6 +21,12 @@ function sorgente(percorso) {
     return fs.readFileSync(path.join(__dirname, '..', '..', percorso), 'utf8');
 }
 
+//Le sezioni delle foto stanno nella parziale condivisa con il revisore (Views/Shared/_GestioneFoto.cshtml),
+//che la scheda articolo include: la pagina che arriva al browser e' l'una dentro l'altra.
+function vistaSchedaArticolo() {
+    return sorgente('Istanta/Views/SchedaArticolo/Index.cshtml') + '\n' + sorgente('Istanta/Views/Shared/_GestioneFoto.cshtml');
+}
+
 /* Le voci del menu delle aree come le rende la vista: ogni area porta i canali con cui in
    tabella e' attiva. Si sceglie prima il canale, come nella matrice, dove i canali sono le
    righe. Le aree qui sotto seguono un caso vero: SA ha tutto tranne petstore, EM ha tutto
@@ -125,7 +131,7 @@ test('la conferma non parte se la destinazione non e\' stata scelta', () => {
 /* ---- come la vista offre la scelta ---- */
 
 test('i due menu stanno accanto alla scelta del file, prima il canale', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     assert.ok(vista.includes('data-azione="destinazioneFotoArticolo"'),
         'i gestori inline la policy della pagina li blocca');
@@ -140,7 +146,7 @@ test('i due menu stanno accanto alla scelta del file, prima il canale', () => {
 // Si parte gia' su una destinazione buona: chi carica senza pensarci archivia una foto valida
 // ovunque, che e' cio' che la scheda faceva da sempre.
 test('i menu partono su tutti i canali e tutte le aree', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     assert.ok(vista.includes('<option value="*" selected>Tutti i canali</option>'));
     assert.ok(vista.includes('<option value="*" selected>Tutte le aree</option>'));
@@ -152,7 +158,7 @@ test('i menu partono su tutti i canali e tutte le aree', () => {
 // L'etichetta deve restare col suo menu: andando a capo, un\'etichetta separata finirebbe sopra
 // al menu sbagliato e si sceglierebbe l'area credendo di scegliere il canale.
 test('ogni etichetta sta in gruppo col suo menu', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     for (const nome of ['canaleNuovaFotoArticolo', 'areaNuovaFotoArticolo']) {
         const etichetta = vista.indexOf('for="' + nome + '"');
@@ -182,7 +188,7 @@ test('aree e canali arrivano dalla stessa sorgente della pagina Aree/Canali', ()
 });
 
 test('nei menu si mostrano le sigle, che sono cio\' che il server scrive', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     assert.ok(vista.includes('<option value=\\"{testo(a.sigla)}\\"'), 'l\'area si manda come sigla');
     assert.ok(vista.includes('<option value=\\"{testo(c.sigla)}\\"'), 'il canale si manda come sigla');
@@ -206,7 +212,7 @@ test('c\'e\' qualcosa da salvare solo se la destinazione e\' cambiata davvero', 
 });
 
 test('la foto in uso e quelle in elenco hanno i due menu e il salva', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
 
     //Una volta per la primaria e una per ogni foto dell'elenco.
     assert.ok(vista.includes('@destinazioneDiUnaFoto(fotoPrimaria.Id, fotoPrimaria.Area, fotoPrimaria.Canale)'));
@@ -218,7 +224,7 @@ test('la foto in uso e quelle in elenco hanno i due menu e il salva', () => {
 // Un pulsante sempre presente e spento e' un invito a premere che non porta da nessuna parte:
 // finche' non c'e' niente da salvare non deve esserci.
 test('il pulsante compare solo quando c\'e\' qualcosa da salvare', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
     const js = sorgente('Istanta/wwwroot/js/archivio.js');
 
     assert.ok(vista.includes('data-idfoto=""{idFoto}"" style=""display:none""'),
@@ -235,7 +241,7 @@ test('il pulsante compare solo quando c\'e\' qualcosa da salvare', () => {
 // Il pulsante sta accanto all'immagine e i menu accanto al nome: sono in due punti diversi della
 // riga, quindi devono potersi ritrovare, e sbagliare foto vorrebbe dire scrivere su un'altra riga.
 test('menu e pulsante di una foto si ritrovano per identificativo', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
     const js = sorgente('Istanta/wwwroot/js/archivio.js');
 
     //Accanto al nome della foto, non accanto all'immagine.
@@ -250,7 +256,7 @@ test('menu e pulsante di una foto si ritrovano per identificativo', () => {
 });
 
 test('le tendine hanno tutte la stessa misura, cosi\' restano incolonnate', () => {
-    const vista = sorgente('Istanta/Views/SchedaArticolo/Index.cshtml');
+    const vista = vistaSchedaArticolo();
     const css = sorgente('Istanta/wwwroot/css/site.css');
 
     //Tre punti della scheda: la foto in uso, quelle in elenco e il caricamento.

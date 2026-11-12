@@ -245,7 +245,8 @@ test("attivare un'extra la rimette nel box se manca, e aggiorna tutti i record d
         await schedaRef.attivaFotoExtraDelBox(b, elemento, true);
     });
 
-    assert.deepStrictEqual(richieste, ["SyncFoto/attivaDisattivaFotoExtra/BIO-guid/true"]);
+    //Con il codice del box: il server cambia l'extra solo sulle sue referenze, non su altri articoli con lo stesso logo.
+    assert.deepStrictEqual(richieste, ["SyncFoto/attivaDisattivaFotoExtra/BIO-guid/true?codice=A"]);
     assert.deepStrictEqual(b.records.map(r => r.recordInTracciato["Foto.Extra"][0].attiva), [true, true]);
     assert.deepStrictEqual(impaginati, [["BIO.psd", 3, "BIO"]]);
 });

@@ -63,7 +63,8 @@ public class DateFotoTests
     [Fact]
     public void La_scheda_articolo_mostra_le_date_di_primaria_altre_foto_e_foto_extra()
     {
-        string vista = Sorgente("Istanta/Views/SchedaArticolo/Index.cshtml");
+        //Le sezioni delle foto stanno nella parziale condivisa con il revisore, che la scheda include.
+        string vista = Sorgente("Istanta/Views/SchedaArticolo/Index.cshtml") + "\n" + Sorgente("Istanta/Views/Shared/_GestioneFoto.cshtml");
         Assert.Contains("Istanta.Utility.DateFoto.Testo(fotoPrimaria.DataInserimento, fotoPrimaria.DataModifica)", vista);
         //Altre foto e foto extra: la stessa riga per ogni foto dei due elenchi.
         int volte = vista.Split("Istanta.Utility.DateFoto.Testo(foto.DataInserimento, foto.DataModifica)").Length - 1;
