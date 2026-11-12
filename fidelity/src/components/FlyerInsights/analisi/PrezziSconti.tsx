@@ -10,6 +10,7 @@ import type {
   PrezziSconti as DatiPrezziSconti,
   ScontoPerGruppo,
 } from "../../../../lib/insightVolantino/tipi";
+import { NOTA_PREZZO_CALCOLATO } from "../volantino/box";
 import { Blocco, MostraTutte, Nota, RIGHE_INIZIALI } from "./comuni";
 
 /**
@@ -92,7 +93,9 @@ function Sottocosto({ idBox, box }: { idBox: readonly string[]; box: readonly Bo
               {marcaFormato(voce) && <span className="block text-slate-500 [overflow-wrap:anywhere] dark:text-slate-400">{marcaFormato(voce)}</span>}
             </span>
             <span className="flex-none text-right tabular-nums text-slate-600 dark:text-slate-300">
-              <span className="block font-semibold text-slate-800 dark:text-slate-100">{formatEuro(voce.prezzo)}</span>
+              <span className="block font-semibold text-slate-800 dark:text-slate-100" title={voce.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
+                {formatEuro(voce.prezzo)}
+              </span>
               {voce.pagina !== null && <span className="block text-slate-500 dark:text-slate-400">pagina {formatNumero(voce.pagina)}</span>}
             </span>
           </li>

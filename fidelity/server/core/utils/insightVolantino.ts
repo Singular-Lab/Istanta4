@@ -177,8 +177,10 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
   const referenze = singolo.referenze;
   const pilota = referenze[0];
   const geometria = singolo.geometria;
-  // Prezzo e barrato vanno presi insieme dalla stessa riga: la pilota, o la prima che ha un prezzo
+  // Prezzo e barrato vanno presi insieme dalla stessa riga: la pilota, o la prima che ha un prezzo.
+  // Senza prezzo stampato, quello calcolato dal barrato e dallo sconto della stessa riga.
   const conPrezzo = referenze.find(referenza => referenza.prezzo !== null) ?? pilota;
+  const prezzoCalcolato = conPrezzo.prezzo === null ? conPrezzo.prezzoCalcolato ?? null : null;
   const insight: BoxInsight = {
     id: singolo.id,
     codiceBox: singolo.codiceBox,
@@ -190,7 +192,7 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
     nome: pilota.nome,
     marca: pilota.marca,
     formato: pilota.formato,
-    prezzo: conPrezzo.prezzo,
+    prezzo: conPrezzo.prezzo ?? prezzoCalcolato,
     barrato: conPrezzo.barrato,
     sconto: singolo.sconto,
     prezzoAlKg: primo(referenze, referenza => referenza.prezzoAlKg || null),
@@ -211,6 +213,7 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
       varianti: variantiDei(singolo.prodotti.map(prodotto => ({ gusto: prodotto.tipo }))),
     }),
   };
+  if (prezzoCalcolato !== null) insight.prezzoCalcolato = true;
   const origine = opzioni.origine?.(singolo.codiceBox);
   if (origine) insight.origine = origine;
   return insight;

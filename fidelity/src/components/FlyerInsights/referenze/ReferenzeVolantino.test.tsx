@@ -109,6 +109,21 @@ describe("ReferenzeVolantino", () => {
     expect(within(tabella()).getByRole("rowheader", { name: /Olio/ }).closest("tr")).toHaveTextContent("Sottocosto");
   });
 
+  it("il prezzo non stampato ma calcolato dal barrato e dallo sconto si scrive com'è e lo spiega il titolo", () => {
+    const calcolato = box("frantolio", { nome: "Olio Il Frantolio", pagina: 1, prezzo: 2.59, prezzoCalcolato: true, barrato: 5.39, sconto: 51.95, sottocosto: true });
+    disegna({ box: [calcolato, LATTE] });
+
+    const riga = within(tabella()).getByRole("rowheader", { name: /Olio Il Frantolio/ }).closest("tr")!;
+    const prezzo = within(riga).getByText("€ 2,59");
+    expect(prezzo).toHaveAttribute("title", expect.stringMatching(/Calcolato dal prezzo barrato e dallo sconto/));
+    expect(riga).toHaveTextContent("calcolato dal barrato e dallo sconto");
+    expect(riga).not.toHaveTextContent("≈");
+    expect(riga).toHaveTextContent("€ 5,39");
+    // Il prezzo stampato non ha il titolo del calcolo
+    const latte = within(tabella()).getByRole("rowheader", { name: /Latte intero/ }).closest("tr")!;
+    expect(within(latte).getByText("€ 1,29")).not.toHaveAttribute("title");
+  });
+
   it("la colonna Linea c'è solo con le linee del distributore: pastiglia, Industria o trattino", () => {
     const { unmount } = render(<ReferenzeVolantino box={[LATTE, PASTA]} onApriBox={() => {}} />);
     expect(within(tabella()).queryByRole("columnheader", { name: "Linea" })).not.toBeInTheDocument();

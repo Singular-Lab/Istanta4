@@ -15,7 +15,7 @@ import {
 } from "../../../../lib/insightVolantino/scheda";
 import type { BoxInsight, GeometriaPagina, ParteDescrizione, ProdottoInsight } from "../../../../lib/insightVolantino/tipi";
 import { ETICHETTA_MECCANICA } from "../../../../lib/puntiVendita/analisi";
-import { marcaFormato, testoReparto } from "./box";
+import { marcaFormato, NOTA_PREZZO_CALCOLATO, testoReparto } from "./box";
 import { paginaNellImmagine, proporzioneRitaglio, riquadroBox, stileImmagine, stileRitaglio, type PaginaNellImmagine } from "./geometria";
 
 /** Quante foto del prodotto si mostrano al massimo: la prima in grande, le altre da scegliere. */
@@ -182,6 +182,7 @@ function Prezzi({ box }: { box: BoxInsight }) {
           Sottocosto
         </Badge>
       )}
+      {box.prezzoCalcolato && <span className="basis-full text-xs text-slate-500">{NOTA_PREZZO_CALCOLATO}</span>}
       {box.prezzoAlKg && <span className="basis-full text-xs text-slate-500">{box.prezzoAlKg}</span>}
       {box.punti && <span className="basis-full text-xs text-slate-500">Punti: {box.punti}</span>}
     </div>

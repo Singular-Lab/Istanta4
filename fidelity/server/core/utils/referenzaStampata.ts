@@ -60,6 +60,12 @@ export interface ProdottoStampato {
   barrato: number | null;
   /** 0–100. */
   sconto: number | null;
+  /**
+   * Il prezzo ricavato dal barrato e dallo sconto stampati, quando il box non stampa il prezzo (i
+   * sottocosto dello storico); null o assente altrimenti. Non e' mai in prezzo: lo usa solo chi lo
+   * mostra come calcolato, gli insight del volantino.
+   */
+  prezzoCalcolato?: number | null;
   prezzoAlKg: string | null;
   punti: string | null;
   meccanica: MeccanicaReferenza | null;
@@ -239,11 +245,75 @@ function datoNumerico(dati: Dati, ...chiavi: string[]): number | null {
 /** Il testo stampato del primo campo con una delle etichette (senza maiuscole), nell'ordine dato. */
 function stampato(campi: readonly CampoStampato[], ...etichette: string[]): CampoStampato | null {
   for (const etichetta of etichette) {
-    const campo = campi.find(voce => voce.etichetta.toLowerCase() === etichetta.toLowerCase() && testoStampato(voce.contenuto) !== '');
+    const campo = campi.find(voce => senzaX(voce.etichetta) === senzaX(etichetta) && testoStampato(voce.contenuto) !== '');
     if (campo) return campo;
   }
   return null;
 }
+
+/**
+ * L'etichetta senza maiuscole e senza il prefisso "X_": nel Plugin "X_prezzo_offerta" e' lo stesso
+ * campo di "prezzo_offerta" (Agenzie/Edro21/custom.js toglie il prefisso), e nello storico arriva
+ * cosi' dai box sottocosto.
+ */
+const senzaX = (etichetta: string): string => etichetta.trim().toLowerCase().replace(/^x_/, '');
+
+// ─── Prezzi stampati ────────────────────────────────────────────────
+
+/*
+ * I riquadri che vogliono dire la stessa cosa, nell'ordine in cui si cercano. Istanta scrive sempre
+ * negli stessi riquadri del box, ma lo stesso dato ha nomi diversi secondo il box, la meccanica e
+ * l'agenzia (AgenziaLib/Edro21.cs, plugin/stili/mappaStili.json; per Coop AgenziaLib/Coopfi.cs).
+ * Le etichette arrivano gia' tradotte dalla mappa WebPliant (prezzo_offerta -> prezzo, txt_sconto
+ * -> sconto). Nessun nome vuol dire una cosa per un cliente e un'altra per un altro: l'elenco e' uno.
+ */
+
+/** Il prezzo in offerta: a pezzo, con l'euro davanti (EURprima), all'etto; prezzo_promo e' di Coop. */
+const ETICHETTE_PREZZO = ['prezzo_offerta', 'prezzo', 'prezzo_offerta_EURprima', 'prezzo_offerta_etto', 'prezzo_offerta_etto_EURprima', 'prezzo_promo'];
+/** Il prezzo barrato, a pezzo o all'etto (box boxetto): un numero, o lo stile del barrato. */
+const ETICHETTE_BARRATO = new Set(['campo_offerta', 'campo_offerta_etto']);
+/** Il prezzo barrato di Coop, scritto come testo: "invece di € 19,80". */
+const ETICHETTE_BARRATO_COOP = ['prezzo_continuo'];
+/** Lo sconto: grande, normale, fidelity, "sconto 30%", il valore dello sconto; sconto e' di Coop (txt_sconto). */
+const ETICHETTE_SCONTO = ['sconto_effettivo_grande', 'sconto_norm', 'sconto_fid', 'sconto_effettivo', 'val_sconto_grande', 'val_sconto', 'sconto'];
+/**
+ * Lo stile di paragrafo di uno sconto (SCONTO_Normale, SCONTO_Fidelity, Sconto_SIR_Grande). Vale
+ * come sconto anche nel riquadro di un prezzo: nello storico "30" arriva in un riquadro "prezzo"
+ * con lo stile SCONTO_Normale, e non e' un prezzo di € 30.
+ */
+const STILE_SCONTO = /^sconto_/i;
+const SOLO_PREZZO = /^\s*€?\s*\d+(?:[.,]\d+)?\s*€?\s*$/;
+
+/** Il barrato stampato: i riquadri del barrato con lo stile del barrato o con un prezzo solo, poi quello di Coop. */
+const barratoStampatoDi = (campi: readonly CampoStampato[]): CampoStampato | null =>
+  campi.find(campo => ETICHETTE_BARRATO.has(senzaX(campo.etichetta))
+    && (/barrato/i.test(campo.paragrafo) || SOLO_PREZZO.test(testoStampato(campo.contenuto))))
+  ?? stampato(campi, ...ETICHETTE_BARRATO_COOP);
+
+/** Lo sconto stampato: i riquadri dello sconto, poi un riquadro qualunque con lo stile di uno sconto. */
+const scontoStampatoDi = (campi: readonly CampoStampato[]): CampoStampato | null =>
+  stampato(campi, ...ETICHETTE_SCONTO)
+  ?? campi.find(campo => STILE_SCONTO.test(campo.paragrafo) && testoStampato(campo.contenuto) !== '')
+  ?? null;
+
+/**
+ * I prezzi dei data_fields. Nello storico DB1 manda come prezzo il listino, uguale al barrato: quel
+ * prezzo non e' l'offerta e si scarta. Un prezzo senza barrato o diverso dal barrato resta (le
+ * referenze compilate a mano hanno quelli veri).
+ */
+function prezziDeiDati(dati: Dati, contesto: ContestoReferenza): { prezzo: number | null; barrato: number | null } {
+  const prezzo = prezzoValido(datoNumerico(dati, 'prezzo', 'prezzo_offerta'));
+  const barrato = prezzoValido(datoNumerico(dati, 'prezzo_anziche', 'anziche'));
+  if (contesto.storico && prezzo !== null && prezzo === barrato) return { prezzo: null, barrato: null };
+  return { prezzo, barrato };
+}
+
+/**
+ * Istanta ha tolto il prezzo apposta (sconto linea, ScontoLineaEdro21.SenzaPrezzoOfferta): il campo
+ * del prezzo c'e' ma e' vuoto. Quel box resta senza prezzo, anche calcolato.
+ */
+const prezzoTolto = (dati: Dati, contesto: ContestoReferenza): boolean =>
+  !contesto.storico && ('prezzo' in dati || 'prezzo_offerta' in dati) && dato(dati, 'prezzo', 'prezzo_offerta') === null;
 
 const STILE_DESCRIZIONE = /<(DES_descr_([a-z]+)[a-z0-9_]*)>([\s\S]*?)<\/\1>/gi;
 
@@ -458,10 +528,7 @@ function prodottoDelGruppo(elemento: Dati, box: ProdottoStampato, contesto: Cont
   const marca = maiuscoleSensate(testoStampato(dato(elemento, 'descrizione_due', 'Descrizioni.Descrizione2', 'descrizione2')) || null);
   const tipo = testoStampato(dato(elemento, 'descrizione_tre', 'Descrizioni.Descrizione3', 'descrizione3')) || null;
   const formato = testoStampato(dato(elemento, 'descrizione_quattro', 'Descrizioni.Descrizione4', 'descrizione4')) || null;
-  const propri = {
-    prezzo: prezzoValido(datoNumerico(elemento, 'prezzo', 'prezzo_offerta')),
-    barrato: prezzoValido(datoNumerico(elemento, 'prezzo_anziche', 'anziche')),
-  };
+  const propri = prezziDeiDati(elemento, contesto);
   const prezzi = propri.prezzo !== null ? propri : { prezzo: box.prezzo, barrato: box.barrato };
   return {
     ...anagrafica,
@@ -493,21 +560,22 @@ function prodottoPilota(riga: RigaReferenza, campi: readonly CampoStampato[], da
   const tipo = stampata.tipo ?? (testoStampato(dato(dati, 'descrizione_tre', 'Descrizioni.Descrizione3', 'descrizione3')) || null);
   const formato = stampata.formato ?? (testoStampato(dato(dati, 'descrizione_quattro', 'Descrizioni.Descrizione4', 'descrizione4')) || null);
 
-  // Prezzi: quelli stampati; i data_fields solo se il box non ne stampa nessuno
-  const prezzoStampato = stampato(campi, 'prezzo_offerta', 'prezzo', 'prezzo_offerta_EURprima', 'prezzo_offerta_etto', 'X_prezzo_offerta', 'X_prezzo');
-  const barratoStampato = campi.find(campo => /^(x_)?campo_offerta$/i.test(campo.etichetta)
-    && (/barrato/i.test(campo.paragrafo) || /^\s*€?\s*\d+(?:[.,]\d+)?\s*€?\s*$/.test(testoStampato(campo.contenuto))));
-  const conPrezziStampati = prezzoStampato !== null || barratoStampato !== undefined;
-  const prezzo = prezzoValido(conPrezziStampati ? numeroStampato(prezzoStampato?.contenuto) : datoNumerico(dati, 'prezzo', 'prezzo_offerta'));
-  const barrato = prezzoValido(conPrezziStampati
-    ? numeroStampato(barratoStampato ? testoStampato(barratoStampato.contenuto) : null)
-    : datoNumerico(dati, 'prezzo_anziche', 'anziche'));
-  const scontoStampato = scontoValido(numeroStampato(testoStampato(
-    stampato(campi, 'sconto_effettivo_grande', 'sconto_norm', 'sconto_fid', 'X_sconto_effettivo_grande')?.contenuto,
-  ) || null));
+  // Prezzi: quelli stampati, con tutti i loro nomi (ETICHETTE_PREZZO...); i data_fields solo se il
+  // box non ne stampa nessuno. Un riquadro con lo stile di uno sconto non e' un prezzo.
+  const prezzoStampato = stampato(campi.filter(campo => !STILE_SCONTO.test(campo.paragrafo)), ...ETICHETTE_PREZZO);
+  const barratoStampato = barratoStampatoDi(campi);
+  const conPrezziStampati = prezzoStampato !== null || barratoStampato !== null;
+  const prezziDati = conPrezziStampati ? null : prezziDeiDati(dati, contesto);
+  const prezzo = prezziDati ? prezziDati.prezzo : prezzoValido(numeroStampato(testoStampato(prezzoStampato?.contenuto) || null));
+  const barrato = prezziDati ? prezziDati.barrato : prezzoValido(numeroStampato(testoStampato(barratoStampato?.contenuto) || null));
+  const scontoStampato = scontoValido(numeroStampato(testoStampato(scontoStampatoDi(campi)?.contenuto) || null));
   const sconto = scontoStampato
     ?? scontoDaiPrezzi(prezzo, barrato)
     ?? (conPrezziStampati ? null : scontoValido(datoNumerico(dati, 'sconto_effettivo', 'sconto_norm', 'sconto_fid')));
+  // Il box non stampa il prezzo ma il barrato e lo sconto si': il prezzo si ricava, e si mostra come calcolato
+  const prezzoCalcolato = prezzo === null && barratoStampato !== null && barrato !== null && scontoStampato !== null && !prezzoTolto(dati, contesto)
+    ? prezzoValido(barrato * (1 - scontoStampato / 100))
+    : null;
 
   const alKgStampato = campi.find(campo => /campo_offerta_kgl|^x_campo_offerta$/i.test(campo.etichetta)
     && /\bal\b|\ba conf/i.test(testoStampato(campo.contenuto)));
@@ -524,6 +592,7 @@ function prodottoPilota(riga: RigaReferenza, campi: readonly CampoStampato[], da
     prezzo,
     barrato,
     sconto,
+    prezzoCalcolato,
     prezzoAlKg: alKgStampato ? testoStampato(alKgStampato.contenuto) : prezzoAlKgDaiDati(dati),
     punti: puntiStampati(campi, dati),
     meccanica: meccanicaDaiSegnali(segnali),

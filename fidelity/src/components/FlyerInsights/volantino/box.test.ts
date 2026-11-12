@@ -68,4 +68,12 @@ describe("testi del box", () => {
     expect(tooltip.righe?.map(riga => riga.etichetta)).toEqual(["Prezzo", "Meccanica", "Prodotti nel box"]);
     expect(tooltip.righe?.[0].valore).toBe("€ 2,00 invece di € 2,50");
   });
+
+  it("il prezzo calcolato dal barrato e dallo sconto si scrive come quello stampato, e il nome e il tooltip lo dicono", () => {
+    const calcolato = boxDi("a", { nome: "Olio", prezzo: 2.59, prezzoCalcolato: true, barrato: 5.39, sconto: 51.95 });
+
+    expect(descrizioneBox(calcolato)).toBe("Olio, € 2,59 calcolato, sconto 52%");
+    const tooltip = tooltipBox(calcolato);
+    expect(tooltip.righe?.[0]).toEqual({ etichetta: "Prezzo calcolato", valore: "€ 2,59 invece di € 5,39" });
+  });
 });

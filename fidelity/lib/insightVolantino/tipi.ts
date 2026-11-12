@@ -80,6 +80,11 @@ export interface BoxInsight {
   marca: string | null;
   formato: string | null;
   prezzo: number | null;
+  /**
+   * true quando il box non stampa il prezzo e prezzo e' calcolato dal barrato e dallo sconto
+   * stampati (i sottocosto dello storico): si mostra come calcolato. Assente altrimenti.
+   */
+  prezzoCalcolato?: boolean;
   barrato: number | null;
   /** Sconto in % (0-100). */
   sconto: number | null;

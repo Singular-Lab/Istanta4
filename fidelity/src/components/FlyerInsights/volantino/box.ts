@@ -40,12 +40,18 @@ export const testoReparto = (reparto: RepartoInsight | null): string | null => {
   return reparto.descrizione || reparto.codice || null;
 };
 
+/**
+ * Perche' un prezzo e' segnato come calcolato (spec insight-volantino, "Prezzi, sconti, spazio e
+ * marche"): la nota della scheda e il titolo del prezzo nelle liste. Il prezzo si scrive come quello stampato.
+ */
+export const NOTA_PREZZO_CALCOLATO = "Calcolato dal prezzo barrato e dallo sconto: il prezzo non è stampato nel box.";
+
 /** Nome del riquadro per le tecnologie assistive: "Mozzarella, Granarolo, € 1,69, sconto 30%". */
-export const descrizioneBox = (box: Pick<BoxInsight, "nome" | "marca" | "prezzo" | "sconto">): string =>
+export const descrizioneBox = (box: Pick<BoxInsight, "nome" | "marca" | "prezzo" | "prezzoCalcolato" | "sconto">): string =>
   [
     box.nome || "Box senza nome",
     box.marca,
-    box.prezzo !== null ? formatEuro(box.prezzo) : null,
+    box.prezzo !== null ? (box.prezzoCalcolato ? `${formatEuro(box.prezzo)} calcolato` : formatEuro(box.prezzo)) : null,
     box.sconto !== null ? `sconto ${formatPercentuale(Math.round(box.sconto))}` : null,
   ]
     .filter(Boolean)
@@ -55,7 +61,8 @@ export const descrizioneBox = (box: Pick<BoxInsight, "nome" | "marca" | "prezzo"
 export const tooltipBox = (box: BoxInsight): ContenutoTooltip => {
   const righe: RigaTooltip[] = [];
   if (box.prezzo !== null) {
-    righe.push({ etichetta: "Prezzo", valore: box.barrato !== null ? `${formatEuro(box.prezzo)} invece di ${formatEuro(box.barrato)}` : formatEuro(box.prezzo) });
+    const prezzo = formatEuro(box.prezzo);
+    righe.push({ etichetta: box.prezzoCalcolato ? "Prezzo calcolato" : "Prezzo", valore: box.barrato !== null ? `${prezzo} invece di ${formatEuro(box.barrato)}` : prezzo });
   }
   if (box.sconto !== null) righe.push({ etichetta: "Sconto", valore: formatPercentuale(Math.round(box.sconto)) });
   if (box.meccanica) righe.push({ etichetta: "Meccanica", valore: ETICHETTA_MECCANICA[box.meccanica] });

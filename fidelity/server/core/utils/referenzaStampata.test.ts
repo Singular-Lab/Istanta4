@@ -340,6 +340,131 @@ describe('leggiReferenza: Istanta', () => {
   });
 });
 
+// Spec insight-volantino, "Prezzi, sconti, spazio e marche del volantino": lo stesso dato stampato
+// in riquadri con nomi diversi (AgenziaLib/Edro21.cs, plugin/stili/mappaStili.json, Coop).
+describe('leggiReferenza: i nomi di prezzo, barrato e sconto', () => {
+  /** I dati DB1 dello storico: il listino come prezzo, uguale al barrato. */
+  const LISTINO_DB1 = { codice_referenza: '4969665', prezzo: 18.9, prezzo_anziche: 18.9, prezzo_base: 18.9 };
+
+  it('box all\'etto: il prezzo con l\'euro davanti e il barrato all\'etto, non il listino dei dati', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [
+        campo('prezzo_offerta_etto_EURprima', '€ 1,75', 'PREZ_Sconto_boxetto_EURprima'),
+        campo('campo_offerta_etto', '€ 2,19', 'PREZ_CampoOfferta_barrato_boxetto'),
+        campo('sconto_norm', '20', 'SCONTO_Normale_boxetto'),
+      ],
+      data_fields: LISTINO_DB1,
+    }), STORICO);
+
+    expect(referenza).toMatchObject({ prezzo: 1.75, barrato: 2.19, sconto: 20, prezzoCalcolato: null, meccanica: 'sconto' });
+  });
+
+  it('il prefisso X_ non cambia il significato del riquadro', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [
+        campo('X_prezzo_offerta_EURprima', '€ 1,99', 'PREZ_Sconto_EURprima'),
+        campo('X_campo_offerta', '€ 2,85', 'PREZ_CampoOfferta_barrato'),
+        campo('X_sconto_norm', '30', 'SCONTO_Normale'),
+      ],
+    }), STORICO);
+
+    expect(referenza).toMatchObject({ prezzo: 1.99, barrato: 2.85, sconto: 30 });
+  });
+
+  it('un riquadro "prezzo" con lo stile di uno sconto e\' lo sconto, non un prezzo di € 30', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [
+        campo('prezzo_offerta_EURprima', '€ 6,90', 'PREZ_Sconto_EURprima'),
+        campo('prezzo', '30', 'SCONTO_Normale'),
+        campo('campo_offerta', '€ 9,86', 'PREZ_CampoOfferta_barrato'),
+      ],
+    }), STORICO);
+
+    expect(referenza).toMatchObject({ prezzo: 6.9, barrato: 9.86, sconto: 30 });
+  });
+
+  it('lo sconto nel riquadro del valore dello sconto, anche con lo stile di carattere', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [campo('prezzo_offerta_etto', '0,20', 'PREZ_Sconto_boxetto'), campo('val_sconto', '<SCONTO_Fid_car>30</SCONTO_Fid_car>')],
+      data_fields: { codice_referenza: '1' },
+    }), ISTANTA);
+
+    expect(referenza).toMatchObject({ prezzo: 0.2, sconto: 30 });
+  });
+
+  it('Coop: il prezzo continuo e\' il barrato e lo sconto stampato e\' lo sconto', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [
+        campo('prezzo', '€ 7,92', 'PREZZO_PROMO'),
+        campo('prezzo_continuo', 'invece di € 19,80'),
+        campo('sconto', '-60%', 'B.SCONTO'),
+      ],
+      data_fields: { codice_referenza: '1' },
+    }), ISTANTA);
+
+    expect(referenza).toMatchObject({ prezzo: 7.92, barrato: 19.8, sconto: 60, meccanica: 'sconto' });
+  });
+
+  it('storico: il listino dei dati DB1 (prezzo uguale al barrato) non e\' il prezzo in offerta', () => {
+    const referenza = leggiReferenza(riga({ data_fields: LISTINO_DB1 }), STORICO);
+
+    expect(referenza).toMatchObject({ prezzo: null, barrato: null, sconto: null, prezzoCalcolato: null });
+  });
+
+  it('storico: un prezzo compilato a mano senza barrato resta, uno diverso dal barrato anche', () => {
+    const senzaBarrato = leggiReferenza(riga({ data_fields: { codice_referenza: '42', descrizione_uno: 'Pasta', prezzo: 0.89 } }), STORICO);
+    const scontato = leggiReferenza(riga({ data_fields: { codice_referenza: '43', prezzo: 1.49, prezzo_anziche: 2.95 } }), STORICO);
+
+    expect(senzaBarrato).toMatchObject({ prezzo: 0.89, barrato: null });
+    expect(scontato).toMatchObject({ prezzo: 1.49, barrato: 2.95 });
+  });
+
+  it('storico: nel gruppo del box il listino dei dati lascia i prezzi del box', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [campo('prezzo_offerta', '1,69', 'PREZ_FidelityR'), campo('campo_offerta', '€ 2,95', 'PREZ_CampoOfferta_barrato')],
+      data_fields: { codice_referenza: 'P1', descrizione_uno: 'Mozzarella' },
+      group_elements: [{ codice_referenza: 'P2', descrizione_uno: 'Mozzarella light', prezzo: 3.1, prezzo_anziche: 3.1, prezzo_base: 3.1 }],
+    }), STORICO);
+
+    expect(referenza.prodotti[1]).toMatchObject({ chiave: 'c-P2', prezzo: 1.69, barrato: 2.95 });
+  });
+
+  it('senza prezzo stampato ma con barrato e sconto stampati: il prezzo calcolato, a parte', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [
+        campo('X_campo_offerta', '€ 5,39', 'PREZ_CampoOfferta_barrato'),
+        campo('X_sconto_effettivo_grande', '-51,95%', 'Sconto_SIR_Grande'),
+      ],
+    }), STORICO);
+
+    // 5,39 x (1 - 0,5195) = 2,5899: al centesimo
+    expect(referenza).toMatchObject({ prezzo: null, barrato: 5.39, sconto: 51.95, prezzoCalcolato: 2.59 });
+  });
+
+  it('nessun prezzo calcolato senza lo sconto stampato o senza il barrato stampato', () => {
+    const soloBarrato = leggiReferenza(riga({ compiled_fields: [campo('campo_offerta', '€ 5,39', 'PREZ_CampoOfferta_barrato')] }), STORICO);
+    // Sconto linea di Istanta: stampa solo lo sconto, il barrato e' nei dati
+    const scontoLinea = leggiReferenza(riga({
+      meccanica: 'PERCENTO_FID_ALL',
+      compiled_fields: [campo('sconto_fid', '20', 'SCONTO_Fidelity')],
+      data_fields: { codice_referenza: '1', prezzo: '', prezzo_anziche: '3,86' },
+    }), ISTANTA);
+
+    expect(soloBarrato).toMatchObject({ prezzo: null, prezzoCalcolato: null });
+    expect(scontoLinea).toMatchObject({ prezzo: null, barrato: 3.86, sconto: 20, prezzoCalcolato: null });
+  });
+
+  it('sconto linea di Istanta con il barrato stampato: il prezzo tolto apposta non si calcola', () => {
+    const referenza = leggiReferenza(riga({
+      meccanica: 'PERCENTO_FID_ALL',
+      compiled_fields: [campo('campo_offerta', '€ 5,49', 'PREZ_CampoOfferta_barrato'), campo('sconto_fid', '20', 'SCONTO_Fidelity')],
+      data_fields: { codice_referenza: '1', prezzo: '', prezzo_anziche: '5,49' },
+    }), ISTANTA);
+
+    expect(referenza).toMatchObject({ prezzo: null, barrato: 5.49, sconto: 20, prezzoCalcolato: null });
+  });
+});
+
 describe('reparto', () => {
   const reparto = (dati: Record<string, unknown>, paragrafo = '') =>
     leggiReferenza(riga({ data_fields: dati, compiled_fields: [campo('descrizione', 'Pane', paragrafo)] }), ISTANTA).reparto;
