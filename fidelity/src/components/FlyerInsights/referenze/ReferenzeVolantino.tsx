@@ -14,7 +14,7 @@ import { twMerge } from "@/utils/twMerge";
 import { Fragment, useId, useMemo, useState, type ReactNode } from "react";
 import type { BoxInsight, LineeDistributore } from "../../../../lib/insightVolantino/tipi";
 import { ETICHETTA_MECCANICA, MECCANICHE } from "../../../../lib/puntiVendita/analisi";
-import { marcaFormato } from "../volantino/box";
+import { marcaFormato, NOTA_PREZZO_CALCOLATO } from "../volantino/box";
 import { tintaMeccanica } from "../volantino/colori";
 import {
   contaRapidi,
@@ -222,7 +222,10 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
             )}
           </td>
           <td className={twMerge(CLASSI_TD, "whitespace-nowrap text-right tabular-nums")}>
-            <span className="block font-semibold text-slate-800 dark:text-slate-100">{voce.prezzo !== null ? formatEuro(voce.prezzo) : VUOTO}</span>
+            <span className="block font-semibold text-slate-800 dark:text-slate-100" title={voce.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
+              {voce.prezzo !== null ? formatEuro(voce.prezzo) : VUOTO}
+              {voce.prezzoCalcolato && <span className="sr-only"> calcolato dal barrato e dallo sconto</span>}
+            </span>
             {voce.barrato !== null && (
               <span className="block text-2xs text-slate-500 dark:text-slate-400">
                 <span className="sr-only">invece di </span>
