@@ -3146,7 +3146,10 @@ namespace Istanta.Models
         //I20-1070: una decisione su una foto extra per questa sola lavorazione, registrata o tolta.
         updateExtraLavorazione = 15,
         //I20-1088: i meta dei testi del box aggiornati o tolti.
-        updateTestiDalBox = 16
+        updateTestiDalBox = 16,
+        //I campi del tracciato di una referenza cambiati da una reimportazione salvata. Prima era cambioMeta,
+        //che il registro chiama "Cambio strutturale" come le azioni sul box.
+        aggiornamentoDaImportazione = 17
     }
 
     public enum senderOperazione

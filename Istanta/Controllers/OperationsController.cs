@@ -1483,7 +1483,9 @@ namespace Istanta.Controllers
 
                                     item[GLOBAL_VARIABLES.keyContextPromo] = JsonConvert.DeserializeObject<List<FicoContextField>>(promoItem.Context!)!;
                                     item[GLOBAL_VARIABLES.keyContextTracciato] = context;
-                                    item[GLOBAL_VARIABLES_FICO.keyVersioneTracciato] = _rec.Versione;
+                                    //La versione della lista appena importata, quella che il record prende qui sotto:
+                                    //prima era _rec.Versione, la vecchia, e il dato restava indietro di una versione.
+                                    item[GLOBAL_VARIABLES_FICO.keyVersioneTracciato] = versioneLab;
                                     //item[GLOBAL_VARIABLES_FICO.keyXlsxTracciato] = pImp.NomeFile;
 
                                     //Trovo le differenze
@@ -1492,9 +1494,9 @@ namespace Istanta.Controllers
 
                                     Dictionary<string, object> oldItem = JsonConvert.DeserializeObject<Dictionary<string, object>>(_rec.Dato!)!;
 
-                                    //La data di modifica cambia solo se un campo del tracciato e' cambiato: le Alterazioni
-                                    //qui sotto contano anche contesto e versione, che Istanta rimette a ogni importazione.
-                                    //Va calcolata prima del ciclo, che allinea oldItem al dato nuovo.
+                                    //La data di modifica cambia solo se un campo del tracciato e' cambiato (anche uno nuovo,
+                                    //che le Alterazioni qui sotto non registrano). Va calcolata prima del ciclo, che allinea
+                                    //oldItem al dato nuovo.
                                     if (DateRecordTracciato.CambiatoDaImportazione(oldItem, item))
                                     {
                                         _rec.DataModifica = DateTime.Now;
@@ -1534,30 +1536,19 @@ namespace Istanta.Controllers
                                     sw4.Stop();
                                     Stopwatch sw6 = new Stopwatch();
                                     sw6.Start();
-                                    if (alterazioni.Count > 0 && !pkg.askReport)
+
+                                    //Solo i campi del tracciato: versione e contesto li rimette Istanta a ogni importazione.
+                                    alterazioni = AlterazioniImportazione.SoloCampiDelTracciato(alterazioni);
+
+                                    if (!pkg.askReport)
                                     {
-                                        //Si deve prepararre il registro del cambio meta per informare il servizio di propagazione
-
-
-                                        RegistroOperazioni regOp = new RegistroOperazioni();
-
-                                        regOp.IdTracciato = _rec.IdTracciato;
-                                        regOp.TipoOperazione = (byte)tipoOperazione.cambioMeta;
-
-                                        CambioMetaRecordTracciatoAzione az = new CambioMetaRecordTracciatoAzione();
-                                        az.codice = _rec.Codice;
-                                        az.attributi = new Dictionary<string, object>();
-
-                                        List<CambioMetaRecordTracciatoAzione> formData = new List<CambioMetaRecordTracciatoAzione>();
-                                        foreach (string k in alterazioni.Keys)
+                                        //L'aggiornamento da importazione nel registro, per il servizio di propagazione:
+                                        //con i campi cambiati e il valore di prima, e solo se qualcosa e' cambiato.
+                                        RegistroOperazioni? regOp = AlterazioniImportazione.OperazioneDiRegistro(_rec.IdTracciato, _rec.Codice, _rec.CodiceGruppo, alterazioni);
+                                        if (regOp != null)
                                         {
-                                            az.attributi[k] = alterazioni[k];
+                                            regContext.addOperazione(regOp, true, "0", DateTime.Now);
                                         }
-
-                                        regOp.FormData = JsonConvert.SerializeObject(formData);
-                                        regOp.CodiceAssociato = _rec.CodiceGruppo;//Portiamo sempre dietro il codice gruppo di provenienza
-                                                                                  //Registro alterazione meta dovuta ad aggiornamento massivo del tracciato
-                                        regContext.addOperazione(regOp, true, "0", DateTime.Now);
                                     }
 
                                     item[GLOBAL_VARIABLES.keyAlterazioni] = alterazioni;

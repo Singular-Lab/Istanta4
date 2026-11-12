@@ -67,6 +67,8 @@ namespace Istanta.Controllers
                         return "Eliminazione foto extra";
                     case "cambioMeta":
                         return "Cambio strutturale";
+                    case "aggiornamentoDaImportazione":
+                        return "Aggiornamento da importazione";
                     case "login":
                         return "Login";
                     default:
