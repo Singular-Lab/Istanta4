@@ -49,8 +49,7 @@ const DETTAGLIO_PROMOZIONE: DettaglioPromozioneVolantiniConsultazione = {
   opzioni: { insegne: [], aree: [] },
   loghiInsegne: {},
   numeri: { kit: 0, pagine: 0, puntiVendita: 0, localita: 0, regioni: 0, prodotti: 0, referenze: 0, scontoMedio: null, sottocosto: 0 },
-  puntiVendita: [],
-  assortimento: { prodotti: { inTutti: 0, inAlcuni: 0, inUnoSolo: 0 }, fasceSconto: [], reparti: [], meccanichePerCanale: [], marche: [] },
+  assortimento: { prodotti: { inTutti: 0, inAlcuni: 0, inUnoSolo: 0 }, fasceSconto: [], reparti: [], meccanichePerCanale: [], marche: [], referenze: [] },
 };
 
 function creaApp(tipo: TIPO_UTENTI = TIPO_UTENTI.GDO) {

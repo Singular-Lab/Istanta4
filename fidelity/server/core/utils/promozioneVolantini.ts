@@ -8,8 +8,10 @@ import {
   type MeccanichePerCanale,
   type NumeriPromozioneConsultazione,
   type ProdottiComuniLocali,
+  type PresenzaReferenzaPromozione,
   type PuntoVenditaPromozioneConsultazione,
   type QuotaMeccanica,
+  type ReferenzaPromozione,
   type Riferimento,
   type VarianteConsultazione,
 } from '../../../lib/consultazione/tipi';
@@ -170,6 +172,86 @@ function kitPerProdotto(kit: readonly KitConInsight[]): Map<string, number> {
   return presenze;
 }
 
+/** Un box prima dell'altro nel volantino: pagina piu' bassa, i box senza pagina in fondo. */
+const primaNelVolantino = (box: BoxInsight, rispettoA: BoxInsight): boolean =>
+  (box.pagina ?? Number.POSITIVE_INFINITY) < (rispettoA.pagina ?? Number.POSITIVE_INFINITY);
+
+const presenzaDa = (idKit: string, box: BoxInsight): PresenzaReferenzaPromozione => ({
+  idKit,
+  pagina: box.pagina,
+  prezzo: box.prezzo,
+  ...(box.prezzoCalcolato ? { prezzoCalcolato: true } : {}),
+  sconto: box.sconto,
+  barrato: box.barrato,
+  idReferenza: box.idReferenze[0] ?? null,
+});
+
+/** Il prodotto pilota del box con i dati anagrafici (codice, EAN), se il server li ha letti. */
+const pilota = (box: BoxInsight) => box.dettaglioProdotti?.[0];
+
+/**
+ * I prodotti dei kit con i kit che li stampano (spec volantini-pop, elenchi del "Comune o locale"):
+ * la stessa chiave del prodotto pilota di kitPerProdotto, cosi' gli elenchi coincidono con i numeri.
+ * Un prodotto stampato piu' volte nello stesso kit vale una volta, con il box della pagina piu' bassa;
+ * marca, formato, reparto, foto, codice, EAN, prezzo al kg e linea dal primo kit che li ha; meccaniche
+ * e sottocosto da tutti i kit. Dal piu' condiviso al piu' locale, poi per nome.
+ */
+function referenzePromozione(kit: readonly KitConInsight[]): ReferenzaPromozione[] {
+  const perChiave = new Map<string, ReferenzaPromozione>();
+  const meccanichePerChiave = new Map<string, Set<MeccanicaReferenza>>();
+  for (const voce of kit) {
+    const primoBox = new Map<string, BoxInsight>();
+    for (const singolo of voce.box) {
+      if (!singolo.chiave) continue;
+      const gia = primoBox.get(singolo.chiave);
+      if (!gia || primaNelVolantino(singolo, gia)) primoBox.set(singolo.chiave, singolo);
+    }
+    for (const [chiave, singolo] of primoBox) {
+      const meccanica = meccanicaDi(singolo);
+      if (meccanica) {
+        const insieme = meccanichePerChiave.get(chiave) ?? new Set<MeccanicaReferenza>();
+        insieme.add(meccanica);
+        meccanichePerChiave.set(chiave, insieme);
+      }
+      const referenza = perChiave.get(chiave);
+      if (!referenza) {
+        perChiave.set(chiave, {
+          chiave,
+          nome: singolo.nome,
+          marca: singolo.marca,
+          formato: singolo.formato,
+          reparto: singolo.reparto,
+          foto: singolo.foto[0] ?? null,
+          codice: pilota(singolo)?.codice ?? null,
+          ean: pilota(singolo)?.ean[0] ?? null,
+          meccaniche: [],
+          prezzoAlKg: singolo.prezzoAlKg,
+          linea: singolo.linea?.nome || singolo.linea?.sigla || null,
+          sottocosto: singolo.sottocosto,
+          presenze: [presenzaDa(voce.variante.id, singolo)],
+        });
+        continue;
+      }
+      referenza.nome ||= singolo.nome;
+      referenza.marca ??= singolo.marca;
+      referenza.formato ??= singolo.formato;
+      referenza.reparto ??= singolo.reparto;
+      referenza.foto ??= singolo.foto[0] ?? null;
+      referenza.codice ??= pilota(singolo)?.codice ?? null;
+      referenza.ean ??= pilota(singolo)?.ean[0] ?? null;
+      referenza.prezzoAlKg ??= singolo.prezzoAlKg;
+      referenza.linea ??= singolo.linea?.nome || singolo.linea?.sigla || null;
+      referenza.sottocosto ||= singolo.sottocosto;
+      referenza.presenze.push(presenzaDa(voce.variante.id, singolo));
+    }
+  }
+  for (const [chiave, referenza] of perChiave) {
+    const meccaniche = meccanichePerChiave.get(chiave);
+    referenza.meccaniche = meccaniche ? MECCANICHE.filter(m => meccaniche.has(m)) : [];
+  }
+  return [...perChiave.values()].sort((a, b) => b.presenze.length - a.presenze.length || a.nome.localeCompare(b.nome, 'it'));
+}
+
 /** Con un solo kit ogni prodotto e' "in uno solo": "in tutti" vale solo quando i kit sono piu' d'uno. */
 function prodottiComuniLocali(presenze: ReadonlyMap<string, number>, totaleKit: number): ProdottiComuniLocali {
   const prodotti: ProdottiComuniLocali = { inTutti: 0, inAlcuni: 0, inUnoSolo: 0 };
@@ -259,6 +341,7 @@ export function aggregaPromozioneVolantini(
       reparti: spazioPerReparto(tuttiIBox),
       meccanichePerCanale: meccanichePerCanale(kit),
       marche: marchePromozione(tuttiIBox),
+      referenze: referenzePromozione(kit),
     },
   };
 }

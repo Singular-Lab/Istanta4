@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_MARCHE_PROMOZIONE, type VarianteConsultazione } from '../../../lib/consultazione/tipi';
-import type { BoxInsight, SintesiVolantino } from '../../../lib/insightVolantino/tipi';
+import type { BoxInsight, ProdottoInsight, SintesiVolantino } from '../../../lib/insightVolantino/tipi';
 import { aggregaPromozioneVolantini, type KitConInsight, puntoVenditaDa, type RigaPuntoVenditaPromozione } from './promozioneVolantini';
 
 // Il dettaglio di consultazione di una promozione (spec volantini-pop): i numeri dei kit dalla sintesi
@@ -110,6 +110,97 @@ describe('aggregaPromozioneVolantini: prodotti comuni e locali', () => {
 
     expect(dettaglio.assortimento.prodotti).toEqual({ inTutti: 0, inAlcuni: 0, inUnoSolo: 2 });
     expect(dettaglio.numeri.prodotti).toBe(2);
+  });
+});
+
+describe('aggregaPromozioneVolantini: elenchi dei prodotti comuni e locali', () => {
+  const REPARTO_LATTICINI = { codice: 'LAT', descrizione: 'Latticini', colore: null };
+
+  it('un prodotto per chiave, con i kit che lo stampano nell\'ordine dei kit: gli elenchi coincidono con i numeri', () => {
+    const dettaglio = aggregaPromozioneVolantini([
+      kit('k1', [prodotto('A'), prodotto('B'), prodotto('C')]),
+      kit('k2', [prodotto('A'), prodotto('B'), prodotto('D')]),
+      kit('k3', [prodotto('A'), prodotto('E')]),
+    ], []);
+
+    const { referenze, prodotti } = dettaglio.assortimento;
+    expect(referenze.map(r => [r.chiave, r.presenze.map(p => p.idKit)])).toEqual([
+      ['c-A', ['k1', 'k2', 'k3']],
+      ['c-B', ['k1', 'k2']],
+      ['c-C', ['k1']],
+      ['c-D', ['k2']],
+      ['c-E', ['k3']],
+    ]);
+    // Stessi gruppi dei numeri del Comune o locale
+    const inTutti = referenze.filter(r => r.presenze.length === 3).length;
+    const inUnoSolo = referenze.filter(r => r.presenze.length === 1).length;
+    expect({ inTutti, inAlcuni: referenze.length - inTutti - inUnoSolo, inUnoSolo }).toEqual(prodotti);
+  });
+
+  it('per ogni kit prezzo, sconto, pagina e referenza del box; prezzo calcolato solo quando lo e\'', () => {
+    const dettaglio = aggregaPromozioneVolantini([
+      kit('k1', [box('b1', { chiave: 'c-latte', nome: 'Latte intero', marca: 'Granarolo', formato: '1 l', pagina: 4, prezzo: 1.19, sconto: 20, reparto: REPARTO_LATTICINI, foto: ['/foto/latte.jpg', '/foto/latte-2.jpg'], idReferenze: ['r1', 'r1-bis'] })]),
+      kit('k2', [box('b2', { chiave: 'c-latte', nome: 'LATTE INTERO', pagina: 2, prezzo: 1.29, prezzoCalcolato: true, sconto: null, idReferenze: [] })]),
+    ], []);
+
+    expect(dettaglio.assortimento.referenze).toEqual([
+      {
+        chiave: 'c-latte', nome: 'Latte intero', marca: 'Granarolo', formato: '1 l', reparto: REPARTO_LATTICINI, foto: '/foto/latte.jpg',
+        codice: null, ean: null, meccaniche: [], prezzoAlKg: null, linea: null, sottocosto: false,
+        presenze: [
+          { idKit: 'k1', pagina: 4, prezzo: 1.19, sconto: 20, barrato: null, idReferenza: 'r1' },
+          { idKit: 'k2', pagina: 2, prezzo: 1.29, prezzoCalcolato: true, sconto: null, barrato: null, idReferenza: null },
+        ],
+      },
+    ]);
+  });
+
+  it('i dati minimi del prodotto: codice ed EAN del pilota, prezzo al kg e linea dal primo kit che li ha, meccaniche e sottocosto da tutti', () => {
+    const pilota: ProdottoInsight = {
+      chiave: 'c-latte', nome: 'Latte', marca: 'Granarolo', formato: '1 l', gusto: null, codice: '0014823', ean: ['8001234567890', '8009999999999'],
+      prezzo: 1.19, settore: null, segmento: null, tema: null, ruolo: null,
+    };
+    const dettaglio = aggregaPromozioneVolantini([
+      kit('k1', [box('b1', { chiave: 'c-latte', meccanica: 'fidelity', barrato: 1.49, prezzoAlKg: null })]),
+      kit('k2', [box('b2', {
+        chiave: 'c-latte', meccanica: 'sconto', sottocosto: true, prezzoAlKg: 'al l € 1,19',
+        linea: { sigla: 'SD', nome: 'Sapori & Dintorni' }, dettaglioProdotti: [pilota],
+      })]),
+      kit('k3', [box('b3', { chiave: 'c-latte', meccanica: 'fidelity' })]),
+    ], []);
+
+    const [latte] = dettaglio.assortimento.referenze;
+    expect(latte).toMatchObject({
+      codice: '0014823', ean: '8001234567890', prezzoAlKg: 'al l € 1,19', linea: 'Sapori & Dintorni', sottocosto: true,
+      meccaniche: ['sconto', 'fidelity'],
+    });
+    expect(latte?.presenze[0]?.barrato).toBe(1.49);
+  });
+
+  it('ripetuto nello stesso kit vale una volta, con il box della pagina piu\' bassa; marca, reparto e foto dal primo kit che li ha', () => {
+    const dettaglio = aggregaPromozioneVolantini([
+      kit('k1', [
+        box('dopo', { chiave: 'c-pasta', pagina: 9, prezzo: 0.99 }),
+        box('senza-pagina', { chiave: 'c-pasta', pagina: null, prezzo: 0.79 }),
+        box('prima', { chiave: 'c-pasta', pagina: 3, prezzo: 0.89 }),
+      ]),
+      kit('k2', [box('b2', { chiave: 'c-pasta', marca: 'Barilla', reparto: REPARTO_LATTICINI, foto: ['/foto/pasta.jpg'] })]),
+    ], []);
+
+    const [pasta] = dettaglio.assortimento.referenze;
+    expect(pasta?.presenze.map(p => [p.idKit, p.pagina, p.prezzo])).toEqual([['k1', 3, 0.89], ['k2', 1, null]]);
+    expect(pasta).toMatchObject({ marca: 'Barilla', reparto: REPARTO_LATTICINI, foto: '/foto/pasta.jpg' });
+  });
+
+  it('dal piu\' condiviso al piu\' locale, a parita\' per nome; i box senza chiave e i kit senza box restano fuori', () => {
+    const dettaglio = aggregaPromozioneVolantini([
+      kit('k1', [box('z', { chiave: 'c-z', nome: 'Zucchero' }), box('a', { chiave: 'c-a', nome: 'Aceto' }), box('x', { chiave: '' })]),
+      kit('k2', [box('z2', { chiave: 'c-z', nome: 'Zucchero' })]),
+      kit('vuoto', []),
+    ], []);
+
+    expect(dettaglio.assortimento.referenze.map(r => r.nome)).toEqual(['Zucchero', 'Aceto']);
+    expect(dettaglio.assortimento.referenze.flatMap(r => r.presenze.map(p => p.idKit))).not.toContain('vuoto');
   });
 });
 

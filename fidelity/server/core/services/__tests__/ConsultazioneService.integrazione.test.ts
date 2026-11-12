@@ -536,21 +536,13 @@ describeConDatabase('ConsultazioneService', () => {
     });
     expect(dettaglio.assortimento.prodotti).toEqual({ inTutti: 1, inAlcuni: 0, inUnoSolo: 1 });
     expect(dettaglio.assortimento.meccanichePerCanale.map(voce => [voce.canale.nome, voce.box])).toEqual([['Ipermercati', 2], ['Superstore', 1]]);
-    expect(dettaglio.puntiVendita).toEqual([
-      {
-        id: expect.any(String), idKit: [ipermercati.idRuntime], riga: 'Firenze - Viale Italia 3', localita: 'FIRENZE', indirizzo: null,
-        // Ne' regione ne' provincia stampate: la regione dell'anagrafica
-        regione: 'TOS', puntoVendita: { id: firenze, nome: 'Iper Firenze', coordinate: null },
-      },
-      {
-        id: expect.any(String), idKit: [superstore.idRuntime], riga: 'GROSSETO - Via Roma 1', localita: 'GROSSETO', indirizzo: null,
-        regione: 'TOS', puntoVendita: { id: grosseto, nome: 'Superstore Grosseto', coordinate: { lat: 42.76, lon: 11.11 } },
-      },
-      {
-        id: expect.any(String), idKit: [superstore.idRuntime], riga: 'Modena - Via Emilia 2', localita: 'Modena', indirizzo: null,
-        regione: 'EMR', puntoVendita: null,
-      },
+    // Gli elenchi del Comune o locale: lo stesso prodotto nei due kit, nell'ordine dei kit, l'altro solo negli Ipermercati
+    expect(dettaglio.assortimento.referenze.map(r => [r.chiave, r.presenze.map(p => p.idKit)])).toEqual([
+      [expect.stringContaining('0014823'), [ipermercati.idRuntime, superstore.idRuntime]],
+      [expect.stringContaining('0099999'), [ipermercati.idRuntime]],
     ]);
+    // Le righe dei punti vendita contano nei numeri, ma l'elenco non arriva piu' alla pagina
+    expect(dettaglio).not.toHaveProperty('puntiVendita');
     senzaDatiDiLavorazione(dettaglio);
     // Superadmin e Agenzia: tutte le GDO
     expect((await service.getPromozioneVolantini(superstore.idPromo, 'tutte')).kit).toHaveLength(2);
@@ -592,12 +584,6 @@ describeConDatabase('ConsultazioneService', () => {
     // Il dettaglio (regola in TypeScript) dice gli stessi numeri della scheda (regola in SQL)
     const dettaglio = await service.getPromozioneVolantini(emilia.idPromo, ambito);
     expect(dettaglio.numeri).toMatchObject({ puntiVendita: 4, localita: 3, regioni: 2 });
-    expect(dettaglio.puntiVendita.map(pv => [pv.localita, pv.indirizzo, pv.idKit])).toEqual([
-      ['AREZZO', 'VIA CHIARINI 23/A', [emilia.idRuntime, liguria.idRuntime]],
-      ['BARGA', 'VIA CANIPAIA', [emilia.idRuntime, liguria.idRuntime]],
-      ['LA SPEZIA', 'Via Roma 1', [liguria.idRuntime]],
-      ['BARGA', null, [liguria.idRuntime]],
-    ]);
   });
 
   it('dettaglio della promozione: l\'id e\' testo, non sempre un UUID; il periodo viene dallo stato della promo', async () => {
@@ -651,7 +637,6 @@ describeConDatabase('ConsultazioneService', () => {
     const perInsegna = await service.getPromozioneVolantini(idPromo, ambito, { idCanale: a.idCanale });
     expect(kitDi(perInsegna)).toEqual([a.idRuntime, c.idRuntime].sort());
     expect(perInsegna).toMatchObject({ numeroKitTotale: 3, numeri: { kit: 2, puntiVendita: 3 } });
-    expect(perInsegna.puntiVendita.map(pv => pv.localita?.toLowerCase()).sort()).toEqual(['lucca', 'pisa', 'siena']);
     expect(perInsegna.assortimento.meccanichePerCanale.every(voce => voce.canale.id === a.idCanale)).toBe(true);
     // Le insegne non dipendono dal filtro sull'insegna; le aree sono quelle dell'insegna 1
     expect(idDi(perInsegna.opzioni.insegne)).toEqual([a.idCanale, b.idCanale].sort());
@@ -666,7 +651,7 @@ describeConDatabase('ConsultazioneService', () => {
 
     // Insegna 2 e area 1 non hanno kit insieme: la promo c'e', senza kit, e i valori scelti restano fra le opzioni
     const incompatibili = await service.getPromozioneVolantini(idPromo, ambito, { idCanale: b.idCanale, idArea: a.idArea });
-    expect(incompatibili).toMatchObject({ kit: [], puntiVendita: [], numeroKitTotale: 3, numeri: { kit: 0, puntiVendita: 0, prodotti: 0 } });
+    expect(incompatibili).toMatchObject({ kit: [], numeroKitTotale: 3, numeri: { kit: 0, puntiVendita: 0, prodotti: 0 }, assortimento: { referenze: [] } });
     expect(idDi(incompatibili.opzioni.insegne)).toEqual([a.idCanale, b.idCanale].sort());
     expect(idDi(incompatibili.opzioni.aree)).toEqual([a.idArea, b.idArea].sort());
   });

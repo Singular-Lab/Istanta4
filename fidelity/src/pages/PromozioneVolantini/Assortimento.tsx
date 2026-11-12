@@ -8,94 +8,8 @@ import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useMemo } from "react";
 import type { FasciaSconto } from "../../../lib/insightVolantino/tipi";
-import type { AssortimentoPromozioneConsultazione, MarcaPromozione, ProdottiComuniLocali } from "../../../lib/consultazione/tipi";
+import type { AssortimentoPromozioneConsultazione, MarcaPromozione } from "../../../lib/consultazione/tipi";
 import { etichettaFascia, meccanicheImpilate, plurale } from "./analisi";
-
-/* ---------- Comune o locale ---------- */
-
-// I tre gruppi dal più condiviso al più locale: tinta del tema, poi due tinte lontane fra loro
-const GRUPPI_PRODOTTI = [
-  {
-    id: "inTutti",
-    sfondo: "bg-theme-1 text-white dark:bg-indigo-300 dark:text-slate-900",
-    pallino: "bg-theme-1 dark:bg-indigo-300",
-    nota: "il cuore della promozione",
-  },
-  {
-    id: "inAlcuni",
-    sfondo: "bg-cyan-700 text-white dark:bg-cyan-300 dark:text-slate-900",
-    pallino: "bg-cyan-700 dark:bg-cyan-300",
-    nota: "di un'insegna o di un'area",
-  },
-  {
-    id: "inUnoSolo",
-    sfondo: "bg-orange-700 text-white dark:bg-orange-300 dark:text-slate-900",
-    pallino: "bg-orange-700 dark:bg-orange-300",
-    nota: "scelte locali",
-  },
-] as const;
-
-/** Sotto questa quota la percentuale non sta dentro la sua parte della barra: resta nei numeri sotto. */
-const QUOTA_CON_ETICHETTA = 9;
-
-function ComuneOLocale({ prodotti, numeroKit }: { prodotti: ProdottiComuniLocali; numeroKit: number }) {
-  const totale = prodotti.inTutti + prodotti.inAlcuni + prodotti.inUnoSolo;
-  const etichette: Record<(typeof GRUPPI_PRODOTTI)[number]["id"], string> = {
-    inTutti: `In tutti i ${formatNumero(numeroKit)} volantini`,
-    inAlcuni: "In alcuni",
-    inUnoSolo: "In uno solo",
-  };
-
-  return (
-    <Sezione
-      titolo="Comune o locale"
-      descrizione={`I ${plurale(totale, "prodotto diverso", "prodotti diversi")} della promozione, secondo in quanti volantini compaiono.`}
-    >
-      {totale === 0 ? (
-        <EmptyState compatta icon="PackageSearch" title="Nessun prodotto riconosciuto" description="Gli insight dei volantini non hanno prodotti da confrontare." />
-      ) : numeroKit === 1 ? (
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          La promozione ha un solo volantino: tutti i suoi {plurale(totale, "prodotto", "prodotti")} sono lì.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <div
-            role="img"
-            aria-label={`${plurale(prodotti.inTutti, "prodotto", "prodotti")} in tutti i volantini, ${formatNumero(prodotti.inAlcuni)} in alcuni, ${formatNumero(prodotti.inUnoSolo)} in uno solo`}
-            className="flex h-9 gap-0.5 overflow-hidden rounded-control"
-          >
-            {GRUPPI_PRODOTTI.map(gruppo => {
-              const valore = prodotti[gruppo.id];
-              if (valore === 0) return null;
-              const quota = (valore / totale) * 100;
-              return (
-                <div
-                  key={gruppo.id}
-                  style={{ flexGrow: valore, flexBasis: 0 }}
-                  className={twMerge("flex min-w-0 items-center overflow-hidden whitespace-nowrap px-2.5 text-xs font-extrabold tabular-nums", gruppo.sfondo)}
-                >
-                  {quota >= QUOTA_CON_ETICHETTA && formatPercentuale(Math.round(quota))}
-                </div>
-              );
-            })}
-          </div>
-          <dl className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-            {GRUPPI_PRODOTTI.map(gruppo => (
-              <div key={gruppo.id} className="flex flex-col gap-0.5 rounded-control bg-slate-50 px-3 py-2.5 dark:bg-darkmode-700">
-                <dt className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                  <span aria-hidden="true" className={twMerge("h-2.5 w-2.5 flex-none rounded-full", gruppo.pallino)} />
-                  {etichette[gruppo.id]}
-                </dt>
-                <dd className="text-2xl font-extrabold tabular-nums text-slate-800 dark:text-slate-100">{formatNumero(prodotti[gruppo.id])}</dd>
-                <dd className="text-2xs text-slate-500 dark:text-slate-400">{gruppo.nota}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      )}
-    </Sezione>
-  );
-}
 
 /* ---------- Quanto è profondo lo sconto ---------- */
 
@@ -273,21 +187,22 @@ function Marche({ marche }: { marche: readonly MarcaPromozione[] }) {
  * L'assortimento della promozione sommando tutti i kit: prodotti comuni o locali, profondità dello
  * sconto, reparti, meccaniche per insegna e marche. In due colonne sugli schermi larghi.
  */
-export function Assortimento({ assortimento, numeroKit }: { assortimento: AssortimentoPromozioneConsultazione; numeroKit: number }) {
+/**
+ * Quanto è profondo lo sconto, reparti, meccaniche per insegna e marche: i numeri dell'assortimento di
+ * tutti i volantini mostrati. Il confronto dei prodotti fra i volantini sta in ConfrontoAssortimento.
+ */
+export function Assortimento({ assortimento }: { assortimento: AssortimentoPromozioneConsultazione }) {
   return (
-    <>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <ComuneOLocale prodotti={assortimento.prodotti} numeroKit={numeroKit} />
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      <div className="flex min-w-0 flex-col gap-6">
         <ProfonditaSconto fasce={assortimento.fasceSconto} />
-      </div>
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <Reparti reparti={assortimento.reparti} />
-        <div className="flex min-w-0 flex-col gap-6">
-          <Meccaniche perCanale={assortimento.meccanichePerCanale} />
-          <Marche marche={assortimento.marche} />
-        </div>
       </div>
-    </>
+      <div className="flex min-w-0 flex-col gap-6">
+        <Meccaniche perCanale={assortimento.meccanichePerCanale} />
+        <Marche marche={assortimento.marche} />
+      </div>
+    </div>
   );
 }
 
