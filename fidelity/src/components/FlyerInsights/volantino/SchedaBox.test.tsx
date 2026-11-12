@@ -274,6 +274,22 @@ describe("SchedaBox: descrizione completa vicino al prezzo", () => {
     expect(within(cartellino()).getByText("−32%")).toBeInTheDocument();
   });
 
+  it("il prezzo non stampato ma calcolato dal barrato e dallo sconto si segna come calcolato", () => {
+    disegna({ box: boxDi({ nome: "Olio", prezzo: 2.59, prezzoCalcolato: true, barrato: 5.39, sconto: 51.95, sottocosto: true }) });
+
+    expect(within(cartellino()).getByText("€ 2,59")).toBeInTheDocument();
+    expect(cartellino()).not.toHaveTextContent("≈");
+    expect(within(cartellino()).getByText("€ 5,39")).toBeInTheDocument();
+    expect(within(cartellino()).getByText(/Calcolato dal prezzo barrato e dallo sconto/)).toBeInTheDocument();
+  });
+
+  it("un prezzo stampato non ha la nota del calcolo", () => {
+    disegna();
+
+    expect(within(cartellino()).getByText("€ 1,69")).toBeInTheDocument();
+    expect(within(cartellino()).queryByText(/Calcolato dal prezzo barrato/)).not.toBeInTheDocument();
+  });
+
   it("le varianti dei prodotti del box, senza doppioni", () => {
     disegna({
       box: boxDi({

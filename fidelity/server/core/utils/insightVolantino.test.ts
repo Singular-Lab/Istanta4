@@ -306,6 +306,36 @@ describe('boxInsight: il box come lo vede la scheda', () => {
     expect(istanta).not.toHaveProperty('origine');
   });
 
+  it('sottocosto dello storico senza prezzo stampato: il prezzo calcolato da barrato e sconto, segnato come calcolato', () => {
+    const box = perId(boxInsight(boxDi([
+      riga('s1', {
+        compiled_fields: [
+          campo('X_campo_offerta', '€ 5,39', 'PREZ_CampoOfferta_barrato'),
+          campo('X_sconto_effettivo_grande', '-51,95%', 'Sconto_SIR_Grande'),
+          campo('descrizione', '<DES_descr_nome>Olio extra vergine</DES_descr_nome>', 'DES_Descrizione'),
+        ],
+      }),
+      riga('s2', { x: 50, compiled_fields: [campo('prezzo_offerta_EURprima', '€ 1,99', 'PREZ_Sconto_EURprima'), campo('campo_offerta', '€ 2,85', 'PREZ_CampoOfferta_barrato')] }),
+    ], true), opzioni()));
+
+    expect(box.get('s1')).toMatchObject({ prezzo: 2.59, prezzoCalcolato: true, barrato: 5.39, sconto: 51.95 });
+    expect(box.get('s2')).toMatchObject({ prezzo: 1.99, barrato: 2.85 });
+    expect(box.get('s2')).not.toHaveProperty('prezzoCalcolato');
+  });
+
+  it('il box a sconto linea di Istanta resta senza prezzo', () => {
+    const [box] = boxInsight(boxDi([
+      riga('l1', {
+        meccanica: 'PERCENTO_FID_ALL',
+        compiled_fields: [campo('campo_offerta', '€ 5,49', 'PREZ_CampoOfferta_barrato'), campo('sconto_fid', '20', 'SCONTO_Fidelity')],
+        data_fields: { codice_referenza: 'L1', descrizione_uno: 'Linea bimbo', prezzo: '', prezzo_anziche: '5,49' },
+      }),
+    ]), opzioni());
+
+    expect(box).toMatchObject({ prezzo: null, barrato: 5.49, sconto: 20 });
+    expect(box).not.toHaveProperty('prezzoCalcolato');
+  });
+
   it('prodotti del box con i dati anagrafici: EAN separati, codice, settore, tema e ruolo, anche per il gruppo', () => {
     const righe = [
       riga('p1', {

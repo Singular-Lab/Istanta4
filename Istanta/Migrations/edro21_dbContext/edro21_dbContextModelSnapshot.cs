@@ -17,7 +17,7 @@ namespace Istanta.Migrations.Contesto1
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.20")
+                .HasAnnotation("ProductVersion", "9.0.21")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1147,6 +1147,12 @@ namespace Istanta.Migrations.Contesto1
 
                     b.Property<bool?>("DaEsportare")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("DataModifica")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DataModificaStrutturale")
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<DateTime?>("DataRegistrazione")
                         .HasColumnType("timestamp without time zone");

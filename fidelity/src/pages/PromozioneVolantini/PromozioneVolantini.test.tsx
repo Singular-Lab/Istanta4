@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import type { ReactNode } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
@@ -12,9 +11,8 @@ import type {
 } from "../../../lib/consultazione/tipi";
 
 // Consultazione di una promozione (/volantini/promozioni/:idPromo): banda con le insegne, filtri per
-// insegna e area, griglia delle miniature, dove arriva (cartogramma,
-// mappa, elenco), assortimento e confronto fra i kit. Ogni kit apre i suoi insight; nessun
-// collegamento alla produzione.
+// insegna e area, griglia delle miniature, assortimento e confronto fra i kit, senza la sezione
+// "Dove arriva". Ogni kit apre i suoi insight; nessun collegamento alla produzione.
 
 const finti = vi.hoisted(() => ({
   risultato: {} as Record<string, unknown>,
@@ -23,14 +21,6 @@ const finti = vi.hoisted(() => ({
   permessi: new Set<string>(),
 }));
 
-vi.mock("leaflet/dist/leaflet.css", () => ({}));
-vi.mock("react-leaflet", () => ({
-  MapContainer: ({ children }: { children?: ReactNode }) => <div data-testid="mappa">{children}</div>,
-  TileLayer: () => null,
-  CircleMarker: () => <span data-testid="pallino" />,
-  Popup: () => null,
-  useMap: () => ({ fitBounds: () => undefined }),
-}));
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
 vi.mock("@/context/PermissionContext", () => ({ usePermission: (codice: string) => finti.permessi.has(codice) }));
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
@@ -180,7 +170,6 @@ const oggiE = (iso: string) => {
   vi.setSystemTime(new Date(iso));
 };
 
-const tabellaElenco = () => screen.getByRole("table", { name: "Punti vendita stampati nei volantini della promozione" });
 const tabellaConfronto = () => screen.getByRole("table", { name: "I volantini della promozione a confronto" });
 const righeDi = (tabella: HTMLElement) => within(tabella).getAllByRole("row").slice(1);
 const percorso = (link: HTMLElement) => link.getAttribute("href");
@@ -225,16 +214,16 @@ describe("Consultazione di una promozione", () => {
     expect(screen.getByRole("link", { name: `Torna a ${vista}` })).toHaveAttribute("href", indirizzo);
   });
 
-  it("la striscia dei numeri della promozione non c'è: dopo le schede dei volantini viene dove arrivano", async () => {
+  it("la striscia dei numeri della promozione non c'è: dopo le schede dei volantini viene l'assortimento", async () => {
     await apri();
 
     expect(screen.queryByLabelText("La promozione in numeri")).not.toBeInTheDocument();
     expect(screen.queryByText("48 pagine in tutto")).not.toBeInTheDocument();
     expect(screen.queryByText("495 referenze stampate")).not.toBeInTheDocument();
-    // Le sezioni nell'ordine della pagina: subito dopo "I volantini" c'è "Dove arriva"
+    // Le sezioni nell'ordine della pagina: subito dopo "I volantini" c'è l'assortimento
     const titoli = screen.getAllByRole("heading", { level: 2 }).map(titolo => titolo.textContent);
     expect(titoli.indexOf("I volantini")).toBeGreaterThanOrEqual(0);
-    expect(titoli[titoli.indexOf("I volantini") + 1]).toMatch(/Dove arriva/);
+    expect(titoli[titoli.indexOf("I volantini") + 1]).toBe("Comune o locale");
   });
 
   it("le miniature dicono insegna e area e aprono gli insight del loro kit; senza miniatura c'è il foglio segnaposto", async () => {
@@ -300,85 +289,29 @@ describe("Consultazione di una promozione", () => {
     expect(screen.getByRole("heading", { name: "I volantini" })).toBeInTheDocument();
   });
 
-  it("il cartogramma conta i punti vendita per regione e quelli senza regione a parte", async () => {
-    await apri();
-
-    const regioni = screen.getByRole("group", { name: "Punti vendita per regione" });
-    expect(within(regioni).getAllByRole("button")).toHaveLength(20);
-    expect(within(regioni).getByRole("button", { name: "Toscana: 4 punti vendita" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(regioni).getByRole("button", { name: "Lazio: 1 punto vendita" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(regioni).getByRole("button", { name: "Lombardia: 0 punti vendita" })).toBeDisabled();
-    expect(screen.getByText("1 punto vendita ha la regione non indicata: non è nel cartogramma.")).toBeInTheDocument();
-  });
-
-  it("una regione filtra località, mappa ed elenco; di nuovo, o dal chip, il filtro si toglie", async () => {
-    await apri();
-
-    expect(screen.getByText("6 di 6 punti vendita")).toBeInTheDocument();
-    expect(screen.getAllByTestId("pallino")).toHaveLength(3);
-    expect(screen.getByText(/3 punti vendita non sono sulla mappa/)).toBeInTheDocument();
-
-    const lazio = screen.getByRole("button", { name: "Lazio: 1 punto vendita" });
-    fireEvent.click(lazio);
-
-    expect(lazio).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("heading", { name: "Località con più punti vendita in Lazio" })).toBeInTheDocument();
-    expect(screen.getByText("Regione: Lazio")).toBeInTheDocument();
-    expect(screen.getByText("1 di 1 punto vendita")).toBeInTheDocument();
-    expect(within(tabellaElenco()).getByText("Roma")).toBeInTheDocument();
-    expect(within(tabellaElenco()).queryByText("Lucca")).not.toBeInTheDocument();
-    expect(screen.getAllByTestId("pallino")).toHaveLength(1);
-    expect(screen.queryByText(/non sono sulla mappa/)).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Togli il filtro sulla regione" }));
-
-    expect(lazio).toHaveAttribute("aria-pressed", "false");
-    expect(screen.queryByText("Regione: Lazio")).not.toBeInTheDocument();
-    expect(screen.getByText("6 di 6 punti vendita")).toBeInTheDocument();
-
-    const toscana = screen.getByRole("button", { name: "Toscana: 4 punti vendita" });
-    fireEvent.click(toscana);
-    expect(screen.getByText("4 di 4 punti vendita")).toBeInTheDocument();
-    fireEvent.click(toscana);
-    expect(toscana).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByText("6 di 6 punti vendita")).toBeInTheDocument();
-  });
-
-  it("l'elenco si cerca per località e indirizzo e dice quali righe sono riconosciute", async () => {
+  it("la sezione Dove arriva non c'è: niente regioni, insegne, località, elenco né mappa dei punti vendita", async () => {
+    // Il server manda ancora le righe dei punti vendita: la pagina non le mostra
     finti.permessi = new Set(["gdo.visualizza"]);
     await apri();
 
-    const elenco = tabellaElenco();
-    expect(within(elenco).getAllByText("Riconosciuto")).toHaveLength(4);
-    expect(within(elenco).getAllByText("Solo nel volantino")).toHaveLength(2);
-    expect(within(elenco).getByRole("link", { name: "Scheda del punto vendita Conad Lucca" })).toHaveAttribute("href", "/punti-vendita/pv1");
-    // Senza località e indirizzo letti, la riga come è stampata
-    expect(within(elenco).getByText("SEDE - VIA SENZA NOME")).toBeInTheDocument();
-    expect(within(elenco).getByText("Regione non indicata")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Dove arriva/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Punti vendita per regione" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Toscana: \d+ punt/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Punti vendita per insegna" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Località con più punti vendita/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Elenco dei punti vendita" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Punti vendita stampati nei volantini della promozione" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("searchbox", { name: "Cerca nei punti vendita per località o indirizzo" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Conad Lucca")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Scheda del punto vendita/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/non sono sulla mappa/)).not.toBeInTheDocument();
 
-    const ricerca = screen.getByRole("searchbox", { name: "Cerca nei punti vendita per località o indirizzo" });
-    fireEvent.change(ricerca, { target: { value: "mazzini" } });
-
-    expect(await screen.findByText("1 di 1 punto vendita")).toBeInTheDocument();
-    expect(within(tabellaElenco()).getByText("Pisa")).toBeInTheDocument();
-    expect(within(tabellaElenco()).queryByText("Firenze")).not.toBeInTheDocument();
-
-    fireEvent.change(ricerca, { target: { value: "LUCCA" } });
-    expect(await screen.findByText("2 di 2 punti vendita")).toBeInTheDocument();
-
-    fireEvent.change(ricerca, { target: { value: "nessuna via" } });
-    expect(await screen.findByText("Nessun punto vendita con questa ricerca.")).toBeInTheDocument();
+    // I punti vendita di ciascun volantino restano nel confronto
+    const puntiVenditaDi = (riga: HTMLElement) => within(riga).getAllByRole("cell")[1]?.textContent;
+    expect(righeDi(tabellaConfronto()).map(puntiVenditaDi)).toEqual(["3", "2", "1"]);
   });
 
-  it("senza il permesso dei punti vendita i riconosciuti non portano alla scheda", async () => {
-    await apri();
-
-    expect(within(tabellaElenco()).getAllByText("Riconosciuto")).toHaveLength(4);
-    expect(within(tabellaElenco()).queryByRole("link")).not.toBeInTheDocument();
-    expect(within(tabellaElenco()).getByText("Conad Lucca")).toBeInTheDocument();
-  });
-
-  it("un punto vendita stampato da due volantini è una riga sola, con i due volantini, e conta una volta", async () => {
+  it("un punto vendita stampato da due volantini conta nel confronto per ciascuno dei due", async () => {
     // A2623: Emilia e Liguria stampano gli stessi punti vendita toscani
     const EMILIA = { id: "a-em", nome: "Emilia" };
     const LIGURIA = { id: "a-li", nome: "Liguria" };
@@ -393,39 +326,12 @@ describe("Consultazione di una promozione", () => {
     }));
     await apri();
 
-    expect(screen.getByRole("button", { name: "Toscana: 2 punti vendita" })).toBeInTheDocument();
-    expect(screen.getByText("2 di 2 punti vendita")).toBeInTheDocument();
-    const elenco = tabellaElenco();
-    expect(within(elenco).getAllByText("AREZZO")).toHaveLength(1);
-    const volantiniArezzo = within(elenco).getByRole("list", { name: "Volantini che stampano AREZZO" });
-    expect(within(volantiniArezzo).getAllByRole("listitem").map(voce => voce.textContent)).toEqual(["City · Emilia", "City · Liguria"]);
-
-    // Nel confronto ogni volantino ha i suoi 2 punti vendita; la promozione ne conta 2, non 4
+    // Nel confronto ogni volantino ha i suoi 2 punti vendita
     // La seconda colonna del confronto sono i punti vendita del volantino
     const puntiVenditaDi = (riga: HTMLElement) => within(riga).getAllByRole("cell")[1]?.textContent;
     expect(righeDi(tabellaConfronto()).map(puntiVenditaDi)).toEqual(["2", "2"]);
-  });
-
-  it("l'elenco mostra 25 righe alla volta", async () => {
-    const molte = Array.from({ length: 30 }, (_, i) => riga(`m${i}`, { localita: `Località ${i}`, regione: "TOS" }));
-    finti.risultato = caricato(dettaglio({ puntiVendita: molte }));
-    await apri();
-
-    expect(righeDi(tabellaElenco())).toHaveLength(25);
-    expect(screen.getByText("25 di 30 punti vendita")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Mostra altri 5" }));
-
-    expect(righeDi(tabellaElenco())).toHaveLength(30);
-    expect(screen.queryByRole("button", { name: /Mostra altri/ })).not.toBeInTheDocument();
-  });
-
-  it("senza righe dei punti vendita lo dice, invece di grafici vuoti", async () => {
-    finti.risultato = caricato(dettaglio({ puntiVendita: [] }));
-    await apri();
-
-    expect(screen.getByText("Nessun punto vendita nei volantini")).toBeInTheDocument();
-    expect(screen.queryByRole("group", { name: "Punti vendita per regione" })).not.toBeInTheDocument();
+    // Le righe stampate non diventano un elenco nella pagina
+    expect(screen.queryByText("AREZZO")).not.toBeInTheDocument();
   });
 
   it("mostra l'assortimento: comune o locale, fasce di sconto, reparti, meccaniche e marche", async () => {

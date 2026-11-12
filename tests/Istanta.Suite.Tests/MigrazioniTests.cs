@@ -127,8 +127,8 @@ public class MigrazioniTests
         var nomi1 = ctx1.GetService<IMigrationsAssembly>().Migrations.Keys.Select(NomeSenzaData).ToList();
         var nomi2 = ctx2.GetService<IMigrationsAssembly>().Migrations.Keys.Select(NomeSenzaData).ToList();
 
-        Assert.Equal(new[] { "Baseline", "EanA300ContractA5000", "TimestampSenzaFuso" }, nomi1);
-        Assert.Equal(new[] { "Baseline", "PromoBackup", "TimestampSenzaFuso" }, nomi2);
+        Assert.Equal(new[] { "Baseline", "EanA300ContractA5000", "TimestampSenzaFuso", "DateModificaTracciato" }, nomi1);
+        Assert.Equal(new[] { "Baseline", "PromoBackup", "TimestampSenzaFuso", "DateModificaTracciato" }, nomi2);
     }
 
     // Lo schema c'e' gia' su ogni database: la Baseline lo registra e basta.
@@ -237,6 +237,44 @@ public class MigrazioniTests
 
         var giu = Assert.Single(migration.DownOperations);
         Assert.Equal("promo_backup", Assert.IsType<DropTableOperation>(giu).Name);
+    }
+
+    // Le date di modifica dei record dei tracciati: due colonne nullable in promo_tracciati_records, e
+    // le righe che esistono gia' partono con la data di modifica uguale a quella di registrazione.
+    [Fact]
+    public void La_migration_DateModificaTracciato_aggiunge_le_due_date_e_riempie_la_data_di_modifica()
+    {
+        using var ctx = Contesto2();
+
+        var migration = CreaMigration(ctx, "DateModificaTracciato");
+
+        Assert.Equal(3, migration.UpOperations.Count);
+        var colonne = migration.UpOperations.Take(2).Cast<AddColumnOperation>().ToList();
+        Assert.All(colonne, c =>
+        {
+            Assert.Equal("promo_tracciati_records", c.Table);
+            Assert.Equal("timestamp without time zone", c.ColumnType);
+            Assert.True(c.IsNullable);
+        });
+        Assert.Equal(new[] { "data_modifica", "data_modifica_strutturale" }, colonne.Select(c => c.Name).ToArray());
+        var riempi = Assert.IsType<SqlOperation>(migration.UpOperations[2]);
+        Assert.Contains("UPDATE promo_tracciati_records SET data_modifica = data_registrazione", riempi.Sql);
+
+        Assert.Equal(new[] { "data_modifica", "data_modifica_strutturale" },
+            migration.DownOperations.Cast<DropColumnOperation>().Select(o => o.Name).ToArray());
+    }
+
+    // Nel primo contesto PromoTracciatiRecord e' un'entita' raggiunta per navigazione, senza tabella
+    // vera: la migration omonima riallinea solo lo snapshot, e un ALTER farebbe fallire l'avvio.
+    [Fact]
+    public void La_migration_DateModificaTracciato_del_primo_contesto_non_tocca_lo_schema()
+    {
+        using var ctx = Contesto1();
+
+        var migration = CreaMigration(ctx, "DateModificaTracciato");
+
+        Assert.Empty(migration.UpOperations);
+        Assert.Empty(migration.DownOperations);
     }
 
     // Se qualcuno cambia il modello senza generare la migration, questo test lo dice prima che

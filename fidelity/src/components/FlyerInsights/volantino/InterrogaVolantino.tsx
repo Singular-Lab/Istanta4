@@ -9,7 +9,7 @@ import { twMerge } from "@/utils/twMerge";
 import { useMemo, useState, type KeyboardEvent } from "react";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import { normalizzaRicerca, ripartizionePagina } from "./analisiPagina";
-import { marcaFormato } from "./box";
+import { marcaFormato, NOTA_PREZZO_CALCOLATO } from "./box";
 import type { GruppoBox } from "./colori";
 import {
   alternaValore,
@@ -413,7 +413,11 @@ export function InterrogaVolantino({
                       {dettagli && <span className="truncate text-3xs text-slate-500 dark:text-slate-400">{dettagli}</span>}
                     </span>
                     <span className="flex flex-none flex-col items-end text-3xs tabular-nums text-slate-500 dark:text-slate-400">
-                      {voce.prezzo !== null && <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">{formatEuro(voce.prezzo)}</span>}
+                      {voce.prezzo !== null && (
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-100" title={voce.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
+                          {formatEuro(voce.prezzo)}
+                        </span>
+                      )}
                       <span>
                         {voce.sconto !== null ? `−${percento(voce.sconto)} · ` : ""}
                         {percento(voce.geometria ? voce.spazio : null)}

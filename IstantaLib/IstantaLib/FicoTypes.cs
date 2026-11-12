@@ -1187,6 +1187,8 @@ namespace IstantaLib
         public string scope { get; set; }
         public bool tendina { get; set; }
         public bool isData { get; set; } = false;
+        //Con isData: il criterio chiede anche l'orario (OO:MM) e confronta al minuto.
+        public bool conOrario { get; set; } = false;
     }
 
     //Oggetto che specifica la colonna di visualizzazione di un record prestazione

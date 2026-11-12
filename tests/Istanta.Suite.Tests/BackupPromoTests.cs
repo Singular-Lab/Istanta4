@@ -37,6 +37,8 @@ public class BackupPromoTests
             DaEsportare = true,
             IdAddestramento = 3,
             DataRegistrazione = new DateTime(2026, 9, 1, 8, 0, 0),
+            DataModifica = new DateTime(2026, 9, 2, 15, 40, 0),
+            DataModificaStrutturale = new DateTime(2026, 9, 3, 11, 20, 0),
             ModalitaInserimento = 2,
             Stato = 1
         };
@@ -82,7 +84,8 @@ public class BackupPromoTests
         Assert.Equal(new HashSet<string>
         {
             "Id", "IdTracciato", "Versione", "IndiceLettura", "IndiceEsportazione", "Label", "Scatto", "Codice",
-            "CodiceGruppo", "Dato", "DaEsportare", "IdAddestramento", "DataRegistrazione", "ModalitaInserimento", "Stato"
+            "CodiceGruppo", "Dato", "DaEsportare", "IdAddestramento", "DataRegistrazione", "DataModifica",
+            "DataModificaStrutturale", "ModalitaInserimento", "Stato"
         }, colonne);
 
         var lette = BackupPromo.LeggiTracciati(backup);
@@ -97,6 +100,8 @@ public class BackupPromoTests
         Assert.True(seconda.DaEsportare);
         Assert.Equal(3, seconda.IdAddestramento);
         Assert.Equal(new DateTime(2026, 9, 1, 8, 0, 0), seconda.DataRegistrazione);
+        Assert.Equal(new DateTime(2026, 9, 2, 15, 40, 0), seconda.DataModifica);
+        Assert.Equal(new DateTime(2026, 9, 3, 11, 20, 0), seconda.DataModificaStrutturale);
         Assert.Equal((byte)2, seconda.ModalitaInserimento);
         Assert.Equal((byte)1, seconda.Stato);
     }
@@ -266,6 +271,8 @@ public class BackupPromoTests
         Assert.Equal(originale.DaEsportare, entita.DaEsportare);
         Assert.Equal(originale.IdAddestramento, entita.IdAddestramento);
         Assert.Equal(originale.DataRegistrazione, entita.DataRegistrazione);
+        Assert.Equal(originale.DataModifica, entita.DataModifica);
+        Assert.Equal(originale.DataModificaStrutturale, entita.DataModificaStrutturale);
         Assert.Equal(originale.ModalitaInserimento, entita.ModalitaInserimento);
         Assert.Equal(originale.Stato, entita.Stato);
 

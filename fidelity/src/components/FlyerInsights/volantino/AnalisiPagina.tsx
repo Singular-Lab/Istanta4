@@ -6,7 +6,7 @@ import { twMerge } from "@/utils/twMerge";
 import { useMemo, useState } from "react";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import { perSpazio, ripartizionePagina, sintesiPagina } from "./analisiPagina";
-import { descrizioneBox, marcaFormato } from "./box";
+import { descrizioneBox, marcaFormato, NOTA_PREZZO_CALCOLATO } from "./box";
 import type { GruppoBox } from "./colori";
 import { riquadroBox, testoApertura } from "./geometria";
 
@@ -174,7 +174,11 @@ function Analisi({ pagine, totale, box: tuttiIBox, gruppo, titoloRipartizione, s
                       </span>
                       <span className="flex flex-none flex-col items-end text-3xs tabular-nums text-slate-500 dark:text-slate-400">
                         {/* Un prezzo non stampato non si segna: resterebbe una colonna di "N/D" */}
-                        {voce.prezzo !== null && <span className="text-xs font-semibold text-slate-800 dark:text-slate-100">{formatEuro(voce.prezzo)}</span>}
+                        {voce.prezzo !== null && (
+                          <span className="text-xs font-semibold text-slate-800 dark:text-slate-100" title={voce.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
+                            {formatEuro(voce.prezzo)}
+                          </span>
+                        )}
                         <span>
                           {voce.sconto !== null ? `−${percento(voce.sconto)} · ` : ""}
                           {percento(voce.spazio)}

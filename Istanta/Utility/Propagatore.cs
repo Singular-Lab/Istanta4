@@ -180,6 +180,7 @@ namespace Istanta.Utility
                     {
                         if (
                             azione.TipoOperazione == (Byte)tipoOperazione.cambioMeta ||
+                            azione.TipoOperazione == (Byte)tipoOperazione.aggiornamentoDaImportazione ||
                             azione.TipoOperazione == (Byte)tipoOperazione.revisioneCampiOfferta
                             )
                         {
@@ -267,7 +268,9 @@ namespace Istanta.Utility
                             string func = "";
 
                             Dictionary<string, object> objParams = new Dictionary<string, object>();
-                            if (azione.TipoOperazione == (Byte)tipoOperazione.cambioMeta)
+                            //L'aggiornamento da importazione si analizza come i cambi della lista registrati prima come cambioMeta.
+                            if (azione.TipoOperazione == (Byte)tipoOperazione.cambioMeta ||
+                                azione.TipoOperazione == (Byte)tipoOperazione.aggiornamentoDaImportazione)
                             {
                                 objParams.Add("azione", JsonConvert.DeserializeObject<List<CambioMetaRecordTracciatoAzione>>(azione.FormData!)!);
                                 func = "analizzaPropagazionePerCambioMeta";

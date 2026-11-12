@@ -1595,6 +1595,7 @@ namespace Istanta.Controllers
                             _rec.Versione = versioneLab;
                             _rec.Label = label;
                             _rec.DataRegistrazione = DateTime.Now;
+                            _rec.DataModifica = _rec.DataRegistrazione;
                             //_rec.SelezioneMenabo = (Byte)TipoSelezioneMenabo.None;
                             _rec.ModalitaInserimento = (Byte)ModalitaInserimento.Manuale;
                             _rec.Stato = (Byte)StatoRecord.Attivo;
@@ -1636,6 +1637,11 @@ namespace Istanta.Controllers
                                     if (rec.Label != _rec.Label)
                                     {
                                         throw new Exception("La label attualmente presente nel gruppo è " + rec.Label + " mentre la label che si sta cercando di impostare è " + _rec.Label + ", è necessario risolvere il conflitto prima di procedere.");
+                                    }
+                                    //La data di modifica cambia solo se un campo del tracciato e' cambiato.
+                                    if (DateRecordTracciato.CambiatoDaImportazione(Utility.Main.getJsonObject(rec.Dato ?? ""), item))
+                                    {
+                                        rec.DataModifica = DateTime.Now;
                                     }
                                     rec.Scatto = _rec.Scatto;
                                     rec.CodiceGruppo = _rec.CodiceGruppo;
@@ -1982,6 +1988,7 @@ namespace Istanta.Controllers
                             newRecord.IndiceEsportazione = 0;
 
                             newRecord.DataRegistrazione = DateTime.Now;
+                            newRecord.DataModifica = newRecord.DataRegistrazione;
                             newRecord.ModalitaInserimento = (Byte)ModalitaInserimento.Manuale;
                             newRecord.Stato = (Byte)StatoRecord.Attivo;
 
