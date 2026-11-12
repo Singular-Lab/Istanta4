@@ -238,7 +238,6 @@ class Promo {
                     
                     recHtml.find("#labNomeEsportazione").text(metaTr.NomeEsportazione);
                     recHtml.find("#aRev").attr("href", "Revisore?id_promo=" + 0 + "&id_tracciati=" + trItem.id);
-                    recHtml.find("#aMen").attr("href", "Menabo?id_tracciato=" + trItem.id);
 
                     recHtml.find("#btnEsportaCollapse").attr("data-bs-target", "#collapseExport_" + trItem.id);
                     recHtml.find(".collapse").attr("id", "collapseExport_"+trItem.id);

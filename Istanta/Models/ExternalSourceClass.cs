@@ -16,7 +16,7 @@ namespace Istanta.Models
 
     public class ExternalSourceClass
     {
-        private readonly string[] COMMANDS = new string[] { "getAree", "getMastro", "getGrammature", "getMeccaniche" };
+        private readonly string[] COMMANDS = new string[] { "getAree", "getGrammature", "getMeccaniche" };
         private string pathExternal;
 
         private Dictionary<string, JObject> Sources = new Dictionary<string, JObject>();
@@ -144,8 +144,6 @@ namespace Istanta.Models
                 {
                     case "getAree":
                         return getAree();
-                    case "getMastro":
-                        return getMastro();
                     case "getMeccaniche":
                         return getMeccaniche();
                     default:
@@ -324,82 +322,10 @@ namespace Istanta.Models
 
         #endregion
 
-        #region Mastro
+        #region Sorgenti caricate
         public JObject getSource(string nomeSource)
         {
             return Sources[nomeSource];
-        }
-
-        public DbMastro getMastro()
-        {
-            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMastro.json"));
-            DbMastro? mastroDB = o1.ToObject<DbMastro>();
-
-            return mastroDB!;
-        }
-        public DbMastroItem getMastroById(int id)
-        {
-            var _source = getMastro().source;
-            return _source.Find(m => m.Id == id)!;
-        }
-
-        public DbMastroItem getMastroByNameAndFormato(string id, string formato)
-        {
-            var _source = getMastro().source;
-            return _source.Find(m => m.Nome == id && m.Formato == formato)!;
-        }
-
-        public Int64 getLastMastroId()
-        {
-            var _last = getMastro().source.OrderByDescending(m => m.Id).FirstOrDefault();
-            return (_last != null ? _last.Id + 1 : 1);
-        }
-
-        public void addMastro(DbMastroItem item)
-        {
-            var db = getMastro();
-            var _source = db.source;
-
-            var _last = _source.OrderByDescending(o => o.Id).FirstOrDefault();
-            item.Id = _last != null ? _last.Id + 1 : 1;
-
-            _source.Add(item);
-
-            saveMastro(db);
-        }
-
-        public void editMastro(DbMastroItem item)
-        {
-            var db = getMastro();
-            var dbItem = db.source.Find(m => m.Id == item.Id);
-
-
-            dbItem!.Nome = item.Nome;
-            dbItem.Formato = item.Formato;
-            dbItem.MeccanicaDefault = item.MeccanicaDefault;
-            dbItem.Active = item.Active;
-            dbItem.Associazioni = item.Associazioni;
-
-            saveMastro(db);
-        }
-
-        public void deleteMastro(DbMastroItem item)
-        {
-            var db = getMastro();
-            var mastro = db.source.Find(m => m.Id == item.Id);
-            //db.source.Remove(db.source.Find(m => m.Id == item.Id));
-            mastro!.Active = false;
-            saveMastro(db);
-        }
-
-        void saveMastro(DbMastro db)
-        {
-            string jsonStr = JsonConvert.SerializeObject(db);
-
-            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceMastro.json", false))
-            {
-                sw.WriteLine(jsonStr);
-            }
         }
 
         #endregion
@@ -465,13 +391,6 @@ namespace Istanta.Models
             }
         }
 
-        public string getFormatoMeccanica(string meccanica)
-        {
-            var db = getMeccaniche();
-            var meccanicaItem = db.source.Where(f => f.NomeTraduzione == meccanica).FirstOrDefault();
-            return (meccanicaItem != null ? meccanicaItem.Formato : "1x1")!;
-        }
-
         #endregion
 
         #region Combinazioni PoP
@@ -486,179 +405,6 @@ namespace Istanta.Models
         public List<PopMateriale> getMateriali()
         {
             return getCombinazioniPoP().Materiali;
-        }
-
-        #endregion
-
-        #region Regole Menabò
-        public DbMenabo getRegoleMenabo()
-        {
-            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMenabo.json")); // this.Sources["SourceMenabo"];
-            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
-            return menaboDB!;
-        }
-
-        public void addRegolaMenabo(DbMenaboItem item)
-        {
-            JObject o1 = this.Sources["SourceMenabo"];
-            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
-
-            var _last = menaboDB!.source.OrderByDescending(o => o.Id).FirstOrDefault();
-
-            item.Id = _last != null ? _last.Id + 1 : 1;
-
-
-            JObject? o2 = this.Sources["SourceMenaboPagine"];
-            DbMenaboPagine? menaboPagDB = o2.ToObject<DbMenaboPagine>();
-
-            var _lastSchemaPag = menaboPagDB!.source.OrderByDescending(o => o.Id).FirstOrDefault();
-
-            DbMenaboPagineItem schemaPag = new DbMenaboPagineItem();
-            schemaPag.Id = _lastSchemaPag != null ? _lastSchemaPag.Id + 1 : 1;
-            schemaPag.Pagine = new List<DbMenaboPagineItemPagina>();
-            schemaPag.Titolo = item.Titolo;
-
-            menaboPagDB.source.Add(schemaPag);
-
-            saveSchemaMenabo(menaboPagDB);
-
-
-            item.IdMenaboPagine = schemaPag.Id;
-
-            menaboDB.source.Add(item);
-
-
-            saveMenabo(menaboDB);
-
-
-        }
-
-
-        public DbMenaboItem getMenaboById(int id)
-        {
-            DbMenabo menaboDB = getRegoleMenabo();
-            return menaboDB.source.Where(m => m.Id == id).FirstOrDefault()!;
-        }
-        public bool editMenabo(DbMenaboItem item)
-        {
-
-            JObject? o2 = this.Sources["SourceMenabo"];
-            DbMenabo? menaboDb = o2.ToObject<DbMenabo>();
-
-            var dbExist = menaboDb!.source.Where(m => m.Id == item.Id).FirstOrDefault();
-            if (dbExist != null)
-            {
-                dbExist.Aree = item.Aree;
-                dbExist.Titolo = item.Titolo;
-                saveMenabo(menaboDb);
-                return true;
-            }
-
-
-            return false;
-        }
-        public void deleteMenabo(DbMenaboItem item)
-        {
-            var db = getRegoleMenabo();
-            db.source.Remove(db.source.Find(m => m.Id == item.Id)!);
-            saveMenabo(db);
-        }
-
-
-        public DbMenaboPagineItem getSchemaMenabo(Int64 id)
-        {
-            JObject? o1 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMenabo.json"));  //this.Sources["SourceMenabo"];
-            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
-
-            JObject? o2 = JObject.Parse(System.IO.File.ReadAllText(this.pathExternal + "SourceMenaboPagine.json")); //this.Sources["SourceMenaboPagine"];
-            DbMenaboPagine? menaboPagineDb = o2.ToObject<DbMenaboPagine>();
-
-            var mItem = menaboDB!.source.Where(m => m.IdMenaboPagine == id).FirstOrDefault();
-            if (mItem != null)
-            {
-                var mpItem = menaboPagineDb!.source.Where(mp => mp.Id == mItem.IdMenaboPagine).FirstOrDefault();
-                if (mpItem != null)
-                {
-                    return mpItem;
-                }
-                else
-                {
-                    throw new Exception("Schema pagine non trovato");
-                }
-            }
-            else
-            {
-                throw new Exception("Menabo non trovato");
-            }
-
-        }
-
-
-        public List<string> getFormatiPagina()
-        {
-            JObject? o1 = this.Sources["SourceMenabo"];
-            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
-            return menaboDB!.formatiMenaboPagina;
-        }
-
-        public void saveFormatiPagina(List<string> nuoviFormati)
-        {
-            JObject? o1 = this.Sources["SourceMenabo"];
-            DbMenabo? menaboDB = o1.ToObject<DbMenabo>();
-            menaboDB!.formatiMenaboPagina = nuoviFormati;
-            saveMenabo(menaboDB);
-        }
-
-        public List<DbMenaboItem> getMenabos()
-        {
-            DbMenabo menaboDB = getRegoleMenabo();
-            return menaboDB.source;
-        }
-
-
-
-        public bool editSchemaMenabo(DbMenaboPagineItem item)
-        {
-
-            JObject? o2 = this.Sources["SourceMenaboPagine"];
-            DbMenaboPagine? menaboPagineDb = o2.ToObject<DbMenaboPagine>();
-
-            var dbExist = menaboPagineDb!.source.Where(m => m.Id == item.Id).FirstOrDefault();
-            if (dbExist != null)
-            {
-                dbExist.Pagine = item.Pagine;
-                saveSchemaMenabo(menaboPagineDb);
-                return true;
-            }
-
-
-            return false;
-        }
-
-
-
-        public void saveMenabo(DbMenabo db)
-        {
-            string jsonStr = JsonConvert.SerializeObject(db);
-
-            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceMenabo.json", false))
-            {
-                sw.WriteLine(jsonStr);
-            }
-
-            this.RefreshSources();
-        }
-
-        public void saveSchemaMenabo(DbMenaboPagine db)
-        {
-            string jsonStr = JsonConvert.SerializeObject(db);
-
-            using (StreamWriter sw = new StreamWriter(this.pathExternal + "SourceMenaboPagine.json", false))
-            {
-                sw.WriteLine(jsonStr);
-            }
-
-            this.RefreshSources();
         }
 
         #endregion
@@ -2592,59 +2338,6 @@ namespace Istanta.Models
     public class DbAree
     {
         public List<Aree> source=new List<Aree>();
-    }
-
-    public class DbMenabo
-    {
-        public string libAutoSelezione="";
-        public string libOrdinamentoLista="";
-        public string libAutoImpaginazioneMeccanica = "";
-        public List<string> formatiMenaboPagina = new List<string>();
-        public List<DbMenaboItem> source = new List<DbMenaboItem>();
-        public List<listaSetRegole> automatismo = new List<listaSetRegole>();
-    }
-    public class DbMenaboItem
-    {
-        public Int64 Id;
-        public string Titolo="";
-        public List<string> Aree=new List<string>();
-        public Int64 IdMenaboPagine;
-
-        public string ToAreeString()
-        {
-            return String.Join(",", this.Aree);
-        }
-    }
-
-    public class DbMenaboPagine
-    {
-        public List<DbMenaboPagineItem> source=new List<DbMenaboPagineItem>();
-    }
-
-    public class DbMenaboPagineItem
-    {
-        public Int64 Id;
-        public string Titolo="";
-        public List<DbMenaboPagineItemPagina> Pagine =  new List<DbMenaboPagineItemPagina>();
-    }
-    public class DbMenaboPagineItemPagina
-    {
-        public Int16 Numero { get; set; }
-        public Int16 IdMastro { get; set; }
-    }
-
-    public class DbMastro
-    {
-        public List<DbMastroItem> source=new List<DbMastroItem>();
-    }
-    public class DbMastroItem
-    {
-        public Int64 Id;
-        public string Nome="";
-        public string Formato="";
-        public List<string> Associazioni = new List<string>();
-        public string MeccanicaDefault="";
-        public bool Active = true;
     }
 
     public class DbCustomPlugin

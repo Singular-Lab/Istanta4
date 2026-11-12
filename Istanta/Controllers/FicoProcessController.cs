@@ -3078,7 +3078,6 @@ namespace Istanta.Controllers
                 string keyFirmaRevisione = GLOBAL_VARIABLES.keyFirmaRevisione;
 
 
-                string k_multiplex = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppoMultiplex;
                 string k_codgruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
                 string k_cod = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
 
@@ -3571,7 +3570,6 @@ namespace Istanta.Controllers
 
 
 
-            string k_multiplex = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppoMultiplex;
             string k_cod = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
 
             //I20-1069: un campo mancante dice di quale record.

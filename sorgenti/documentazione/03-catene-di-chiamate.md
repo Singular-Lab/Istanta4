@@ -25,7 +25,7 @@ browser
 ```
 
 Il middleware ha una **lista bianca di pagine** (`private string[] pagine`) che comprende `""`,
-`"/"`, `/Tracciati`, `/Confronti`, `/SyncFoto`, `/Archivio`, `/Aree`, `/MenaboSettings`,
+`"/"`, `/Tracciati`, `/Confronti`, `/SyncFoto`, `/Archivio`, `/Aree`,
 `/Etichette`, `/DeclinazioniMeccaniche`… Se non c'è sessione e la richiesta è per una di quelle,
 redirige a `/Login`; se è una chiamata API risponde `{login:false, error:"no_login"}` in JSON.
 
@@ -150,22 +150,11 @@ RevisoreController.salva(acts, idTracciato, idOperazione, sender)
 
 Decidere quale referenza va in quale pagina e in quale box.
 
+Il menabò si lavora solo dal Plugin. La UI web (`Menabo/Index`, `inMenabo`, `AllInMenabo`,
+`AutoImpaginazione`, `ScambiaRef` e il resto della catena, con i Multiplex) è stata tolta il
+12/11/2026: vedi `11-rimozioni.md`.
+
 ```
-MenaboController.Index(id_tracciato)                     righe 106-156
-  ├─ this.Bind()
-  ├─ ctx2.MenaboPagines.Include(i => i.MenaboRefs)
-  └─ ctx2.PromoTracciatis.Where(m => m.Id == id_tracciato)
-
-mettere una referenza nel menabò
-  → PUT Menabo/inMenabo/{onoff}/{indice}/{idTracciato}/{areaTracciato}
-     MenaboController.inMenabo(...)                      righe 1934-2608, 675 righe
-     → ctx2.SaveChanges() × 5
-
-metterne molte in un colpo
-  → POST Menabo/AllInMenabo                              righe 1616-1917, 302 righe
-     └─ execLibFunction(funcAutoImpaginazione, _pass)     riga 1724
-        il nome viene da "AgenziaLib." + nomeCliente + ".eseguiAutoSelezioneGruppoMassiva"
-
 la scheda di una referenza
   → PUT Menabo/getSchedaRef/{idLavorazione}/{byPassLavorazioneRecord}/{mode}
      righe 9358-10015, 658 righe
@@ -181,12 +170,13 @@ PUT Menabo/ImpaginaFromInDesignNew/{idLavorazione}/{impagina}/{sovrascriviPS}/{n
 ```
 
 Altri metodi grossi dello stesso controller, tutti sopra le 250 righe: `IdentificaMeccanicaRecord`
-(dichiarato **tre volte** con firme diverse: righe 2683, 3567, 3265), `IdentificaCodiceBox` (527),
+(una sola versione dal 12/11/2026), `IdentificaCodiceBox` (527),
 `leggiRegoleRicorsive` (475), `ricollegaBox` (364), `Etichettatura` (due volte: 339 e 325),
-`Raggruppa` (321), `Sgruppa` (306), `AllInMenabo` (302), `PreAnalisiMismatch` (276),
+`Raggruppa` (321), `Sgruppa` (306), `PreAnalisiMismatch` (276),
 `ClonaRecordRicollegato` (265), `cambioMetaRecordInLavorazione` (259).
 
-`MenaboController` è **12.919 righe**: da solo un terzo di tutto il codice dei controller.
+`MenaboController` era **12.919 righe** il 14/09/2026, da solo un terzo di tutto il codice dei
+controller; dopo la pulizia del 12/11/2026 è circa 10.100.
 
 ---
 
@@ -318,5 +308,4 @@ qualcosa:
 | 768 | `AgenziaLib/Edro21.cs` — `interpretaMeccanica` |
 | 710 | `AgenziaLib/Coopfi.cs` — `elaboraTracciatiRecords_do` |
 | 696 | `Istanta/Controllers/SyncFotoController.cs` — `ScanPacchettoFoto_do` |
-| 675 | `Istanta/Controllers/MenaboController.cs` — `inMenabo` |
 | 658 | `Istanta/Controllers/MenaboController.cs` — `getSchedaRef` |

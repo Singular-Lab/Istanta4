@@ -43,7 +43,6 @@ public class EtichettaSfGaEdro21Tests : IDisposable
         Directory.CreateDirectory(_cartella);
         File.Copy(DllAgenziaLibTests.TrovaFile("Istanta/wwwroot/external_source/Edro21/SourceEtichetteRef.json"),
             Path.Combine(_cartella, "SourceEtichetteRef.json"), true);
-        File.WriteAllText(Path.Combine(_cartella, "SourceMenabo.json"), "{}");
         return new MenaboController(
             null,
             new ConfigurationBuilder().Build(),

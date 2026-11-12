@@ -244,3 +244,32 @@ lo mostra invece di ciclare su una lista vuota.
 - **`#warning VULNERABILITA'`** in `MenaboController`: da segnalare, non da toccare.
 - **L'access log di nginx non serve a niente**: su 35.041 richieste in dieci giorni, 35.038 erano i
   `curl` di controllo dei job. nginx sta solo davanti alla `:80` e non fa da proxy.
+
+---
+
+## 12 novembre 2026 — il resto del menabò web (`TASK-23f43a40`)
+
+Il 14/09 la UI web del menabò era uscita (`menabo.js`, `Views/Menabo/Index.cshtml`, 21 azioni), ma
+le azioni che solo lei chiamava erano rimaste, insieme a tutto ciò che dipendeva da loro. Nessun
+client le usava: né il Plugin, né la web di Istanta, né Correggo4, Fidelity o Olimpo. Circa
+**5.970 righe** di codice.
+
+| cosa | dove | perché |
+|---|---|---|
+| `inMenabo`, `AllInMenabo`, `AutoImpaginazione`, `ScambiaRef`, `leggiCsv`, `cambiaFormato` (due), `Menabo/salvaPagina`, `getFormato`, `getMastro`, `getMeccaniche`, `Menabo/Index` e `Bind` | `MenaboController` | la catena della UI web; `Menabo/Index` restituiva una vista che non c'era più |
+| `AggiungiMultiplex`, `RimuoviMultiplex` e la chiave `Scatto.CodiceGruppoMultiplex` | `MenaboController`, `IstantaCore.cs`, `AgenziaLib/Tipi.cs`, `Trea.cs`, `utility.js`, `revisore.js`, gli `agenzia.js` di navcove, craiOvest, Maiora e gross | i Multiplex, chiamati solo da `inMenabo` |
+| le metà orfane: due `IdentificaMeccanicaRecord`, `IdentificaArticoloInRevisione`, `CalcolaSpazi`, `CheckCorrispondenza*`, `getEditDistance`, `findSimilarity` e altri | `MenaboController` | senza chiamanti |
+| le regole di impaginazione automatica: `Tracciati/scriviRegolaMenabo`, `getRegoleMenaboByIdAddestramento`, `getAllRegoleMenabo`, `getAllFormatiPaginaMenabo`, `getAllMeccaniche`, i tipi `listaSetRegole`/`setRegole`/`Regola`, la scheda e le finestre in `Training.cshtml` e le funzioni di `addestramento.js` | Istanta | le leggeva solo `AutoImpaginazione`; la scheda non aveva più un'intestazione cliccabile |
+| `Trea.AutoImpaginazioneMeccanicaByRef` | AgenziaLib | la chiamava solo `AllInMenabo`, per riflessione |
+| gli schemi del menabò di `MenaboSettings` (Index, Update, Insert, Delete, pagine, `salvaFormatiPagine`), la vista e `menaboSettings.js` | Istanta | la pagina non era nel menu e falliva a ogni apertura: il controller non caricava `SourceMenabo` |
+| `MastroController` e la sua vista | Istanta | nessun link e nessun chiamante |
+| `DbMenabo*`, `DbMastro*` e la regione "Regole Menabò" di `ExternalSourceClass`; `MachineLearningCore.cs` | Istanta | i loro dati li leggeva solo ciò che è stato tolto |
+
+**Restano** le pagine vive di `MenaboSettings` (Ordinamento, Formati, TipiDiExport,
+NamingConventions) e l'unica `IdentificaMeccanicaRecord` usata (da `FicoProcessController`).
+
+**Una correzione insieme alla pulizia:** `Etichettatura` e altri tre punti di `MenaboController`
+chiedevano `SourceMenabo.json` al costruttore di `ExternalSourceClass` senza usarlo; senza il file
+l'etichettatura restituiva i record **senza etichette**, in silenzio. Ora nessuno lo chiede.
+`SourceMenabo.json` e `SourceMastro.json` possono restare nei volumi dei clienti: nessuno li legge
+più. I test di guardia sono in `tests/Istanta.Suite.Tests/MenaboWebRimossoTests.cs`.

@@ -160,11 +160,11 @@ modo per provare il risultato: cioè senza un volantino vero da esportare e con 
 **Prima di rifattorizzare, servirebbe un modo di provare.** Oggi non c'è: nessun test automatico in
 tutto il progetto.
 
-### 16. `MenaboController`, 12.919 righe
+### 16. `MenaboController`, circa 10.100 righe
 
-Da solo è un terzo di tutto il codice dei controller. Ha `IdentificaMeccanicaRecord` dichiarato
-**tre volte** con firme diverse (righe 2683, 3567, 3265), `Etichettatura` **due volte** (339 e 325
-righe), e `ImpaginaFromInDesignNew` con **tre `[Route]`** sulla stessa azione. È cresciuto per
+Da solo è un terzo di tutto il codice dei controller. Il 12/11/2026 ha perso la UI web del menabò e
+due delle tre versioni di `IdentificaMeccanicaRecord` (circa 10.100 righe); restano `Etichettatura`
+**due volte** (339 e 325 righe), e `ImpaginaFromInDesignNew` con **tre `[Route]`** sulla stessa azione. È cresciuto per
 accumulo, e si vede.
 
 ### 17. Il workflow GHCR con i Dockerfile per servizio

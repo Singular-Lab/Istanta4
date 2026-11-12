@@ -55,7 +55,6 @@ namespace Istanta.Models
 
         public static readonly string keyScattoCodice = "Codice";
         public static readonly string keyScattoCodiceGruppo = "CodiceGruppo";
-        public static readonly string keyScattoCodiceGruppoMultiplex = "CodiceGruppoMultiplex";
         public static readonly string keyScattoCodiceSottogruppo = "CodiceSottogruppo";
         public static readonly string keyFuoriPoP = "FuoriPoP";
         public static readonly string keyRegoleMastro = "RegoleMastro";
@@ -110,7 +109,6 @@ namespace Istanta.Models
         public static readonly string keyRequisitoDescrizioneSingola = "DescrizioneSingola";//Richiesta descrizione singola
         public static readonly string keyRequisitoDescrizioneSottogruppo = "DescrizioneSottoGruppo";//Richiesta descrizione del sottogruppo di appartenenza
         public static readonly string keyRequisitoDescrizioneGruppo = "DescrizioneGruppo";//Richiesta descrizione del proprio gruppo
-        public static readonly string keyRequisitoDescrizioneGruppoMultiplex = "DescrizioneGruppoMultiplex";//Richiesta descrizione del gruppo multiplex di appartenenza
 
         public static readonly string keyXMLDescrizioneGruppo = "descrizione_gruppo";
         public static readonly string keyDescrizioneRegionale = "descrizione_regionale";
@@ -156,7 +154,6 @@ namespace Istanta.Models
         public static readonly string[] chiaviTracciato = new string[]
         {
         keyRefCodice,
-        keyScattoCodiceGruppoMultiplex,
         keyScattoCodiceSottogruppo,
         combinazioneAssegnata,
         keyScattoCodiceGruppo,
@@ -955,15 +952,6 @@ namespace Istanta.Models
         public string error { get; set; } = String.Empty;
 
         public List<PromoLavorazioniRecord> records { get; set; } = new List<PromoLavorazioniRecord>();
-    }
-
-    public class revisioneMultiplex
-    {
-        public bool Esito { get; set; }
-
-        public bool revisioneEffettuata { get; set; }
-        public ErrorCodes errorCode { get; set; } = ErrorCodes.None;
-        public string error { get; set; } = String.Empty;
     }
 
     public class StringResult
@@ -1926,20 +1914,6 @@ namespace Istanta.Models
         RichiestaClonazione=7,
     }
 
-    public partial class MenaboRefLocal
-    {
-        public Int64 Id { get; set; }
-        public Int64? IdRecord { get; set; }
-        public string? CodiceGruppo { get; set; }
-        public Int64 IdPagina { get; set; }
-        public Int16 Indice { get; set; }
-        public Byte Selezione { get; set; }
-        public string? Formato { get; set; }
-        public List<CombinazioniMeccaniche>? Meccaniche { get; set; }
-        public MenaboPagine IdPaginaNavigation { get; set; } = null!;
-
-    }
-
     public class RecordPostControlloMeccaniche
     {
         public ArticoloInRevisione? record = null;
@@ -2021,60 +1995,6 @@ namespace Istanta.Models
 
     }
 
-    public class refsConMultiplex
-    {
-        public MenaboRefLocal? Ref { get; set; }
-        public List<string>? allEtichette { get; set; }
-        public List<string>? etichetteVisual { get; set; }
-
-        public List<string>? codiciRefdaAggiungere = new List<string>();
-        public string? codiceMultiplexAggiunto { get; set; }
-
-        public List<string>? codiciRefdaRimuovere = new List<string>();
-        public string? codiceMultiplexRimossi { get; set; }
-    }
-
-    public class listMenaboRefs
-    {
-        public List<MenaboRef>? RefList { get; set; }
-    }
-
-    public class MenaboRefsToImpaginate
-    {
-        public MenaboRef? menaboref { get; set; }
-
-        public List<listaSetRegole>? regole { get; set; }
-        //public int idRegola { get; set; }
-        public int idTracciato { get; set; }
-
-        public int indiceImpaginato;
-
-        public int paginaImpaginato;
-        public string? areaTracciato { get; set; }
-    }
-
-    public class ListMenaboRefsToImpaginate
-    {
-        public List<MenaboRefsToImpaginate>? refsToImpaginate { get; set; }
-    }
-
-    public class ResultMenaboRefsToImpaginate
-    {
-        public MenaboRefsToImpaginate? refs { get; set; }
-        public string? error { get; set; }
-
-        public int errorCode { get; set; }
-
-    }
-
-    public class ResultImpaginazioneAutomatica
-    {
-        public List<ResultMenaboRefsToImpaginate> menaboRefsImpaginated = new List<ResultMenaboRefsToImpaginate>();
-        public List<ResultMenaboRefsToImpaginate> menaboRefsFailed = new List<ResultMenaboRefsToImpaginate>();
-        public bool failedOperation = false;
-        public string error = "";
-    }
-
     public class CodiciConSottogruppo
     {
 
@@ -2123,69 +2043,9 @@ namespace Istanta.Models
         public List<Dictionary<string, string>>? listTracciato { get; set; }
     }
 
-    public class RecordConTracciato
-    {
-        public PromoTracciatiRecord? record { get; set; }
-        public int? idTracciato { get; set; }
-        public string? siglaTracciato { get; set; }
-        public string codiceMultiplex = "";
-        public bool? impaginato { get; set; }
-        public bool? gruppoImpaginato { get; set; }
-
-        public int idPagina = 0;
-    }
-
     public class RecordsPromo
     {
         public List<PromoTracciatiRecord>? records { get; set; }
-    }
-
-    public class listaSetRegole
-    {
-        public int id { get; set; }
-        public List<setRegole>? setRegoleList { get; set; }
-        public int ordine { get; set; }
-        public int idAddestramento { get; set; }
-        public int paginaDa { get; set; }
-        public int paginaA { get; set; }
-        public int indice { get; set; }
-        public bool indicePreciso { get; set; }
-        public int restrizioni { get; set; }
-        public string? formatoPagina { get; set; }
-        public string? meccanica { get; set; }
-        public string? label { get; set; }
-
-        public int priority = 0;
-    }
-    public class setRegole
-    {
-        public List<Regola>? setDiRegole { get; set; }
-    }
-    public class Regola
-    {
-        public int idCampo { get; set; }
-        public string? nomeCampo { get; set; }
-        public int operatorId { get; set; }
-        public string? value { get; set; }
-    }
-
-    public class refImpaginazione
-    {
-        public MenaboRef refToImpaginate = new MenaboRef();
-        public PromoTracciatiRecord record = new PromoTracciatiRecord();
-        public int idRegola = 0;
-        public List<listaSetRegole> regola = new List<listaSetRegole>();
-        public int impaginatoAPagina = 0;
-        public int impaginatoAIndice = 0;
-        public bool impaginato = false;
-        public bool preImpaginato = false;
-    }
-
-    public class Meccanica
-    {
-        public string? meccanicaName { get; set; }
-        public List<int>? listLivelliPresenti { get; set; }
-        public string? formatoRichiesto { get; set; }
     }
 
     public class Criterio
@@ -2895,12 +2755,6 @@ namespace Istanta.Models
         PaginaInesistente = 17,
     }
 
-    public enum Restrizioni
-    {
-        Nessuna = 0,
-        PaginaNuova = 1,
-        PaginaEsclusiva = 2
-    }
     public enum OperationCommand
     {
         None = 0,
@@ -3026,14 +2880,6 @@ namespace Istanta.Models
         None = 3
     }
 
-    public enum SyncStatus
-    {
-        Ok = 1,//Referenza INDD intatta come da traccaito
-        NotFound = 2,//Referenza INDD NON trovata nel tracciato
-        Corrupted = 3,//Referenza INDD identificata come gruppo che è stata ricostruita solo parzialmnente
-        MultiplexReversed = 4//Referenza INDD identificata come gruppo che è stata ricostruita evidenziando un nuovo raggruppamento multiplex
-    }
-
     public enum SyncDescrizioneStatus
     {
         None = 0,
@@ -3074,20 +2920,6 @@ namespace Istanta.Models
     {
         Disattivo = 0,
         Attivo = 1,
-    }
-
-    public enum operatorId
-    {
-        Uguale = 0,
-        Diverso = 1,
-        Contiene = 2,
-        Non_contiene = 3,
-        Inizia_con = 4,
-        Finisce_con = 5,
-        Maggiore_di = 6,
-        Maggiore_o_uguale_di = 7,
-        Minore_di = 8,
-        Minore_o_uguale_di = 9
     }
 
     public enum statoRevisione

@@ -2616,11 +2616,6 @@
         });
 
         $(htmlItem).attr("codice_gruppo", element.recordInTracciato[keyScattoCodiceSottogruppo]);
-        let tmpText = $(htmlItem).find("#codici_sottogruppo").text();
-        if (tmpText.length > 60) {
-            tmpText = tmpText.substring(0, 60);
-            $(htmlItem).find("#codici_multiplex").text(tmpText);
-        }
 
 
         let fd = new FormData();

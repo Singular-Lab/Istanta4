@@ -137,7 +137,8 @@ public class NumeriAgenziaLibTests : IDisposable
         //Regole dei box (CssFramework) e dei filtri.
         var menabo = Sorgente("Istanta/Controllers/MenaboController.cs");
         Assert.DoesNotContain("CultureInfo.GetCultureInfo(\"it-IT\"), out float", menabo);
-        Assert.Contains("NumeroDiRegola.TryLeggi(dato[nomeCampo], out floatValue)", menabo);
+        //Il confronto delle regole dei filtri (CompareValue); quello delle regole di impaginazione automatica e' stato tolto con il menabo' web.
+        Assert.Contains("NumeroDiRegola.TryLeggi(datoStr, out double datoValue)", menabo);
         //AgenziaLib: ToDecimal passa da NumeriSenzaCultura.
         var utility = Sorgente("AgenziaLib/Utility.cs");
         Assert.Contains("NumeriSenzaCultura.TryLeggiDecimale(obj.ToString(), out d);", utility);
