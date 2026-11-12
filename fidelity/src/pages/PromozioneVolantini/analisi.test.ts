@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import type { KitPromozioneConsultazione, MeccanichePerCanale } from "../../../lib/consultazione/tipi";
+import type { KitPromozioneConsultazione, MeccanichePerCanale, PresenzaReferenzaPromozione, ReferenzaPromozione } from "../../../lib/consultazione/tipi";
 
 // La pagina colora le insegne solo con i canali della promo: la rete delle insegne non serve
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
@@ -9,21 +9,38 @@ import {
   ariaSort,
   celleConPiuKit,
   conValoreScelto,
+  csvConfronto,
+  descriviPresenze,
   etichettaFascia,
+  filtraConfronto,
   fraseKit,
   chiaveCella,
+  grigliaVolantini,
   idFiltro,
   meccanicheImpilate,
+  nomeCasella,
   ORDINAMENTO_INIZIALE,
+  ordinaConfronto,
   ordinaKit,
+  ordineDaIndirizzo,
+  prezziPerLuogo,
+  prodottiConfronto,
+  type ProdottoConfronto,
   prossimoOrdinamento,
+  SENZA_REPARTO,
+  sintesiConfronto,
+  stessaVista,
   testoQuantoManca,
   testoValidita,
   tinteCanaliPromozione,
+  type VistaConfronto,
+  vistaDaIndirizzo,
+  vistaInIndirizzo,
 } from "./analisi";
 
 const CITY = { id: "c1", nome: "City" };
 const SUPERSTORE = { id: "c2", nome: "Superstore" };
+const CONAD = { id: "c3", nome: "Conad" };
 const TOSCANA = { id: "a1", nome: "Toscana" };
 const LAZIO = { id: "a2", nome: "Lazio" };
 
@@ -143,6 +160,154 @@ describe("assortimento", () => {
       [60, 0, 40],
       [25, 75, 0],
     ]);
+  });
+});
+
+describe("assortimento a confronto", () => {
+  // 3 insegne × 2 aree, senza il volantino Superstore · Lazio: 5 volantini
+  const kitPromo = [
+    kit("ct", { canale: CITY, area: TOSCANA }),
+    kit("cl", { canale: CITY, area: LAZIO }),
+    kit("ot", { canale: CONAD, area: TOSCANA }),
+    kit("ol", { canale: CONAD, area: LAZIO }),
+    kit("st", { canale: SUPERSTORE, area: TOSCANA }),
+  ];
+  const griglia = grigliaVolantini(kitPromo);
+  const presenza = (idKit: string, prezzo: number | null = 1, campi: Partial<PresenzaReferenzaPromozione> = {}): PresenzaReferenzaPromozione => ({
+    idKit,
+    pagina: 2,
+    prezzo,
+    sconto: null,
+    barrato: null,
+    idReferenza: null,
+    ...campi,
+  });
+  const referenza = (nome: string, presenze: PresenzaReferenzaPromozione[], campi: Partial<ReferenzaPromozione> = {}): ReferenzaPromozione => ({
+    chiave: nome,
+    nome,
+    marca: null,
+    formato: null,
+    reparto: null,
+    foto: null,
+    codice: null,
+    ean: null,
+    meccaniche: [],
+    prezzoAlKg: null,
+    linea: null,
+    sottocosto: false,
+    presenze,
+    ...campi,
+  });
+  const prodotto = (nome: string, idKit: string[], campi: Partial<ReferenzaPromozione> = {}) =>
+    prodottiConfronto([referenza(nome, idKit.map(id => presenza(id)), campi)], griglia)[0] as ProdottoConfronto;
+  const dove = (idKit: string[]) => descriviPresenze(prodotto("x", idKit), griglia).testo;
+
+  it("la griglia: insegne e aree per nome, una casella per kit, e la casella senza volantino", () => {
+    expect(griglia.insegne.map(i => i.nome)).toEqual(["City", "Conad", "Superstore"]);
+    expect(griglia.aree.map(a => a.nome)).toEqual(["Lazio", "Toscana"]);
+    expect(griglia.casellaDelKit.get("st")).toBe(5);
+    expect([...griglia.esistenti].sort()).toEqual([0, 1, 2, 3, 5]);
+    expect(nomeCasella(griglia, 1)).toBe("City · Toscana");
+  });
+
+  it("dove c'è, nella forma più breve", () => {
+    expect(dove(["ct", "cl", "ot", "ol", "st"])).toBe("In tutti i 5 volantini");
+    expect(dove(["ct", "cl"])).toBe("Solo City");
+    expect(dove(["ct", "cl", "ot", "ol"])).toBe("Solo City e Conad");
+    expect(dove(["ct", "ot", "st"])).toBe("Solo Toscana");
+    expect(dove(["cl"])).toBe("Solo City · Lazio");
+    expect(dove(["cl", "ol", "ot", "st"])).toBe("Manca in City · Toscana");
+    expect(descriviPresenze(prodotto("x", ["ct", "cl", "ot", "ol", "st"]), griglia).eccezione).toBe(false);
+  });
+
+  it("prezzi per luogo: dal più basso, con il prezzo più diffuso detto altrove; uno solo quando è uguale ovunque", () => {
+    const vari = prodottiConfronto(
+      [referenza("Napisan", [presenza("ct", 6.79), presenza("ot", 6.79), presenza("st", 6.79), presenza("cl", 7.99), presenza("ol", 7.99)])],
+      griglia
+    )[0] as ProdottoConfronto;
+    expect(prezziPerLuogo(vari, griglia)).toEqual([
+      { prezzo: 6.79, luogo: "altrove", piuAlto: false },
+      { prezzo: 7.99, luogo: "Lazio", piuAlto: true },
+    ]);
+    expect(vari).toMatchObject({ min: 6.79, max: 7.99, differenza: 1.2, percentuale: 18 });
+    expect(prezziPerLuogo(prodotto("uguale", ["ct", "cl"]), griglia)).toEqual([{ prezzo: 1, luogo: "", piuAlto: false }]);
+    const senzaPrezzo = prodottiConfronto([referenza("y", [presenza("ct", null)])], griglia)[0] as ProdottoConfronto;
+    expect(prezziPerLuogo(senzaPrezzo, griglia)).toEqual([]);
+  });
+
+  it("i numeri: base comune, prezzi diversi, una sola insegna e una sola area, un solo volantino", () => {
+    const prodotti = prodottiConfronto(
+      [
+        referenza("tutti", ["ct", "cl", "ot", "ol", "st"].map(id => presenza(id))),
+        referenza("city", [presenza("ct", 1), presenza("cl", 2)]),
+        referenza("toscana", ["ct", "ot", "st"].map(id => presenza(id))),
+        referenza("uno", [presenza("st")]),
+      ],
+      griglia
+    );
+    const sintesi = sintesiConfronto(prodotti, griglia);
+    expect(sintesi).toMatchObject({ totale: 4, base: 1, prezziDiversi: 1 });
+    expect(sintesi.perInsegna.map(v => [v.insegna.nome, v.prodotti])).toEqual([["City", 1], ["Conad", 0], ["Superstore", 1]]);
+    expect(sintesi.perArea.map(v => [v.area.nome, v.prodotti])).toEqual([["Lazio", 0], ["Toscana", 2]]);
+    expect([...sintesi.perCasella]).toEqual([[5, 1]]);
+    expect(sintesi.piuDistante?.referenza.nome).toBe("city");
+  });
+
+  it("la vista nell'indirizzo, avanti e indietro; un valore storpiato o di una casella senza volantino non è una vista", () => {
+    const viste: VistaConfronto[] = [{ tipo: "base" }, { tipo: "prezzi" }, { tipo: "insegna", id: CITY.id }, { tipo: "area", id: TOSCANA.id }, { tipo: "casella", casella: 1 }];
+    for (const vista of viste) expect(vistaDaIndirizzo(vistaInIndirizzo(vista, griglia), griglia)).toEqual(vista);
+    expect(vistaDaIndirizzo("tutto", griglia)).toBeNull();
+    expect(vistaDaIndirizzo(`casella:${SUPERSTORE.id}:${LAZIO.id}`, griglia)).toBeNull();
+    expect(stessaVista({ tipo: "insegna", id: CITY.id }, { tipo: "insegna", id: CITY.id.toUpperCase() })).toBe(true);
+    expect(stessaVista({ tipo: "casella", casella: 1 }, { tipo: "casella", casella: 2 })).toBe(false);
+  });
+
+  it("filtra per vista, punto di vista, prezzi diversi, reparto e ricerca in nome, marca, codice ed EAN", () => {
+    const LAT = { codice: "LAT", descrizione: "Latticini" };
+    const prodotti = prodottiConfronto(
+      [
+        referenza("Latte", [presenza("ct", 1.19), presenza("cl", 1.29)], { marca: "Granarolo", reparto: LAT, codice: "0014823", ean: "8001234567890" }),
+        referenza("Pasta", ["ct", "cl", "ot", "ol", "st"].map(id => presenza(id))),
+        referenza("Yogurt", [presenza("st")], { reparto: LAT }),
+      ],
+      griglia
+    );
+    const nomi = (filtro: Partial<Parameters<typeof filtraConfronto>[2]>) =>
+      filtraConfronto(prodotti, griglia, { vista: null, punto: null, cerca: "", reparto: null, soloDiversi: false, ...filtro }).map(p => p.referenza.nome);
+    expect(nomi({ vista: { tipo: "insegna", id: CITY.id } })).toEqual(["Latte"]);
+    expect(nomi({ vista: { tipo: "base" } })).toEqual(["Pasta"]);
+    expect(nomi({ vista: { tipo: "casella", casella: 5 } })).toEqual(["Yogurt"]);
+    expect(nomi({ punto: SUPERSTORE.id })).toEqual(["Pasta", "Yogurt"]);
+    expect(nomi({ soloDiversi: true })).toEqual(["Latte"]);
+    expect(nomi({ reparto: "LAT" })).toEqual(["Latte", "Yogurt"]);
+    expect(nomi({ reparto: SENZA_REPARTO })).toEqual(["Pasta"]);
+    expect(nomi({ cerca: "GRANAROLO" })).toEqual(["Latte"]);
+    expect(nomi({ cerca: "0014823" })).toEqual(["Latte"]);
+    expect(nomi({ cerca: "800123" })).toEqual(["Latte"]);
+  });
+
+  it("ordina per differenza in %, per nome o per numero di volantini; a parità per nome", () => {
+    const prodotti = prodottiConfronto(
+      [
+        referenza("B", [presenza("ct", 1), presenza("cl", 1.5)]),
+        referenza("A", [presenza("ct", 1), presenza("cl", 1.1), presenza("ot", 1)]),
+        referenza("C", [presenza("st")]),
+      ],
+      griglia
+    );
+    const nomi = (ordine: Parameters<typeof ordinaConfronto>[1]) => ordinaConfronto(prodotti, ordine).map(p => p.referenza.nome);
+    expect(nomi("differenza")).toEqual(["B", "A", "C"]);
+    expect(nomi("nome")).toEqual(["A", "B", "C"]);
+    expect(nomi("volantini")).toEqual(["A", "B", "C"]);
+    expect(ordineDaIndirizzo("storpiato")).toBe("differenza");
+  });
+
+  it("il file per Excel: punto e virgola, BOM, una colonna di prezzo per ogni volantino con la virgola decimale", () => {
+    const prodotti = prodottiConfronto([referenza("Latte \"intero\"", [presenza("ct", 1.19), presenza("cl", 1.29)], { marca: "Granarolo", meccaniche: ["fidelity"] })], griglia);
+    const [testa, riga] = csvConfronto(prodotti, griglia).split("\r\n");
+    expect(testa?.startsWith("\uFEFF")).toBe(true);
+    expect(testa).toContain('"Prezzo City · Lazio";"Prezzo City · Toscana";"Prezzo Conad · Lazio";"Prezzo Conad · Toscana";"Prezzo Superstore · Toscana"');
+    expect(riga).toBe('"Latte ""intero""";"Granarolo";"";"";"";"";"Prezzo Fidelity";"Solo City";"1,29";"1,19";"";"";"";"0,10";"8"');
   });
 });
 

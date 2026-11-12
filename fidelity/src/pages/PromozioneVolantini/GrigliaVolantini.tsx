@@ -62,7 +62,7 @@ export function GrigliaVolantini({
                   />
                 </span>
                 <span className="flex min-w-0 flex-1 items-center gap-3 border-t border-slate-200 px-4 py-3.5 dark:border-darkmode-400">
-                  <LogoInsegna idCanale={k.canale.id} tinta={tinta(k.canale.id)} misura="medio" />
+                  <LogoInsegna idCanale={k.canale.id} nome={k.canale.nome} tinta={tinta(k.canale.id)} misura="medio" />
                   <span className="flex min-w-0 flex-col gap-1 leading-tight">
                     <span className="truncate text-sm font-bold text-slate-800 group-hover/kit:text-primary dark:text-slate-100 dark:group-hover/kit:text-indigo-300">
                       {k.canale.nome}

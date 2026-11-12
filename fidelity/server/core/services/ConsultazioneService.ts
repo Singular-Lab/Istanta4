@@ -615,7 +615,8 @@ export class ConsultazioneService implements IConsultazioneService {
       aGruppi(mostrate, KIT_INSIGHT_IN_PARALLELO, variante => this.insightDelKit(variante, ambito, contestoDellaGdoDelKit)),
       this.loghiDelleInsegneDellaPromo(varianti),
     ]);
-    const { kit: kitConNumeri, numeri, puntiVendita, assortimento } = aggregaPromozioneVolantini(kit, righePuntiVendita);
+    // Le righe servono ai numeri; l'elenco dei punti vendita non va piu' alla pagina (sezione "Dove arriva" tolta)
+    const { kit: kitConNumeri, numeri, assortimento } = aggregaPromozioneVolantini(kit, righePuntiVendita);
     return {
       promo: promoDa(rigaPromo),
       periodo,
@@ -625,7 +626,6 @@ export class ConsultazioneService implements IConsultazioneService {
       opzioni,
       loghiInsegne: loghi,
       numeri,
-      puntiVendita,
       assortimento,
     };
   }

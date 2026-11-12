@@ -15,6 +15,7 @@ import type { CustomError } from "../../../lib/server_call";
 import { idFiltro, tinteCanaliPromozione } from "./analisi";
 import { Assortimento } from "./Assortimento";
 import { Banda } from "./Banda";
+import { ConfrontoAssortimento } from "./ConfrontoAssortimento";
 import { ConfrontoKit } from "./ConfrontoKit";
 import { FiltriPromozione } from "./FiltriPromozione";
 import { GrigliaVolantini } from "./GrigliaVolantini";
@@ -51,8 +52,9 @@ function Caricamento() {
 /**
  * Consultazione di una promozione (/volantini/promozioni/:idPromo, "materiali.visualizza"), dalle
  * schede delle viste Volantini: un'infografica di tutti i suoi volantini pubblicati. Banda con
- * validità e insegne, filtri per insegna e area, griglia delle miniature, assortimento e confronto
- * fra i kit; ogni kit apre i suoi insight. Niente sezione "Dove arriva" (regioni, mappa ed elenco
+ * validità e insegne, filtri per insegna e area, griglia delle miniature, assortimento a confronto per
+ * insegna e area (?vista=&punto=&cerca=&reparto=&diversi=&ordina=), grafici dell'assortimento e
+ * confronto fra i kit; ogni kit apre i suoi insight. Niente sezione "Dove arriva" (regioni, mappa ed elenco
  * dei punti vendita stampati). I filtri stanno nell'indirizzo (?canale=&area=) e il server ricalcola
  * tutto sui soli kit filtrati. Solo materiali pubblicati della GDO, dalle API di consultazione:
  * niente stato di lavorazione né collegamenti alla produzione, e nessun dato di vendita,
@@ -105,9 +107,11 @@ function PromozioneVolantini() {
   }
 
   const inAttesa = query.isPlaceholderData;
-  const cambiaInsegna = (id: string) => aggiorna({ canale: id || null });
-  const cambiaArea = (id: string) => aggiorna({ area: id || null });
-  const azzera = () => aggiorna({ canale: null, area: null });
+  // Cambiando i volantini mostrati la scelta nel confronto dell'assortimento (vista, punto di vista) potrebbe non esserci più
+  const senzaVista = { vista: null } as const;
+  const cambiaInsegna = (id: string) => aggiorna({ canale: id || null, ...senzaVista });
+  const cambiaArea = (id: string) => aggiorna({ area: id || null, ...senzaVista });
+  const azzera = () => aggiorna({ canale: null, area: null, ...senzaVista });
   // Dalla banda: la stessa insegna una seconda volta toglie il filtro
   const scegliInsegna = (id: string) => cambiaInsegna(idCanale?.toLowerCase() === id.toLowerCase() ? "" : id);
   const conKit = dettaglio.kit.length > 0;
@@ -137,7 +141,9 @@ function PromozioneVolantini() {
           {conKit ? (
             <>
               <GrigliaVolantini kit={dettaglio.kit} tinta={tinta} />
-              <Assortimento assortimento={dettaglio.assortimento} numeroKit={dettaglio.kit.length} />
+              {/* Il ?. tiene in piedi la pagina con un server che non manda ancora i prodotti */}
+              <ConfrontoAssortimento referenze={dettaglio.assortimento.referenze ?? []} kit={dettaglio.kit} tinta={tinta} nomePromo={dettaglio.promo.nome} />
+              <Assortimento assortimento={dettaglio.assortimento} />
               <ConfrontoKit kit={dettaglio.kit} tinta={tinta} />
             </>
           ) : (

@@ -77,7 +77,7 @@ export function Banda({ dettaglio, insegne, tinta, idCanale, onScegliInsegna }: 
                       scelta ? "ring-2 ring-amber-300" : idCanale && "opacity-70 hover:opacity-100"
                     )}
                   >
-                    <LogoInsegna idCanale={insegna.id} tinta={tinta(insegna.id)} misura="medio" />
+                    <LogoInsegna idCanale={insegna.id} nome={insegna.nome} tinta={tinta(insegna.id)} misura="medio" />
                     {insegna.nome}
                   </button>
                 </li>

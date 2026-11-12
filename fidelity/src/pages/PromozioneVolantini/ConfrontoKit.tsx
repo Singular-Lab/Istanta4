@@ -123,7 +123,7 @@ export function ConfrontoKit({ kit, tinta }: { kit: readonly KitPromozioneConsul
                       className="flex items-center gap-2.5 whitespace-nowrap font-semibold text-slate-800 hover:text-primary dark:text-slate-100 dark:hover:text-indigo-300"
                     >
                       <Copertina kit={k} conNome={false} className="aspect-[5/7] w-7 flex-none rounded-sm shadow-sm ring-1 ring-black/5" />
-                      <LogoInsegna idCanale={k.canale.id} tinta={colore} />
+                      <LogoInsegna idCanale={k.canale.id} nome={k.canale.nome} tinta={colore} />
                       {nomeKit(k)}
                     </Link>
                   </Table.Td>

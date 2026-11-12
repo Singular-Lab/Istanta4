@@ -1,4 +1,4 @@
-import type { FasciaSconto, QuotaSpazio } from '../insightVolantino/tipi';
+import type { FasciaSconto, QuotaSpazio, RepartoInsight } from '../insightVolantino/tipi';
 import type { Riferimento } from '../materiali/tipi';
 import type { MeccanicaReferenza } from '../puntiVendita/analisi';
 import type { PeriodoConsultazione } from './periodi';
@@ -249,6 +249,51 @@ export interface ProdottiComuniLocali {
   inUnoSolo: number;
 }
 
+/** Un kit che stampa un prodotto della promozione: se lo stampa piu' volte, il box della pagina piu' bassa. */
+export interface PresenzaReferenzaPromozione {
+  /** Id del kit, come in `kit` del dettaglio. */
+  idKit: string;
+  pagina: number | null;
+  prezzo: number | null;
+  /** true quando il prezzo non e' stampato ed e' calcolato dal barrato e dallo sconto. Assente altrimenti. */
+  prezzoCalcolato?: boolean;
+  /** Sconto in % (0-100). */
+  sconto: number | null;
+  /** Prezzo barrato stampato; null se il box non lo stampa. */
+  barrato: number | null;
+  /** Id della referenza pilota del box: apre gli insight del kit su quel box (?referenza=). */
+  idReferenza: string | null;
+}
+
+/**
+ * Un prodotto della promozione (prodotto pilota dei box) con i kit che lo stampano: la stessa chiave
+ * dei conteggi in `ProdottiComuniLocali` (stesso codice della referenza o, senza, stessi nome, marca e
+ * formato normalizzati), cosi' elenchi e numeri coincidono.
+ */
+export interface ReferenzaPromozione {
+  chiave: string;
+  nome: string;
+  marca: string | null;
+  formato: string | null;
+  reparto: RepartoInsight | null;
+  /** URL della prima foto del prodotto, pronto per <img>. */
+  foto: string | null;
+  /** Codice articolo del prodotto pilota; null se la fonte non lo dice. */
+  codice: string | null;
+  /** Primo EAN del prodotto pilota; null se non ce n'e'. */
+  ean: string | null;
+  /** Le meccaniche riconosciute dei box del prodotto nei kit, senza ripetizioni, nell'ordine di MECCANICHE. */
+  meccaniche: MeccanicaReferenza[];
+  /** Prezzo al kg o al litro come lo stampa il primo kit che lo indica ("al kg € 22,42"). */
+  prezzoAlKg: string | null;
+  /** Linea del distributore (Sapori & Dintorni...); null se non e' del distributore. */
+  linea: string | null;
+  /** In sottocosto in almeno un kit. */
+  sottocosto: boolean;
+  /** Una per kit, nell'ordine dei kit del dettaglio. */
+  presenze: PresenzaReferenzaPromozione[];
+}
+
 export interface QuotaMeccanica {
   /** null: meccanica non riconosciuta. */
   meccanica: MeccanicaReferenza | null;
@@ -283,6 +328,8 @@ export interface AssortimentoPromozioneConsultazione {
   meccanichePerCanale: MeccanichePerCanale[];
   /** Le marche con piu' spazio, al massimo MAX_MARCHE_PROMOZIONE, senza "marca non indicata". */
   marche: MarcaPromozione[];
+  /** I prodotti dei kit, dal piu' condiviso al piu' locale e poi per nome. */
+  referenze: ReferenzaPromozione[];
 }
 
 export const MAX_MARCHE_PROMOZIONE = 8;
@@ -324,8 +371,7 @@ export interface DettaglioPromozioneVolantiniConsultazione {
    */
   loghiInsegne: Record<string, string>;
   numeri: NumeriPromozioneConsultazione;
-  /** Un elemento per punto vendita, nell'ordine in cui compare per primo: per kit (come `kit`) e posizione nella lista stampata. */
-  puntiVendita: PuntoVenditaPromozioneConsultazione[];
+  // Le righe dei punti vendita non arrivano piu': la sezione "Dove arriva" e' stata tolta e nessuno le usa
   assortimento: AssortimentoPromozioneConsultazione;
 }
 
