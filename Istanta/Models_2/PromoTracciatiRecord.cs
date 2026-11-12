@@ -26,6 +26,10 @@ namespace Istanta.Models_2
         public int? IdAddestramento { get; set; }
         //public Byte SelezioneMenabo { get; set; }
         public DateTime? DataRegistrazione { get; set; }
+        //Ultima importazione che ha cambiato il dato del tracciato: alla nascita e' la DataRegistrazione.
+        public DateTime? DataModifica { get; set; }
+        //Ultimo cambio strutturale (azioni sul box, rimessa in volantino): null finche' non ce n'e' uno.
+        public DateTime? DataModificaStrutturale { get; set; }
         public Byte ModalitaInserimento { get; set; }
         public Byte Stato { get; set; }
 

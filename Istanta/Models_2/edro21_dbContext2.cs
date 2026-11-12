@@ -321,6 +321,14 @@ namespace Istanta.Models_2
                 .HasColumnType("timestamp without time zone")
                 .HasColumnName("data_registrazione");
 
+                entity.Property(e => e.DataModifica)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("data_modifica");
+
+                entity.Property(e => e.DataModificaStrutturale)
+                .HasColumnType("timestamp without time zone")
+                .HasColumnName("data_modifica_strutturale");
+
                 entity.Property(e => e.ModalitaInserimento).HasColumnName("modalita_inserimento");
 
                 entity.Property(e => e.Stato).HasColumnName("stato");

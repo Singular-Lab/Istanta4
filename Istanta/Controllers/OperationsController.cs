@@ -1388,6 +1388,8 @@ namespace Istanta.Controllers
                                     _rec.Versione = versioneLab;
                                     _rec.Label = idLabel;
                                     _rec.DataRegistrazione = DateTime.Now;
+                                    //Alla nascita la data di modifica e' quella di registrazione.
+                                    _rec.DataModifica = _rec.DataRegistrazione;
                                   
                                     _rec.ModalitaInserimento = (Byte)ModalitaInserimento.Sistema;
                                     _rec.Stato = (Byte)StatoRecord.Attivo;
@@ -1489,6 +1491,14 @@ namespace Istanta.Controllers
                                     var alterazioni = new Dictionary<string, object>();
 
                                     Dictionary<string, object> oldItem = JsonConvert.DeserializeObject<Dictionary<string, object>>(_rec.Dato!)!;
+
+                                    //La data di modifica cambia solo se un campo del tracciato e' cambiato: le Alterazioni
+                                    //qui sotto contano anche contesto e versione, che Istanta rimette a ogni importazione.
+                                    //Va calcolata prima del ciclo, che allinea oldItem al dato nuovo.
+                                    if (DateRecordTracciato.CambiatoDaImportazione(oldItem, item))
+                                    {
+                                        _rec.DataModifica = DateTime.Now;
+                                    }
 
                                     sw1.Stop();
                                     Stopwatch sw4 = new Stopwatch();

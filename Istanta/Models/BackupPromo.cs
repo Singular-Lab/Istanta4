@@ -36,6 +36,8 @@ namespace Istanta.Models
         public bool? DaEsportare { get; set; }
         public int? IdAddestramento { get; set; }
         public DateTime? DataRegistrazione { get; set; }
+        public DateTime? DataModifica { get; set; }
+        public DateTime? DataModificaStrutturale { get; set; }
         public byte ModalitaInserimento { get; set; }
         public byte Stato { get; set; }
 
@@ -56,6 +58,8 @@ namespace Istanta.Models
                 DaEsportare = r.DaEsportare,
                 IdAddestramento = r.IdAddestramento,
                 DataRegistrazione = r.DataRegistrazione,
+                DataModifica = r.DataModifica,
+                DataModificaStrutturale = r.DataModificaStrutturale,
                 ModalitaInserimento = r.ModalitaInserimento,
                 Stato = r.Stato
             };
@@ -76,6 +80,8 @@ namespace Istanta.Models
             r.DaEsportare = DaEsportare;
             r.IdAddestramento = IdAddestramento;
             r.DataRegistrazione = DataRegistrazione;
+            r.DataModifica = DataModifica;
+            r.DataModificaStrutturale = DataModificaStrutturale;
             r.ModalitaInserimento = ModalitaInserimento;
             r.Stato = Stato;
         }
