@@ -38,6 +38,9 @@ const reportIntegritaAvvio = require('./avvio');
 const reportConfrontoCsv = require('./csv');
 const reportConteggi = require('./conteggi');
 const reportConfronti = require('./sezioneConfronti');
+//I20-1221: la sezione Correggo, le correzioni di Correggo4 da approvare e applicare.
+const sezioneCorreggo = require('./sezioneCorreggo');
+const cambiStrutturaliCorreggo = require('../cambiStrutturali');
 //I20-1036: le statistiche della cache degli hash, scritte nel log a fine confronto. Fino a I20-1015
 //cacheHashFoto era una globale di indexNew; da li' e' uscita insieme a reperimentoFoto, e senza
 //questo require il confronto finiva in un ReferenceError (IDX-41) proprio prima di mostrare il
@@ -2002,6 +2005,8 @@ const ReportIntegrita = {
         const confrontiPanel = this._buildPanelConfronti();
 
         const newPanel = this._buildPanelNuovi(this._confrontoReportState.report);
+        //I20-1221: la linguetta Correggo solo per il cliente che la dichiara.
+        const correggoPanel = this.correggoAbilitato() ? this._buildPanelCorreggo() : null;
 
         const conteggi = reportConteggi.conteggiVisibili(
             recordsCambiati,
@@ -2026,6 +2031,11 @@ const ReportIntegrita = {
             { button: newTab, panel: newPanel },
             { button: confrontiTab, panel: confrontiPanel }
         ];
+        if (correggoPanel != null) {
+            const correggoTab = this._crTabButton(this._etichettaLinguettaCorreggo(), false, "Correggo");
+            this._correggoUi.tab = correggoTab;
+            panels.push({ button: correggoTab, panel: correggoPanel });
+        }
 
         const activateTab = (activeIndex) => {
             if (this._confrontoReportState) {
@@ -2040,26 +2050,355 @@ const ReportIntegrita = {
             });
         };
 
-        changedTab.addEventListener("click", () => activateTab(0));
-        removedTab.addEventListener("click", () => activateTab(1));
-        newTab.addEventListener("click", () => activateTab(2));
-        confrontiTab.addEventListener("click", () => activateTab(3));
-
-        tabsRoot.header.appendChild(changedTab);
-        tabsRoot.header.appendChild(removedTab);
-        tabsRoot.header.appendChild(newTab);
-        tabsRoot.header.appendChild(confrontiTab);
-
-        tabsRoot.content.appendChild(changedPanel);
-        tabsRoot.content.appendChild(removedPanel);
-        tabsRoot.content.appendChild(newPanel);
-        tabsRoot.content.appendChild(confrontiPanel);
+        panels.forEach((entry, index) => {
+            entry.button.addEventListener("click", () => activateTab(index));
+            tabsRoot.header.appendChild(entry.button);
+            tabsRoot.content.appendChild(entry.panel);
+        });
 
         body.appendChild(metaBar);
         body.appendChild(tabsRoot.root);
 
-        activateTab(activeTab);
+        activateTab(activeTab < panels.length ? activeTab : 0);
         this._restorePendingReportScroll();
+    },
+
+    /* ---- I20-1221: le correzioni di Correggo ---- */
+
+    /// Le correzioni importate, con la scelta dell'operatore su ognuna. Restano finche' il report e'
+    /// aperto in questa sessione: alla conferma si reimportano da Correggo4.
+    _correggo: { voci: [], importate: false, volantino: "", inCorso: false },
+
+    /// Gli elementi dell'interfaccia della sezione (pannelli.js).
+    _correggoUi: {},
+
+    correggoAbilitato() {
+        try {
+            return sezioneCorreggo.configurazione(pluginMiddleware.getCampo("correzioniCorreggo")) != null;
+        }
+        catch (e) {
+            return false;
+        }
+    },
+
+    _superAdminPerCorreggo() {
+        return typeof ruoloUtenteLoggato !== "undefined" && typeof RuoloUtente !== "undefined" && ruoloUtenteLoggato == RuoloUtente.superAdmin;
+    },
+
+    /// Una chiamata a Istanta che si risolve con la risposta letta; fallisce con il motivo.
+    _chiamaIstantaPerCorreggo(url, corpo, metodo, tipo) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequestClient();
+            xhr.onload = (risposta, letta) => {
+                try {
+                    resolve(letta ? risposta : JSON.parse(risposta));
+                }
+                catch (e) {
+                    reject(new Error("risposta di Istanta non leggibile (" + url + ")"));
+                }
+            };
+            xhr.onerror = (motivo) => reject(new Error("richiesta non riuscita (" + url + "): " + XMLHttpRequestClient.testoErrore(motivo)));
+            xhr.send(url, corpo, metodo, tipo);
+        });
+    },
+
+    /// "Importa correzioni": le correzioni aperte in Correggo4 sul volantino della lavorazione.
+    async importaCorrezioniCorreggo() {
+        if (this._correggo.inCorso) {
+            return;
+        }
+        this._correggo.inCorso = true;
+        showLoading("Importazione delle correzioni di Correggo...");
+        try {
+            const r = await this._chiamaIstantaPerCorreggo("FicoProcess/correzioniCorreggo/" + idKitLavorazione, null, "GET");
+            if (r == null || r.esito !== true) {
+                messaggioUtente("Code RIC-01 Correzioni di Correggo non importate: " + (r != null && r.error ? r.error : "risposta vuota"), "error", false, 8);
+                return;
+            }
+            const dati = r.dati || {};
+            this._correggo.voci = sezioneCorreggo.importa(dati.correzioni || [], pluginMiddleware.getCampo("correzioniCorreggo"), this._superAdminPerCorreggo());
+            this._correggo.importate = true;
+            this._correggo.volantino = dati.volantino || "";
+            messaggioUtente("Code RIC-02 Correzioni di Correggo importate: " + this._correggo.voci.length, "success", false, 4);
+        }
+        catch (e) {
+            messaggioUtente("Code RIC-01 Correzioni di Correggo non importate: " + (e && e.message ? e.message : e), "error", false, 8);
+        }
+        finally {
+            hideLoading();
+            this._correggo.inCorso = false;
+            this._disegnaCorrezioniCorreggo();
+        }
+    },
+
+    /// "Conferma correzioni": applica le approvate box per box, chiude in Correggo4 quelle applicate
+    /// per intero e reimporta. Con referenze da eliminare chiede prima; annullando non si applica niente.
+    async confermaCorrezioniCorreggo() {
+        const voci = this._correggo.voci || [];
+        if (this._correggo.inCorso) {
+            return;
+        }
+        if (!voci.some(v => v.scelta === sezioneCorreggo.SCELTA.approva)) {
+            messaggioUtente("Code RIC-03 Nessuna correzione approvata da applicare", "warning", false, 4);
+            return;
+        }
+        const domanda = sezioneCorreggo.domandaEliminazione(voci);
+        if (domanda != null && !(await Modali.confirm(domanda))) {
+            return;
+        }
+
+        this._correggo.inCorso = true;
+        const piano = sezioneCorreggo.pianoDellaConferma(voci);
+        const esiti = {};
+        const motivi = [];
+        piano.senzaLavoro.forEach(v => { esiti[v.chiave] = true; });
+
+        indesignEvents.setBusy(true);
+        try {
+            for (let i = 0; i < piano.box.length; i++) {
+                const p = piano.box[i];
+                showLoading("Correzioni di Correggo: box " + (i + 1) + " di " + piano.box.length);
+                try {
+                    await this._applicaCorrezioniAlBox(p, esiti, motivi);
+                }
+                catch (e) {
+                    const motivo = e && e.message ? e.message : String(e);
+                    p.voci.forEach(v => { if (esiti[v.chiave] == null) esiti[v.chiave] = false; });
+                    motivi.push(p.basecode + ": " + motivo);
+                    console.error("Code RIC-04 Correzioni di Correggo sul box " + p.basecode + ":", e);
+                }
+            }
+
+            let chiuse = [];
+            const daChiudere = sezioneCorreggo.correzioniDaChiudere(voci, esiti);
+            if (daChiudere.length > 0) {
+                showLoading("Chiusura delle correzioni in Correggo4...");
+                try {
+                    const r = await this._chiamaIstantaPerCorreggo("FicoProcess/correzioniCorreggo/" + idKitLavorazione + "/chiudi",
+                        JSON.stringify({ approvate: daChiudere }), "PUT", "application/json");
+                    if (r == null || r.esito !== true) {
+                        motivi.push("chiusura in Correggo4: " + (r != null && r.error ? r.error : "risposta vuota"));
+                    }
+                    else {
+                        (r.dati || []).forEach(c => {
+                            if (c != null && c.ok === true) chiuse.push(c.id);
+                            else if (c != null) motivi.push("chiusura di " + c.id + ": " + (c.messaggio || c.codice || "non riuscita"));
+                        });
+                    }
+                }
+                catch (e) {
+                    motivi.push("chiusura in Correggo4: " + (e && e.message ? e.message : e));
+                }
+            }
+
+            const r = sezioneCorreggo.riepilogo(voci, esiti, chiuse);
+            messaggioUtente("Code RIC-05 " + r.testo + (motivi.length > 0 ? " Non riuscite: " + motivi.join("; ") : ""),
+                motivi.length > 0 ? "warning" : r.tipo, false, motivi.length > 0 ? 0 : 8);
+        }
+        finally {
+            hideLoading();
+            indesignEvents.setBusy(false);
+            this._correggo.inCorso = false;
+        }
+        //Le chiuse spariscono, le altre restano con lo stato di Correggo4.
+        await this.importaCorrezioniCorreggo();
+    },
+
+    /// Le voci approvate di un box: prima le modifiche sul server (foto, primarie e secondarie, loghi,
+    /// descrizione), poi il box si rifa' una volta sola, con le azioni sul box (prezzi, azioni, timbri)
+    /// se ci sono, altrimenti dalla scheda riletta. Un timbro Elimina toglie la referenza e basta.
+    async _applicaCorrezioniAlBox(p, esiti, motivi) {
+        const fallisce = (voci, motivo) => {
+            voci.forEach(v => { esiti[v.chiave] = false; });
+            motivi.push(p.basecode + ": " + motivo);
+        };
+        const riesce = (voci) => voci.forEach(v => { if (esiti[v.chiave] == null) esiti[v.chiave] = true; });
+
+        const box = this._resolveBoxByCodiceGruppo({ codiceGruppo: p.basecode, numeroPagina: p.pagina });
+        if (box == null) {
+            fallisce(p.voci, "box non trovato nel documento");
+            return;
+        }
+        const dna = Utility.getDnaOfBox(box);
+        const idRec = dna != null && dna.idRec != null && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : 0;
+        const destinazione = { codiceGruppo: p.basecode, idRec: idRec };
+
+        if (p.elimina) {
+            const elimina = p.voci.filter(v => v.eliminaRef === true);
+            const altre = p.voci.filter(v => v.eliminaRef !== true);
+            const rimossa = await rimuoviRefImpaginata([{ codice: p.basecode, idRec: idRec }], true, { eliminaDaTracciato: true, boxes: [box] });
+            if (rimossa) {
+                riesce(elimina);
+                if (altre.length > 0) fallisce(altre, "la referenza e' stata eliminata: le altre correzioni del box non si applicano");
+            }
+            else {
+                fallisce(p.voci, "eliminazione della referenza non riuscita");
+            }
+            return;
+        }
+
+        let records = await this._leggiSchedaRefAggiornata(p.basecode, idRec);
+        if (records == null) {
+            fallisce(p.voci, "scheda della referenza non letta");
+            return;
+        }
+        const vociDi = (tipo) => p.voci.filter(v => v.tipo === tipo);
+        let cambiatoSulServer = false;
+
+        //Foto: quelle con un file diverso cambiano in archivio, poi primarie e secondarie, poi i file nei Links.
+        if (p.foto.length > 0) {
+            try {
+                await this._applicaFotoCorreggo(records, p.foto, destinazione);
+                cambiatoSulServer = true;
+            }
+            catch (e) {
+                fallisce(vociDi(sezioneCorreggo.TIPO.foto), "foto: " + (e && e.message ? e.message : e));
+            }
+        }
+
+        if (p.loghiAggiunti.length > 0 || p.loghiTolti.length > 0) {
+            try {
+                await this._applicaLoghiCorreggo(records, p.loghiAggiunti, p.loghiTolti, destinazione);
+                cambiatoSulServer = true;
+            }
+            catch (e) {
+                fallisce(vociDi(sezioneCorreggo.TIPO.loghi), "loghi: " + (e && e.message ? e.message : e));
+            }
+        }
+
+        if (p.descrizione != null) {
+            const campo = schedaRef.campoDescrizioneCompilatoDelPrimario(records);
+            const registrata = campo != null && await schedaRef.salvaTestiDalBox({ voci: [{
+                label: campo.labelName, azione: schedaRef.AZIONE_TESTO_DAL_BOX.crea,
+                contenuto: String(p.descrizione), contenutoServer: String(campo.content) }] }, destinazione);
+            if (registrata) {
+                cambiatoSulServer = true;
+            }
+            else {
+                fallisce(vociDi(sezioneCorreggo.TIPO.descrizione), campo == null ? "descrizione del server non trovata" : "meta della descrizione non registrato");
+            }
+        }
+
+        //Le azioni sul box, tutte in una richiesta: i prezzi come azione a valori fissi.
+        const azioni = [];
+        const valori = {};
+        const vociAzioni = [];
+        const prezzi = sezioneCorreggo.azioneDeiPrezzi(p.prezzi);
+        if (prezzi != null) {
+            azioni.push(prezzi);
+            vociAzioni.push(...vociDi(sezioneCorreggo.TIPO.prezzi));
+        }
+        if (p.azioni.length > 0) {
+            let strutture = cambiStrutturaliCorreggo.cambiStrutturaliDB;
+            if (!Array.isArray(strutture) || strutture.length === 0) {
+                strutture = await cambiStrutturaliCorreggo.getCambioStrutturale();
+            }
+            const primario = (records.find(r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1) || records[0] || {}).recordInTracciato || {};
+            p.azioni.forEach(a => {
+                const voce = p.voci.find(v => v.chiave === a.chiave);
+                const struttura = sezioneCorreggo.strutturaDellAzione(strutture, a);
+                if (struttura == null) {
+                    fallisce([voce], "azione «" + (a.titolo || a.idAzione) + "» non trovata fra le azioni sul box del cliente");
+                    return;
+                }
+                const legacy = cambiStrutturaliCorreggo._mapCambioStrutturaleToLegacy(struttura, primario, azioni.length + 1);
+                Object.assign(valori, sezioneCorreggo.valoriPerIstruzioni(legacy.istruzioni, a.valori));
+                azioni.push(legacy);
+                vociAzioni.push(voce);
+            });
+        }
+
+        const daRifare = p.voci.filter(v => esiti[v.chiave] == null);
+        if (daRifare.length === 0) {
+            return;
+        }
+        if (azioni.length > 0) {
+            records = (await this._leggiSchedaRefAggiornata(p.basecode, idRec)) || records;
+            const params = schedaRef.parametriAzioniDelBox(records, azioni, valori, "tutto");
+            const dettaglio = { item: box, pagRef: box.parentPage, codiceGruppo: p.basecode, idRec: idRec };
+            await schedaRef.cambioStrutturaleSulBox(params, dettaglio);
+            riesce(daRifare);
+        }
+        else if (cambiatoSulServer) {
+            records = (await this._leggiSchedaRefAggiornata(p.basecode, idRec)) || records;
+            await schedaRef.rifaiBox(records, box);
+            riesce(daRifare);
+        }
+        else {
+            riesce(daRifare);
+        }
+    },
+
+    /// Le foto di Correggo4 su un box: il file cambiato in archivio (come la conferma dell'Agenzia
+    /// dall'editor di Correggo4), le primarie e secondarie della lavorazione, i file nei Links.
+    async _applicaFotoCorreggo(records, foto, destinazione) {
+        const cambiate = sezioneCorreggo.fotoDaCambiare(records, foto);
+        if (cambiate.length > 0) {
+            const voce = Utility.voceLavorazione(pathLavorazione, idMacchina(), app.activeDocument.name, libroDelDocumentoInLavorazione(app.activeDocument.name));
+            const guidLavorazione = voce != null && voce.details != null ? voce.details.guidId : null;
+            if (guidLavorazione == null) {
+                throw new Error("lavorazione del documento non trovata in lavorazioni.json");
+            }
+            const r = await this._chiamaIstantaPerCorreggo("FicoProcess/correggiFotoESelezioniFromCorreggo", JSON.stringify({
+                guidIdLavorazione: guidLavorazione, codice: destinazione.codiceGruppo, idRec: destinazione.idRec,
+                foto: cambiate.map(f => ({ guidid: f.guidid, codice: f.codice, nomeFile: f.nomeFile, md5: "", stato: f.stato }))
+            }), "PUT", "application/json");
+            if (r == null || r.esito !== true) {
+                throw new Error("cambio della foto non registrato: " + (r != null && r.error ? r.error : "risposta vuota"));
+            }
+        }
+
+        const ps = sezioneCorreggo.primarieSecondarie(records, foto);
+        if (ps != null) {
+            const formData = new FormData();
+            formData.append("idLavorazione", idKitLavorazione);
+            formData.append("CodiceGruppo", destinazione.codiceGruppo);
+            formData.append("idRec", destinazione.idRec);
+            formData.append("ps", JSON.stringify(ps));
+            const r = await this._chiamaIstantaPerCorreggo("Menabo/modificaPrimarieSecondarie/0", formData, "PUT");
+            if (r == null || r.esito === false) {
+                throw new Error("primarie e secondarie non registrate: " + (r != null && r.error ? r.error : "risposta vuota"));
+            }
+        }
+
+        //Le foto che finiranno nel box devono essere nei Links (I20-1230).
+        for (const f of foto.filter(x => x.stato === sezioneCorreggo.STATO_FOTO.primaria || x.stato === sezioneCorreggo.STATO_FOTO.secondaria)) {
+            if (f.nomeFile !== "") {
+                await ReperimentoFoto.assicuraFotoNeiLinks(f.nomeFile, f.guidid);
+            }
+        }
+    },
+
+    /// I loghi di Correggo4 su un box: un logo inserito si collega alla referenza primaria, come
+    /// dalla scheda; uno rimosso si esclude per la lavorazione.
+    async _applicaLoghiCorreggo(records, aggiunti, tolti, destinazione) {
+        const primario = (records.find(r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1) || records[0] || {}).recordInTracciato || {};
+        for (const logo of aggiunti) {
+            const formData = new FormData();
+            formData.append("guidId", logo.guidid);
+            formData.append("nomeReale", logo.nomeFile);
+            formData.append("fileHash", logo.md5);
+            formData.append("codiceReferenza", primario["Referenza.Codice"]);
+            const r = await this._chiamaIstantaPerCorreggo("SyncFoto/linkLogoBollo/", formData, "PUT");
+            //Gia' collegato va bene lo stesso: il logo c'e'.
+            if (r != null && r.esito === false && !String(r.error || "").includes("associata al prodotto")) {
+                throw new Error("logo " + logo.sigla + " non collegato: " + r.error);
+            }
+        }
+        for (const logo of tolti) {
+            const registrata = await schedaRef.salvaExtraLavorazione({
+                rimuovi: false,
+                voce: { tipo: 2, sigla: logo.sigla, azione: schedaRef.AZIONE_EXTRA.escludi, ambito: schedaRef.AMBITO_DECISIONE.tutto }
+            }, destinazione);
+            if (!registrata) {
+                throw new Error("logo " + logo.sigla + " non escluso");
+            }
+        }
+    },
+
+    _etichettaLinguettaCorreggo() {
+        const voci = this._correggo.voci || [];
+        return this._correggo.importate ? reportConteggi.etichettaLinguetta("Correggo", voci.length) : "Correggo";
     },
 
     //I20-981: il csv del report.

@@ -14,6 +14,7 @@
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 const reportConteggi = require('./conteggi');
 const reportConfronti = require('./sezioneConfronti');
+const sezioneCorreggo = require('./sezioneCorreggo');
 //I20-1007: le due parti pure dell'interfaccia del report, qui accanto.
 const barraScorrimento = require('./barraScorrimento');
 const dissolvenza = require('./dissolvenza');
@@ -3290,6 +3291,194 @@ const pannelli = {
         }
 
         this._renderNuoviTable();
+    },
+    /* ---- I20-1221: la linguetta Correggo ---- */
+
+    /// Il pannello delle correzioni di Correggo: in alto "Importa correzioni" e "Conferma correzioni",
+    /// sotto le correzioni per pagina e per box, ognuna con Approva e Rifiuta.
+    _buildPanelCorreggo() {
+        const panel = this._crPanel();
+
+        const topbar = this._crTabTopbar();
+        topbar.style.flexWrap = "wrap";
+
+        const btnImporta = document.createElement("button");
+        btnImporta.type = "button";
+        btnImporta.textContent = "Importa correzioni";
+        btnImporta.style.cursor = "pointer";
+        Tooltip.impostaTooltip(btnImporta, "Scarica da Correggo4 le correzioni aperte sul volantino di questa lavorazione");
+        btnImporta.addEventListener("click", async () => await this.importaCorrezioniCorreggo());
+
+        const btnConferma = document.createElement("button");
+        btnConferma.type = "button";
+        btnConferma.textContent = "Conferma correzioni";
+        btnConferma.style.cursor = "pointer";
+        Tooltip.impostaTooltip(btnConferma, "Applica all'impaginato le correzioni approvate e chiudile in Correggo4");
+        btnConferma.addEventListener("click", async () => await this.confermaCorrezioniCorreggo());
+
+        const stato = document.createElement("span");
+        stato.style.fontSize = "11px";
+
+        topbar.appendChild(btnImporta);
+        topbar.appendChild(btnConferma);
+        topbar.appendChild(stato);
+
+        const contenuto = this._crScrollableContent();
+        contenuto.id = "contenutoCorreggo";
+
+        panel.appendChild(topbar);
+        panel.appendChild(contenuto);
+
+        this._correggoUi = { panel: panel, contenuto: contenuto, stato: stato, conferma: btnConferma, tab: null };
+        this._disegnaCorrezioniCorreggo();
+        return panel;
+    },
+
+    /// Ridisegna le correzioni, il conteggio della linguetta e lo stato della testata.
+    _disegnaCorrezioniCorreggo() {
+        const ui = this._correggoUi || {};
+        if (ui.contenuto == null) {
+            return;
+        }
+        const voci = this._correggo.voci || [];
+        ui.contenuto.innerHTML = "";
+        if (ui.tab != null) {
+            ui.tab.textContent = this._etichettaLinguettaCorreggo();
+        }
+        const approvate = voci.filter(v => v.scelta === sezioneCorreggo.SCELTA.approva).length;
+        if (ui.stato != null) {
+            ui.stato.textContent = !this._correggo.importate
+                ? "Correzioni non ancora importate"
+                : (this._correggo.volantino ? this._correggo.volantino + ": " : "") + voci.length + " correzioni, " + approvate + " approvate";
+        }
+        if (ui.conferma != null) {
+            ui.conferma.disabled = approvate === 0;
+            ui.conferma.style.opacity = approvate === 0 ? "0.5" : "1";
+        }
+        if (!this._correggo.importate) {
+            return;
+        }
+        if (voci.length === 0) {
+            const vuoto = document.createElement("div");
+            vuoto.textContent = "Nessuna correzione aperta in Correggo4 per questa lavorazione.";
+            vuoto.style.padding = "8px";
+            ui.contenuto.appendChild(vuoto);
+            return;
+        }
+
+        let pagina = undefined;
+        let box = undefined;
+        voci.forEach(voce => {
+            if (voce.pagina !== pagina) {
+                pagina = voce.pagina;
+                box = undefined;
+                ui.contenuto.appendChild(this._crPageHeader(pagina != null ? pagina : "-", "correggo"));
+            }
+            if (voce.basecode !== box) {
+                box = voce.basecode;
+                ui.contenuto.appendChild(this._crTestataBoxCorreggo(voce));
+            }
+            ui.contenuto.appendChild(this._crRigaCorreggo(voce));
+        });
+    },
+
+    /// Il box delle correzioni che seguono: cliccandolo si seleziona in pagina.
+    _crTestataBoxCorreggo(voce) {
+        const testata = document.createElement("div");
+        testata.style.display = "flex";
+        testata.style.alignItems = "center";
+        testata.style.gap = "8px";
+        testata.style.padding = "4px 0 0 0";
+        testata.appendChild(this._crCodiceGruppo(voce.basecode || "Senza box"));
+        if (voce.basecode !== "") {
+            const vai = document.createElement("button");
+            vai.type = "button";
+            vai.textContent = "Vai al box";
+            vai.style.cursor = "pointer";
+            vai.style.fontSize = "10px";
+            vai.addEventListener("click", () => {
+                const trovato = this._resolveBoxByCodiceGruppo({ codiceGruppo: voce.basecode, numeroPagina: voce.pagina });
+                if (trovato == null) {
+                    messaggioUtente("Code RIC-06 Box " + voce.basecode + " non trovato nel documento", "warning", false, 5);
+                    return;
+                }
+                try {
+                    if (trovato.parentPage) {
+                        app.activeWindow.activePage = trovato.parentPage;
+                    }
+                    app.selection = [trovato];
+                }
+                catch (e) {
+                    console.error("Code RIC-06 selezione del box non riuscita:", e);
+                }
+            });
+            testata.appendChild(vai);
+        }
+        return testata;
+    },
+
+    /// Una voce: che cosa propone, chi l'ha scritta, Approva e Rifiuta.
+    _crRigaCorreggo(voce) {
+        const row = this._crRow(voce.automatica ? "cambiato" : "uscito");
+
+        const left = document.createElement("div");
+        left.style.display = "flex";
+        left.style.flexDirection = "column";
+        left.style.gap = "3px";
+        left.style.flex = "1 1 auto";
+        left.style.minWidth = "0";
+
+        const testo = document.createElement("div");
+        testo.textContent = voce.testo;
+        testo.style.fontSize = "12px";
+        testo.style.whiteSpace = "normal";
+        testo.style.wordBreak = "break-word";
+        left.appendChild(testo);
+
+        const info = document.createElement("div");
+        info.style.fontSize = "10px";
+        info.style.opacity = "0.8";
+        info.textContent = [
+            voce.autore + (voce.tipoAutore ? " (" + voce.tipoAutore + ")" : ""),
+            voce.automatica ? "automatica" : "da decidere",
+            voce.propagata ? "propagata" : ""
+        ].filter(s => s !== "").join(" · ");
+        left.appendChild(info);
+
+        const scelte = document.createElement("div");
+        scelte.style.display = "flex";
+        scelte.style.gap = "4px";
+        scelte.style.flexShrink = "0";
+
+        const pulsante = (testoPulsante, scelta, colore) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.textContent = testoPulsante;
+            btn.style.cursor = "pointer";
+            btn.style.fontSize = "11px";
+            const attiva = voce.scelta === scelta;
+            btn.style.fontWeight = attiva ? "700" : "400";
+            btn.style.backgroundColor = attiva ? colore : "";
+            btn.style.color = attiva ? "#fff" : "";
+            btn.addEventListener("click", () => {
+                //Un secondo clic sulla scelta attiva la toglie.
+                sezioneCorreggo.scegli(voce, attiva ? sezioneCorreggo.SCELTA.nessuna : scelta, this._superAdminPerCorreggo());
+                this._disegnaCorrezioniCorreggo();
+            });
+            return btn;
+        };
+        const approva = pulsante("Approva", sezioneCorreggo.SCELTA.approva, "#2d7d32");
+        if (!voce.approvabile) {
+            approva.disabled = true;
+            approva.style.opacity = "0.5";
+            Tooltip.impostaTooltip(approva, "Solo un superAdmin puo' approvare l'eliminazione della referenza");
+        }
+        scelte.appendChild(approva);
+        scelte.appendChild(pulsante("Rifiuta", sezioneCorreggo.SCELTA.rifiuta, "#b23b3b"));
+
+        row.appendChild(left);
+        row.appendChild(scelte);
+        return row;
     },
 };
 

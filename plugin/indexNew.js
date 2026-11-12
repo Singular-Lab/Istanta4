@@ -6712,7 +6712,11 @@ function boxDaRimuovere(item) {
     return itemToRemove;
 }
 
-async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno = false) {
+/// I20-1221: eliminazioneConfermata ({ eliminaDaTracciato, boxes }) e' un'eliminazione gia' confermata
+/// altrove (il timbro Elimina approvato nel Report Correggo): niente domande, i box indicati si tolgono
+/// dalla pagina e, con eliminaDaTracciato, il record si cancella sul server. Restituisce vero se il
+/// server ha registrato la rimozione.
+async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno = false, eliminazioneConfermata = null) {
     //scorriamo tutte le selezioni, cerchiamo le loro basi e ci salviamo in una lista i loro codici gruppo
 
     function setBusyRimozione(value) {
@@ -6775,6 +6779,14 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
                 codiciGruppo.push(codiceGruppoInput);
                 listaCodiciConIdDaInviare.push({ codice: codiceGruppoInput, idRec: idRecInput });
             }
+            //I20-1221: qui i box si conoscono, e vanno tolti dalla pagina.
+            if (eliminazioneConfermata != null && Array.isArray(eliminazioneConfermata.boxes)) {
+                eliminazioneConfermata.boxes.forEach(function (boxConfermato) {
+                    if (boxConfermato != null && boxConfermato.isValid) {
+                        itemsDaRimuovere.push(boxDaRimuovere(boxConfermato));
+                    }
+                });
+            }
         }
         else {
             //for (var i = 0; i < app.selection.length; i++) {
@@ -6821,7 +6833,7 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
             }
         }
 
-        var eliminaDaTracciato = false;
+        var eliminaDaTracciato = eliminazioneConfermata != null && eliminazioneConfermata.eliminaDaTracciato === true;
         hideLoading();
 
         if (askConfirm) {
@@ -6947,17 +6959,20 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
             hideLoading();
         }
 
+        var rimossa = res === true;
         var filtro = $("#areaFiltriEffettiva");
         if(filtro != null && filtro.length > 0){
             var res = await filtriJs.ricercaFiltro(filtro);
             await aggiornaTracciatoPostRicerca(res);
         }
+        return rimossa;
     }
     catch(e){
         console.log(e);
         messaggioUtente("Code IDX-73 rimuoviRefImpaginata errore generico " + e, "error");
         hideLoading();
         setBusyRimozione(false);
+        return false;
     }
 }
 

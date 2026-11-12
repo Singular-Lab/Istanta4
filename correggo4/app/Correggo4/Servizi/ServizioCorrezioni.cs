@@ -299,28 +299,41 @@ public sealed partial class ServizioCorrezioni
 
     public async Task<EsitoCorrezione> AccettaNotaAsync(Utente u, long idNota)
     {
-        if (!u.Accetta) return NonAutorizzato("Solo l'Agenzia accetta le correzioni.");
+        var (errore, idPagina) = await ChiudiNotaAsync(u, idNota);
+        if (errore != null) return errore;
+        return Fatto(await CaricaAsync(await IdVolantinoAsync(idPagina), u), idNota);
+    }
+
+    /// <summary>
+    /// I20-1221: l'accettazione della nota senza ricaricare lo stato del volantino, perche' la usa anche
+    /// la conferma delle correzioni dal Plugin, che ne chiude molte in una volta. Errore null = accettata.
+    /// </summary>
+    private async Task<(EsitoCorrezione? Errore, int IdPagina)> ChiudiNotaAsync(Utente u, long idNota)
+    {
+        if (!u.Accetta) return (NonAutorizzato("Solo l'Agenzia accetta le correzioni."), 0);
         var nota = await ctx.VolantiniPagineNotes.FirstOrDefaultAsync(n => n.Id == idNota);
-        if (nota == null || nota.Stato == StatoEliminata) return NonTrovata("La nota è stata eliminata.");
-        if (nota.Stato == StatoAccettata) return GiaAccettata();
-        if (nota.Stato != StatoNonVerificata) return EsitoCorrezione.No(409, "stato_non_accettabile", "Questa correzione non si può accettare.");
-        if (nota.Tipo == TipoNotaPromemoria) return EsitoCorrezione.No(409, "promemoria", "Un promemoria non si accetta.");
+        if (nota == null || nota.Stato == StatoEliminata) return (NonTrovata("La nota è stata eliminata."), 0);
+        if (nota.Stato == StatoAccettata) return (GiaAccettata(), nota.IdPagina);
+        if (nota.Stato != StatoNonVerificata)
+            return (EsitoCorrezione.No(409, "stato_non_accettabile", "Questa correzione non si può accettare."), nota.IdPagina);
+        if (nota.Tipo == TipoNotaPromemoria)
+            return (EsitoCorrezione.No(409, "promemoria", "Un promemoria non si accetta."), nota.IdPagina);
 
         var adesso = DateTime.UtcNow;
         var ultima = nota.DataModifica ?? nota.DataInserimento;
         int mancano = SecondiBattitura - (int)Math.Floor((adesso - ultima).TotalSeconds);
         if (mancano > 0)
-            return new EsitoCorrezione(false, 409, "in_battitura",
+            return (new EsitoCorrezione(false, 409, "in_battitura",
                 $"La nota è stata modificata da poco: si potrà accettare tra {TempoLeggibile(mancano)}.",
-                new { secondi = mancano });
+                new { secondi = mancano }), nota.IdPagina);
 
         var finestraAperta = await FinestraApertaAsync(nota.IdPagina);   // j209, decisione dell'11/9
-        if (finestraAperta != null) return finestraAperta;
+        if (finestraAperta != null) return (finestraAperta, nota.IdPagina);
         nota.Stato = StatoAccettata;
         nota.IdCorrettore = u.Id;
         nota.DataCorrezione = adesso;
         await ctx.SaveChangesAsync();
-        return Fatto(await CaricaAsync(await IdVolantinoAsync(nota.IdPagina), u), nota.Id);
+        return (null, nota.IdPagina);
     }
 
     // ------------------------------------------------------------------ timbri
@@ -408,20 +421,29 @@ public sealed partial class ServizioCorrezioni
 
     public async Task<EsitoCorrezione> AccettaTimbroAsync(Utente u, long idTimbro)
     {
-        if (!u.Accetta) return NonAutorizzato("Solo l'Agenzia accetta le correzioni.");
+        var (errore, idPagina) = await ChiudiTimbroAsync(u, idTimbro);
+        if (errore != null) return errore;
+        return Fatto(await CaricaAsync(await IdVolantinoAsync(idPagina), u), idTimbro);
+    }
+
+    /// <summary>I20-1221: come ChiudiNotaAsync, per i timbri.</summary>
+    private async Task<(EsitoCorrezione? Errore, int IdPagina)> ChiudiTimbroAsync(Utente u, long idTimbro)
+    {
+        if (!u.Accetta) return (NonAutorizzato("Solo l'Agenzia accetta le correzioni."), 0);
         var comp = await ctx.VolantiniPagineDisegniComposizionis.FirstOrDefaultAsync(c => c.Id == idTimbro);
-        if (comp == null || comp.Stato == StatoEliminata) return NonTrovata("Il timbro è stato eliminato.");
-        if (comp.Stato == StatoAccettata) return GiaAccettata();
-        if (comp.Stato != StatoNonVerificata) return EsitoCorrezione.No(409, "stato_non_accettabile", "Questa correzione non si può accettare.");
+        if (comp == null || comp.Stato == StatoEliminata) return (NonTrovata("Il timbro è stato eliminato."), 0);
+        if (comp.Stato == StatoAccettata) return (GiaAccettata(), comp.IdPagina);
+        if (comp.Stato != StatoNonVerificata)
+            return (EsitoCorrezione.No(409, "stato_non_accettabile", "Questa correzione non si può accettare."), comp.IdPagina);
 
         var finestraAperta = await FinestraApertaAsync(comp.IdPagina);   // j209
-        if (finestraAperta != null) return finestraAperta;
+        if (finestraAperta != null) return (finestraAperta, comp.IdPagina);
         // Per i timbri l'originale non ha il tempo di battitura (S:6834-6846).
         comp.Stato = StatoAccettata;
         comp.IdCorrettore = u.Id;
         comp.DataCorrezione = DateTime.UtcNow;
         await ctx.SaveChangesAsync();
-        return Fatto(await CaricaAsync(await IdVolantinoAsync(comp.IdPagina), u), comp.Id);
+        return (null, comp.IdPagina);
     }
 
     // ------------------------------------------------------------------ OK visto

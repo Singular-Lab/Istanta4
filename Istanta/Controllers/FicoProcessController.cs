@@ -6437,6 +6437,49 @@ namespace Istanta.Controllers
             return Ok(result);
         }
 
+        #region I20-1221 Report Correggo del Plugin
+        /// I20-1221: le correzioni aperte in Correggo4 sul volantino della lavorazione, per il Report
+        /// Correggo del Plugin. Istanta chiede a Olimpo il passaporto dell'operatore e chiama Correggo4
+        /// con quello: le legge solo l'Agenzia.
+        [HttpGet]
+        [Route("FicoProcess/correzioniCorreggo/{idLavorazione}")]
+        public async Task<IActionResult> correzioniCorreggo(int idLavorazione)
+        {
+            var (cliente, bearer, errore) = await ClienteCorreggo4PerOperatoreAsync();
+            if (errore != null) return errore;
+            return Ok(await cliente!.CorrezioniAsync(idLavorazione, bearer!));
+        }
+
+        /// I20-1221: chiude in Correggo4 le correzioni che il Plugin ha approvato e applicato.
+        /// Le rifiutate e quelle senza scelta il Plugin non le manda: restano aperte.
+        [HttpPut]
+        [Route("FicoProcess/correzioniCorreggo/{idLavorazione}/chiudi")]
+        public async Task<IActionResult> chiudiCorrezioniCorreggo(int idLavorazione, [FromBody] RichiestaChiusuraCorrezioniCorreggo richiesta)
+        {
+            var (cliente, bearer, errore) = await ClienteCorreggo4PerOperatoreAsync();
+            if (errore != null) return errore;
+            return Ok(await cliente!.ChiudiAsync(idLavorazione, richiesta?.approvate, bearer!));
+        }
+
+        private async Task<(ClienteCorreggo4? Cliente, string? Bearer, IActionResult? Errore)> ClienteCorreggo4PerOperatoreAsync()
+        {
+            if (!Int16.TryParse(SessionIstantaObject.GetSession(HttpContext), out Int16 idUtente) || idUtente <= 0)
+                return (null, null, Unauthorized(RispostaCorreggo4.No("no_login", "no_login")));
+
+            Utenti? me = await this.ctx.Utentis.FirstOrDefaultAsync(u => u.Id == idUtente);
+            if (me == null)
+                return (null, null, Unauthorized(RispostaCorreggo4.No("no_login", "utente_non_trovato")));
+
+            //Il client condiviso del controller lo usa FICOMiddleware con i suoi header: per Correggo4 uno nuovo.
+            FICOLoginResponse passaporto = await FICOMiddleware.login(olUrl, me, secretKey, olympusUserPolycy, this.ctx, httpClient);
+            if (!passaporto.esito || string.IsNullOrWhiteSpace(passaporto.publicKey))
+                return (null, null, Ok(RispostaCorreggo4.No("olimpo_rifiuta",
+                    "Olimpo non ha concesso il passaporto per Correggo4" + (string.IsNullOrWhiteSpace(passaporto.error) ? "." : ": " + passaporto.error))));
+
+            return (new ClienteCorreggo4(httpClientFactory.CreateClient(), ficoConf.Value.correggoServerUrl), passaporto.publicKey, null);
+        }
+        #endregion
+
         //Conferma foto e selezioni p/s
         [HttpPut]
         [Route("FicoProcess/correggiFotoESelezioniFromCorreggo")]

@@ -7075,18 +7075,20 @@ const schedaRef = {
     },
 
     /// Manda al server le modifiche ai meta dei testi del box aperto. Vero se le ha registrate.
-    salvaTestiDalBox(richiesta) {
+    /// I20-1221: destinazione ({ codiceGruppo, idRec }), se c'e', e' un altro box (il Report Correggo),
+    /// come per salvaExtraLavorazione.
+    salvaTestiDalBox(richiesta, destinazione = null) {
         var me = this;
         return new Promise(function (resolve) {
             var schedaRef = me.schedeRefDati;
-            if (schedaRef == null || schedaRef.length < 1 || richiesta == null) {
+            if ((destinazione == null && (schedaRef == null || schedaRef.length < 1)) || richiesta == null) {
                 resolve(false);
                 return;
             }
             var formData = new FormData();
             formData.append("idLavorazione", idKitLavorazione);
-            formData.append("CodiceGruppo", schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
-            formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
+            formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
             formData.append("richiesta", JSON.stringify(richiesta));
 
             var xhr = new XMLHttpRequestClient();
