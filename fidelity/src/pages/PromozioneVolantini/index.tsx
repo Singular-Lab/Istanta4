@@ -4,8 +4,6 @@ import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
-import { PERMISSIONS } from "@/constants/permissions";
-import { usePermission } from "@/context/PermissionContext";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
 import { useDettaglioPromozioneVolantini } from "@/query/consultazione";
 import { twMerge } from "@/utils/twMerge";
@@ -18,7 +16,6 @@ import { idFiltro, tinteCanaliPromozione } from "./analisi";
 import { Assortimento } from "./Assortimento";
 import { Banda } from "./Banda";
 import { ConfrontoKit } from "./ConfrontoKit";
-import { DoveArriva } from "./DoveArriva";
 import { FiltriPromozione } from "./FiltriPromozione";
 import { GrigliaVolantini } from "./GrigliaVolantini";
 import { LoghiInsegneContext } from "./LogoInsegna";
@@ -53,10 +50,10 @@ function Caricamento() {
 
 /**
  * Consultazione di una promozione (/volantini/promozioni/:idPromo, "materiali.visualizza"), dalle
- * schede delle viste Volantini: un'infografica di tutti i suoi volantini pubblicati e dei punti
- * vendita che raggiungono. Banda con validità e insegne, filtri per insegna e area, griglia delle
- * miniature, dove arriva, assortimento e confronto fra i kit; ogni
- * kit apre i suoi insight. I filtri stanno nell'indirizzo (?canale=&area=) e il server ricalcola
+ * schede delle viste Volantini: un'infografica di tutti i suoi volantini pubblicati. Banda con
+ * validità e insegne, filtri per insegna e area, griglia delle miniature, assortimento e confronto
+ * fra i kit; ogni kit apre i suoi insight. Niente sezione "Dove arriva" (regioni, mappa ed elenco
+ * dei punti vendita stampati). I filtri stanno nell'indirizzo (?canale=&area=) e il server ricalcola
  * tutto sui soli kit filtrati. Solo materiali pubblicati della GDO, dalle API di consultazione:
  * niente stato di lavorazione né collegamenti alla produzione, e nessun dato di vendita,
  * previsione, calore o visibilità.
@@ -69,8 +66,6 @@ function PromozioneVolantini() {
   const idCanale = idFiltro(parametri.get("canale"));
   const idArea = idFiltro(parametri.get("area"));
   const query = useDettaglioPromozioneVolantini(idPromo, { idCanale, idArea });
-  // La scheda del punto vendita è delle pagine dei punti vendita, con il loro permesso
-  const conScheda = usePermission(PERMISSIONS.GDO.VISUALIZZA);
   const dettaglio = query.data;
   // I colori di tutte le insegne della promo: un filtro non li cambia. Il ?. tiene in piedi la
   // pagina con un server non ancora aggiornato al contratto: allora valgono le insegne dei kit
@@ -122,7 +117,7 @@ function PromozioneVolantini() {
     <LoghiInsegneContext.Provider value={dettaglio.loghiInsegne ?? {}}>
       <Pagina
         titolo={dettaglio.promo.nome}
-        descrizione="I volantini pubblicati della promozione e i punti vendita che raggiungono."
+        descrizione="I volantini pubblicati della promozione, il loro assortimento e il confronto fra i kit."
         indietro={indietro(dettaglio.periodo)}
       >
         <Banda dettaglio={dettaglio} insegne={opzioni.insegne} tinta={tinta} idCanale={idCanale} onScegliInsegna={scegliInsegna} />
@@ -142,7 +137,6 @@ function PromozioneVolantini() {
           {conKit ? (
             <>
               <GrigliaVolantini kit={dettaglio.kit} tinta={tinta} />
-              <DoveArriva dettaglio={dettaglio} tinta={tinta} conScheda={conScheda} />
               <Assortimento assortimento={dettaglio.assortimento} numeroKit={dettaglio.kit.length} />
               <ConfrontoKit kit={dettaglio.kit} tinta={tinta} />
             </>

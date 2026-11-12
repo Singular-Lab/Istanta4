@@ -1,30 +1,22 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import type { KitPromozioneConsultazione, MeccanichePerCanale, PuntoVenditaPromozioneConsultazione } from "../../../lib/consultazione/tipi";
+import type { KitPromozioneConsultazione, MeccanichePerCanale } from "../../../lib/consultazione/tipi";
 
 // La pagina colora le insegne solo con i canali della promo: la rete delle insegne non serve
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
 
 import {
   ariaSort,
-  CARTOGRAMMA,
   celleConPiuKit,
-  classiScalaRegioni,
-  contaPerRegione,
   conValoreScelto,
   etichettaFascia,
-  filtraPuntiVendita,
   fraseKit,
   chiaveCella,
   idFiltro,
-  localitaConPiuPuntiVendita,
   meccanicheImpilate,
   ORDINAMENTO_INIZIALE,
   ordinaKit,
-  passoRegione,
   prossimoOrdinamento,
-  puntiSullaMappa,
-  puntiVenditaPerCanale,
   testoQuantoManca,
   testoValidita,
   tinteCanaliPromozione,
@@ -49,17 +41,6 @@ const kit = (id: string, campi: Partial<KitPromozioneConsultazione> = {}): KitPr
   scontoMedio: 25,
   quotaFidelity: 10,
   sottocosto: 2,
-  ...campi,
-});
-
-const riga = (id: string, campi: Partial<PuntoVenditaPromozioneConsultazione> = {}): PuntoVenditaPromozioneConsultazione => ({
-  id,
-  idKit: ["k1"],
-  riga: `RIGA ${id}`,
-  localita: "Lucca",
-  indirizzo: "Via Roma 1",
-  regione: "TOS",
-  puntoVendita: null,
   ...campi,
 });
 
@@ -126,123 +107,6 @@ describe("filtri del dettaglio", () => {
     // Per nome: City prima di Superstore, qualunque sia l'ordine ricevuto
     expect(tutte(CITY.id)).toEqual(tinteCanaliPromozione([CITY, SUPERSTORE])(CITY.id));
     expect(tutte(SUPERSTORE.id)).not.toEqual(soloSuperstore(SUPERSTORE.id));
-  });
-});
-
-describe("regioni", () => {
-  it("il cartogramma ha le 20 regioni, ognuna in una tessera sua", () => {
-    expect(new Set(CARTOGRAMMA.map(t => t.codice)).size).toBe(20);
-    expect(new Set(CARTOGRAMMA.map(t => `${t.colonna},${t.riga}`)).size).toBe(20);
-  });
-
-  it("conta le righe per regione e a parte quelle con la regione non indicata", () => {
-    const conteggio = contaPerRegione([riga("1"), riga("2"), riga("3", { regione: "LIG" }), riga("4", { regione: null }), riga("5", { regione: null })]);
-
-    expect(conteggio.perRegione.get("TOS")).toBe(2);
-    expect(conteggio.perRegione.get("LIG")).toBe(1);
-    expect(conteggio.perRegione.has("LAZ")).toBe(false);
-    expect(conteggio.senzaRegione).toBe(2);
-    expect(conteggio.massimo).toBe(2);
-  });
-
-  it("senza righe con la regione il massimo è 0 e la legenda è vuota", () => {
-    expect(contaPerRegione([riga("1", { regione: null })]).massimo).toBe(0);
-    expect(classiScalaRegioni(0)).toEqual([]);
-  });
-
-  it("la scala ha classi intere fino al massimo, e la regione più piena cade nell'ultima", () => {
-    expect(classiScalaRegioni(100)).toEqual([
-      { passo: 0, da: 1, a: 20 },
-      { passo: 1, da: 21, a: 40 },
-      { passo: 2, da: 41, a: 60 },
-      { passo: 3, da: 61, a: 80 },
-      { passo: 4, da: 81, a: 100 },
-    ]);
-    expect(classiScalaRegioni(3)).toEqual([
-      { passo: 0, da: 1, a: 1 },
-      { passo: 1, da: 2, a: 2 },
-      { passo: 2, da: 3, a: 3 },
-    ]);
-    expect(passoRegione(0, 20)).toBe(-1);
-    expect(passoRegione(20, 20)).toBe(0);
-    expect(passoRegione(21, 20)).toBe(1);
-    expect(passoRegione(100, 20)).toBe(4);
-  });
-});
-
-describe("località e punti vendita", () => {
-  const righe = [
-    riga("1", { localita: "LUCCA" }),
-    riga("2", { localita: "Lucca " }),
-    riga("3", { localita: "lucca" }),
-    riga("4", { localita: "Pisa" }),
-    riga("5", { localita: "Arezzo" }),
-    riga("6", { localita: "Pisa" }),
-    riga("7", { localita: "Genova", regione: "LIG" }),
-    riga("8", { localita: null }),
-    riga("9", { localita: "Forlì", regione: null }),
-  ];
-
-  it("la stessa località scritta diversa si conta una volta, dalla più presente; senza località non conta", () => {
-    expect(localitaConPiuPuntiVendita(righe, null)).toEqual([
-      { chiave: "lucca", nome: "LUCCA", puntiVendita: 3 },
-      { chiave: "pisa", nome: "Pisa", puntiVendita: 2 },
-      { chiave: "arezzo", nome: "Arezzo", puntiVendita: 1 },
-      { chiave: "forli", nome: "Forlì", puntiVendita: 1 },
-      { chiave: "genova", nome: "Genova", puntiVendita: 1 },
-    ]);
-  });
-
-  it("segue la regione scelta e si ferma al numero chiesto", () => {
-    expect(localitaConPiuPuntiVendita(righe, "LIG").map(l => l.nome)).toEqual(["Genova"]);
-    expect(localitaConPiuPuntiVendita(righe, "TOS", 2).map(l => l.nome)).toEqual(["LUCCA", "Pisa"]);
-  });
-
-  it("filtra per regione, lasciando fuori le righe senza regione", () => {
-    const filtrate = filtraPuntiVendita(righe, { regione: "TOS", cerca: "" });
-    expect(filtrate.map(r => r.id)).toEqual(["1", "2", "3", "4", "5", "6", "8"]);
-    expect(filtraPuntiVendita(righe, { regione: null, cerca: "" })).toHaveLength(righe.length);
-  });
-
-  it("cerca in località e indirizzo senza badare a maiuscole e accenti", () => {
-    const conIndirizzi = [
-      riga("1", { localita: "Forlì", indirizzo: "Viale Bologna 3" }),
-      riga("2", { localita: "Cesena", indirizzo: "Via Emilia 120" }),
-      riga("3", { localita: null, indirizzo: null, riga: "CESENATICO - PIAZZA ANDREA COSTA" }),
-    ];
-    expect(filtraPuntiVendita(conIndirizzi, { regione: null, cerca: "FORLI" }).map(r => r.id)).toEqual(["1"]);
-    expect(filtraPuntiVendita(conIndirizzi, { regione: null, cerca: "via  emilia" }).map(r => r.id)).toEqual(["2"]);
-    expect(filtraPuntiVendita(conIndirizzi, { regione: null, cerca: "cesena" }).map(r => r.id)).toEqual(["2", "3"]);
-  });
-
-  it("conta i punti vendita per insegna dai kit che stampano ciascuno", () => {
-    const kitPromo = [kit("k1"), kit("k2", { canale: SUPERSTORE })];
-    const perCanale = puntiVenditaPerCanale(kitPromo, [riga("1"), riga("2", { idKit: ["k2"] }), riga("3", { idKit: ["k2"] }), riga("4", { idKit: ["altro"] })]);
-    expect(perCanale).toEqual([
-      { canale: SUPERSTORE, puntiVendita: 2 },
-      { canale: CITY, puntiVendita: 1 },
-    ]);
-  });
-
-  it("un punto vendita stampato da due kit della stessa insegna conta una volta, da due insegne una volta per ciascuna", () => {
-    const kitPromo = [kit("em"), kit("li"), kit("ss", { canale: SUPERSTORE })];
-    const perCanale = puntiVenditaPerCanale(kitPromo, [riga("1", { idKit: ["em", "li"] }), riga("2", { idKit: ["li", "ss"] })]);
-    expect(perCanale).toEqual([
-      { canale: CITY, puntiVendita: 2 },
-      { canale: SUPERSTORE, puntiVendita: 1 },
-    ]);
-  });
-
-  it("sulla mappa solo i riconosciuti con le coordinate, una volta anche se li stampano più kit", () => {
-    const pv = (id: string, coordinate: { lat: number; lon: number } | null) => ({ id, nome: `PV ${id}`, coordinate });
-    const { punti, fuoriMappa } = puntiSullaMappa([
-      riga("1", { idKit: ["k1", "k3"], puntoVendita: pv("p1", { lat: 43.8, lon: 10.5 }) }),
-      riga("2", { idKit: ["k2", "k1"], puntoVendita: pv("p1", { lat: 43.8, lon: 10.5 }) }),
-      riga("3", { puntoVendita: pv("p2", null) }),
-      riga("4", { puntoVendita: null }),
-    ]);
-    expect(punti).toEqual([{ id: "p1", nome: "PV p1", lat: 43.8, lon: 10.5, idKit: ["k1", "k3", "k2"] }]);
-    expect(fuoriMappa).toBe(2);
   });
 });
 
