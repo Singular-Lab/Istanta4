@@ -128,10 +128,66 @@ const Menu = {
         $(".utility-floating-menu").remove();
     },
 
+    /// L'orario con cui parte la casella dei campi data con orario.
+    ORARIO_PREDEFINITO: '01:00',
+
+    /// L'orario scritto dall'operatore nella forma OO:MM, o null se non e' un orario.
+    /// Accetta anche l'ora con una cifra e il punto al posto dei due punti ("9.30" e' 09:30).
+    orarioValido(testo) {
+        if (testo == null) {
+            return null;
+        }
+        const parti = String(testo).trim().match(/^(\d{1,2})[:.](\d{2})$/);
+        if (!parti) {
+            return null;
+        }
+        const ore = parseInt(parti[1], 10);
+        const minuti = parseInt(parti[2], 10);
+        if (ore > 23 || minuti > 59) {
+            return null;
+        }
+        return String(ore).padStart(2, '0') + ':' + String(minuti).padStart(2, '0');
+    },
+
+    /// L'orario spostato di passo ore o minuti (parte 'ore' o 'minuti'), girando sulla mezzanotte e
+    /// sull'ora: le frecce della casella dell'orario.
+    spostaOrario(orario, parte, passo) {
+        const valido = Menu.orarioValido(orario) || Menu.ORARIO_PREDEFINITO;
+        let [ore, minuti] = valido.split(':').map((v) => parseInt(v, 10));
+        if (parte === 'minuti') {
+            minuti = (((minuti + passo) % 60) + 60) % 60;
+        }
+        else {
+            ore = (((ore + passo) % 24) + 24) % 24;
+        }
+        return String(ore).padStart(2, '0') + ':' + String(minuti).padStart(2, '0');
+    },
+
+    /// Data (GG/MM/AAAA) e orario (OO:MM, o null se non c'e') di un valore di un campo data: quello
+    /// di un criterio ("12/11/2026 10:00") o di una referenza, anche con i secondi o in forma ISO.
+    /// I secondi si perdono. Un valore che non e' una data da' data vuota.
+    separaDataOra(valore) {
+        const testo = valore == null ? '' : String(valore).trim();
+        const italiana = testo.match(/^(\d{2}\/\d{2}\/\d{4})(?:\s+(\d{1,2}[:.]\d{2})(?::\d{2})?)?$/);
+        if (italiana) {
+            return { data: italiana[1], orario: italiana[2] ? Menu.orarioValido(italiana[2]) : null };
+        }
+        const iso = testo.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2}))?/);
+        if (iso) {
+            return { data: iso[3] + '/' + iso[2] + '/' + iso[1], orario: iso[4] ? iso[4] + ':' + iso[5] : null };
+        }
+        return { data: '', orario: null };
+    },
+
     /// Trasforma ogni <date-menu-picker> sotto rootNode (o in tutta la pagina) in un campo data con
     /// il suo calendario. Il campo non si scrive a mano: si sceglie dal calendario, che si apre come
     /// una modale sopra i campi a riposo (I20-1123). Da fuori si legge value, e si ascolta
     /// date-change.
+    ///
+    /// Con l'attributo con-orario accanto al calendario c'e' la casella dell'orario OO:MM (parte
+    /// dall'attributo orario, o da ORARIO_PREDEFINITO): si scrive, o si sposta con le frecce su e giu'
+    /// sulle ore o sui minuti secondo dove sta il cursore; un orario non valido torna all'ultimo
+    /// valido. value e' allora "GG/MM/AAAA OO:MM", vuoto finche' la data non c'e'.
     registerDateMenuPicker(rootNode = null) {
         const toInputDate = (date) => {
             const day = String(date.getDate()).padStart(2, '0');
@@ -383,8 +439,10 @@ const Menu = {
                 controls.style.width = '100%';
                 controls.style.minWidth = '0';
 
+                const conOrario = placeholder.hasAttribute('con-orario');
                 const inputDate = document.createElement('input');
                 inputDate.id = elementId + '_value';
+                inputDate.className = 'date-menu-picker-data';
                 inputDate.type = 'text';
                 inputDate.placeholder = 'GG/MM/AAAA';
                 inputDate.value = toInputDate(new Date());
@@ -424,9 +482,53 @@ const Menu = {
                 calendarIcon.style.margin = '0 auto';
                 openCalendarButton.appendChild(calendarIcon);
 
+                let inputOrario = null;
+                let ultimoOrarioValido = Menu.orarioValido(placeholder.getAttribute('orario')) || Menu.ORARIO_PREDEFINITO;
+                if (conOrario) {
+                    inputOrario = document.createElement('input');
+                    inputOrario.id = elementId + '_orario';
+                    inputOrario.className = 'date-menu-picker-orario';
+                    inputOrario.type = 'text';
+                    inputOrario.placeholder = 'OO:MM';
+                    inputOrario.title = "Orario OO:MM: scrivilo, o usa le frecce su e giu' sulle ore o sui minuti";
+                    inputOrario.value = ultimoOrarioValido;
+                    inputOrario.style.height = '30px';
+                    inputOrario.style.border = '1px solid #6a6a6a';
+                    inputOrario.style.borderRadius = '4px';
+                    inputOrario.style.background = '#2e2e2e';
+                    inputOrario.style.color = '#ffffff';
+                    inputOrario.style.padding = '0 4px';
+                    inputOrario.style.width = '56px';
+                    inputOrario.style.flex = '0 0 56px';
+                    inputOrario.style.boxSizing = 'border-box';
+                    inputOrario.style.textAlign = 'center';
+                }
+
+                //Il valore del campo: la data, e con l'orario "GG/MM/AAAA OO:MM"; senza data e' vuoto.
+                const valoreCampo = () => {
+                    if (!conOrario) {
+                        return inputDate.value;
+                    }
+                    return inputDate.value ? inputDate.value + ' ' + ultimoOrarioValido : '';
+                };
+
+                //Scrive data e orario senza avvisare: per chi ricarica un valore salvato.
+                const impostaValore = (nuovoValore) => {
+                    if (!conOrario) {
+                        inputDate.value = String(nuovoValore || '');
+                        lastValidDate = inputDate.value;
+                        return;
+                    }
+                    const parti = Menu.separaDataOra(nuovoValore);
+                    inputDate.value = parti.data;
+                    lastValidDate = inputDate.value;
+                    ultimoOrarioValido = parti.orario || ultimoOrarioValido;
+                    inputOrario.value = ultimoOrarioValido;
+                };
+
                 const emitChange = () => {
                     const detail = {
-                        value: inputDate.value
+                        value: valoreCampo()
                     };
                     wrapper.dispatchEvent(new CustomEvent('date-change', { detail: detail, bubbles: true }));
                     wrapper.dispatchEvent(new Event('change', { bubbles: true }));
@@ -468,18 +570,70 @@ const Menu = {
                     e.preventDefault();
                 });
 
+                if (conOrario) {
+                    //Un orario scritto vale quando e' valido: altrimenti torna l'ultimo valido.
+                    const confermaOrario = () => {
+                        const orario = Menu.orarioValido(inputOrario.value);
+                        if (orario == null) {
+                            inputOrario.value = ultimoOrarioValido;
+                            return;
+                        }
+                        inputOrario.value = orario;
+                        if (orario !== ultimoOrarioValido) {
+                            ultimoOrarioValido = orario;
+                            if (inputDate.value) {
+                                emitChange();
+                            }
+                        }
+                    };
+
+                    inputOrario.addEventListener('keydown', function (e) {
+                        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            //Il cursore prima dei due punti sposta le ore, dopo i minuti.
+                            const sulleOre = !(inputOrario.selectionStart > 2);
+                            const orario = Menu.spostaOrario(ultimoOrarioValido, sulleOre ? 'ore' : 'minuti', e.key === 'ArrowUp' ? 1 : -1);
+                            inputOrario.value = orario;
+                            ultimoOrarioValido = orario;
+                            try {
+                                inputOrario.setSelectionRange(sulleOre ? 0 : 3, sulleOre ? 2 : 5);
+                            }
+                            catch (err) {
+                                //Senza selezione la freccia successiva sposta le ore.
+                            }
+                            if (inputDate.value) {
+                                emitChange();
+                            }
+                        }
+                        else if (e.key === 'Enter') {
+                            confermaOrario();
+                        }
+                    });
+
+                    //Il change della casella non deve arrivare al wrapper: l'avviso e' emitChange.
+                    inputOrario.addEventListener('change', function (e) {
+                        e.stopPropagation();
+                        confermaOrario();
+                    });
+                    inputOrario.addEventListener('blur', confermaOrario);
+                }
+
                 Object.defineProperty(wrapper, 'value', {
                     get() {
-                        return inputDate.value;
+                        return valoreCampo();
                     },
                     set(newValue) {
-                        inputDate.value = String(newValue || '');
+                        impostaValore(newValue);
                         emitChange();
                     }
                 });
+                wrapper.impostaValore = impostaValore;
 
                 controls.appendChild(inputDate);
                 controls.appendChild(openCalendarButton);
+                if (inputOrario) {
+                    controls.appendChild(inputOrario);
+                }
                 wrapper.appendChild(labelNode);
                 wrapper.appendChild(controls);
 

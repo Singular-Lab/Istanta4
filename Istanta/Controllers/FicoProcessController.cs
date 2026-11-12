@@ -3141,6 +3141,8 @@ namespace Istanta.Controllers
                             ?? throw new ErroreIstanta("lettura del tracciato", $"il Dato del record {t.Id} del tracciato {tItem.Id} non si legge.");
 
                         recordInTracciato[GLOBAL_VARIABLES.keyRefIdRec] = t.Id;
+                        //Le date del record (registrazione, modifica, modifica strutturale), per i filtri del Plugin.
+                        DateRecordTracciato.AggiungiAlDato(recordInTracciato, t.DataRegistrazione, t.DataModifica, t.DataModificaStrutturale);
 
                         return new ArticoloInRevisione
                         {

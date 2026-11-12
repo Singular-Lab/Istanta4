@@ -4,6 +4,8 @@ const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 //I20-1181: l'altezza della griglia dallo spazio vero, come la lista della Home.
 const AltezzaScorrimento = require('./altezzaScorrimento');
 const FuoriVolantino = require('./fuoriVolantino');
+//Lo stesso modulo che indexNew.js dichiara come Menu: qui serve anche sotto Node, per i test.
+const Menu = require('./menu');
 
 /// I20-1002: i filtri di pagina del volantino.
 ///
@@ -22,6 +24,25 @@ const filtri = {
     /// durante I20-1043): scrivendo a velocita' normale i giri si accodavano, fino a sei insieme,
     /// e la lista si aggiornava secondi dopo.
     RITARDO_RICERCA_TESTO_MS: 300,
+
+    /// Vero per un campo dei filtri dichiarato data con orario (isData e conOrario nei campiFiltro
+    /// del cliente): il criterio chiede anche l'orario e confronta al minuto.
+    campoConOrario(campoAssociato) {
+        return campoAssociato != null && campoAssociato.conOrario === true;
+    },
+
+    /// Un valore di un campo data con orario come numero confrontabile al minuto (i secondi si
+    /// perdono), o null se non e' una data. Senza orario vale la mezzanotte.
+    minutoConfrontabile(valore) {
+        const parti = Menu.separaDataOra(valore);
+        if (!parti.data) {
+            return null;
+        }
+        const [giorno, mese, anno] = parti.data.split('/').map((v) => parseInt(v, 10));
+        const [ore, minuti] = (parti.orario || '00:00').split(':').map((v) => parseInt(v, 10));
+        const minuto = Date.UTC(anno, mese - 1, giorno, ore, minuti);
+        return Number.isNaN(minuto) ? null : minuto;
+    },
 
     _ricercheTesto: new Map(),
 
@@ -1580,8 +1601,13 @@ const filtri = {
             return normalized;
         };
 
-        const ensureDatePicker = (criterioContainer) => {
+        const ensureDatePicker = (criterioContainer, conOrario = false) => {
             let dateContainer = criterioContainer.find('.filtro-valore-data');
+            //Cambiando chiave fra una data e una data con orario il campo si rifa' nella variante giusta.
+            if (dateContainer.length && (dateContainer.attr('data-con-orario') === '1') !== conOrario) {
+                dateContainer.remove();
+                dateContainer = criterioContainer.find('.filtro-valore-data');
+            }
             if (dateContainer.length) {
                 if (dateContainer.find('date-menu-picker').length > 0) {
                     Menu.registerDateMenuPicker(dateContainer.get(0));
@@ -1592,11 +1618,15 @@ const filtri = {
             const datePickerId = 'filtro-date-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
             dateContainer = $('<div></div>')
                 .addClass('filtro-valore-data')
+                .attr('data-con-orario', conOrario ? '1' : '0')
                 .css({ width: (isTracciato ? '200px' : '30%'), maxWidth: '100%', minWidth: '0', marginRight: '10px', display: 'none' });
 
             const placeholder = $('<date-menu-picker></date-menu-picker>')
                 .attr('id', datePickerId)
                 .attr('label', '');
+            if (conOrario) {
+                placeholder.attr('con-orario', '');
+            }
 
             dateContainer.append(placeholder);
             criterioContainer.find('.filtro-valore-hidden').before(dateContainer);
@@ -1612,8 +1642,9 @@ const filtri = {
 
             wrapper.off('change.filtroDate').on('change.filtroDate', async function () {
                 const valoreInput = $(this).closest('.criterio').find('.filtro-valore-hidden');
-                const pickedDate = $(this).prop('value') || $(this).find('input').val() || '';
-                valoreInput.val(toItalianDate(pickedDate));
+                const pickedDate = $(this).prop('value') || (conOrario ? '' : $(this).find('input').val()) || '';
+                //Con l'orario il valore e' gia' "GG/MM/AAAA OO:MM", come lo da' il campo.
+                valoreInput.val(conOrario ? pickedDate : toItalianDate(pickedDate));
 
                 let filtro = $(this).closest('.filtro');
                 var resRicerca = await me.ricercaFiltro(filtro);
@@ -1625,10 +1656,20 @@ const filtri = {
             return dateContainer;
         };
 
-        const setDatePickerValue = (criterioContainer, value) => {
-            const dateContainer = ensureDatePicker(criterioContainer);
+        const setDatePickerValue = (criterioContainer, value, conOrario = false) => {
+            const dateContainer = ensureDatePicker(criterioContainer, conOrario);
             const wrapper = dateContainer.children().first();
             const safeValue = value == null ? '' : String(value);
+
+            if (conOrario) {
+                //Data e orario dal valore salvato; senza valore la data e' vuota e l'orario quello di partenza.
+                const nodo = wrapper.get(0);
+                if (nodo && typeof nodo.impostaValore === 'function') {
+                    nodo.impostaValore(safeValue);
+                }
+                criterioContainer.find('.filtro-valore-hidden').val(nodo ? nodo.value : '');
+                return;
+            }
             const safeItalianValue = toItalianDate(safeValue);
 
             const input = wrapper.find('input');
@@ -1639,14 +1680,14 @@ const filtri = {
             criterioContainer.find('.filtro-valore-hidden').val(safeItalianValue);
         };
 
-        const showDatePickerForCampo = (criterioContainer, value = '') => {
-            const dateContainer = ensureDatePicker(criterioContainer);
+        const showDatePickerForCampo = (criterioContainer, value = '', conOrario = false) => {
+            const dateContainer = ensureDatePicker(criterioContainer, conOrario);
 
             criterioContainer.find('.filtro-valore-tendina').css({ display: 'none' });
             criterioContainer.find('.filtro-valore-hidden').css({ display: 'none' });
             dateContainer.css({ display: 'block' });
 
-            setDatePickerValue(criterioContainer, value);
+            setDatePickerValue(criterioContainer, value, conOrario);
         };
 
         const hideDatePicker = (criterioContainer) => {
@@ -1805,7 +1846,7 @@ const filtri = {
                                 criterioCorrente.find('.filtro-operatore').css({ display: 'block' });
 
                                 if (campoAssociato != null && isCampoData(campoAssociato)) {
-                                    showDatePickerForCampo(criterioCorrente, '');
+                                    showDatePickerForCampo(criterioCorrente, '', filtri.campoConOrario(campoAssociato));
                                 }
                                 else if (campoAssociato != null && campoAssociato.tendina) {
                                     // mostriamo la tendina e nascondiamo il campo di testo
@@ -2119,7 +2160,7 @@ const filtri = {
                     hideDatePicker(criterioHtml.closest('.criterio'));
                 }
                 else if (isCampoData(campoAssociato)) {
-                    showDatePickerForCampo(criterioHtml.closest('.criterio'), criterio.valore);
+                    showDatePickerForCampo(criterioHtml.closest('.criterio'), criterio.valore, filtri.campoConOrario(campoAssociato));
                 }
                 else {
                     //nascondiamo la tendina e mostriamo il campo di testo
@@ -2154,7 +2195,7 @@ const filtri = {
         const chiaveFinale = criterioHtml.find('.filtro-chiave-hidden').val();
         const campoFinale = pluginMiddleware.getCampo("campiFiltro").find(c => c.campoAssociato === chiaveFinale);
         if (isCampoData(campoFinale)) {
-            showDatePickerForCampo(criterioHtml, criterioHtml.find('.filtro-valore-hidden').val());
+            showDatePickerForCampo(criterioHtml, criterioHtml.find('.filtro-valore-hidden').val(), filtri.campoConOrario(campoFinale));
         }
 
 
@@ -3072,6 +3113,10 @@ const filtri = {
                     //cerchiamo in campiFiltro un campo con chiaveObj uguale a campiFiltro.campoAssociato
                     let campoAssociato = campiFiltro.find(c => c.campoAssociato === chiaveObj);
                     const campoData = isCampoData(campoAssociato);
+                    //Un campo data con orario si confronta al minuto, gli altri campi data al giorno.
+                    const confrontaData = campoData && filtri.campoConOrario(campoAssociato)
+                        ? (v) => filtri.minutoConfrontabile(v)
+                        : parseItalianComparable;
                     let scope = record.recordInTracciato; 
                     if(campoAssociato != null && campoAssociato.scope){
                         let scopes = campoAssociato.scope.split('||');
@@ -3113,9 +3158,9 @@ const filtri = {
 
                                         let foundInArray = false;
                                         if (campoData) {
-                                            const valoreData = toItalianDateString(valore);
+                                            const valoreData = confrontaData(valore);
                                             if (valoreData != null) {
-                                                foundInArray = recordValore.some(v => toItalianDateString(v) === valoreData);
+                                                foundInArray = recordValore.some(v => confrontaData(v) === valoreData);
                                             }
                                         }
                                         else {
@@ -3144,8 +3189,8 @@ const filtri = {
                                     } else {
                                         // Altrimenti, confrontiamo direttamente (case insensitive per stringhe)
                                         if (campoData) {
-                                            const recordDateValue = parseItalianComparable(recordValore);
-                                            const filterDateValue = parseItalianComparable(valore);
+                                            const recordDateValue = confrontaData(recordValore);
+                                            const filterDateValue = confrontaData(valore);
 
                                             if (recordDateValue != null && filterDateValue != null) {
                                                 recordValore = recordDateValue;

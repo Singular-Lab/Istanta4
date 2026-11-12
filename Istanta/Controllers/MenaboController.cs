@@ -9740,6 +9740,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                             ?? throw new ErroreIstanta("lettura del gruppo", $"il Dato del record {t.Id} del gruppo {codiceGruppo} non si legge.");
 
                         recordInTracciato[GLOBAL_VARIABLES.keyRefIdRec] = t.Id;
+                        //Le date del record (registrazione, modifica, modifica strutturale), per i filtri del Plugin.
+                        DateRecordTracciato.AggiungiAlDato(recordInTracciato, t.DataRegistrazione, t.DataModifica, t.DataModificaStrutturale);
 
                         return new ArticoloInRevisione
                         {
@@ -12549,6 +12551,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     }
 
                     ptr.Dato = JsonConvert.SerializeObject(RimessaInVolantino.Applica(dato, campi));
+                    //La rimessa in volantino e' un cambio strutturale.
+                    ptr.DataModificaStrutturale = DateTime.Now;
                     this.ctx2.SaveChanges();
                     result.salvati++;
                 }
@@ -12686,7 +12690,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 string report = "";
 
 
-                var op = await cambioMetaRecordInLavorazione(obj, idLavorazione, idOperazione);
+                var op = await cambioMetaRecordInLavorazione(obj, idLavorazione, idOperazione, true);
                 if (op is OkObjectResult && (op as OkObjectResult)!.Value is CambioMetaRecordTracciatoResponse)
                 {
                     CambioMetaRecordTracciatoResponse resultSet = ((op as OkObjectResult)!.Value as CambioMetaRecordTracciatoResponse)!;
@@ -12794,6 +12798,14 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
         [HttpPut]
         [Route("Menabo/cambiaMetaRecordInLavorazione/{idLavorazione}/{idOperazione}")]
         public async Task<IActionResult> cambioMetaRecordInLavorazione([FromForm] CambioMetaRecordTracciatoRequest obj, int idLavorazione, int idOperazione)
+        {
+            return await cambioMetaRecordInLavorazione(obj, idLavorazione, idOperazione, false);
+        }
+
+        /// Il cambio dei meta dei record di un gruppo. Con strutturale (le azioni sul box, da
+        /// setCambioStrutturale) ogni record cambiato prende anche la data di modifica strutturale; l'artwork
+        /// (setArtwork) e la chiamata diretta non la toccano.
+        private async Task<IActionResult> cambioMetaRecordInLavorazione(CambioMetaRecordTracciatoRequest obj, int idLavorazione, int idOperazione, bool strutturale)
         {
             System.Globalization.CultureInfo culture = new System.Globalization.CultureInfo("it-IT");
 
@@ -13026,6 +13038,10 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                             //SAlvo  i nuovi meta
                             ptr.Dato = JsonConvert.SerializeObject(metaRef);
+                            if (strutturale)
+                            {
+                                ptr.DataModificaStrutturale = DateTime.Now;
+                            }
                         }
 
                         this.ctx2.SaveChanges();
@@ -13487,6 +13503,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     newRecord.Codice = resultExternal[keyCodiceRef].ToString();
                     newRecord.CodiceGruppo = codiceGruppo;
                     newRecord.DataRegistrazione = DateTime.Now;
+                    newRecord.DataModifica = newRecord.DataRegistrazione;
                     newRecord.IdTracciato = idTracciato;
                     newRecord.IndiceEsportazione = -1;
                     newRecord.ModalitaInserimento = (byte)ModalitaInserimento.Manuale;
