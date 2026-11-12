@@ -3123,6 +3123,16 @@ const schedaFoto = {
 
     },
 
+    /// L'indirizzo dell'attiva/disattiva di un'extra. Il codice gruppo del box dice su quali
+    /// referenze cambiarla: tutte quelle del box, e non altri articoli che hanno lo stesso logo
+    /// (stesso GUID), che il server senza codice poteva cambiare al posto di queste.
+    indirizzoAttivaFotoExtra(guidId, attiva, records) {
+        const record = (records || []).find(r => r && r.recordInTracciato && r.recordInTracciato.StatoSelezione == 1)
+            || (records || []).find(r => r && r.recordInTracciato);
+        const codice = record ? (record.recordInTracciato["Scatto.CodiceGruppo"] || record.recordInTracciato["Referenza.Codice"] || "") : "";
+        return "SyncFoto/attivaDisattivaFotoExtra/" + guidId + "/" + attiva + "?codice=" + encodeURIComponent(codice);
+    },
+
     attivaDisattivaFotoExtra(guidId, tipo, nomeFoto, box, attiva, sigla = null) {
         let me = this;
 
@@ -3211,7 +3221,7 @@ const schedaFoto = {
         xhr.onerror = function () {
             messaggioUtente("Code SRF-46 Errore di rete", "error");
         }
-        xhr.send("SyncFoto/attivaDisattivaFotoExtra/" + guidId + "/" + attiva, null, "GET");
+        xhr.send(me.indirizzoAttivaFotoExtra(guidId, attiva, me.schedeRefDati), null, "GET");
 
 
     },

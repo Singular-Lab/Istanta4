@@ -403,7 +403,7 @@ const FotoExtraPiuBox = {
 
     /// Attiva o disattiva un'extra di un box, come attivaDisattivaFotoExtra.
     async attivaFotoExtraDelBox(b, elemento, attiva) {
-        await this.richiestaFotoExtra("SyncFoto/attivaDisattivaFotoExtra/" + elemento.guidId + "/" + attiva, null, "GET", false, true);
+        await this.richiestaFotoExtra(this.indirizzoAttivaFotoExtra(elemento.guidId, attiva, b.records), null, "GET", false, true);
         b.records.forEach(r => (r.recordInTracciato["Foto.Extra"] || []).forEach(e => {
             if (e.guidId == elemento.guidId) {
                 e.attiva = attiva;
