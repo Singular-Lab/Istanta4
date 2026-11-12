@@ -60,7 +60,6 @@ namespace AgenziaLib.Tipi
 
         public static readonly string keyScattoCodice = "Scatto.Codice";
         public static readonly string keyScattoCodiceGruppo = "Scatto.CodiceGruppo";
-        public static readonly string keyScattoCodiceMultiplex = "Scatto.CodiceGruppoMultiplex";
         public static readonly string keyFuoriPoP = "FuoriPoP";
         public static readonly string codiceBox = "codiceBox";
 
@@ -76,7 +75,6 @@ namespace AgenziaLib.Tipi
         public static readonly string keyRequisitoDescrizioneSingola = "DescrizioneSingola";//Richiesta descrizione singola
         public static readonly string keyRequisitoDescrizioneSottogruppo = "DescrizioneSottoGruppo";//Richiesta descrizione del sottogruppo di appartenenza
         public static readonly string keyRequisitoDescrizioneGruppo = "DescrizioneGruppo";//Richiesta descrizione del proprio gruppo
-        public static readonly string keyRequisitoDescrizioneGruppoMultiplex = "DescrizioneGruppoMultiplex";//Richiesta descrizione del gruppo multiplex di appartenenza
 
         public static readonly string keyScattoCodiceSottogruppo = "Scatto.CodiceSottogruppo";
         public static readonly string keyXMLSelezione = "StatoSelezione";

@@ -16,155 +16,19 @@ namespace Istanta.Controllers
     {
         private readonly string extarnalSourcePath;
         private ExternalSourceClass exClass;
-        private readonly ILogger<MastroController> _logger;
+        private readonly ILogger<MenaboSettingsController> _logger;
         private readonly Edro21_DbContext2 ctx2;
 
         private readonly IDbContextFactory<Edro21_DbContext2> _dbContextFactory2;
-        public MenaboSettingsController(ILogger<MastroController> logger, IConfiguration configuration, IOptions<PathExternal> external_lib, IDbContextFactory<Edro21_DbContext2> dbContextFactory2)
+        public MenaboSettingsController(ILogger<MenaboSettingsController> logger, IConfiguration configuration, IOptions<PathExternal> external_lib, IDbContextFactory<Edro21_DbContext2> dbContextFactory2)
         {
             this._dbContextFactory2 = dbContextFactory2;
             this.ctx2 = this._dbContextFactory2.CreateDbContext();
             _logger = logger;
             this.extarnalSourcePath = external_lib.Value.pathSource;
-            exClass = new ExternalSourceClass(this.extarnalSourcePath, new string[] { /*"SourceMenabo", "SourceMenaboPagine"*/ });
+            exClass = new ExternalSourceClass(this.extarnalSourcePath);
         }
 
-
-        public async Task<IActionResult> Index()
-        {
-            
-            await this.Bind();
-
-            return View();
-        }
-
-        [HttpPost]
-        [Route("MenaboSettings/Update/{id}")]
-        public async Task<IActionResult> Index(Int16 id, string Titolo, string Aree)
-        {
-            var edit = exClass.getMenaboById(id);//await this.ctx.Mastros.FindAsync(id);
-            if (edit != null)
-            {
-                edit.Titolo = Titolo;
-                edit.Aree = Aree.Split(",").ToList();
-                exClass.editMenabo(edit);
-            }
-
-            await this.Bind();
-
-            return Redirect("../../MenaboSettings");
-        }
-
-        [HttpGet]
-        [Route("MenaboSettings/Delete/{id}")]
-        public async Task<IActionResult> Index(Int16 id)
-        {
-            var item = exClass.getMenaboById(id);// await this.ctx.Mastros.FindAsync(id);
-            if (item != null)
-            {
-                exClass.deleteMenabo(item);//this.ctx.Mastros.Remove(item);
-                
-            }
-
-            return Redirect("../../MenaboSettings");
-        }
-
-        [HttpPost]
-        [Route("MenaboSettings/Insert")]
-        public async Task<IActionResult> Insert(string Titolo, string Aree)
-        {
-            DbMenaboItem schema = new DbMenaboItem();
-            schema.Aree = Aree.Split(',').ToList();
-            schema.Titolo = Titolo;
-
-            exClass.addRegolaMenabo(schema);
-
-
-            return Redirect("../MenaboSettings");
-        }
-
-        [HttpPut]
-        [Route("MenaboSettings/salvaPaginaSchema/{id_schema}")]
-        public async Task<IActionResult> salvaPaginaSchema(DbMenaboPagineItemPagina pagItem, Int64 id_schema)
-        {
-            BoolResult res = new BoolResult();
-
-            var edit = exClass.getSchemaMenabo(id_schema);
-            if (edit != null)
-            {
-                var pItem = edit.Pagine.Where(p => p.Numero == pagItem.Numero).FirstOrDefault();
-                if (pItem != null)
-                {
-                    //Aggiorno mastro
-                    pItem.IdMastro = pagItem.IdMastro;
-                }
-                else
-                {
-                    //Pagian nuova
-                    edit.Pagine.Add(pagItem);
-
-                }
-
-                exClass.editSchemaMenabo(edit);
-                res.Esito = true;
-            }
-            else
-            {
-                res.Esito = false;
-                res.error = "Schema non trovato";
-            }
-
-
-            return Ok(res);
-        }
-
-        [HttpPut]
-        [Route("MenaboSettings/eliminaPaginaSchema/{id_schema}")]
-        public async Task<IActionResult> eliminaPaginaSchema(DbMenaboPagineItemPagina pagItem, Int64 id_schema)
-        {
-            BoolResult res = new BoolResult();
-
-            var edit = exClass.getSchemaMenabo(id_schema);
-            if (edit != null)
-            {
-                bool del = edit.Pagine.Remove(edit.Pagine.Where(p => p.Numero == pagItem.Numero).FirstOrDefault()!);
-                if (del)
-                {
-                    exClass.editSchemaMenabo(edit);
-                }
-
-                res.Esito = del;
-            }
-            else
-            {
-                res.Esito = false;
-                res.error = "Schema non trovato";
-            }
-
-
-            return Ok(res);
-        }
-
-        private async Task Bind()
-        {
-            var menabos =  exClass.getMenabos();
-            ViewBag.ListaMenabo = menabos;
-
-            List<DbMenaboPagineItem> schemi = new List<DbMenaboPagineItem>();
-            foreach(var mItem in menabos)
-            {
-                var schema = exClass.getSchemaMenabo(mItem.IdMenaboPagine);
-                schemi.Add(schema);
-            }
-
-            ViewBag.ListaSchemi = schemi;
-
-            List<DbMastroItem> _listMastro = exClass.getMastro().source;//await this.ctx.Mastros.ToListAsync();
-            this.ViewBag.ListaMastro = _listMastro;
-
-            var formatiPagine = exClass.getFormatiPagina();
-            ViewBag.FormatiPagina = formatiPagine;
-        }
 
         public IActionResult Ordinamento()
         {
@@ -364,27 +228,6 @@ namespace Istanta.Controllers
 			return Ok(res);
 		}
 
-
-		[HttpGet]
-        [Route("MenaboSettings/salvaFormatiPagine/{formatiPagine}")]
-        public async Task<IActionResult> salvaFormatiPagine(string formatiPagine)
-        {
-            BoolResult res = new BoolResult();
-
-            try
-            {
-                List<string> listaFormati = formatiPagine.Split(',').ToList();
-                exClass.saveFormatiPagina(listaFormati);
-                res.Esito = true;
-            }
-            catch (Exception ex)
-            {
-                res.error = ex.ToString();
-            }
-
-
-            return Ok(res);
-        }
 
         [HttpGet]
         [Route("MenaboSettings/creaOrdinamentoAutomatico")]

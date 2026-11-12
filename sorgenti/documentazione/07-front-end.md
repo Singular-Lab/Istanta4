@@ -64,7 +64,7 @@ Bootstrap sono invece locali in `wwwroot/lib/`.
 | `declinazioneMeccaniche.js` | 961 | |
 | `syncfoto.js` | 922 | `class SyncFoto` — 19 metodi, dalla scansione al caricamento |
 | `promo.js` | 892 | `class Promo` — 15 metodi, la gestione delle promo |
-| `addestramento.js` | 729 | |
+| `addestramento.js` | 460 | |
 | `components.js` | 697 | `renderRecordRevisione`, `addMismatchKeyVisual`, `renderGruppiModalitaSottogruppo` |
 | `cssFramework.js` | 636 | `class CssFramework` — 23 metodi, l'editor del framework css |
 | `confronti.js` | 582 | |
@@ -78,7 +78,6 @@ Bootstrap sono invece locali in `wwwroot/lib/`.
 | `IAgenzia.js` | 205 | **il contratto del front-end: 60 metodi** |
 | `mySocket.js` | 163 | `class Messages` — il websocket |
 | `loghibolli.js` | 131 | |
-| `menaboSettings.js` | 120 | |
 | `site.js` | 101 | `mostraMessaggio`, `showLoading`, `hideLoading`, `getStringFromDate`, `scaricaUltimaVersioneDelPlugin` |
 | `call.js` | 83 | **`Call.do(...)`: il livello ajax**. Tutte le chiamate al server passano di qui |
 | `sourceEditor.js` | 76 | l'editor dei json, usato da 8 viste |
@@ -145,7 +144,7 @@ Le più grandi:
 | `Revisore/Index.cshtml` | 1.220 | 77 |
 | `DeclinazioniMeccaniche/Index.cshtml` | 914 | 151 |
 | `Archivio/Index.cshtml` | 740 | 72 |
-| `Tracciati/Training.cshtml` | 533 | 12 |
+| `Tracciati/Training.cshtml` | 271 | 17 |
 | `Register/Index.cshtml` | 519 | **216 (54%)** |
 | `FrameworkCss/Index.cshtml` | 495 | 121 |
 | `SchedaArticolo/Index.cshtml` | 482 | 25 |

@@ -575,11 +575,6 @@ class Agenzia extends IAgenzia {
                     elementGruppo.css("background-color", "#dfbbbb");
 
                 }
-                else if (primoFiglio.log.stato == 4) {
-                    elementGruppo.css("background-color", "#b8d0df");
-                    elementGruppo.find("#lab_stato").text("Nuovo multiplex");
-
-                }
 
 
 
@@ -626,10 +621,6 @@ class Agenzia extends IAgenzia {
             else if (count[3] > 0) {
                 elementGruppo.find("#lab_stato").text("Gruppo corrotto");
                 elementGruppo.css("background-color", "#dfbbbb");
-            }
-            else if (count[4] > 0) {
-                elementGruppo.css("background-color", "#b8d0df");
-                elementGruppo.find("#lab_stato").text("Nuovo multiplex");
             }
         }
 

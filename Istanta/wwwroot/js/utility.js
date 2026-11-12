@@ -119,7 +119,6 @@ const keyDescrPesoGruppoTracciato = "Descrizioni.PesoGruppoTracciato";
 const keyScatto = "Scatto";
 const keyScattoCodice = "Scatto.Codice";
 const keyScattoCodiceGruppo = "Scatto.CodiceGruppo";
-const keyScattoCodiceGruppoMultiplex = "Scatto.CodiceGruppoMultiplex";
 const keyScattoCodiceSottogruppo= "Scatto.CodiceSottogruppo";
 
 const keyTracciato = "Tracciato";
@@ -132,11 +131,10 @@ const keyRequisitoPrezziDiversi = "PrezziDiversi";//Se true indica che i prezzi 
 const keyRequisitoDescrizioneSingola = "DescrizioneSingola";//Richiesta descrizione singola
 const keyRequisitoDescrizioneSottogruppo = "DescrizioneSottoGruppo";//Richiesta descrizione del sottogruppo di appartenenza
 const keyRequisitoDescrizioneGruppo = "DescrizioneGruppo";//Richiesta descrizione del proprio gruppo
-const keyRequisitoDescrizioneGruppoMultiplex = "DescrizioneGruppoMultiplex";//Richiesta descrizione del gruppo multiplex di appartenenza
 const keyCombinazioneAssegnata = "combinazioneAssegnata";
 
 
-const chiaviTracciato = [keyRefCodice, keyScattoCodiceGruppo, keyScattoCodiceGruppoMultiplex, keyScattoCodiceSottogruppo, keyCombinazioneAssegnata];
+const chiaviTracciato = [keyRefCodice, keyScattoCodiceGruppo, keyScattoCodiceSottogruppo, keyCombinazioneAssegnata];
 const chiaviRevisionato = [
     "Approvata",
     "Area",
