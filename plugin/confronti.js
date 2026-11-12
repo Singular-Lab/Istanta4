@@ -735,10 +735,9 @@ const confronti = {
                     }
                 }
                 listFotoBox1.forEach(foto => {
-                    let noFoto = false;
-                    if (foto == (pluginMiddleware.getCampo("nomeNoFoto") ? pluginMiddleware.getCampo("nomeNoFoto") : "nofoto.png")) {
-                        noFoto = true;
-                    }
+                    //I20-1231: il segnaposto si riconosce dal nome del file, il bollo dell'archivio o quello
+                    //incorporato. Prima si confrontava l'oggetto foto con un nome, e non era mai vero.
+                    let noFoto = pluginMiddleware.eSegnapostoFoto(foto.nomeFoto);
                     if ((!noFoto && !listFoto.find(f => f.nomeFoto == foto.nomeFoto)) || (noFoto && !listFoto.find(f => f.nomeFoto == ""))) {
                         differenze.push({ label: foto.nomeFoto, difference: "foto in più nel box: " + foto.nomeFoto });
                     }

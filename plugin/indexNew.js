@@ -1152,42 +1152,9 @@ async function cambioDiStatoDelSistema()
             //Mostro schermata operativa
             //Che significa analizzare il documento in questione            
             //Perchè potrebbe essere che si è operativi o che ci sia da configurare il kit  
-            //impostiamo il logo nofoto dell'agenzia
-            ReperimentoFoto.getBolloNOFOTO(function (item) {
-                console.log(item);
-                if (pluginMiddleware.setBolloNOFOTO != null) {
-                    pluginMiddleware.setBolloNOFOTO(item);
-                }
-                else {
-                    console.error("nomeNoFoto assente nel pluginMiddleware");
-                }
-            }, function (err) {
-                console.error(err);
-                if (pluginMiddleware.setBolloNOFOTO != null) {
-                    pluginMiddleware.setBolloNOFOTO("");
-                }
-                else {
-                    console.error("nomeNoFoto assente nel pluginMiddleware");
-                }
-            })
-
-            ReperimentoFoto.getBolloFOTONOFOUND(function (item) {
-                console.log(item);
-                if (pluginMiddleware.setBolloFOTONOFOUND != null) {
-                    pluginMiddleware.setBolloFOTONOFOUND(item);
-                }
-                else {
-                    console.error("fotoNoFound assente nel pluginMiddleware");
-                }
-            }, function (err) {
-                console.error(err);
-                if (pluginMiddleware.setBolloFOTONOFOUND != null) {
-                    pluginMiddleware.setBolloFOTONOFOUND("");
-                }
-                else {
-                    console.error("fotoNoFound assente nel pluginMiddleware");
-                }
-            })
+            //impostiamo i bolli nofoto e fotonofound dell'agenzia. I20-1231: si rileggono anche dopo ogni
+            //ricarica della configurazione del cliente (ficoProcess.scaricaFicoData).
+            ReperimentoFoto.caricaBolliDiRipiego();
 
             await initDocumentInLavorazione();       
             if (docInLavorazione==null)
