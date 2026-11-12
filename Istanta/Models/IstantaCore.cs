@@ -2815,6 +2815,12 @@ namespace Istanta.Models
         public string? result;
     }
 
+    /// I20-1221: gli id delle correzioni di Correggo4 approvate e applicate dal Plugin.
+    public class RichiestaChiusuraCorrezioniCorreggo
+    {
+        public List<string>? approvate { get; set; }
+    }
+
     public class ModificaFotoESelezioneCorreggoRequest
     {
         public string? guidIdLavorazione { get; set; }

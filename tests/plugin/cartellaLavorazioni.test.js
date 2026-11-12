@@ -114,7 +114,9 @@ test("nessuno costruisce piu' a mano il percorso di lavorazioni.json", () => {
     //si confronta con gli indirizzi dell'ipconfig, e una voce di prima riceve quelli attuali).
     //I20-1126: piu' una lettura e una scrittura in segnalazioni/schermata.js, la scelta di disattivare
     //le segnalazioni della lavorazione (segnalazioniDisattivate).
-    assert.strictEqual(conta(/Utility\.voceLavorazione\(/g), 11);
+    //I20-1221: piu' una lettura in reportIntegrita.js (_applicaFotoCorreggo), il guid della lavorazione
+    //per correggere in archivio le foto arrivate da Correggo4.
+    assert.strictEqual(conta(/Utility\.voceLavorazione\(/g), 12);
     assert.strictEqual(conta(/Utility\.salvaVoceLavorazione\(/g), 6);
 });
 

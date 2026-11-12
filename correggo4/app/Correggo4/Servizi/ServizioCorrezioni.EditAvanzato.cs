@@ -753,23 +753,35 @@ public sealed partial class ServizioCorrezioni
 
     public async Task<EsitoCorrezione> ConfermaEditAsync(Utente u, long idBox, string? parte)
     {
-        if (!u.Accetta) return NonAutorizzato("Solo l'Agenzia conferma le correzioni.");
-        if (parte is not (ParteOfferta or ParteDescrizione)) return NonTrovata("Parte della scheda sconosciuta.");
+        var (errore, idPagina) = await ChiudiEditAsync(u, idBox, parte, fotoAIstanta: true);
+        if (errore != null) return errore;
+        return Fatto(await CaricaAsync(await IdVolantinoAsync(idPagina), u), idBox);
+    }
+
+    /// <summary>
+    /// I20-1221: la conferma di una parte dell'Edit avanzato senza ricaricare lo stato, per la conferma
+    /// delle correzioni dal Plugin. fotoAIstanta false: le foto le ha gia' applicate il Plugin, che le
+    /// scrive su Istanta da se', e qui non si rimandano.
+    /// </summary>
+    private async Task<(EsitoCorrezione? Errore, int IdPagina)> ChiudiEditAsync(Utente u, long idBox, string? parte, bool fotoAIstanta)
+    {
+        if (!u.Accetta) return (NonAutorizzato("Solo l'Agenzia conferma le correzioni."), 0);
+        if (parte is not (ParteOfferta or ParteDescrizione)) return (NonTrovata("Parte della scheda sconosciuta."), 0);
         var box = await ctx.VolantiniPagineElementis.AsNoTracking()
             .FirstOrDefaultAsync(e => e.Id == idBox && e.IdParent == null);
-        if (box == null) return NonTrovata("Prodotto non trovato.");
+        if (box == null) return (NonTrovata("Prodotto non trovato."), 0);
 
         var (righe, capo) = await RigheParteAsync(box.Id, parte);
         if (capo == null || capo.Stato == EaAnnullato)
-            return NonTrovata("Non c'è nessuna correzione da confermare: forse è stata annullata.");
+            return (NonTrovata("Non c'è nessuna correzione da confermare: forse è stata annullata."), box.IdPagina);
         if (capo.Stato == EaCorretto)
-            return EsitoCorrezione.No(409, "gia_confermata", "La correzione è già stata confermata.");
+            return (EsitoCorrezione.No(409, "gia_confermata", "La correzione è già stata confermata."), box.IdPagina);
         var finestraAperta = await FinestraApertaAsync(box.IdPagina);   // j209
-        if (finestraAperta != null) return finestraAperta;
+        if (finestraAperta != null) return (finestraAperta, box.IdPagina);
 
         // Passo 2 (decisione dell'11/9): il cambio foto va a Istanta; se Istanta rifiuta la conferma non
         // passa e la correzione resta in attesa. L'originale (Service.cs:2720) confermava comunque.
-        if (parte == ParteDescrizione)
+        if (parte == ParteDescrizione && fotoAIstanta)
         {
             var figlioImm = await ctx.VolantiniPagineElementis.AsNoTracking()
                 .FirstOrDefaultAsync(e => e.IdParent == box.Id && e.LabelInd == SchemaReferenza.LabelImmagine);
@@ -782,15 +794,16 @@ public sealed partial class ServizioCorrezioni
                 var vol = await ctx.Volantinis.AsNoTracking().FirstAsync(v => v.Id == idVol);
                 var esito = await fico.CorreggiFotoAsync(u.Id, vol.GuidKitRuntime, box.Basecode, voci);
                 if (!esito.Ok)
-                    return EsitoCorrezione.No(502, "istanta_rifiuta",
-                        $"Istanta non ha accettato il cambio foto ({esito.Errore}). La correzione resta in attesa: riprova più tardi.");
+                    return (EsitoCorrezione.No(502, "istanta_rifiuta",
+                        $"Istanta non ha accettato il cambio foto ({esito.Errore}). La correzione resta in attesa: riprova più tardi."),
+                        box.IdPagina);
             }
         }
 
         // TODO finestra Category: come AccettaNotaAsync, quando esistera' si rifiuta a finestra aperta.
         foreach (var riga in righe.Where(x => x.Stato == EaRegistrato)) riga.Stato = EaCorretto;
         await ctx.SaveChangesAsync();
-        return Fatto(await CaricaAsync(await IdVolantinoAsync(box.IdPagina), u), box.Id);
+        return (null, box.IdPagina);
     }
 
     // ------------------------------------------------------------------ appoggio

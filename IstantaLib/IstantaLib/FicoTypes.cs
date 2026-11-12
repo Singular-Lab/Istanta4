@@ -948,6 +948,26 @@ namespace IstantaLib
         public List<string> campi { get; set; } = new List<string>();
     }
 
+    /// I20-1221: il Report Correggo del Plugin per un cliente. Spento se abilitato e' falso.
+    public class AgenziaCustomPlugin_CorrezioniCorreggo
+    {
+        public bool abilitato { get; set; } = false;
+        public List<AgenziaCustomPlugin_TimbroCorreggo> timbri { get; set; } = new List<AgenziaCustomPlugin_TimbroCorreggo>();
+    }
+
+    /// I20-1221: cosa fa un timbro di Correggo approvato. Un'azione sul box del plugin di agenzia
+    /// (idAzione, con i valori dei campi che altrimenti scriverebbe l'operatore), oppure l'eliminazione
+    /// della referenza dall'impaginato e dal tracciato (eliminaRef). Un timbro senza regola arriva senza
+    /// scelta, e approvarlo non cambia l'impaginato.
+    public class AgenziaCustomPlugin_TimbroCorreggo
+    {
+        /// Il simbolo del timbro in Correggo4, per esempio "_4_2_alkg".
+        public string simbolo { get; set; } = "";
+        public int idAzione { get; set; } = 0;
+        public Dictionary<string, string> valori { get; set; } = new Dictionary<string, string>();
+        public bool eliminaRef { get; set; } = false;
+    }
+
     public class AgenziaCustomPlugin
     {
         #region filtri e visualizzazione
@@ -1014,6 +1034,12 @@ namespace IstantaLib
         /// Le regole dicono quando una referenza e' fuori per un campo del cliente (Coop: il tema
         /// con "fuori depliant") e quali campi correggere. Spenta se manca.
         public AgenziaCustomPlugin_FuoriVolantinoInTracciato fuoriVolantinoInTracciato { get; set; } = new AgenziaCustomPlugin_FuoriVolantinoInTracciato();
+
+        /// I20-1221: il Report Correggo del Plugin, nel Report Integrita': le correzioni di Correggo4 si
+        /// importano, si approvano o si rifiutano, e quelle approvate si applicano all'impaginato. Le
+        /// regole dicono cosa fa ogni timbro approvato (Coop: i timbri del prezzo info pack, Fuori volantino,
+        /// Elimina). Spento se manca.
+        public AgenziaCustomPlugin_CorrezioniCorreggo correzioniCorreggo { get; set; } = new AgenziaCustomPlugin_CorrezioniCorreggo();
 
         /// Contenitori del noRender: per un campo, il gruppo del box che va nascosto con lui quando il
         /// campo e' in noRender, e che la segnalazione del Plugin indica quando manca insieme al campo
