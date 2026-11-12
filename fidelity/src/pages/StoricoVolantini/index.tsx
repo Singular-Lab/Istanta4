@@ -10,11 +10,13 @@ import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import TomSelect from "@/components/Base/TomSelect";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
+import { useParametriUrl } from "@/hooks/useParametriUrl";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
 import type { PaginaVolantiniConsultazione } from "../../../lib/consultazione/tipi";
-import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
+import { STATO_PROMO } from "../../../lib/enums";
+import { percorsoDettaglioVolantino, percorsoPromo } from "../../../lib/materiali/periodi";
 import { urlVolantiniConsultazione } from "../../query/consultazione";
 import { PERMISSIONS } from "../../constants/permissions";
 import { usePermission } from "../../context/PermissionContext";
@@ -22,6 +24,7 @@ import CardVolantino from "../shared/CardVolantino";
 import { areeECanaliDaCombinazioni, type CombinazioneConNomi, type OpzioneFiltro } from "./filtriAreeCanali";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+const PAGE_SIZE_PREDEFINITA = 20;
 
 interface CardFilter {
     id_area: string;
@@ -40,13 +43,16 @@ const StoricoVolantiniPage = () => {
     const [aree, setAree] = useState<OpzioneFiltro[]>([]);
     const [canali, setCanali] = useState<OpzioneFiltro[]>([]);
 
-    // Filtri
-    const [filter, setFilter] = useState<CardFilter>({ id_area: "", id_canale: "" });
+    // Filtri e paginazione stanno nell'indirizzo (?area=&canale=&pagina=&dimensione=): tornando da un
+    // volantino, o ricaricando, si ritrova la stessa pagina con gli stessi filtri. Le pagine le taglia il server
+    const [parametri, aggiorna] = useParametriUrl();
+    const idArea = parametri.get("area") ?? "";
+    const idCanale = parametri.get("canale") ?? "";
+    const filter: CardFilter = { id_area: idArea, id_canale: idCanale };
+    const currentPage = Math.max(1, Math.trunc(Number(parametri.get("pagina"))) || 1);
+    const dimensioneLetta = Number(parametri.get("dimensione"));
+    const pageSize = PAGE_SIZE_OPTIONS.includes(dimensioneLetta) ? dimensioneLetta : PAGE_SIZE_PREDEFINITA;
     const [isFiltering, setIsFiltering] = useState(false);
-
-    // Stato paginazione: le pagine le taglia il server
-    const [currentPage, setCurrentPage] = useState(1);
-    const [pageSize, setPageSize] = useState(20);
     // Solo l'ultima richiesta aggiorna la pagina: una risposta lenta non sovrascrive quelle dopo
     const ultimaRichiesta = useRef(0);
 
@@ -89,32 +95,31 @@ const StoricoVolantiniPage = () => {
         };
 
         loadInitialData();
-        fetchData(filter, 1, pageSize);
     }, []);
 
+    // Ogni cambio di filtri o pagina nell'indirizzo chiede la pagina al server
+    useEffect(() => {
+        fetchData({ id_area: idArea, id_canale: idCanale }, currentPage, pageSize);
+    }, [fetchData, idArea, idCanale, currentPage, pageSize]);
+
     const handlePageChange = useCallback((pagina: number) => {
-        setCurrentPage(pagina);
-        fetchData(filter, pagina, pageSize);
-    }, [fetchData, filter, pageSize]);
+        aggiorna({ pagina: pagina > 1 ? pagina : null });
+    }, [aggiorna]);
 
     // Cambiando le righe per pagina si riparte dalla prima pagina
     const handlePageSizeChange = useCallback((dimensione: number) => {
-        setPageSize(dimensione);
-        setCurrentPage(1);
-        fetchData(filter, 1, dimensione);
-    }, [fetchData, filter]);
+        aggiorna({ dimensione: dimensione === PAGE_SIZE_PREDEFINITA ? null : dimensione, pagina: null });
+    }, [aggiorna]);
 
     // Cambiando i filtri si riparte dalla prima pagina
     const handleFilterChange = useCallback((newFilter: CardFilter) => {
-        setFilter(newFilter);
-        setCurrentPage(1);
-        fetchData(newFilter, 1, pageSize);
-    }, [fetchData, pageSize]);
+        aggiorna({ area: newFilter.id_area, canale: newFilter.id_canale, pagina: null });
+    }, [aggiorna]);
 
     const refetch = useCallback(() => {
         setIsLoading(true);
-        fetchData(filter, currentPage, pageSize);
-    }, [filter, currentPage, pageSize, fetchData]);
+        fetchData({ id_area: idArea, id_canale: idCanale }, currentPage, pageSize);
+    }, [idArea, idCanale, currentPage, pageSize, fetchData]);
 
     const paginatedKits = data?.kit ?? [];
     const totale = data?.totale ?? 0;
@@ -250,7 +255,8 @@ const StoricoVolantiniPage = () => {
                                             collegamento={puoConsultareVolantini ? percorsoDettaglioVolantino(kit.id) : undefined}
                                             promo={{
                                                 nome: kit.promo.nome,
-                                                collegamento: canAccessPromo ? `/promozioni/in-corso/dettagli/${kit.promo.id}` : undefined,
+                                                // Lo storico ha solo promo archiviate: il loro dettaglio sta sotto lo storico delle promozioni
+                                                collegamento: canAccessPromo ? percorsoPromo(kit.promo.id, STATO_PROMO.ARCHIVIATA) : undefined,
                                             }}
                                             puoScaricare={puoScaricare}
                                         />

@@ -1,5 +1,6 @@
 import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
+import type { Indietro } from "@/components/Base/PageHeader";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import StatusBadge from "@/components/Base/StatusBadge";
@@ -17,14 +18,29 @@ import { useFetchFlyerInsights, useFetchFlyerInsightsConfig } from "@/query/quer
 import { useVolantinoConsultazione } from "@/query/consultazione";
 import { useScaricaFileConsultazione } from "@/utils/scaricaFileConsultazione";
 import { useCallback, useId, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { percorsoVolantini } from "../../../lib/consultazione/periodi";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { percorsoPromozioneVolantini, percorsoVolantini } from "../../../lib/consultazione/periodi";
 import { EXPORT_DI_SISTEMA } from "../../../lib/enums";
 import type { BoxInsight } from "../../../lib/insightVolantino/tipi";
 import { ScaricaVolantino } from "./ScaricaVolantino";
 import { statoValidita } from "./validita";
 
-const INDIETRO = { to: percorsoVolantini("attivi"), etichetta: "Torna ai volantini attivi" };
+const VOLANTINI_ATTIVI: Indietro = { to: percorsoVolantini("attivi"), etichetta: "Torna ai volantini attivi" };
+
+/**
+ * Il ritorno dal volantino (spec insight-volantino, "Ritorno dagli insight del volantino"): alla pagina
+ * da cui è stato aperto (Volantini, dettaglio della promo, Storico volantini, punto vendita, dashboard),
+ * con la sua query, qualunque sia il periodo della promo. Senza una pagina di Fidelity prima (segnalibro,
+ * nuova scheda: la prima voce del router ha la chiave "default") porta al dettaglio della promozione del
+ * volantino; se la promozione non si sa ancora, ai volantini attivi.
+ */
+function useIndietro(idPromo: string | undefined): Indietro {
+  const navigate = useNavigate();
+  const { key } = useLocation();
+  if (key !== "default") return { onClick: () => navigate(-1), etichetta: "Torna indietro" };
+  if (idPromo) return { to: percorsoPromozioneVolantini(idPromo), etichetta: "Torna alla promozione" };
+  return VOLANTINI_ATTIVI;
+}
 
 /** Il report PDF del volantino è disattivato per tutti: il pulsante resta, disattivato, con questo motivo. */
 export const REPORT_DISATTIVATO = "Il report PDF è disattivato";
@@ -86,6 +102,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
   const idVolantino = useId();
 
   const dati = insights.data;
+  const indietro = useIndietro(dati?.contesto?.idPromo);
   const boxVolantino = dati?.box;
 
   const boxIniziale = useMemo(() => (boxVolantino ? boxDellaReferenza(boxVolantino, referenza) : null), [boxVolantino, referenza]);
@@ -108,7 +125,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
 
   if (!idKit) {
     return (
-      <Pagina compatta titolo="Dettaglio volantino" indietro={INDIETRO}>
+      <Pagina compatta titolo="Dettaglio volantino" indietro={indietro}>
         <PageError compatta titolo="Volantino non indicato" motivo="L'indirizzo non contiene il volantino da consultare." />
       </Pagina>
     );
@@ -116,7 +133,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
 
   if (insights.isError) {
     return (
-      <Pagina compatta titolo="Dettaglio volantino" indietro={INDIETRO}>
+      <Pagina compatta titolo="Dettaglio volantino" indietro={indietro}>
         <PageError
           compatta
           titolo="Insight non caricati"
@@ -153,7 +170,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
       compatta
       titolo={titolo}
       meta={meta}
-      indietro={INDIETRO}
+      indietro={indietro}
       azioni={
         // Il report PDF è disattivato per tutti ma resta visibile; accanto si scarica il PDF del volantino
         <div className="flex flex-wrap items-start justify-end gap-2">

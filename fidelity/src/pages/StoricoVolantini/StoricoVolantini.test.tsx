@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const finti = vi.hoisted(() => ({ get: vi.fn(), permessiNegati: new Set<string>() }));
@@ -31,12 +31,39 @@ const kit = {
 const URL_STORICO = "/consultazione/volantini?periodo=storico";
 const pagina = (kitDellaPagina: unknown[], totale = kitDellaPagina.length) => ({ kit: kitDellaPagina, totale, pagina: 1, dimensione: 20 });
 
-const apri = () =>
-  render(
-    <MemoryRouter>
-      <StoricoVolantini />
-    </MemoryRouter>
+/** L'indirizzo corrente, per vedere filtri e pagina che la pagina scrive nella query. */
+function Indirizzo() {
+  const { pathname, search } = useLocation();
+  return <output aria-label="Indirizzo">{`${pathname}${search}`}</output>;
+}
+
+const apri = (indirizzo = "/storico-volantini") => {
+  const router = createMemoryRouter(
+    [
+      { path: "/storico-volantini", element: <><StoricoVolantini /><Indirizzo /></> },
+      { path: "/volantini/tutti_i_volantini", element: <p>Pagina del volantino</p> },
+      { path: "*", element: <Indirizzo /> },
+    ],
+    { initialEntries: [indirizzo] }
   );
+  render(<RouterProvider router={router} />);
+  return router;
+};
+
+const indirizzo = () => screen.getByRole("status", { name: "Indirizzo" }).textContent;
+
+const COMBINAZIONI = [
+  { id: "c1", id_area: "a-nord", id_canale: "ch-super", area_nome: "Nord", area_codice: "N", canale_nome: "Super", canale_codice: "S", stato: "ATTIVO" },
+  { id: "c2", id_area: "a-nord", id_canale: "ch-iper", area_nome: "Nord", area_codice: "N", canale_nome: "Iper", canale_codice: "I", stato: "ATTIVO" },
+  { id: "c3", id_area: "a-centro", id_canale: "ch-super", area_nome: "Centro", area_codice: "C", canale_nome: "Super", canale_codice: "S", stato: "DISATTIVO" },
+];
+
+const conStorico = (totale = 1) =>
+  finti.get.mockImplementation((url: string) => {
+    if (url.startsWith(URL_STORICO)) return Promise.resolve(pagina([kit], totale));
+    if (url === "/get_all_combinazioni_canale_area") return Promise.resolve(COMBINAZIONI);
+    return Promise.reject(new Error(`rotta inattesa ${url}`));
+  });
 
 describe("Storico volantini", () => {
   beforeEach(() => {
@@ -78,17 +105,7 @@ describe("Storico volantini", () => {
   });
 
   it("popola i filtri Area e Canale dalle combinazioni area/canale e filtra lo storico per l'area scelta", async () => {
-    finti.get.mockImplementation((url: string) => {
-      if (url.startsWith(URL_STORICO)) return Promise.resolve(pagina([kit]));
-      if (url === "/get_all_combinazioni_canale_area") {
-        return Promise.resolve([
-          { id: "c1", id_area: "a-nord", id_canale: "ch-super", area_nome: "Nord", area_codice: "N", canale_nome: "Super", canale_codice: "S", stato: "ATTIVO" },
-          { id: "c2", id_area: "a-nord", id_canale: "ch-iper", area_nome: "Nord", area_codice: "N", canale_nome: "Iper", canale_codice: "I", stato: "ATTIVO" },
-          { id: "c3", id_area: "a-centro", id_canale: "ch-super", area_nome: "Centro", area_codice: "C", canale_nome: "Super", canale_codice: "S", stato: "DISATTIVO" },
-        ]);
-      }
-      return Promise.reject(new Error(`rotta inattesa ${url}`));
-    });
+    conStorico();
     apri();
 
     const area = await screen.findByRole("combobox", { name: "Area" });
@@ -115,6 +132,55 @@ describe("Storico volantini", () => {
     expect(finti.get).toHaveBeenCalledWith(`${URL_STORICO}&pagina=1&dimensione=20`);
     // Solo volantini pubblicati: la scheda non mostra lo stato del kit
     expect(screen.queryByText("Pubblicato")).not.toBeInTheDocument();
+  });
+
+  it("area, canale, pagina e righe per pagina arrivano dall'indirizzo", async () => {
+    conStorico(120);
+    apri("/storico-volantini?area=a-nord&canale=ch-super&pagina=3&dimensione=50");
+
+    expect(await screen.findByRole("heading", { name: "Volantino Nord" })).toBeInTheDocument();
+    expect(finti.get).toHaveBeenCalledWith(`${URL_STORICO}&idArea=a-nord&idCanale=ch-super&pagina=3&dimensione=50`);
+    expect(finti.get).not.toHaveBeenCalledWith(`${URL_STORICO}&pagina=1&dimensione=20`);
+    const area = screen.getByRole("combobox", { name: "Area" });
+    await vi.waitFor(() => expect(area).toHaveValue("a-nord"));
+    expect(screen.getByRole("combobox", { name: "Canale" })).toHaveValue("ch-super");
+  });
+
+  it("un filtro nuovo va nell'indirizzo e riparte dalla prima pagina; Azzera filtri toglie area e canale", async () => {
+    conStorico(120);
+    apri("/storico-volantini?pagina=3&dimensione=50");
+
+    const area = await screen.findByRole("combobox", { name: "Area" });
+    await vi.waitFor(() => expect(within(area).getAllByRole("option")).toHaveLength(3));
+    fireEvent.change(area, { target: { value: "a-nord" } });
+
+    await vi.waitFor(() => expect(indirizzo()).toBe("/storico-volantini?dimensione=50&area=a-nord"));
+    await vi.waitFor(() => expect(finti.get).toHaveBeenCalledWith(`${URL_STORICO}&idArea=a-nord&pagina=1&dimensione=50`));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Azzera filtri/ }));
+    await vi.waitFor(() => expect(indirizzo()).toBe("/storico-volantini?dimensione=50"));
+  });
+
+  it("tornando indietro da un volantino ritrova la stessa pagina con gli stessi filtri", async () => {
+    conStorico(120);
+    const router = apri("/storico-volantini?area=a-nord&pagina=3");
+
+    fireEvent.click(await screen.findByRole("link", { name: "Volantino Nord" }));
+    expect(await screen.findByText("Pagina del volantino")).toBeInTheDocument();
+    finti.get.mockClear();
+
+    await router.navigate(-1);
+
+    expect(await screen.findByRole("heading", { name: "Volantino Nord" })).toBeInTheDocument();
+    expect(indirizzo()).toBe("/storico-volantini?area=a-nord&pagina=3");
+    expect(finti.get).toHaveBeenCalledWith(`${URL_STORICO}&idArea=a-nord&pagina=3&dimensione=20`);
+  });
+
+  it("il nome della promo apre il suo dettaglio nello storico delle promozioni", async () => {
+    conStorico();
+    apri();
+
+    expect(await screen.findByRole("link", { name: "Promo: Promo ottobre" })).toHaveAttribute("href", "/promozioni/storico/dettagli/p1");
   });
 });
 
