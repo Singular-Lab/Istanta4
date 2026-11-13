@@ -119,7 +119,6 @@ export function ConfrontoKit({ kit, tinta }: { kit: readonly KitPromozioneConsul
                       to={percorso}
                       tabIndex={-1}
                       onClick={evento => evento.stopPropagation()}
-                      title={k.titolo}
                       className="flex items-center gap-2.5 whitespace-nowrap font-semibold text-slate-800 hover:text-primary dark:text-slate-100 dark:hover:text-indigo-300"
                     >
                       <Copertina kit={k} conNome={false} className="aspect-[5/7] w-7 flex-none rounded-sm shadow-sm ring-1 ring-black/5" />

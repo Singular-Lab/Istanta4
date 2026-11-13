@@ -140,7 +140,8 @@ function coloriSenzaMarketing(
         altri ??= { id: "altri", etichetta: colore.etichetta || "Altri reparti", forma: "quadrato", tinta: tinta(reparto) };
         continue;
       }
-      const etichetta = colore.etichetta || nomeReparto(reparto);
+      // La config dà il colore; il nome è quello del reparto, lo stesso di schede e tabelle (non la label della config)
+      const etichetta = nomeReparto(reparto);
       voci.set(`${colore.colore}|${etichetta}`, { id: chiaveReparto(reparto), etichetta, forma: "quadrato", tinta: tinta(reparto) });
     }
     return { tinta, voci: [...ordinaVoci([...voci.values()]), ...(altri ? [altri] : []), ...nonNoto], daConfigurazione: true };

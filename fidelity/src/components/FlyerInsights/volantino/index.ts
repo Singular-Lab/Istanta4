@@ -4,7 +4,7 @@
  * reale, lettura a schermo pieno, colori, ricerca e interrogazione dei box, analisi delle pagine
  * aperte, scheda del box e viaggio del prodotto.
  */
-export { default, VolantinoSfogliabile, type VolantinoSfogliabileProps } from "./VolantinoSfogliabile";
+export { ATTRIBUTO_LETTORE, default, VolantinoSfogliabile, type VolantinoSfogliabileProps } from "./VolantinoSfogliabile";
 export { PaginaConImmagine, type PaginaConImmagineProps } from "./PaginaConImmagine";
 export { AnalisiPagina, type AnalisiPaginaProps } from "./AnalisiPagina";
 export {

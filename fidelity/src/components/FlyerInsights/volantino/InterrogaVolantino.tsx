@@ -8,7 +8,9 @@ import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useMemo, useState, type KeyboardEvent } from "react";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
+import { unitaPrezzo } from "../../../../lib/insightVolantino/unita";
 import { normalizzaRicerca, ripartizionePagina } from "./analisiPagina";
+import { testoRuoli } from "../referenze/tabella";
 import { marcaFormato, NOTA_PREZZO_CALCOLATO } from "./box";
 import type { GruppoBox } from "./colori";
 import {
@@ -148,7 +150,7 @@ function SceltaValori({ condizione, onAlterna }: { condizione: Condizione; onAlt
                     onChange={() => onAlterna(valore.chiave)}
                     className="h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-2 focus:ring-primary/30 dark:border-darkmode-400 dark:bg-darkmode-800"
                   />
-                  <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200" title={valore.etichetta}>
+                  <span className="min-w-0 flex-1 truncate text-slate-700 dark:text-slate-200" title={valore.fonte ? `${valore.etichetta} (${valore.fonte})` : valore.etichetta}>
                     {valore.etichetta}
                   </span>
                   <span className="tabular-nums text-slate-500 dark:text-slate-400">{formatNumero(valore.box)}</span>
@@ -387,7 +389,7 @@ export function InterrogaVolantino({
           </div>
           <ul className="-mx-2 flex flex-col">
             {mostrati.map(voce => {
-              const dettagli = [voce.pagina !== null ? `pag. ${formatNumero(voce.pagina)}` : null, marcaFormato(voce)].filter(Boolean).join(" · ");
+              const dettagli = [voce.pagina !== null ? `pag. ${formatNumero(voce.pagina)}` : null, marcaFormato(voce), testoRuoli(voce)].filter(Boolean).join(" · ");
               return (
                 <li key={voce.id}>
                   <button
@@ -416,6 +418,7 @@ export function InterrogaVolantino({
                       {voce.prezzo !== null && (
                         <span className="text-xs font-semibold text-slate-800 dark:text-slate-100" title={voce.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
                           {formatEuro(voce.prezzo)}
+                          {unitaPrezzo(voce.prezzoAllEtto)}
                         </span>
                       )}
                       <span>

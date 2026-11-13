@@ -54,29 +54,49 @@ const NO = "no";
 export interface ValoreCondizione {
   chiave: string;
   etichetta: string;
+  /** Il valore come lo scrive la fonte ("tantealtreoff"), per il suggerimento; assente quando è l'etichetta. */
+  fonte?: string;
 }
 
 type Box = BoxInsight;
 
 /* ---------- Valori dei box ---------- */
 
-/** I valori diversi di un testo, per chiave normalizzata: "CARNI" e "Carni" sono lo stesso valore. */
-const valoriTesto = (testi: ReadonlyArray<string | null | undefined>): ValoreCondizione[] => {
-  const valori = new Map<string, string>();
-  for (const testo of testi) {
+/**
+ * I valori diversi di un testo, per chiave normalizzata: "CARNI" e "Carni" sono lo stesso valore. Con
+ * `fonti`, il valore come lo scrive la fonte allo stesso indice, per il suggerimento.
+ */
+const valoriTesto = (testi: ReadonlyArray<string | null | undefined>, fonti?: ReadonlyArray<string | null | undefined>): ValoreCondizione[] => {
+  const valori = new Map<string, ValoreCondizione>();
+  testi.forEach((testo, indice) => {
     const pulito = testo?.trim();
-    if (!pulito) continue;
+    if (!pulito) return;
     const chiave = normalizzaRicerca(pulito);
-    if (!valori.has(chiave)) valori.set(chiave, pulito);
-  }
-  return [...valori].map(([chiave, etichetta]) => ({ chiave, etichetta }));
+    if (valori.has(chiave)) return;
+    const fonte = fonti?.[indice]?.trim();
+    valori.set(chiave, fonte && fonte !== pulito ? { chiave, etichetta: pulito, fonte } : { chiave, etichetta: pulito });
+  });
+  return [...valori.values()];
 };
 
 const siNo = (vero: boolean, siEtichetta: string, noEtichetta: string): ValoreCondizione[] =>
   vero ? [{ chiave: SI, etichetta: siEtichetta }] : [{ chiave: NO, etichetta: noEtichetta }];
 
-const dalProdotto = (voce: Box, campo: "settore" | "segmento" | "tema" | "ruolo"): ValoreCondizione[] =>
+const dalProdotto = (voce: Box, campo: "settore" | "segmento" | "ruolo"): ValoreCondizione[] =>
   valoriTesto((voce.dettaglioProdotti ?? []).map(prodotto => prodotto[campo]));
+
+/** Il tema è già leggibile (libreria agenzia): la scrittura della fonte va nel suggerimento. */
+const temiDelBox = (voce: Box): ValoreCondizione[] =>
+  valoriTesto(
+    (voce.dettaglioProdotti ?? []).map(prodotto => prodotto.tema),
+    (voce.dettaglioProdotti ?? []).map(prodotto => prodotto.temaOriginale)
+  );
+
+/** I ruoli del box; un box senza ruolo ha "Senza ruolo", proposto solo accanto ad altri ruoli. */
+const ruoliDelBox = (voce: Box): ValoreCondizione[] => {
+  const ruoli = dalProdotto(voce, "ruolo");
+  return ruoli.length > 0 ? ruoli : [{ chiave: SENZA, etichetta: "Senza ruolo" }];
+};
 
 const ORIGINE: Readonly<Record<NonNullable<Box["origine"]>, string>> = { listino: "Dal listino", fuori_listino: "Fuori listino" };
 
@@ -101,8 +121,8 @@ const DEFINIZIONI: readonly DefinizioneScelta[] = [
   },
   { id: "settore", etichetta: "Settore", valori: voce => dalProdotto(voce, "settore") },
   { id: "segmento", etichetta: "Segmento", valori: voce => dalProdotto(voce, "segmento") },
-  { id: "tema", etichetta: "Tema", valori: voce => dalProdotto(voce, "tema") },
-  { id: "ruolo", etichetta: "Ruolo", valori: voce => dalProdotto(voce, "ruolo") },
+  { id: "tema", etichetta: "Tema", valori: temiDelBox },
+  { id: "ruolo", etichetta: "Ruolo", valori: ruoliDelBox },
   { id: "marca", etichetta: "Marca", valori: voce => valoriTesto([voce.marca, ...(voce.dettaglioProdotti ?? []).map(prodotto => prodotto.marca)]) },
   { id: "linea", etichetta: "Linea del distributore", valori: voce => (voce.linea ? [{ chiave: voce.linea.sigla, etichetta: voce.linea.nome || voce.linea.sigla }] : []) },
   { id: "bolli", etichetta: "Bolli", valori: voce => (voce.bolli ?? []).map(sigla => ({ chiave: sigla, etichetta: sigla })) },
@@ -245,16 +265,16 @@ export interface Condizione {
 export function condizioniDisponibili(tutti: readonly Box[], base: readonly Box[], interrogazione: Interrogazione): Condizione[] {
   const condizioni: Condizione[] = [];
   for (const definizione of DEFINIZIONI) {
-    const presenti = new Map<string, string>();
+    const presenti = new Map<string, ValoreCondizione>();
     let senzaDato = 0;
-    /** L'etichetta del valore "senza" (reparto non noto...), se qualche box l'ha. */
-    let senza: string | null = null;
+    /** Il valore "senza" (reparto non noto, senza ruolo...), se qualche box l'ha. */
+    let senza: ValoreCondizione | null = null;
     for (const voce of tutti) {
       const valori = definizione.valori(voce);
       if (valori.every(valore => valore.chiave === SENZA)) senzaDato += 1;
       for (const valore of valori) {
-        if (valore.chiave === SENZA) senza = valore.etichetta;
-        else if (!presenti.has(valore.chiave)) presenti.set(valore.chiave, valore.etichetta);
+        if (valore.chiave === SENZA) senza = valore;
+        else if (!presenti.has(valore.chiave)) presenti.set(valore.chiave, valore);
       }
     }
     const utile = definizione.serve ? [...presenti.keys()].some(definizione.serve) : presenti.size > 1 || (presenti.size === 1 && senzaDato > 0);
@@ -272,8 +292,8 @@ export function condizioniDisponibili(tutti: readonly Box[], base: readonly Box[
       const indice = definizione.ordine?.indexOf(chiave) ?? -1;
       return indice < 0 ? Number.MAX_SAFE_INTEGER : indice;
     };
-    const valori = [...presenti]
-      .map(([chiave, etichetta]) => ({ chiave, etichetta, box: conti.get(chiave) ?? 0, scelto: scelte.includes(chiave) }))
+    const valori = [...presenti.values()]
+      .map(valore => ({ ...valore, box: conti.get(valore.chiave) ?? 0, scelto: scelte.includes(valore.chiave) }))
       .sort(
         (a, b) =>
           Number(a.chiave === SENZA) - Number(b.chiave === SENZA) ||

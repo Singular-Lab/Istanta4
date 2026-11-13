@@ -356,7 +356,38 @@ describe('leggiReferenza: i nomi di prezzo, barrato e sconto', () => {
       data_fields: LISTINO_DB1,
     }), STORICO);
 
-    expect(referenza).toMatchObject({ prezzo: 1.75, barrato: 2.19, sconto: 20, prezzoCalcolato: null, meccanica: 'sconto' });
+    expect(referenza).toMatchObject({ prezzo: 1.75, barrato: 2.19, sconto: 20, prezzoCalcolato: null, meccanica: 'sconto', prezzoAllEtto: true });
+  });
+
+  it('box all\'etto dello storico: prezzo all\'etto, prezzo al kg stampato nella descrizione, nessun ribasso dal listino al kg', () => {
+    // Kit 445d0220, Gorgonzola Sapori&Dintorni: "0,99 ALL'ETTO" e "al kg € 9,90" dentro la descrizione;
+    // prezzo_anziche_kgl 16,80 e' il listino DB1 (prezzo_base_KgL), non un barrato stampato
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [
+        campo('sy_euro', '€', '[Nessuno stile paragrafo]'),
+        campo('prezzo_offerta_etto', '0,99', 'PREZ_NoSconto_boxetto'),
+        campo('sy_etto', 'ALL’ETTO', '[Paragrafo base]'),
+        campo(
+          'descrizione',
+          '<DES_descr_nome>Gorgonzola dolce <br>DOP<br></DES_descr_nome><DES_descr_marca>Sapori&Dintorni <br>CONAD<br></DES_descr_marca><CPREZ_CampoOfferta>al kg </CPREZ_CampoOfferta><EURO piccolo_Descr2_boxetto>€</EURO piccolo_Descr2_boxetto><CPREZ_CampoOfferta> 9,90</CPREZ_CampoOfferta>',
+          'DIC_Rep_25'
+        ),
+      ],
+      data_fields: { codice_referenza: '915', prezzo_offerta_kgl: 9.9, prezzo_anziche_kgl: 16.8, prezzo_base_KgL: 16.8, descrizione_unita_misura: 'Kg', meccanica: 'TP_MM_bdp_boxetto' },
+    }), STORICO);
+
+    expect(referenza).toMatchObject({ nome: 'Gorgonzola dolce DOP', prezzo: 0.99, barrato: null, prezzoAllEtto: true, prezzoAlKg: 'al kg € 9,90' });
+  });
+
+  it('storico senza prezzo al kg stampato: quello dei dati, senza il listino al kg come prezzo di prima', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [campo('prezzo_offerta', '1,29', 'PREZ_NoSconto')],
+      data_fields: { codice_referenza: '915', prezzo_offerta_kgl: 12.9, prezzo_anziche_kgl: 16.8, descrizione_unita_misura: 'Kg' },
+    }), STORICO);
+
+    expect(referenza).toMatchObject({ prezzo: 1.29, prezzoAlKg: 'al kg € 12,90' });
+    // Il prezzo a pezzo non e' all'etto
+    expect(referenza.prezzoAllEtto).toBeUndefined();
   });
 
   it('il prefisso X_ non cambia il significato del riquadro', () => {

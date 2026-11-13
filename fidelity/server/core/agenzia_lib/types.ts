@@ -332,6 +332,32 @@ export interface InsightVolantinoAgenzia {
    * nome, marca in evidenza, formato, varianti).
    */
   descrizioneBox?(testi: TestiDescrizioneBox): ParteDescrizione[];
+  /**
+   * Le etichette dei ruoli delle referenze (campo ruolo dei dati), per chiave: il valore in minuscolo
+   * con gli spazi singoli (lib/insightVolantino/ruolo.ts, chiaveRuolo). Un ruolo che manca qui, o un
+   * cliente senza, si scrive con l'iniziale maiuscola e il resto minuscolo (spec insight-volantino,
+   * "Ruolo della referenza leggibile").
+   */
+  ruoli?: Readonly<Record<string, string>>;
+  /**
+   * Le etichette dei temi delle referenze (campo tema dei dati, "tantealtreoff"), per chiave come i
+   * ruoli. Un tema che manca qui si scrive con l'iniziale maiuscola e il resto minuscolo (spec
+   * insight-volantino, "Tema della referenza leggibile").
+   */
+  temi?: Readonly<Record<string, string>>;
+  /** Da dove viene la sezione di ogni pagina del menabò del volantino. Senza, il menabò non compare. */
+  menabo?: MenaboAgenzia;
+}
+
+/** La sezione delle pagine del menabò del volantino (spec insight-volantino, "Menabò del volantino"). */
+export interface MenaboAgenzia {
+  /** Il dato delle referenze (data_fields) che dice la sezione della pagina: per Conad CNO "mastro". */
+  campo: string;
+  /**
+   * Il nome leggibile di una sezione; senza, il valore com'e'. Null per un valore che non e' una
+   * sezione (per Conad CNO la mastro della pagina bianca): quei box non decidono la sezione della pagina.
+   */
+  nome?(valore: string): string | null;
 }
 
 /** Testi stampati da cui ricavare la linea quando Istanta non l'ha assegnata (volantini dello storico). */

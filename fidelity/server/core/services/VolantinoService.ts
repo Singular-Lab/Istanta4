@@ -4,11 +4,12 @@ import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/e
 import type { RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { FileItemKit } from '../../../lib/types';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
-import type { IAgenziaLib, InsightVolantinoAgenzia } from '../agenzia_lib/types';
+import type { IAgenziaLib } from '../agenzia_lib/types';
 import type { ICatalogoLoghiService, LogoDelCatalogo } from '../interfaces/ICatalogoLoghiService';
 import { log } from '../logger';
-import { regoleLinee, type RegoleLinee, sigleAssegnate, urlImmagineLogo } from '../utils/lineeDistributore';
-import { type FonteRepartiGdo, type RisolutoreReparti, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
+import { urlImmagineLogo } from '../utils/lineeDistributore';
+import { opzioniDellAgenzia } from '../utils/insightAgenzia';
+import { type FonteRepartiGdo, nomeRepartoLeggibile, type RisolutoreReparti, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import { caricaRisolutoreReparti } from './risolutoreRepartiGdo';
 import {
@@ -27,7 +28,7 @@ import { ReferenzeGruppo } from '../models/referenze_gruppo';
 import { kitNellAmbito, pdfDelKit, righeDelKit } from '../repositories/InsightVolantinoRepository';
 import { boxDelKit } from '../utils/analisiKit';
 import { applicaAnagraficaReparti, leggiAnagraficaReparti, valoreCampo, type PercorsoCampo } from '../utils/campiInsights';
-import { sezioniInsight, type OpzioniInsight } from '../utils/insightVolantino';
+import { sezioniInsight } from '../utils/insightVolantino';
 import { origineStoricoPerReport } from '../utils/origineStorico';
 import { leggiReferenza, percentualeIngombro } from '../utils/referenzaStampata';
 
@@ -62,6 +63,18 @@ function applicaRepartoGdo(referenza: Record<string, unknown>, risolutore: Risol
   if (campoDescrizione) referenza[campoDescrizione] = risolto.descrizione;
 }
 
+/**
+ * La descrizione dell'anagrafica, che arriva in maiuscolo, scritta come frase ("DROGHERIA ALIMENTARE"
+ * -> "Drogheria alimentare"), come nei box degli insight. Il nome per il marketing resta com'e'.
+ */
+function descrizioneComeFrase(referenza: Record<string, unknown>, risolutore: RisolutoreReparti, campoCodice: string, campoDescrizione?: string): void {
+  if (!campoDescrizione) return;
+  const descrizione = testoDelCampo(referenza[campoDescrizione]);
+  if (!descrizione) return;
+  if (!risolutore.vuoto && risolutore.risolvi({ codice: testoDelCampo(referenza[campoCodice]), descrizione }).marketing) return;
+  referenza[campoDescrizione] = nomeRepartoLeggibile(descrizione);
+}
+
 /** Le marche del distributore dalla config (marche.distributore, facoltativa): solo testi non vuoti. */
 function marcheDelDistributore(valore: unknown): string[] {
   return Array.isArray(valore) ? valore.filter((voce): voce is string => typeof voce === 'string' && voce.trim() !== '') : [];
@@ -71,10 +84,6 @@ function marcheDelDistributore(valore: unknown): string[] {
  * Autonomous VolantinoService with its own implementation.
  * Manages volantino (flyer) file queries and insights.
  */
-/** La composizione della descrizione del box dichiarata dalla libreria agenzia, legata al suo modulo; undefined senza. */
-const descrizioneDellAgenzia = (agenzia: InsightVolantinoAgenzia | undefined): OpzioniInsight['descrizioneBox'] =>
-  agenzia?.descrizioneBox ? testi => agenzia.descrizioneBox!(testi) : undefined;
-
 export class VolantinoService implements IVolantinoService {
   constructor(
     private readonly configService: IConfigService,
@@ -168,6 +177,7 @@ export class VolantinoService implements IVolantinoService {
         nomeArea: kit.area || undefined,
         nomeCanale: kit.canale || undefined,
         idPromo: kit.idPromo,
+        nomePromo: kit.nomePromo,
         // Le date della promo come le legge kitNellAmbito: YYYY-MM-DD nel fuso delle promo
         validitaDal: kit.validitaDal,
         validitaAl: kit.validitaAl
@@ -241,6 +251,7 @@ export class VolantinoService implements IVolantinoService {
         // Stesso reparto per Istanta ("01") e storico ("1", senza descrizione): quello dell'anagrafica
         applicaAnagraficaReparti(mapped, anagraficaReparti, repartiField, repartiDescField);
         if (!risolutore.vuoto) applicaRepartoGdo(mapped, risolutore, repartiField, repartiDescField);
+        descrizioneComeFrase(mapped, risolutore, repartiField, repartiDescField);
 
         // Normalizza stringhe numeriche in formato italiano (es. "0,85" → 0.85)
         // Il componente usa Number(ref.prezzo) che non gestisce la virgola come separatore decimale
@@ -357,11 +368,11 @@ export class VolantinoService implements IVolantinoService {
       // reparto e meccanica gia' mappati qui sopra, cosi' codici e colori restano quelli dei riepiloghi.
       const dtoPerId = new Map(referenzeDTO.map(ref => [String(ref.id), ref] as const));
       const codiciFuoriListino = new Set([...codiciBoxFuoriListino].map(codice => codice.trim()));
-      // Linee del distributore e bolli, se la libreria agenzia del cliente li dichiara: i loghi
-      // assegnati da Istanta alle referenze e il catalogo dei loghi, letto prima delle sezioni
-      const regole: RegoleLinee | null = regoleLinee(this.agenziaLib.insightVolantino?.lineeDistributore);
-      const loghiPerReferenza = new Map(righe.map(riga => [String(riga.id), sigleAssegnate(riga.foto_extra)] as const));
-      const catalogo = regole ? await this.catalogo(richiesta) : new Map<string, LogoDelCatalogo>();
+      // Quello che dichiara la libreria agenzia del cliente, come nel dettaglio della promozione:
+      // linee del distributore con i loghi assegnati da Istanta, descrizione del box, etichette dei
+      // ruoli e menabò. Il catalogo dei loghi serve solo con le linee, ed e' letto prima delle sezioni
+      const dellAgenzia = opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe);
+      const catalogo = dellAgenzia.lineeDistributore ? await this.catalogo(richiesta) : new Map<string, LogoDelCatalogo>();
       const sezioni = sezioniInsight(
         boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico }))),
         {
@@ -378,14 +389,11 @@ export class VolantinoService implements IVolantinoService {
             ? (codiceBox) => (codiciFuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino')
             : undefined,
           risolviReparto: risolutore.vuoto ? undefined : (reparto) => risolutore.risolvi(reparto),
-          lineeDistributore: regole,
-          loghiAssegnati: (idReferenza) => loghiPerReferenza.get(idReferenza) ?? [],
           urlLogo: (sigla) => {
             const voce = catalogo.get(sigla.trim().toLowerCase());
             return voce ? urlImmagineLogo(voce.guidId) : null;
           },
-          // La descrizione completa del box nella scheda, se la libreria agenzia del cliente la compone a modo suo
-          descrizioneBox: descrizioneDellAgenzia(this.agenziaLib.insightVolantino)
+          ...dellAgenzia
         }
       );
 

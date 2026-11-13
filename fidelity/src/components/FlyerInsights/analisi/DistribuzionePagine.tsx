@@ -12,7 +12,7 @@ import { pagineDaSfogliare } from "../volantino/geometria";
  * "Distribuzione nelle pagine", come il riepilogo delle pagine di prima: una colonna per pagina alta
  * quante sono le sue referenze, divisa per reparto con gli stessi colori del volantino sfogliabile,
  * e la linea dell'ingombro (la parte della pagina coperta dai box) su un asse a parte. Sotto, un
- * riquadro per pagina con referenze e ingombro. Colonne e riquadri portano il volantino alla pagina.
+ * riquadro per pagina con le referenze e la parte della pagina coperta dai box, scritte per intero. Colonne e riquadri portano il volantino alla pagina.
  * Niente calore, visibilità o vendite (spec insight-volantino).
  */
 
@@ -288,8 +288,8 @@ export function DistribuzionePagine({ box, totalePagine, configurazione, paginaC
         <Legenda voci={[VOCE_INGOMBRO]} />
       </div>
 
-      {/* Un riquadro per pagina, come nel riepilogo di prima: referenze e ingombro a colpo d'occhio */}
-      <ul aria-label="Pagine del volantino" className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2">
+      {/* Un riquadro per pagina, come nel riepilogo di prima: referenze e pagina coperta a colpo d'occhio, a parole intere */}
+      <ul aria-label="Pagine del volantino" className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2">
         {colonne.map(colonna => {
           const corrente = colonna.pagina === paginaCorrente;
           const contenuto = (
@@ -303,8 +303,8 @@ export function DistribuzionePagine({ box, totalePagine, configurazione, paginaC
                 {colonna.pagina}
               </span>
               <span className="min-w-0 text-left leading-tight">
-                <span className="block text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatNumero(colonna.referenze)} ref.</span>
-                <span className="block text-3xs tabular-nums text-slate-500 dark:text-slate-400">{formatPercentuale(colonna.occupato, 0)} ing.</span>
+                <span className="block text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100">{contaReferenze(colonna.referenze)}</span>
+                <span className="block text-3xs tabular-nums text-slate-500 dark:text-slate-400">{formatPercentuale(colonna.occupato, 0)} della pagina</span>
               </span>
             </>
           );
@@ -319,7 +319,7 @@ export function DistribuzionePagine({ box, totalePagine, configurazione, paginaC
               {onVaiAllaPagina ? (
                 <button
                   type="button"
-                  aria-label={`Pagina ${colonna.pagina}: ${contaReferenze(colonna.referenze)}, ${formatPercentuale(colonna.occupato, 0)} di ingombro`}
+                  aria-label={`Pagina ${colonna.pagina}: ${contaReferenze(colonna.referenze)}, ${formatPercentuale(colonna.occupato, 0)} della pagina coperta dai box`}
                   aria-current={corrente ? "page" : undefined}
                   onClick={() => onVaiAllaPagina(colonna.pagina)}
                   className={twMerge(

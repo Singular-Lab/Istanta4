@@ -146,10 +146,10 @@ describe('aggregaPromozioneVolantini: elenchi dei prodotti comuni e locali', () 
     expect(dettaglio.assortimento.referenze).toEqual([
       {
         chiave: 'c-latte', nome: 'Latte intero', marca: 'Granarolo', formato: '1 l', reparto: REPARTO_LATTICINI, foto: '/foto/latte.jpg',
-        codice: null, ean: null, meccaniche: [], prezzoAlKg: null, linea: null, sottocosto: false,
+        codice: null, ean: null, meccaniche: [], prezzoAlKg: null, linea: null, sottocosto: false, ruoli: [],
         presenze: [
-          { idKit: 'k1', pagina: 4, prezzo: 1.19, sconto: 20, barrato: null, idReferenza: 'r1' },
-          { idKit: 'k2', pagina: 2, prezzo: 1.29, prezzoCalcolato: true, sconto: null, barrato: null, idReferenza: null },
+          { idKit: 'k1', pagina: 4, prezzo: 1.19, sconto: 20, barrato: null, idReferenza: 'r1', ruolo: null },
+          { idKit: 'k2', pagina: 2, prezzo: 1.29, prezzoCalcolato: true, sconto: null, barrato: null, idReferenza: null, ruolo: null },
         ],
       },
     ]);
@@ -175,6 +175,24 @@ describe('aggregaPromozioneVolantini: elenchi dei prodotti comuni e locali', () 
       meccaniche: ['sconto', 'fidelity'],
     });
     expect(latte?.presenze[0]?.barrato).toBe(1.49);
+  });
+
+  it('il ruolo del prodotto pilota in ogni kit e i ruoli del prodotto, dal piu\' frequente; un ruolo vuoto non conta', () => {
+    const conRuolo = (ruolo: string | null): ProdottoInsight => ({
+      chiave: 'c-latte', nome: 'Latte', marca: null, formato: null, gusto: null, codice: null, ean: [],
+      prezzo: null, settore: null, segmento: null, tema: null, ruolo,
+    });
+    const dettaglio = aggregaPromozioneVolantini([
+      kit('k1', [box('b1', { chiave: 'c-latte', dettaglioProdotti: [conRuolo('Star')] })]),
+      kit('k2', [box('b2', { chiave: 'c-latte', dettaglioProdotti: [conRuolo('Base')] })]),
+      kit('k3', [box('b3', { chiave: 'c-latte', dettaglioProdotti: [conRuolo('Base')] })]),
+      kit('k4', [box('b4', { chiave: 'c-latte', dettaglioProdotti: [conRuolo(null)] })]),
+      kit('k5', [box('b5', { chiave: 'c-latte' })]),
+    ], []);
+
+    const [latte] = dettaglio.assortimento.referenze;
+    expect(latte?.ruoli).toEqual(['Base', 'Star']);
+    expect(latte?.presenze.map(p => [p.idKit, p.ruolo])).toEqual([['k1', 'Star'], ['k2', 'Base'], ['k3', 'Base'], ['k4', null], ['k5', null]]);
   });
 
   it('ripetuto nello stesso kit vale una volta, con il box della pagina piu\' bassa; marca, reparto e foto dal primo kit che li ha', () => {

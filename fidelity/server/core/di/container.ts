@@ -551,7 +551,8 @@ function bindServices() {
     )
   ).inSingletonScope();
   // Dati delle pagine di Visualizzazione: solo pubblicati della GDO, senza Istanta. La config degli
-  // insight serve al dettaglio della promozione (reparti, meccanica e marche come negli insight)
+  // insight serve al dettaglio della promozione (reparti, meccanica e marche come negli insight),
+  // la libreria agenzia alle linee del distributore e ai ruoli dei prodotti
   container.bind<IConsultazioneService>(TYPES.ConsultazioneService).toDynamicValue(
     (context) => new ConsultazioneService(
       context.get<IMaterialiRepository>(TYPES.MaterialiRepository),
@@ -561,7 +562,9 @@ function bindServices() {
       campiRicercaDaConfigurazione,
       context.get<IConfigService>(TYPES.ConfigService),
       undefined,
-      context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository)
+      context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository),
+      undefined,
+      context.get<IAgenziaLib>(TYPES.AgenziaLib)
     )
   );
   container.bind<IConsultazionePuntiVenditaService>(TYPES.ConsultazionePuntiVenditaService).toDynamicValue(

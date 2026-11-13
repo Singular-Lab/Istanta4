@@ -6,6 +6,7 @@ import { Link } from "react-router-dom";
 import SelettoreArea from "./SelettoreArea";
 import {
   areaDellaPagina,
+  areaDelPercorso,
   areaIniziale,
   areeDelMenu,
   ElementoMenuFormattato,
@@ -29,6 +30,12 @@ interface SideMenuProps {
    * funzione (anteprima dell'editor del menu, che non deve navigare).
    */
   onSeleziona?: (pathname: string) => void;
+  /**
+   * L'indirizzo della pagina aperta: quando la pagina non è una voce del menu il menu mostra l'area che
+   * il catalogo delle pagine le assegna (spec interfaccia-operatore, "Area del menu per le pagine fuori
+   * dal menu").
+   */
+  percorso?: string;
 }
 
 const classiBadge = (variant?: string) =>
@@ -38,8 +45,9 @@ const classiBadge = (variant?: string) =>
  * Menu laterale ad area attiva: mostra le voci di una sola area (Produzione, Visualizzazione...),
  * con sopra il selettore dell'area quando le aree sono più di una. L'area mostrata è quella della
  * pagina corrente; scegliere un'area dal selettore cambia solo le voci mostrate, e il menu torna
- * a seguire la pagina quando se ne apre un'altra. Se la pagina corrente non è nel menu resta l'ultima
- * area mostrata; all'inizio è quella della pagina iniziale, o la prima.
+ * a seguire la pagina quando se ne apre un'altra. Se la pagina corrente non è nel menu vale l'area che
+ * il catalogo delle pagine le assegna (la consultazione di una promozione è in Visualizzazione); senza,
+ * resta l'ultima area mostrata, e all'inizio quella della pagina iniziale, o la prima.
  *
  * Dentro l'area un gruppo con sottovoci si apre e si chiude col click; il gruppo che contiene la
  * pagina corrente si apre da solo a ogni cambio pagina.
@@ -51,6 +59,7 @@ function SideMenu({
   onRiprova,
   onNavigate,
   onSeleziona,
+  percorso,
 }: SideMenuProps) {
   // Due menu nella stessa pagina (layout e anteprima dell'editor) non devono ripetere gli id
   const idMenu = `side-menu-${useId().replace(/[^A-Za-z0-9_-]/g, "")}`;
@@ -73,9 +82,14 @@ function SideMenu({
   }, [aree]);
 
   // L'area segue la pagina corrente solo quando la pagina cambia: un'area scelta dal selettore
-  // resta finché non si apre un'altra pagina del menu
-  const areaPagina = areaDellaPagina(aree);
-  const pagina = areaPagina ? `${areaPagina.chiave}|${percorsoAttivo(areaPagina.elementi) ?? ""}` : undefined;
+  // resta finché non si apre un'altra pagina. Una pagina che non è nel menu prende l'area del catalogo
+  const areaVoce = areaDellaPagina(aree);
+  const areaPagina = areaVoce ?? areaDelPercorso(aree, percorso);
+  const pagina = areaVoce
+    ? `${areaVoce.chiave}|${percorsoAttivo(areaVoce.elementi) ?? ""}`
+    : areaPagina
+      ? `${areaPagina.chiave}|${percorso ?? ""}`
+      : undefined;
   const [paginaVista, setPaginaVista] = useState(pagina);
   const [areaScelta, setAreaScelta] = useState(areaPagina?.chiave);
   if (pagina !== paginaVista) {

@@ -8,7 +8,7 @@ import type { BoxInsight, LineeDistributore } from "../../../../lib/insightVolan
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
 
 import { ReferenzeVolantino, RIGHE_PER_VOLTA } from "./ReferenzeVolantino";
-import { filtraRighe, FILTRI_VUOTI, nomeReferenza, ordinaRighe, ricercaUtile, righeReferenze } from "./tabella";
+import { contaRuoli, filtraRighe, FILTRI_VUOTI, nomeReferenza, ordinaRighe, ricercaUtile, righeReferenze, ruoliDeiBox, ruoliDelBox, testoRuoli } from "./tabella";
 
 const box = (id: string, campi: Partial<BoxInsight> = {}): BoxInsight => ({
   id,
@@ -187,6 +187,88 @@ describe("ReferenzeVolantino", () => {
 
     fireEvent.change(screen.getByRole("combobox", { name: "Pagina" }), { target: { value: "3" } });
     expect(prodotti()).toEqual(["Latte intero"]);
+  });
+
+  it("con un filtro il titolo dice quanti box mostra sul totale; senza, le referenze del volantino", () => {
+    disegna();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Meccanica" }), { target: { value: "fidelity" } });
+    expect(screen.getByRole("heading", { level: 2, name: "Referenze in volantino · 1 box su 3" })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Meccanica" }), { target: { value: "" } });
+    expect(screen.getByRole("heading", { level: 2, name: "Referenze in volantino · 5" })).toBeInTheDocument();
+  });
+
+  it("il prezzo stampato all'etto lo dice", () => {
+    disegna({ box: [box("etto", { nome: "Gorgonzola", prezzo: 0.99, prezzoAllEtto: true })] });
+
+    expect(within(tabella()).getByRole("rowheader", { name: /Gorgonzola/ }).closest("tr")).toHaveTextContent("€ 0,99 all'etto");
+  });
+
+  describe("ruolo", () => {
+    const prodotto = (ruolo: string | null) => ({
+      chiave: "c", nome: "x", marca: null, formato: null, gusto: null, codice: null, ean: [], prezzo: null, settore: null, segmento: null, tema: null, ruolo,
+    });
+    const CON_RUOLI = [
+      { ...LATTE, dettaglioProdotti: [prodotto("Star")] },
+      // Due prodotti con ruoli diversi; lo stesso ruolo scritto in due modi (server non aggiornato) vale una volta
+      { ...PASTA, dettaglioProdotti: [prodotto("Base"), prodotto("Vedette"), prodotto("base")] },
+      { ...OLIO, dettaglioProdotti: [prodotto(null)] },
+    ];
+
+    it("colonna Ruolo con i ruoli dei prodotti del box, e filtro Ruolo a pillole: un box risponde se almeno un suo prodotto ha il ruolo", () => {
+      disegna({ box: CON_RUOLI });
+
+      expect(within(tabella()).getByRole("columnheader", { name: "Ruolo" })).toBeInTheDocument();
+      const pasta = within(tabella()).getByRole("rowheader", { name: /Spaghetti/ }).closest("tr")!;
+      expect(pasta).toHaveTextContent("Base · Vedette");
+
+      const filtro = screen.getByRole("group", { name: "Ruolo" });
+      // Ogni ruolo con il numero dei suoi box
+      expect(within(filtro).getAllByRole("button").map(b => b.textContent)).toEqual(["Tutti i ruoli", "Base1", "Star1", "Vedette1", "Senza ruolo1"]);
+      fireEvent.click(within(filtro).getByRole("button", { name: /^Vedette/ }));
+      expect(prodotti()).toEqual(["Spaghetti"]);
+      fireEvent.click(within(filtro).getByRole("button", { name: /^Vedette/ }));
+      fireEvent.click(within(filtro).getByRole("button", { name: /^Star/ }));
+      expect(prodotti()).toEqual(["Latte intero"]);
+      fireEvent.click(within(filtro).getByRole("button", { name: /^Star/ }));
+      fireEvent.click(within(filtro).getByRole("button", { name: /^Senza ruolo/ }));
+      expect(prodotti()).toEqual(["Olio extravergine"]);
+    });
+
+    it("più ruoli insieme valgono in alternativa; Tutti i ruoli toglie la scelta", () => {
+      disegna({ box: CON_RUOLI });
+
+      const filtro = screen.getByRole("group", { name: "Ruolo" });
+      fireEvent.click(within(filtro).getByRole("button", { name: /^Star/ }));
+      fireEvent.click(within(filtro).getByRole("button", { name: /^Vedette/ }));
+      expect(prodotti()).toEqual(["Spaghetti", "Latte intero"]);
+      expect(within(filtro).getByRole("button", { name: /^Star/ })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("heading", { level: 2, name: "Referenze in volantino · 2 box su 3" })).toBeInTheDocument();
+
+      fireEvent.click(within(filtro).getByRole("button", { name: "Tutti i ruoli" }));
+      expect(prodotti()).toEqual(["Spaghetti", "Olio extravergine", "Latte intero"]);
+    });
+
+    it("senza ruoli nel volantino niente colonna né filtro", () => {
+      disegna();
+
+      expect(within(tabella()).queryByRole("columnheader", { name: "Ruolo" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("group", { name: "Ruolo" })).not.toBeInTheDocument();
+    });
+
+    it("ruoli del box: senza ripetizioni e senza vuoti; dei box del volantino per nome", () => {
+      expect(ruoliDelBox(CON_RUOLI[1] as BoxInsight)).toEqual(["Base", "Vedette"]);
+      expect(ruoliDelBox(CON_RUOLI[2] as BoxInsight)).toEqual([]);
+      expect(ruoliDeiBox(CON_RUOLI)).toEqual({ ruoli: ["Base", "Star", "Vedette"], senzaRuolo: true });
+      const righe = righeReferenze(CON_RUOLI, REFERENZE);
+      expect(filtraRighe(righe, { ...FILTRI_VUOTI, ruoli: ["BASE"] }).map(r => r.box.id)).toEqual(["pasta"]);
+      expect(filtraRighe(righe, { ...FILTRI_VUOTI, ruoli: ["Star", "senza"] }).map(r => r.box.id)).toEqual(["latte", "olio"]);
+      // I conteggi dei ruoli tengono conto degli altri filtri, non dei ruoli scelti
+      const conti = contaRuoli(righe, { ...FILTRI_VUOTI, ruoli: ["Star"] });
+      expect([conti.get("base"), conti.get("star"), conti.get("vedette"), conti.get("senza")]).toEqual([1, 1, 1, 1]);
+      expect(testoRuoli(CON_RUOLI[1] as BoxInsight)).toBe("Ruolo Base, Vedette");
+      expect(testoRuoli(CON_RUOLI[2] as BoxInsight)).toBeNull();
+    });
   });
 
   it("si ordina per prezzo, sconto e spazio; i valori mancanti restano in fondo", () => {

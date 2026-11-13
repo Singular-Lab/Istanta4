@@ -9,6 +9,7 @@ import {
   type VolantinoDiRiferimento,
 } from '../../../lib/insightVolantino/tipi';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
+import type { InsightVolantinoAgenzia } from '../agenzia_lib/types';
 import type { IConfigService } from '../interfaces/IConfigService';
 import type { IInsightConfrontiService } from '../interfaces/IInsightConfrontiService';
 import { log } from '../logger';
@@ -25,6 +26,7 @@ import {
   valoreCampo,
 } from '../utils/campiInsights';
 import { confrontoSintesi, confrontoSpazioPerReparto, prodottiAssenti } from '../utils/diffVarianti';
+import { opzioniDellAgenzia } from '../utils/insightAgenzia';
 import { type OpzioniInsight, sezioniInsight } from '../utils/insightVolantino';
 import { DESCRIZIONE_ASSENTE, leggiReferenza, type RigaReferenza, scontoDaiPrezzi } from '../utils/referenzaStampata';
 import { type FonteRepartiGdo, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
@@ -165,12 +167,17 @@ export function pagineDelKit(pdf: PdfVolantino | null, box: readonly BoxKit[]): 
   return box.reduce((massimo, singolo) => Math.max(massimo, singolo.pagina ?? 0), 0);
 }
 
+/**
+ * Le opzioni degli insight di un kit dalla config della sua GDO; con la libreria agenzia del cliente
+ * anche linee del distributore, descrizione del box, ruoli e menabò, come nella pagina degli insight.
+ */
 export function opzioniDelKit(
   kit: KitInsight,
   righe: readonly RigaReferenza[],
   box: readonly BoxKit[],
   pdf: PdfVolantino | null,
   contesto: ContestoConfig,
+  agenzia?: InsightVolantinoAgenzia,
 ): OpzioniInsight {
   const reparti = new Map(righe.map(riga => [riga.id, repartoConfigurato(riga, contesto)] as const));
   const meccaniche = new Map(righe.map(riga => [riga.id, meccanicaOriginale(riga, contesto)] as const));
@@ -184,6 +191,7 @@ export function opzioniDelKit(
     urlFoto: guid => urlFotoOlimpo(guid, { performante: true }),
     origine: kit.storico ? codiceBox => (fuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino') : undefined,
     risolviReparto: contesto.risolviReparto,
+    ...opzioniDellAgenzia(agenzia, righe),
   };
 }
 

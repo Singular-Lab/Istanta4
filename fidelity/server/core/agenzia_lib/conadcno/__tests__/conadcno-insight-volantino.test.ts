@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { etichettaRuolo } from "../../../../../lib/insightVolantino/ruolo";
 import { PALETTE_REPORT_STANDARD, type DatiReportVolantino, type SezioneReport } from "../../../../../lib/insightVolantino/report";
 import type { IUserService } from "../../../interfaces/IUserService";
 import { chiaveSezione, ORDINE_SEZIONI_STANDARD, TITOLI_REPORT } from "../../../utils/reportVolantino";
 import { DefaultAgenziaLib } from "../../default/index.js";
 import type { IAgenziaLib } from "../../types.js";
 import { ConadcnoAgenziaLib } from "../index.js";
+import { nomeMastro } from "../ruoli-menabo.js";
 
 // Spec insight-volantino: regole del report PDF di CONAD CNO; il default non le dichiara e valgono
 // gli standard.
@@ -48,8 +50,8 @@ describe("ConadcnoAgenziaLib: report del volantino", () => {
     expect(insightVolantino?.intestazione).not.toHaveProperty("logo");
   });
 
-  it("dichiara solo palette, intestazione, sezioni, linee del distributore e descrizione del box: niente pesi della visibilita' ne' previsione", () => {
-    expect(Object.keys(insightVolantino ?? {}).sort()).toEqual(["descrizioneBox", "intestazione", "lineeDistributore", "palette", "sezioniReport"]);
+  it("dichiara solo palette, intestazione, sezioni, linee del distributore, descrizione del box, ruoli, temi e menabò: niente pesi della visibilita' ne' previsione", () => {
+    expect(Object.keys(insightVolantino ?? {}).sort()).toEqual(["descrizioneBox", "intestazione", "lineeDistributore", "menabo", "palette", "ruoli", "sezioniReport", "temi"]);
   });
 
   it("dopo la sintesi vengono il confronto con l'edizione precedente e i prodotti entrati e usciti", () => {
@@ -88,6 +90,74 @@ describe("ConadcnoAgenziaLib: descrizione del box nella scheda", () => {
       { testo: "230 g" },
       { testo: "Classico" },
     ]);
+  });
+});
+
+describe("ConadcnoAgenziaLib: ruoli e menabò", () => {
+  // Spec insight-volantino, "Ruolo della referenza leggibile", "Tema della referenza leggibile" e "Menabò del volantino"
+  const { insightVolantino } = new ConadcnoAgenziaLib(userService);
+
+  it("le etichette dei ruoli dei volantini CONAD, con le sigle in maiuscolo", () => {
+    const etichetta = (valore: string) => etichettaRuolo(valore, insightVolantino?.ruoli);
+
+    expect(["base", "BASE", "star", "VEDETTE", "prima pagina", "co-marketing/artwork", "RICHIAMO B&F", "richiamo cvs"].map(etichetta)).toEqual([
+      "Base",
+      "Base",
+      "Star",
+      "Vedette",
+      "Prima pagina",
+      "Co-marketing / artwork",
+      "Richiamo B&F",
+      "Richiamo CVS",
+    ]);
+    expect(etichetta("PROMO TOP")).toBe("Promo top");
+  });
+
+  it("le etichette dei temi CONAD, comunque siano scritti; un tema non dichiarato con l'iniziale maiuscola", () => {
+    const etichetta = (valore: string) => etichettaRuolo(valore, insightVolantino?.temi);
+
+    expect(["tantealtreoff", "TANTEALTREOFF", "mnumeri1", "TTMINICOLL", "fpulizia casa", "RICHIAMOBF", "MDD S&D"].map(etichetta)).toEqual([
+      "Tante altre offerte",
+      "Tante altre offerte",
+      "I numeri 1",
+      "Minicollection",
+      "Focus pulizia casa",
+      "Richiamo B&F",
+      "MDD Sapori & Dintorni",
+    ]);
+    expect(etichetta("FMONDORCHIDEE")).toBe("Fmondorchidee");
+  });
+
+  it("il menabò legge la mastro e la scrive senza sigla e senza le indicazioni di impaginazione, spazi al posto dei trattini bassi, maiuscole sensate", () => {
+    const menabo = insightVolantino?.menabo;
+    expect(menabo?.campo).toBe("mastro");
+    const nome = (valore: string) => menabo?.nome?.(valore);
+
+    expect(nome("N1-NUMERI1")).toBe("Numeri 1");
+    expect(nome("Og-OFFERTE generiche")).toBe("Offerte generiche");
+    expect(nome("OF-ORTOFRUTTA")).toBe("Ortofrutta");
+    expect(nome("FC-FRESCHI di CONVENIENZA")).toBe("Freschi di convenienza");
+    expect(nome("X-2025_SUPERMARCHE_FINO50_doppia")).toBe("Supermarche fino 50");
+    expect(nome("SCSS-griglia SCSS 25 minicoll doppia")).toBe("Griglia SCSS 25 minicoll");
+    expect(nome("COP-Copertina base")).toBe("Copertina base");
+    expect(nome("COP-Copertina BASE")).toBe("Copertina base");
+    expect(nome("GAdx-GASTRONOMIA dx")).toBe("Gastronomia");
+    expect(nome("OFdx-ORTOFRUTTA DX")).toBe("Ortofrutta");
+    expect(nome("DIS-DISPENSA_singola")).toBe("Dispensa");
+    expect(nome("f-RILANCIO_doppia_2026")).toBe("Rilancio");
+    expect(nome("BEL-BELLEZZAeIGIENE_doppia")).toBe("Bellezza e igiene");
+    expect(nome("RICHIAMO B&F CVS")).toBe("Richiamo B&F CVS");
+  });
+
+  it("la mastro della pagina bianca non e' una sezione", () => {
+    expect(nomeMastro("PB-Pagina bianca")).toBeNull();
+    expect(nomeMastro("PB-PAGINA_BIANCA")).toBeNull();
+  });
+
+  it("una mastro senza sigla resta com'è, con l'iniziale maiuscola; una fatta solo di sigla resta intera", () => {
+    expect(nomeMastro("Copertina")).toBe("Copertina");
+    expect(nomeMastro("RETRO")).toBe("Retro");
+    expect(nomeMastro("A-")).toBe("A-");
   });
 });
 

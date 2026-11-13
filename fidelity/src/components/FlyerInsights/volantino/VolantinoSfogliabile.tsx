@@ -73,6 +73,13 @@ import { PaginaConImmagine } from "./PaginaConImmagine";
 import { SchedaBox } from "./SchedaBox";
 import { ViaggioProdotto } from "./ViaggioProdotto";
 
+/**
+ * L'attributo della barra dei comandi del lettore, subito sopra le pagine: chi porta in vista il
+ * volantino (menabò, distribuzione, tabella delle referenze) scorre fin qui, così le pagine si vedono
+ * anche su uno schermo stretto.
+ */
+export const ATTRIBUTO_LETTORE = "data-lettore-volantino";
+
 export interface VolantinoSfogliabileProps {
   idKit: string;
   pdf: PdfVolantino | null;
@@ -1554,7 +1561,8 @@ function Sfogliabile({
     <div
       role="toolbar"
       aria-label="Comandi del lettore"
-      className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-slate-200 bg-white px-3 py-2 dark:border-darkmode-400 dark:bg-darkmode-700"
+      {...{ [ATTRIBUTO_LETTORE]: "" }}
+      className="flex scroll-mt-4 flex-wrap items-center justify-between gap-2 rounded-control border border-slate-200 bg-white px-3 py-2 dark:border-darkmode-400 dark:bg-darkmode-700"
     >
       <div className="flex flex-wrap items-center gap-3">
         <Navigazione aperta={aperta} totale={totale} indietro={precedente !== null} avanti={successiva !== null} onGira={gira} onVai={vaiAllaPagina} />

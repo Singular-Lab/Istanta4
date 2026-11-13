@@ -1,5 +1,6 @@
 import type { Request } from 'express';
 import { isAppError, NotFoundError } from '../../../lib/errors';
+import { nomeVolantino } from '../../../lib/insightVolantino/nome';
 import {
   PALETTE_REPORT_STANDARD,
   type DatiReportVolantino,
@@ -109,7 +110,8 @@ export class ReportVolantinoService implements IReportVolantinoService {
     return {
       generatoIl: this.adesso().toISOString(),
       idKit,
-      titolo: kit.titolo,
+      // Spec insight-volantino, "Nome leggibile del volantino": mai il titolo tecnico del kit
+      titolo: nomeVolantino({ insegna: kit.canale, area: kit.area, promo: kit.nomePromo }) ?? 'Volantino',
       sottotitolo: sottotitoloReport(dati.contesto),
       intestazione,
       palette,

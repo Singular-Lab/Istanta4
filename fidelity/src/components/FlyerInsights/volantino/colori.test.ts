@@ -41,13 +41,26 @@ const MAPPA = configurazione({
 });
 
 describe("colori dei reparti", () => {
-  it("dalla mappa della config: il reparto fuori mappa prende il predefinito, la legenda dice i nomi", () => {
+  it("dalla mappa della config: il reparto fuori mappa prende il predefinito, la legenda dice i nomi dei reparti", () => {
     const colori = coloriReparti([box("a", { reparto: DROGHERIA }), box("b", { reparto: VARIE })], MAPPA);
 
     expect(colori.daConfigurazione).toBe(true);
     expect(colori.tinta(DROGHERIA).colore).toBe("#f97316");
     expect(colori.tinta(VARIE).colore).toBe("#64748b");
-    expect(colori.voci.map(v => v.etichetta)).toEqual(["Drogheria alimentare", "Altro"]);
+    // Il nome è quello del reparto, come in schede e tabelle; la label della config non conta
+    expect(colori.voci.map(v => v.etichetta)).toEqual(["DROGHERIA ALIMENTARE", "Altro"]);
+  });
+
+  it("la legenda usa il nome per il marketing del reparto anche quando la config ha un'altra etichetta per il suo colore", () => {
+    const CARNI_CONFIG = configurazione({
+      mappa: { ...MAPPA.mappa!, colorStrategy: { type: "static", map: { "29": { hex: "#dc2626", label: "Carni" } }, default: { hex: "#64748b", label: "Altro" } } },
+    });
+    const MACELLERIA = reparto("29", "Macelleria");
+    const colori = coloriReparti([box("a", { reparto: MACELLERIA })], CARNI_CONFIG);
+
+    expect(colori.tinta(MACELLERIA).colore).toBe("#dc2626");
+    expect(colori.voci.map(v => v.etichetta)).toEqual(["Macelleria"]);
+    expect(gruppoBox(box("a", { reparto: MACELLERIA }), "reparto", colori).etichetta).toBe("Macelleria");
   });
 
   it("la mappa riconosce il reparto anche dalla descrizione, senza badare alle maiuscole", () => {

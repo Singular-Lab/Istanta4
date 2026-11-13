@@ -14,6 +14,7 @@ import {
   type DatoTecnicoScheda,
 } from "../../../../lib/insightVolantino/scheda";
 import type { BoxInsight, GeometriaPagina, ParteDescrizione, ProdottoInsight } from "../../../../lib/insightVolantino/tipi";
+import { UNITA_ETTO } from "../../../../lib/insightVolantino/unita";
 import { ETICHETTA_MECCANICA } from "../../../../lib/puntiVendita/analisi";
 import { marcaFormato, NOTA_PREZZO_CALCOLATO, testoReparto } from "./box";
 import { paginaNellImmagine, proporzioneRitaglio, riquadroBox, stileImmagine, stileRitaglio, type PaginaNellImmagine } from "./geometria";
@@ -158,14 +159,19 @@ function BoxStampato({ nome, immagine, riquadro, rapporto, proporzionePagina, da
   );
 }
 
-/** Prezzo in offerta grande, barrato, sconto, prezzo al kg e punti come stampati. */
+/** Prezzo in offerta grande (con "all'etto" quando è stampato all'etto), barrato, sconto, prezzo al kg e punti come stampati. */
 function Prezzi({ box }: { box: BoxInsight }) {
   if (box.prezzo === null && box.barrato === null && !box.punti) {
     return <p className="text-sm text-slate-500 dark:text-slate-400">Prezzo non stampato nel box.</p>;
   }
   return (
     <div aria-label="Prezzi" className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 tabular-nums">
-      {box.prezzo !== null && <span className="text-3xl font-bold leading-none text-slate-800 dark:text-slate-100">{formatEuro(box.prezzo)}</span>}
+      {box.prezzo !== null && (
+        <span className="text-3xl font-bold leading-none text-slate-800 dark:text-slate-100">
+          {formatEuro(box.prezzo)}
+          {box.prezzoAllEtto && <span className="text-base font-semibold text-slate-600 dark:text-slate-300">{` ${UNITA_ETTO}`}</span>}
+        </span>
+      )}
       {box.barrato !== null && (
         <span className="text-base text-slate-500">
           <span className="sr-only">invece di </span>

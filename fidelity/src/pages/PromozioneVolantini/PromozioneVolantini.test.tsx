@@ -12,8 +12,10 @@ import type {
 } from "../../../lib/consultazione/tipi";
 
 // Consultazione di una promozione (/volantini/promozioni/:idPromo): banda con le insegne, filtri per
-// insegna e area, griglia delle miniature, assortimento a confronto con in primo piano i prodotti in
-// comune e l'elenco di tutti i prodotti in un riquadro che scorre da sé, e confronto fra i kit, senza la
+// insegna e area con l'indice della pagina, griglia delle miniature, assortimento a confronto (base
+// comune, % a marchio con la base scritta, % Fidelity) con in primo piano i prodotti in comune, con
+// ruolo e filtri, come schede o elenco, e l'elenco di tutti i prodotti in un riquadro che scorre da sé,
+// riordinabile dalle intestazioni; sotto, in pannelli chiusi, grafici e confronto fra i kit, senza la
 // sezione "Dove arriva". Ogni kit apre i suoi insight; nessun collegamento alla produzione.
 
 // jsdom non implementa ResizeObserver, usato da Headless UI all'apertura del pannello di un prodotto
@@ -114,11 +116,15 @@ const prodotto = (chiave: string, nome: string, presenze: PresenzaReferenzaPromo
 // k2 Superstore · Toscana (Superstore non ha un volantino nel Lazio)
 const REFERENZE: ReferenzaPromozione[] = [
   prodotto("pasta", "Pasta di semola", [
-    presenza("k1", { prezzo: 0.89, sconto: 20 }),
-    presenza("k3", { prezzo: 0.89, sconto: 20 }),
-    presenza("k2", { prezzo: 0.99, sconto: null, pagina: 5 }),
-  ], { marca: "Barilla", formato: "500 g" }),
-  prodotto("olio", "Olio extravergine", [presenza("k1", { prezzo: 5.99, sconto: 30 }), presenza("k3", { prezzo: 5.99, sconto: 30 })], { marca: "Monini" }),
+    presenza("k1", { prezzo: 0.89, sconto: 20, ruolo: "Star" }),
+    presenza("k3", { prezzo: 0.89, sconto: 20, ruolo: "Base" }),
+    presenza("k2", { prezzo: 0.99, sconto: null, pagina: 5, ruolo: "Base" }),
+  ], { marca: "Barilla", formato: "500 g", ruoli: ["Base", "Star"], meccaniche: ["sconto", "fidelity"] }),
+  prodotto("olio", "Olio extravergine", [presenza("k1", { prezzo: 5.99, sconto: 30, ruolo: "Vedette" }), presenza("k3", { prezzo: 5.99, sconto: 30, ruolo: "Vedette" })], {
+    marca: "Monini",
+    linea: "Conad",
+    ruoli: ["Vedette"],
+  }),
   prodotto("biscotti", "Biscotti frollini", [presenza("k2", { prezzo: 1.49, pagina: 7 })], { foto: null }),
   prodotto("latte", "Latte intero", [presenza("k1", { prezzo: 1.19, sconto: 20, barrato: 1.49, pagina: 4, idReferenza: "r-latte" })], {
     marca: "Granarolo",
@@ -212,6 +218,8 @@ const oggiE = (iso: string) => {
 };
 
 const tabellaConfronto = () => screen.getByRole("table", { name: "I volantini della promozione a confronto" });
+/** Il pannello del confronto fra i volantini aperto dall'indirizzo, come tornando dagli insight di un kit. */
+const CON_CONFRONTO = "/volantini/promozioni/p1?analisi=volantini";
 const righeDi = (tabella: HTMLElement) => within(tabella).getAllByRole("row").slice(1);
 const percorso = (link: HTMLElement) => link.getAttribute("href");
 
@@ -293,18 +301,19 @@ describe("Consultazione di una promozione", () => {
     expect(within(screen.getByRole("region", { name: "La promozione" })).queryByRole("link")).not.toBeInTheDocument();
   });
 
-  it("con due volantini della stessa insegna e area la miniatura dice anche il titolo", async () => {
+  it("con due volantini della stessa insegna e area la miniatura dice quale volantino è, mai il titolo tecnico", async () => {
     finti.risultato = caricato(dettaglio({ kit: [kit("k1"), kit("k4", { titolo: "VOL_bis" })], numeroKitTotale: 2 }));
     await apri();
 
     const griglia = screen.getByRole("list", { name: "Copertine dei volantini" });
-    expect(within(griglia).getByRole("link", { name: "Insight del volantino City · Toscana – VOL_bis" })).toBeInTheDocument();
-    expect(within(griglia).getByText("VOL_k1")).toBeInTheDocument();
+    expect(within(griglia).getByRole("link", { name: "Insight del volantino City · Toscana – volantino 2 di 2" })).toBeInTheDocument();
+    expect(within(griglia).getByText("Volantino 1 di 2")).toBeInTheDocument();
+    expect(within(griglia).queryByText("VOL_bis")).not.toBeInTheDocument();
   });
 
   it("accanto alle insegne c'è il loro logo in un riquadro fisso; senza logo, o se non si carica, le iniziali sul colore dell'insegna", async () => {
     finti.risultato = caricato(dettaglio({ loghiInsegne: { [CITY.id]: LOGO_CITY } }));
-    await apri();
+    await apri(CON_CONFRONTO);
 
     const loghiCity = () => Array.from(document.querySelectorAll(`img[src="${LOGO_CITY}"]`));
     const griglia = screen.getByRole("list", { name: "Copertine dei volantini" });
@@ -333,7 +342,7 @@ describe("Consultazione di una promozione", () => {
 
   it("la sezione Dove arriva non c'è: niente regioni, insegne, località, elenco né mappa dei punti vendita", async () => {
     finti.permessi = new Set(["gdo.visualizza"]);
-    await apri();
+    await apri(CON_CONFRONTO);
 
     expect(screen.queryByRole("heading", { name: /Dove arriva/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Punti vendita per regione" })).not.toBeInTheDocument();
@@ -360,7 +369,7 @@ describe("Consultazione di una promozione", () => {
       kit: [kit("em", { area: EMILIA, numeroPuntiVendita: 2 }), kit("li", { area: LIGURIA, numeroPuntiVendita: 2 })],
       numeri: { ...dettaglio().numeri, kit: 2, puntiVendita: 2, localita: 2, regioni: 1 },
     }));
-    await apri();
+    await apri(CON_CONFRONTO);
 
     // Nel confronto ogni volantino ha i suoi 2 punti vendita
     // La seconda colonna del confronto sono i punti vendita del volantino
@@ -368,8 +377,35 @@ describe("Consultazione di una promozione", () => {
     expect(righeDi(tabellaConfronto()).map(puntiVenditaDi)).toEqual(["2", "2"]);
   });
 
+  it("le analisi dopo l'elenco sono in due pannelli chiusi, che si aprono uno per uno e restano nell'indirizzo", async () => {
+    const router = await apri();
+
+    const assortimento = screen.getByRole("button", { name: /Sconti, reparti, meccaniche e marche/ });
+    const confronto = within(screen.getByRole("region", { name: "Confronto fra i volantini" })).getByRole("button", { name: /Confronto fra i volantini/ });
+    expect(assortimento).toHaveAttribute("aria-expanded", "false");
+    expect(confronto).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("img", { name: /^Box per fascia di sconto/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "I volantini della promozione a confronto" })).not.toBeInTheDocument();
+    // I pannelli vengono dopo l'elenco di tutti i prodotti
+    expect(screen.getByRole("table", { name: "Tutti i prodotti" }).compareDocumentPosition(assortimento) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(assortimento);
+    expect(assortimento).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("img", { name: /^Box per fascia di sconto/ })).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "I volantini della promozione a confronto" })).not.toBeInTheDocument();
+    expect(router.state.location.search).toBe("?analisi=assortimento");
+
+    fireEvent.click(confronto);
+    expect(tabellaConfronto()).toBeInTheDocument();
+    expect(router.state.location.search).toBe("?analisi=assortimento%2Cvolantini");
+
+    fireEvent.click(assortimento);
+    expect(screen.queryByRole("img", { name: /^Box per fascia di sconto/ })).not.toBeInTheDocument();
+    expect(router.state.location.search).toBe("?analisi=volantini");
+  });
+
   it("mostra l'assortimento: fasce di sconto, reparti, meccaniche e marche; la barra comune o locale non c'è più", async () => {
-    await apri();
+    await apri("/volantini/promozioni/p1?analisi=assortimento");
 
     expect(screen.queryByRole("heading", { name: "Comune o locale" })).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: /prodotti in tutti i volantini/ })).not.toBeInTheDocument();
@@ -379,6 +415,62 @@ describe("Consultazione di una promozione", () => {
     const marche = screen.getByRole("table", { name: "Marche con più spazio" });
     expect(within(marche).getByText("Borgo Antico")).toBeInTheDocument();
     expect(within(marche).getByText("24%")).toBeInTheDocument();
+  });
+
+  it("una marca senza sconti stampati lo dice, invece di N/D", async () => {
+    finti.risultato = caricato(
+      dettaglio({ assortimento: { ...dettaglio().assortimento, marche: [{ nome: "Sapori&Dintorni CONAD", box: 20, quotaSpazio: 8.4, scontoMedio: null }] } })
+    );
+    await apri("/volantini/promozioni/p1?analisi=assortimento");
+
+    const marche = screen.getByRole("table", { name: "Marche con più spazio" });
+    expect(within(marche).getByText("nessuno sconto")).toBeInTheDocument();
+    expect(within(marche).queryByText("N/D")).not.toBeInTheDocument();
+  });
+
+  it("sotto i filtri l'indice della pagina: il collegamento di un pannello lo apre e lo porta in vista", async () => {
+    const scorri = vi.fn();
+    const originale = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scorri;
+    try {
+      const router = await apri();
+
+      const indice = screen.getByRole("navigation", { name: "In questa pagina" });
+      expect(within(indice).getAllByRole("button").map(voce => voce.textContent)).toEqual([
+        "Prodotti in comune",
+        "Tutti i prodotti",
+        "Sconti e reparti",
+        "Confronto fra i volantini",
+      ]);
+
+      fireEvent.click(within(indice).getByRole("button", { name: "Confronto fra i volantini" }));
+      await waitFor(() => expect(tabellaConfronto()).toBeInTheDocument());
+      expect(router.state.location.search).toBe("?analisi=volantini");
+      await waitFor(() => expect(scorri.mock.contexts.some(elemento => (elemento as HTMLElement).id === "pannello-volantini")).toBe(true));
+      // L'altro pannello resta chiuso
+      expect(screen.getByRole("button", { name: /Sconti, reparti, meccaniche e marche/ })).toHaveAttribute("aria-expanded", "false");
+      // Le destinazioni si fermano sotto la barra dei filtri
+      expect(document.getElementById("pannello-volantini")?.className).toMatch(/scroll-mt-/);
+
+      fireEvent.click(within(indice).getByRole("button", { name: "Prodotti in comune" }));
+      expect(scorri.mock.contexts.at(-1)).toBe(document.getElementById("prodotti-in-comune"));
+      expect(document.getElementById("prodotti-in-comune")?.className).toMatch(/scroll-mt-/);
+    } finally {
+      Element.prototype.scrollIntoView = originale;
+    }
+  });
+
+  it("aprendo un pannello dalla sua barra la pagina lo porta in vista", async () => {
+    const scorri = vi.fn();
+    const originale = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scorri;
+    try {
+      await apri();
+      fireEvent.click(screen.getByRole("button", { name: /Sconti, reparti, meccaniche e marche/ }));
+      await waitFor(() => expect(scorri.mock.contexts.some(elemento => (elemento as HTMLElement).id === "pannello-assortimento")).toBe(true));
+    } finally {
+      Element.prototype.scrollIntoView = originale;
+    }
   });
 
   it("con un solo volantino l'assortimento a confronto è una frase, senza numeri, mappa né elenco", async () => {
@@ -400,22 +492,64 @@ describe("Consultazione di una promozione", () => {
     const riga = (nome: string, prodotto: string) => righe(nome).find(r => r.querySelector("p")?.firstChild?.textContent === prodotto) as HTMLElement;
     const mappa = () => screen.getByRole("table", { name: "Prodotti di un solo volantino, per insegna e area" });
 
-    it("senza scegliere nulla: i quattro numeri, la mappa dei prodotti di un solo volantino e l'elenco di tutti i prodotti", async () => {
+    it("senza scegliere nulla: i tre numeri, la mappa dei prodotti di un solo volantino con i margini e l'elenco di tutti i prodotti", async () => {
       await apri();
 
-      expect(riquadro("1 in tutti i 3 volantini")).toBeInTheDocument();
-      expect(within(riquadro("1 con prezzo diverso fra i volantini")).getByText(/Il più distante:/)).toHaveTextContent("Pasta di semola Barilla, da € 0,89 a € 0,99 (+11%)");
-      const insegne = riquadro("4 di una sola insegna");
-      expect(within(insegne).getByRole("button", { name: /^City/ })).toHaveTextContent("2");
-      expect(within(insegne).getByRole("button", { name: /^Superstore/ })).toHaveTextContent("2");
-      expect(within(riquadro("3 di una sola area")).getByRole("button", { name: /^Toscana/ })).toHaveTextContent("3");
+      expect(riquadro("1 in tutti i 3 volantini")).toHaveTextContent("20% dei 5 prodotti dei volantini mostrati");
+      expect(riquadro("1 in tutti i 3 volantini")).not.toHaveTextContent("della promozione");
+      // A marchio: olio (Conad) e latte (Sapori & Dintorni), 2 prodotti su 5, con la base scritta
+      const marchio = riquadro("40% dei 5 prodotti è a marchio del distributore");
+      expect(marchio).toHaveTextContent("2 prodotti a marchio su 5 · il resto 60%");
+      // Le linee sono sui soli prodotti a marchio, con il numero dei prodotti
+      expect(marchio).toHaveTextContent("Linee, sui 2 prodotti a marchio");
+      const linee = within(within(marchio).getByRole("list", { name: "Prodotti a marchio per linea" })).getAllByRole("listitem");
+      expect(linee.map(linea => linea.getAttribute("aria-label"))).toEqual([
+        "Conad: 50% dei prodotti a marchio, 1 prodotto",
+        "Sapori & Dintorni: 50% dei prodotti a marchio, 1 prodotto",
+      ]);
+      // Fidelity: pasta e latte, contro il resto
+      const fidelity = riquadro("40% dei 5 prodotti ha il Prezzo Fidelity");
+      expect(fidelity).toHaveTextContent("2 prodotti Fidelity");
+      expect(fidelity).toHaveTextContent("il resto: 60%, 3 prodotti");
+      // I numeri tolti: prezzi diversi, una sola insegna, una sola area
+      expect(screen.queryByText("Prezzi non allineati")).not.toBeInTheDocument();
+      expect(screen.queryByText("Esclusivi di un'insegna")).not.toBeInTheDocument();
+      expect(screen.queryByText("Esclusivi di un'area")).not.toBeInTheDocument();
+      expect(screen.queryByText(/Il più distante:/)).not.toBeInTheDocument();
 
+      // Ai margini della mappa i prodotti di una sola insegna e di una sola area
+      expect(within(mappa()).getByRole("button", { name: "2 prodotti solo City" })).toBeInTheDocument();
+      expect(within(mappa()).getByRole("button", { name: "2 prodotti solo Superstore" })).toBeInTheDocument();
+      expect(within(mappa()).getByRole("button", { name: "3 prodotti solo Toscana" })).toBeInTheDocument();
+      expect(within(mappa()).getByRole("button", { name: "0 prodotti solo Lazio" })).toBeDisabled();
       expect(within(mappa()).getByRole("button", { name: "1 prodotto solo in City · Toscana" })).toBeInTheDocument();
       expect(within(mappa()).getByRole("button", { name: "2 prodotti solo in Superstore · Toscana" })).toBeInTheDocument();
       // Superstore non ha un volantino nel Lazio: la casella non si sceglie
       expect(within(mappa()).queryByRole("button", { name: /Superstore · Lazio/ })).not.toBeInTheDocument();
 
       expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
+    });
+
+    it("le linee del distributore: le quattro con più prodotti sui soli prodotti a marchio, le altre insieme, nessuna a 0%", async () => {
+      const linee = ["Conad", "Sapori & Dintorni", "Verso Natura", "Conad Percorso Qualità", "Piacersi", "Essentiae"];
+      const marchio = linee.flatMap((linea, i) =>
+        Array.from({ length: [40, 30, 20, 10, 4, 1][i] ?? 1 }, (_, n) => prodotto(`${linea}-${n}`, `${linea} ${n}`, [presenza("k1")], { linea }))
+      );
+      const altri = Array.from({ length: 300 }, (_, n) => prodotto(`altro-${n}`, `Altro ${n}`, [presenza("k2")]));
+      finti.risultato = caricato(dettaglio({ assortimento: { ...dettaglio().assortimento, referenze: [...marchio, ...altri] } }));
+      await apri();
+
+      // 105 prodotti a marchio su 405
+      const riquadroMarchio = riquadro("26% dei 405 prodotti è a marchio del distributore");
+      const voci = within(within(riquadroMarchio).getByRole("list", { name: "Prodotti a marchio per linea" })).getAllByRole("listitem");
+      expect(voci.map(voce => voce.getAttribute("aria-label"))).toEqual([
+        "Conad: 38% dei prodotti a marchio, 40 prodotti",
+        "Sapori & Dintorni: 29% dei prodotti a marchio, 30 prodotti",
+        "Verso Natura: 19% dei prodotti a marchio, 20 prodotti",
+        "Conad Percorso Qualità: 10% dei prodotti a marchio, 10 prodotti",
+        "altre 2 linee: 5% dei prodotti a marchio, 5 prodotti",
+      ]);
+      expect(riquadroMarchio).not.toHaveTextContent(/\b0%/);
     });
 
     describe("prodotti in comune", () => {
@@ -462,6 +596,97 @@ describe("Consultazione di una promozione", () => {
         expect(within(acqua).queryByText(/^\+€/)).not.toBeInTheDocument();
       });
 
+      it("il ruolo sopra la foto della scheda: una etichetta per ruolo, con il conteggio in vista e la frase nel suggerimento", async () => {
+        await apri();
+
+        const [pasta] = schede() as [HTMLElement];
+        const etichette = pasta.querySelector("[title^='Ruolo:']") as HTMLElement;
+        expect(etichette).toHaveAttribute("title", "Ruolo: Base in 2 dei 3 volantini in cui compare · Star in 1 dei 3 volantini in cui compare");
+        // Nome e conteggio in elementi separati: "Star 1/3", mai "Star1/3" né "Starin"
+        const voci = Array.from(etichette.querySelectorAll<HTMLElement>(":scope > [aria-hidden='true']"));
+        expect(voci.map(voce => Array.from(voce.children).map(parte => parte.textContent))).toEqual([
+          ["Base", "2/3"],
+          ["Star", "1/3"],
+        ]);
+        expect(screen.queryByText(/Starin/)).not.toBeInTheDocument();
+        // Le etichette stanno sopra la foto, nel suo riquadro
+        expect(etichette.parentElement?.querySelector("img, svg")).not.toBeNull();
+      });
+
+      it("come elenco compatto: una riga per prodotto con ruolo, reparto, prezzi e differenza, che apre prezzi e pagine", async () => {
+        const router = await apri();
+
+        fireEvent.click(within(screen.getByRole("radiogroup", { name: "Vedi i prodotti in comune come" })).getByRole("radio", { name: "Elenco" }));
+        expect(router.state.location.search).toBe("?vistaComuni=elenco");
+        const righeComuni = within(comuni()).getAllByRole("listitem");
+        expect(righeComuni).toHaveLength(1);
+        const pasta = righeComuni[0] as HTMLElement;
+        for (const testo of ["Pasta di semola", "Barilla", "Drogheria", "+€ 0,10 · +11%"]) expect(pasta).toHaveTextContent(testo);
+        expect(pasta).toHaveTextContent("Ruolo: Base in 2 dei 3 volantini in cui compare");
+
+        fireEvent.click(within(pasta).getByRole("button"));
+        expect(await screen.findByRole("dialog", { name: /Pasta di semola Barilla/ })).toBeInTheDocument();
+      });
+
+      it("un prodotto in comune senza ruolo non ha etichette sopra la foto", async () => {
+        const senza = REFERENZE.map(r => ({ ...r, ruoli: [] }));
+        finti.risultato = caricato(dettaglio({ assortimento: { ...dettaglio().assortimento, referenze: senza } }));
+        await apri();
+
+        expect((schede()[0] as HTMLElement).querySelector("[title^='Ruolo:']")).toBeNull();
+      });
+
+      it("filtri propri per testo, reparto e ruolo, nell'indirizzo, che non cambiano l'elenco di tutti i prodotti", async () => {
+        finti.risultato = caricato(
+          dettaglio({
+            assortimento: {
+              ...dettaglio().assortimento,
+              referenze: [
+                ...REFERENZE,
+                prodotto("burro", "Burro", tuttiIKit(() => 2.1), { reparto: LATTICINI, ruoli: ["Star"] }),
+                prodotto("caffe", "Caffè macinato", tuttiIKit(() => 3.99), { marca: "Lavazza", ruoli: ["Base"] }),
+              ],
+            },
+          })
+        );
+        const router = await apri();
+        expect(nomiSchede()).toEqual(["Pasta di semola", "Burro", "Caffè macinato"]);
+
+        const reparto = screen.getByRole("combobox", { name: "Reparto dei prodotti in comune" });
+        expect(within(reparto).getAllByRole("option").map(o => o.textContent)).toEqual(["Tutti i reparti", "Drogheria", "Latticini"]);
+        fireEvent.change(reparto, { target: { value: "LAT" } });
+        expect(nomiSchede()).toEqual(["Burro"]);
+        expect(router.state.location.search).toBe("?repartoComuni=LAT");
+        expect(screen.getByRole("region", { name: "Prodotti in comune" })).toHaveTextContent("1 di 3 prodotti in comune");
+        // L'elenco di tutti i prodotti non cambia
+        expect(nomiDi("Tutti i prodotti")).toHaveLength(7);
+
+        fireEvent.change(reparto, { target: { value: "" } });
+        const ruoli = screen.getByRole("group", { name: "Ruolo dei prodotti in comune" });
+        // Le pillole dei ruoli con i loro prodotti in comune
+        expect(within(ruoli).getAllByRole("button").map(voce => voce.textContent)).toEqual(["Tutti i ruoli", "Base2", "Star2"]);
+        fireEvent.click(within(ruoli).getByRole("button", { name: /^Star/ }));
+        expect(nomiSchede()).toEqual(["Pasta di semola", "Burro"]);
+        expect(router.state.location.search).toBe("?ruoloComuni=Star");
+        // Più ruoli insieme valgono in alternativa
+        fireEvent.click(within(ruoli).getByRole("button", { name: /^Base/ }));
+        expect(nomiSchede()).toEqual(["Pasta di semola", "Burro", "Caffè macinato"]);
+        expect(router.state.location.search).toBe("?ruoloComuni=Star%2CBase");
+        // Scelto solo Base, il filtro dei reparti propone solo i reparti dei prodotti Base
+        fireEvent.click(within(ruoli).getByRole("button", { name: /^Star/ }));
+        expect(within(reparto).getAllByRole("option").map(o => o.textContent)).toEqual(["Tutti i reparti", "Drogheria"]);
+        fireEvent.click(within(ruoli).getByRole("button", { name: /^Base/ }));
+        fireEvent.click(within(ruoli).getByRole("button", { name: /^Star/ }));
+
+        fireEvent.change(screen.getByRole("searchbox", { name: "Cerca fra i prodotti in comune" }), { target: { value: "lavazza" } });
+        await waitFor(() => expect(screen.getByRole("region", { name: "Prodotti in comune" })).toHaveTextContent("Nessun prodotto in comune corrisponde ai filtri."));
+        expect(screen.queryByRole("list", { name: "Prodotti in comune" })).not.toBeInTheDocument();
+
+        fireEvent.click(within(screen.getByRole("region", { name: "Prodotti in comune" })).getAllByRole("button", { name: /Azzera filtri/ })[0] as HTMLElement);
+        await waitFor(() => expect(nomiSchede()).toEqual(["Pasta di semola", "Burro", "Caffè macinato"]));
+        expect(router.state.location.search).toBe("");
+      });
+
       it("una scheda apre prezzi, sconti e pagine per insegna e area, e da una pagina gli insight del kit su quel prodotto", async () => {
         await apri();
 
@@ -501,6 +726,102 @@ describe("Consultazione di una promozione", () => {
       });
     });
 
+    it("a marchio e Fidelity aprono i loro prodotti nell'elenco e stanno nell'indirizzo", async () => {
+      const router = await apri();
+
+      fireEvent.click(within(riquadro("40% dei 5 prodotti è a marchio del distributore")).getByRole("button", { name: /Vedi i prodotti/ }));
+      expect(router.state.location.search).toBe("?vista=marchio");
+      expect(nomiDi("A marchio del distributore").sort()).toEqual(["Latte intero", "Olio extravergine"]);
+
+      fireEvent.click(within(riquadro("40% dei 5 prodotti ha il Prezzo Fidelity")).getByRole("button", { name: /Vedi i prodotti/ }));
+      expect(router.state.location.search).toBe("?vista=fidelity");
+      expect(nomiDi("Con Prezzo Fidelity").sort()).toEqual(["Latte intero", "Pasta di semola"]);
+    });
+
+    it("senza prodotti a marchio né Fidelity i numeri sono a zero e non aprono l'elenco", async () => {
+      const senza = REFERENZE.map(r => ({ ...r, linea: null, meccaniche: [] }));
+      finti.risultato = caricato(dettaglio({ assortimento: { ...dettaglio().assortimento, referenze: senza } }));
+      await apri();
+
+      const marchio = riquadro("0% dei 5 prodotti è a marchio del distributore");
+      expect(marchio).toHaveTextContent("Nessun prodotto a marchio del distributore");
+      expect(within(marchio).getByRole("button", { name: /Vedi i prodotti/ })).toBeDisabled();
+      expect(within(riquadro("0% dei 5 prodotti ha il Prezzo Fidelity")).getByRole("button", { name: /Vedi i prodotti/ })).toBeDisabled();
+    });
+
+    it("il ruolo: colonna dell'elenco con il conteggio in vista quando sono più d'uno, e filtro a pillole nell'indirizzo, anche con più ruoli", async () => {
+      const router = await apri();
+
+      expect(within(elenco("Tutti i prodotti")).getByRole("columnheader", { name: "Ruolo" })).toBeInTheDocument();
+      const pasta = riga("Tutti i prodotti", "Pasta di semola");
+      expect(within(pasta).getByTitle("Base in 2 dei 3 volantini in cui compare")).toHaveTextContent("Base2/3");
+      expect(within(pasta).getByTitle("Star in 1 dei 3 volantini in cui compare")).toHaveTextContent("Star1/3");
+      expect(within(riga("Tutti i prodotti", "Olio extravergine")).getByText("Vedette")).toBeInTheDocument();
+      expect(screen.queryByText(/Starin|Basein/)).not.toBeInTheDocument();
+
+      const ruoli = screen.getByRole("group", { name: "Ruolo" });
+      expect(within(ruoli).getAllByRole("button").map(voce => voce.textContent)).toEqual(["Tutti i ruoli", "Base1", "Star1", "Vedette1", "Senza ruolo3"]);
+      fireEvent.click(within(ruoli).getByRole("button", { name: /^Vedette/ }));
+      expect(router.state.location.search).toBe("?ruolo=Vedette");
+      expect(nomiDi("Tutti i prodotti")).toEqual(["Olio extravergine"]);
+      fireEvent.click(within(ruoli).getByRole("button", { name: /^Senza ruolo/ }));
+      expect(router.state.location.search).toBe("?ruolo=Vedette%2Csenza-ruolo");
+      expect(nomiDi("Tutti i prodotti").sort()).toEqual(["Biscotti frollini", "Latte intero", "Olio extravergine", "Yogurt bianco"]);
+    });
+
+    it("un vecchio indirizzo con un ruolo solo vale ancora", async () => {
+      await apri("/volantini/promozioni/p1?ruolo=Star");
+
+      expect(nomiDi("Tutti i prodotti")).toEqual(["Pasta di semola"]);
+      expect(within(screen.getByRole("group", { name: "Ruolo" })).getByRole("button", { name: /^Star/ })).toHaveAttribute("aria-pressed", "true");
+    });
+
+    it("senza ruoli nei dati niente colonna né filtro Ruolo", async () => {
+      const senza = REFERENZE.map(r => ({ ...r, ruoli: [], presenze: r.presenze.map(p => ({ ...p, ruolo: null })) }));
+      finti.risultato = caricato(dettaglio({ assortimento: { ...dettaglio().assortimento, referenze: senza } }));
+      await apri();
+
+      expect(within(elenco("Tutti i prodotti")).queryByRole("columnheader", { name: "Ruolo" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("group", { name: "Ruolo" })).not.toBeInTheDocument();
+    });
+
+    it("le intestazioni riordinano l'elenco: prezzo dal più basso, di nuovo dal più alto, con aria-sort e l'ordine nell'indirizzo", async () => {
+      const router = await apri();
+      const intestazione = (nome: string) => within(elenco("Tutti i prodotti")).getByRole("columnheader", { name: nome });
+
+      expect(intestazione("Prezzo")).toHaveAttribute("aria-sort", "none");
+      fireEvent.click(within(intestazione("Prezzo")).getByRole("button"));
+      expect(router.state.location.search).toBe("?ordina=prezzo%3Acrescente");
+      expect(intestazione("Prezzo")).toHaveAttribute("aria-sort", "ascending");
+      expect(nomiDi("Tutti i prodotti")).toEqual(["Yogurt bianco", "Pasta di semola", "Latte intero", "Biscotti frollini", "Olio extravergine"]);
+
+      fireEvent.click(within(intestazione("Prezzo")).getByRole("button"));
+      expect(intestazione("Prezzo")).toHaveAttribute("aria-sort", "descending");
+      expect(nomiDi("Tutti i prodotti")).toEqual(["Olio extravergine", "Biscotti frollini", "Latte intero", "Pasta di semola", "Yogurt bianco"]);
+
+      fireEvent.click(within(intestazione("Prodotto")).getByRole("button"));
+      expect(nomiDi("Tutti i prodotti")).toEqual(["Biscotti frollini", "Latte intero", "Olio extravergine", "Pasta di semola", "Yogurt bianco"]);
+      // L'ordine resta nell'indirizzo: tornando dagli insight di un kit lo si ritrova
+      expect(router.state.location.search).toBe("?ordina=prodotto%3Acrescente");
+    });
+
+    it("un prezzo stampato all'etto lo dice nell'elenco e nei prezzi per insegna e area", async () => {
+      const gorgonzola = prodotto("gorgonzola", "Gorgonzola dolce DOP", [presenza("k1", { prezzo: 0.99, prezzoAllEtto: true }), presenza("k3", { prezzo: 1.29, prezzoAllEtto: true })], {
+        marca: "Sapori & Dintorni",
+        prezzoAlKg: "al kg € 9,90",
+      });
+      finti.risultato = caricato(dettaglio({ assortimento: { ...dettaglio().assortimento, referenze: [...REFERENZE, gorgonzola] } }));
+      await apri();
+
+      const voce = riga("Tutti i prodotti", "Gorgonzola dolce DOP");
+      expect(voce).toHaveTextContent("€ 0,99 all'etto");
+      expect(voce).toHaveTextContent("€ 1,29 all'etto");
+      expect(voce).toHaveTextContent("al kg € 9,90");
+      fireEvent.click(within(voce).getByRole("button", { name: /Prezzi e pagine/ }));
+      const tabella = screen.getByRole("table", { name: "Gorgonzola dolce DOP: prezzi e pagine per insegna e area" });
+      expect(tabella).toHaveTextContent("€ 0,99 all'etto");
+    });
+
     it("l'elenco di tutti i prodotti scorre dentro un riquadro: ricerca e filtri stanno fuori, sempre in vista", async () => {
       await apri();
 
@@ -511,8 +832,10 @@ describe("Consultazione di una promozione", () => {
       expect(within(riquadroElenco).getByRole("table", { name: "Tutti i prodotti" })).toBeInTheDocument();
       expect(within(riquadroElenco).queryByRole("searchbox")).not.toBeInTheDocument();
       expect(within(riquadroElenco).queryByRole("combobox")).not.toBeInTheDocument();
-      // Dopo il riquadro la pagina prosegue con l'assortimento e il confronto fra i kit
-      expect(riquadroElenco.compareDocumentPosition(tabellaConfronto()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // Dopo il riquadro la pagina prosegue con i pannelli, chiusi, dell'assortimento e del confronto fra i kit
+      const pannello = within(screen.getByRole("region", { name: "Confronto fra i volantini" })).getByRole("button", { name: /Confronto fra i volantini/ });
+      expect(riquadroElenco.compareDocumentPosition(pannello) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(pannello).toHaveAttribute("aria-expanded", "false");
     });
 
     it("scegliendo un numero la pagina porta all'elenco; togliendo la scelta resta dov'è", async () => {
@@ -522,11 +845,11 @@ describe("Consultazione di una promozione", () => {
       try {
         await apri();
 
-        fireEvent.click(within(riquadro("4 di una sola insegna")).getByRole("button", { name: /^City/ }));
+        fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo City" }));
         expect(scorri).toHaveBeenCalledTimes(1);
         expect(scorri.mock.contexts[0]).toContainElement(elenco("Solo City"));
 
-        fireEvent.click(within(riquadro("4 di una sola insegna")).getByRole("button", { name: /^City/ }));
+        fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo City" }));
         expect(scorri).toHaveBeenCalledTimes(1);
 
         fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo in Superstore · Toscana" }));
@@ -546,7 +869,7 @@ describe("Consultazione di una promozione", () => {
       fireEvent.click(within(riquadro("1 in tutti i 3 volantini")).getByRole("button", { name: /Mostra tutti i prodotti/ }));
       expect(router.state.location.search).toBe("");
 
-      fireEvent.click(within(riquadro("4 di una sola insegna")).getByRole("button", { name: /^City/ }));
+      fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo City" }));
       expect(router.state.location.search).toBe(`?vista=insegna%3A${CITY.id}`);
       expect(nomiDi("Solo City").sort()).toEqual(["Latte intero", "Olio extravergine"]);
       fireEvent.click(screen.getAllByRole("button", { name: /Mostra tutti i prodotti/ })[0] as HTMLElement);
@@ -623,14 +946,21 @@ describe("Consultazione di una promozione", () => {
       fireEvent.change(screen.getByRole("combobox", { name: "Punto di vista" }), { target: { value: SUPERSTORE.id } });
 
       expect(router.state.location.search).toBe(`?punto=${SUPERSTORE.id}`);
-      expect(riquadro("2 solo Superstore")).toBeInTheDocument();
+      expect(within(mappa()).getByRole("button", { name: "2 prodotti solo Superstore" })).toBeInTheDocument();
       expect(within(mappa()).queryByRole("rowheader", { name: /City/ })).not.toBeInTheDocument();
+      // Dal punto di vista di un'insegna non c'è la riga delle aree
+      expect(within(mappa()).queryByRole("button", { name: /solo Toscana$/ })).not.toBeInTheDocument();
       expect(screen.getByText("3 prodotti stampati da Superstore")).toBeInTheDocument();
       expect(nomiDi("Tutti i prodotti").sort()).toEqual(["Biscotti frollini", "Pasta di semola", "Yogurt bianco"]);
     });
 
-    it("ricerca per nome, marca o codice, reparto, solo prezzo diverso e ordinamento; Azzera filtri li toglie", async () => {
+    it("ricerca per nome, marca o codice, reparto e ruolo; Azzera filtri li toglie; niente tendina dell'ordine né solo prezzo diverso", async () => {
       const router = await apri();
+
+      expect(screen.queryByRole("combobox", { name: "Ordina per" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("checkbox", { name: "Solo prezzo diverso" })).not.toBeInTheDocument();
+      // Un solo ordine: prima i prezzi diversi, poi per nome
+      expect(nomiDi("Tutti i prodotti")).toEqual(["Pasta di semola", "Biscotti frollini", "Latte intero", "Olio extravergine", "Yogurt bianco"]);
 
       fireEvent.change(screen.getByRole("combobox", { name: "Reparto" }), { target: { value: "LAT" } });
       expect(nomiDi("Tutti i prodotti").sort()).toEqual(["Latte intero", "Yogurt bianco"]);
@@ -641,13 +971,16 @@ describe("Consultazione di una promozione", () => {
       fireEvent.click(screen.getByRole("button", { name: "Azzera filtri" }));
       await waitFor(() => expect(nomiDi("Tutti i prodotti")).toHaveLength(5));
 
-      fireEvent.click(screen.getByRole("checkbox", { name: "Solo prezzo diverso" }));
+      fireEvent.click(within(screen.getByRole("group", { name: "Ruolo" })).getByRole("button", { name: /^Star/ }));
       expect(nomiDi("Tutti i prodotti")).toEqual(["Pasta di semola"]);
-      expect(router.state.location.search).toBe("?diversi=1");
+      fireEvent.click(screen.getByRole("button", { name: "Azzera filtri" }));
+      await waitFor(() => expect(router.state.location.search).toBe(""));
+    });
 
-      fireEvent.click(screen.getByRole("checkbox", { name: "Solo prezzo diverso" }));
-      fireEvent.change(screen.getByRole("combobox", { name: "Ordina per" }), { target: { value: "nome" } });
-      expect(nomiDi("Tutti i prodotti")).toEqual(["Biscotti frollini", "Latte intero", "Olio extravergine", "Pasta di semola", "Yogurt bianco"]);
+    it("un vecchio indirizzo con solo prezzo diverso e ordine mostra tutti i prodotti, nell'ordine di apertura", async () => {
+      await apri("/volantini/promozioni/p1?diversi=1&ordina=nome&vista=prezzi");
+
+      expect(nomiDi("Tutti i prodotti")).toEqual(["Pasta di semola", "Biscotti frollini", "Latte intero", "Olio extravergine", "Yogurt bianco"]);
     });
 
     it("Scarica Excel salva l'elenco mostrato in un file per Excel con il nome della promozione", async () => {
@@ -663,7 +996,7 @@ describe("Consultazione di una promozione", () => {
         nomi.push(this.download);
       });
       try {
-        await apri("/volantini/promozioni/p1?vista=prezzi");
+        await apri("/volantini/promozioni/p1?vista=base");
         fireEvent.click(screen.getByRole("button", { name: "Scarica Excel" }));
 
         expect(nomi).toEqual(["assortimento Volantino novembre.csv"]);
@@ -696,7 +1029,7 @@ describe("Consultazione di una promozione", () => {
   });
 
   it("la tabella di confronto si ordina cliccando le intestazioni, con aria-sort", async () => {
-    await apri();
+    await apri(CON_CONFRONTO);
 
     const nomi = () => righeDi(tabellaConfronto()).map(r => within(r).getByRole("link").textContent);
     const intestazione = (nome: string) => within(tabellaConfronto()).getByRole("columnheader", { name: nome });
@@ -722,7 +1055,7 @@ describe("Consultazione di una promozione", () => {
   });
 
   it("una riga del confronto apre gli insight del kit col clic", async () => {
-    const router = await apri();
+    const router = await apri(CON_CONFRONTO);
 
     const [prima] = righeDi(tabellaConfronto());
     expect(within(prima).getByRole("link")).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k1");
@@ -733,7 +1066,7 @@ describe("Consultazione di una promozione", () => {
   });
 
   it.each(["Enter", " "])("una riga del confronto si apre da tastiera con %j", async tasto => {
-    const router = await apri();
+    const router = await apri(CON_CONFRONTO);
 
     const righe = righeDi(tabellaConfronto());
     expect(righe[1]).toHaveAttribute("tabindex", "0");

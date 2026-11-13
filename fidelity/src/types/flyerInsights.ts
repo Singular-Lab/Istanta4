@@ -247,6 +247,8 @@ export interface ContestoFlyerInsights {
   nomeArea?: string;
   nomeCanale?: string;
   idPromo: string;
+  /** Nome della promozione, per il titolo quando il kit non ha insegna né area; assente dai server non aggiornati. */
+  nomePromo?: string | null;
   /** Validità della promo (YYYY-MM-DD); null se la promo non le ha, assente dai server non aggiornati. */
   validitaDal?: string | null;
   validitaAl?: string | null;

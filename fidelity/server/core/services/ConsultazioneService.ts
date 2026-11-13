@@ -73,6 +73,7 @@ import type {
   RigaVarianteVolantino,
 } from '../repositories/MaterialiRepository';
 import { boxDelKit } from '../utils/analisiKit';
+import type { IAgenziaLib } from '../agenzia_lib/types';
 import { sezioniInsight } from '../utils/insightVolantino';
 import { aggregaPromozioneVolantini, type KitConInsight } from '../utils/promozioneVolantini';
 import { nomeFileLeggibile } from '../utils/nomeFileLeggibile';
@@ -427,7 +428,9 @@ export class ConsultazioneService implements IConsultazioneService {
     // Nome per il marketing e colore dei reparti della GDO (Impostazioni GDO) nell'assortimento
     private readonly repartiGdo: FonteRepartiGdo = SENZA_REPARTI_GDO,
     // Loghi delle insegne (Impostazioni GDO) accanto ai nomi delle insegne del dettaglio della promozione
-    private readonly loghiInsegne: FonteLoghiInsegne = loghiInsegneDaConfigurazione
+    private readonly loghiInsegne: FonteLoghiInsegne = loghiInsegneDaConfigurazione,
+    // Linee del distributore e ruoli dei prodotti dell'assortimento, come negli insight del volantino
+    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {}
   ) { }
 
   /** Solo kit pubblicati del tipo indicato, nelle promo del periodo e della GDO dell'ambito. */
@@ -664,7 +667,7 @@ export class ConsultazioneService implements IConsultazioneService {
       contestoDellaGdoDelKit(kit.gdo),
     ]);
     const boxKit = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
-    const { sintesi, box } = sezioniInsight(boxKit, opzioniDelKit(kit, righe, boxKit, pdf, contesto));
+    const { sintesi, box } = sezioniInsight(boxKit, opzioniDelKit(kit, righe, boxKit, pdf, contesto, this.agenziaLib.insightVolantino));
     return { variante, sintesi, box };
   }
 

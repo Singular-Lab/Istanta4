@@ -111,7 +111,7 @@ afterEach(() => {
 });
 
 describe('VolantinoService.getFlyerInsights: reparti e meccaniche per ogni fonte', () => {
-  it('storico: reparto "1" senza descrizione diventa 01 DROGHERIA ALIMENTARE, la meccanica arriva dai dati', async () => {
+  it('storico: reparto "1" senza descrizione diventa 01 Drogheria alimentare, la meccanica arriva dai dati', async () => {
     const servizio = creaServizio([
       referenza('s1', { data_fields: { codice_referenza: 'A1', reparto: '1', meccanica: 'TP_FID_KgL' } }),
       referenza('s2', { data_fields: { codice_referenza: 'A2', reparto: '1', meccanica: 'TP_FID_KgL' } }),
@@ -121,17 +121,17 @@ describe('VolantinoService.getFlyerInsights: reparti e meccaniche per ogni fonte
     const insights = await servizio.getFlyerInsights('kit-storico');
 
     expect(insights.riepilogoReparti.map(r => [r.sigla, r.descrizione, r.numeroReferenze])).toEqual([
-      ['01', 'DROGHERIA ALIMENTARE', 2],
-      ['24', 'DEPERIBILI LIBERO SERVIZIO', 1],
+      ['01', 'Drogheria alimentare', 2],
+      ['24', 'Deperibili libero servizio', 1],
     ]);
     expect(insights.riepilogoMeccaniche.map(m => [m.meccanica, m.numeroReferenze])).toEqual([
       ['TP_FID_KgL', 2],
       ['PERCENTO_FID_ALL', 1],
     ]);
-    expect(insights.referenze[0]).toMatchObject({ codiceReferenza: 'A1', reparto: '01', descrizioneReparto: 'DROGHERIA ALIMENTARE' });
+    expect(insights.referenze[0]).toMatchObject({ codiceReferenza: 'A1', reparto: '01', descrizioneReparto: 'Drogheria alimentare' });
     expect(insights.riepilogoPagine[0].reparti).toEqual([
-      { sigla: '01', descrizione: 'DROGHERIA ALIMENTARE', count: 2 },
-      { sigla: '24', descrizione: 'DEPERIBILI LIBERO SERVIZIO', count: 1 },
+      { sigla: '01', descrizione: 'Drogheria alimentare', count: 2 },
+      { sigla: '24', descrizione: 'Deperibili libero servizio', count: 1 },
     ]);
   });
 
@@ -145,8 +145,8 @@ describe('VolantinoService.getFlyerInsights: reparti e meccaniche per ogni fonte
     const insights = await servizio.getFlyerInsights('kit-istanta');
 
     expect(insights.riepilogoReparti.map(r => [r.sigla, r.descrizione]).sort()).toEqual([
-      ['01', 'DROGHERIA ALIMENTARE'],
-      ['05', 'DROGHERIA CHIMICA'],
+      ['01', 'Drogheria alimentare'],
+      ['05', 'Drogheria chimica'],
     ]);
     expect(insights.riepilogoMeccaniche.map(m => m.meccanica).sort()).toEqual(['NM_MIX_MM', 'TP_MM']);
     expect(insights.referenze[1]).toMatchObject({ codiceReferenza: 'B2', reparto: '05' });
@@ -171,7 +171,7 @@ describe('VolantinoService.getFlyerInsights: reparti e meccaniche per ogni fonte
     const insights = await servizio.getFlyerInsights('kit-misto');
 
     expect(insights.riepilogoReparti.map(r => [r.sigla, r.descrizione]).sort()).toEqual([
-      ['01', 'DROGHERIA ALIMENTARE'],
+      ['01', 'Drogheria alimentare'],
       ['1', ''],
     ]);
     expect(insights.riepilogoMeccaniche.map(m => m.meccanica).sort()).toEqual(['', 'TP_MM']);
@@ -189,12 +189,12 @@ describe('VolantinoService.getFlyerInsights: sezioni nuove con la config dell\'i
     const box = new Map(insights.box.map(singolo => [singolo.id, singolo]));
 
     expect(box.get('s1')).toMatchObject({
-      reparto: { codice: '01', descrizione: 'DROGHERIA ALIMENTARE' },
+      reparto: { codice: '01', descrizione: 'Drogheria alimentare' },
       meccanicaOriginale: 'TP_FID_KgL',
       origine: 'listino',
     });
     expect(box.get('s2')).toMatchObject({
-      reparto: { codice: '24', descrizione: 'DEPERIBILI LIBERO SERVIZIO' },
+      reparto: { codice: '24', descrizione: 'Deperibili libero servizio' },
       meccanicaOriginale: 'PERCENTO_FID_ALL',
       origine: 'fuori_listino',
     });
@@ -209,7 +209,7 @@ describe('VolantinoService.getFlyerInsights: sezioni nuove con la config dell\'i
     ], CONFIG_EDRO21);
     const [istanta] = (await conConfig.getFlyerInsights('kit-istanta')).box;
 
-    expect(istanta).toMatchObject({ reparto: { codice: '01', descrizione: 'DROGHERIA ALIMENTARE' }, meccanicaOriginale: 'TP_MM' });
+    expect(istanta).toMatchObject({ reparto: { codice: '01', descrizione: 'Drogheria alimentare' }, meccanicaOriginale: 'TP_MM' });
     expect(istanta).not.toHaveProperty('origine');
 
     const senzaConfig = creaServizio([
@@ -247,6 +247,8 @@ describe('VolantinoService.getFlyerInsights: contesto, reparti della GDO e linee
       nomeArea: 'Nord',
       nomeCanale: 'Super',
       idPromo: 'promo-1',
+      // Per il titolo quando il kit non ha insegna ne' area (spec insight-volantino, "Nome leggibile del volantino")
+      nomePromo: 'Promo di novembre',
       validitaDal: '2026-11-01',
       validitaAl: '2026-11-14',
     });
@@ -272,14 +274,14 @@ describe('VolantinoService.getFlyerInsights: contesto, reparti della GDO e linee
 
     expect(box.get('r1')).toEqual({ codice: '01', descrizione: 'spesa  DI casa', colore: '#8b5cf6', marketing: true });
     expect(box.get('r2')).toEqual(box.get('r1'));
-    expect(box.get('r3')).toEqual({ codice: '24', descrizione: 'DEPERIBILI LIBERO SERVIZIO', colore: '#eab308' });
+    expect(box.get('r3')).toEqual({ codice: '24', descrizione: 'Deperibili libero servizio', colore: '#eab308' });
     expect(insights.riepilogoReparti.map(voce => [voce.sigla, voce.descrizione, voce.numeroReferenze, voce.colore])).toEqual([
       ['01', 'spesa  DI casa', 2, '#8b5cf6'],
-      ['24', 'DEPERIBILI LIBERO SERVIZIO', 1, '#eab308'],
+      ['24', 'Deperibili libero servizio', 1, '#eab308'],
     ]);
     expect(insights.spazio.perReparto.map(voce => [voce.chiave, voce.etichetta])).toEqual([
       ['01', 'spesa  DI casa'],
-      ['24', 'DEPERIBILI LIBERO SERVIZIO'],
+      ['24', 'Deperibili libero servizio'],
     ]);
     expect(insights.referenze.map(ref => ref.reparto)).toEqual(['01', '01', '24']);
   });
@@ -287,7 +289,7 @@ describe('VolantinoService.getFlyerInsights: contesto, reparti della GDO e linee
   it('senza reparti salvati per la GDO restano i reparti dell\'anagrafica, senza colore', async () => {
     const insights = await creaServizio([referenza('r1', { data_fields: { reparto: '1' } })], CONFIG_EDRO21, STORICO).getFlyerInsights('kit-storico');
 
-    expect(insights.box[0].reparto).toEqual({ codice: '01', descrizione: 'DROGHERIA ALIMENTARE' });
+    expect(insights.box[0].reparto).toEqual({ codice: '01', descrizione: 'Drogheria alimentare' });
     expect(insights.riepilogoReparti[0]).not.toHaveProperty('colore');
   });
 

@@ -7,7 +7,18 @@ vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined 
 
 import {
   ariaSort,
+  ariaSortElenco,
   celleConPiuKit,
+  numeriNellaCella,
+  conteggioRuolo,
+  descrizioneRuolo,
+  facceConfronto,
+  lineeInVista,
+  ordinaElenco,
+  ordinamentoElencoDaIndirizzo,
+  ordinamentoElencoInIndirizzo,
+  prossimoOrdinamentoElenco,
+  testoPercentuale,
   conValoreScelto,
   csvConfronto,
   descriviPresenze,
@@ -23,13 +34,17 @@ import {
   ORDINAMENTO_INIZIALE,
   ordinaConfronto,
   ordinaKit,
-  ordineDaIndirizzo,
   prezziPerLuogo,
   prodottiConfronto,
   prodottiInComune,
   type ProdottoConfronto,
   prossimoOrdinamento,
+  percentualeDi,
+  ruoliDelConfronto,
+  ruoliDelProdotto,
+  SENZA_FILTRI,
   SENZA_REPARTO,
+  SENZA_RUOLO,
   sintesiConfronto,
   stessaVista,
   testoQuantoManca,
@@ -118,6 +133,13 @@ describe("filtri del dettaglio", () => {
   it("le miniature dicono il titolo solo dove insegna e area hanno più di un volantino", () => {
     const celle = celleConPiuKit([kit("k1"), kit("k2"), kit("k3", { area: LAZIO }), kit("k4", { canale: SUPERSTORE })]);
     expect([...celle]).toEqual([chiaveCella(CITY.id, TOSCANA.id)]);
+  });
+
+  it("i kit di un'insegna e un'area con più volantini sono numerati, gli altri no", () => {
+    const numeri = numeriNellaCella([kit("k1"), kit("k2"), kit("k3", { area: LAZIO })]);
+    expect(numeri.get("k1")).toEqual({ numero: 1, di: 2 });
+    expect(numeri.get("k2")).toEqual({ numero: 2, di: 2 });
+    expect(numeri.has("k3")).toBe(false);
   });
 
   it("i colori delle insegne si calcolano su tutte le insegne della promo, non sui kit filtrati", () => {
@@ -228,59 +250,113 @@ describe("assortimento a confronto", () => {
       griglia
     )[0] as ProdottoConfronto;
     expect(prezziPerLuogo(vari, griglia)).toEqual([
-      { prezzo: 6.79, luogo: "altrove", piuAlto: false },
-      { prezzo: 7.99, luogo: "Lazio", piuAlto: true },
+      { prezzo: 6.79, luogo: "altrove", piuAlto: false, allEtto: false },
+      { prezzo: 7.99, luogo: "Lazio", piuAlto: true, allEtto: false },
     ]);
     expect(vari).toMatchObject({ min: 6.79, max: 7.99, differenza: 1.2, percentuale: 18 });
-    expect(prezziPerLuogo(prodotto("uguale", ["ct", "cl"]), griglia)).toEqual([{ prezzo: 1, luogo: "", piuAlto: false }]);
+    expect(prezziPerLuogo(prodotto("uguale", ["ct", "cl"]), griglia)).toEqual([{ prezzo: 1, luogo: "", piuAlto: false, allEtto: false }]);
     const senzaPrezzo = prodottiConfronto([referenza("y", [presenza("ct", null)])], griglia)[0] as ProdottoConfronto;
     expect(prezziPerLuogo(senzaPrezzo, griglia)).toEqual([]);
   });
 
-  it("i numeri: base comune, prezzi diversi, una sola insegna e una sola area, un solo volantino", () => {
+  it("un prezzo stampato all'etto lo dice: il Gorgonzola a € 0,99 non è un prezzo al pezzo", () => {
+    const gorgonzola = prodottiConfronto(
+      [referenza("Gorgonzola", [presenza("ct", 0.99, { prezzoAllEtto: true }), presenza("cl", 1.29, { prezzoAllEtto: true }), presenza("ot", 1.29, { prezzoAllEtto: true })])],
+      griglia
+    )[0] as ProdottoConfronto;
+    expect(prezziPerLuogo(gorgonzola, griglia).map(voce => [voce.prezzo, voce.allEtto])).toEqual([[0.99, true], [1.29, true]]);
+  });
+
+  it("i numeri: base comune, a marchio con le linee, Fidelity; ai margini della mappa una sola insegna e una sola area, un solo volantino", () => {
     const prodotti = prodottiConfronto(
       [
-        referenza("tutti", ["ct", "cl", "ot", "ol", "st"].map(id => presenza(id))),
-        referenza("city", [presenza("ct", 1), presenza("cl", 2)]),
-        referenza("toscana", ["ct", "ot", "st"].map(id => presenza(id))),
-        referenza("uno", [presenza("st")]),
+        referenza("tutti", ["ct", "cl", "ot", "ol", "st"].map(id => presenza(id)), { linea: "Conad", meccaniche: ["fidelity"] }),
+        referenza("city", [presenza("ct", 1), presenza("cl", 2)], { linea: "Sapori & Dintorni", meccaniche: ["sconto", "fidelity"] }),
+        referenza("toscana", ["ct", "ot", "st"].map(id => presenza(id)), { linea: "Conad" }),
+        referenza("uno", [presenza("st")], { meccaniche: ["sconto"] }),
       ],
       griglia
     );
     const sintesi = sintesiConfronto(prodotti, griglia);
-    expect(sintesi).toMatchObject({ totale: 4, base: 1, prezziDiversi: 1 });
+    expect(sintesi).toMatchObject({ totale: 4, base: 1, aMarchio: 3, fidelity: 2 });
+    expect(sintesi.perLinea).toEqual([{ linea: "Conad", prodotti: 2 }, { linea: "Sapori & Dintorni", prodotti: 1 }]);
+    expect(percentualeDi(sintesi.aMarchio, sintesi.totale)).toBe(75);
+    expect(percentualeDi(sintesi.fidelity, sintesi.totale)).toBe(50);
     expect(sintesi.perInsegna.map(v => [v.insegna.nome, v.prodotti])).toEqual([["City", 1], ["Conad", 0], ["Superstore", 1]]);
     expect(sintesi.perArea.map(v => [v.area.nome, v.prodotti])).toEqual([["Lazio", 0], ["Toscana", 2]]);
     expect([...sintesi.perCasella]).toEqual([[5, 1]]);
-    expect(sintesi.piuDistante?.referenza.nome).toBe("city");
   });
 
-  it("la vista nell'indirizzo, avanti e indietro; un valore storpiato o di una casella senza volantino non è una vista", () => {
-    const viste: VistaConfronto[] = [{ tipo: "base" }, { tipo: "prezzi" }, { tipo: "insegna", id: CITY.id }, { tipo: "area", id: TOSCANA.id }, { tipo: "casella", casella: 1 }];
+  it("senza prodotti le percentuali sono zero", () => {
+    const sintesi = sintesiConfronto([], griglia);
+    expect(sintesi).toMatchObject({ totale: 0, aMarchio: 0, fidelity: 0, perLinea: [] });
+    expect(percentualeDi(sintesi.aMarchio, sintesi.totale)).toBe(0);
+    expect(testoPercentuale(sintesi.aMarchio, sintesi.totale)).toBe("0%");
+  });
+
+  it("la percentuale scritta: intera; meno dell'1% quando la parte c'è ma arrotondata sarebbe 0%", () => {
+    expect(testoPercentuale(115, 433)).toBe("27%");
+    expect(testoPercentuale(1, 433)).toBe("meno dell'1%");
+    expect(testoPercentuale(0, 433)).toBe("0%");
+    expect(testoPercentuale(3, 3)).toBe("100%");
+  });
+
+  it("le linee in vista: le quattro con più prodotti, le altre insieme; con quattro o meno tutte", () => {
+    const sette = [46, 30, 20, 12, 4, 2, 1].map((prodotti, i) => ({ linea: `Linea ${i + 1}`, prodotti }));
+    const { linee, altre } = lineeInVista(sette);
+    expect(linee.map(voce => voce.linea)).toEqual(["Linea 1", "Linea 2", "Linea 3", "Linea 4"]);
+    expect(altre).toEqual({ linee: 3, prodotti: 7 });
+    // Le percentuali delle linee sono sui soli prodotti a marchio: nessuna a 0%
+    expect(testoPercentuale(46, 115)).toBe("40%");
+    expect(testoPercentuale(7, 115)).toBe("6%");
+    expect(lineeInVista(sette.slice(0, 4))).toEqual({ linee: sette.slice(0, 4), altre: null });
+    expect(lineeInVista([])).toEqual({ linee: [], altre: null });
+  });
+
+  it("la vista nell'indirizzo, avanti e indietro; un valore storpiato, dei numeri tolti o di una casella senza volantino non è una vista", () => {
+    const viste: VistaConfronto[] = [
+      { tipo: "base" },
+      { tipo: "marchio" },
+      { tipo: "fidelity" },
+      { tipo: "insegna", id: CITY.id },
+      { tipo: "area", id: TOSCANA.id },
+      { tipo: "casella", casella: 1 },
+    ];
     for (const vista of viste) expect(vistaDaIndirizzo(vistaInIndirizzo(vista, griglia), griglia)).toEqual(vista);
     expect(vistaDaIndirizzo("tutto", griglia)).toBeNull();
+    for (const tolta of ["prezzi", "insegne", "aree"]) expect(vistaDaIndirizzo(tolta, griglia)).toBeNull();
     expect(vistaDaIndirizzo(`casella:${SUPERSTORE.id}:${LAZIO.id}`, griglia)).toBeNull();
     expect(stessaVista({ tipo: "insegna", id: CITY.id }, { tipo: "insegna", id: CITY.id.toUpperCase() })).toBe(true);
     expect(stessaVista({ tipo: "casella", casella: 1 }, { tipo: "casella", casella: 2 })).toBe(false);
   });
 
-  it("filtra per vista, punto di vista, prezzi diversi, reparto e ricerca in nome, marca, codice ed EAN", () => {
+  it("filtra per vista, punto di vista, ruolo, reparto e ricerca in nome, marca, codice ed EAN", () => {
     const LAT = { codice: "LAT", descrizione: "Latticini" };
     const prodotti = prodottiConfronto(
       [
-        referenza("Latte", [presenza("ct", 1.19), presenza("cl", 1.29)], { marca: "Granarolo", reparto: LAT, codice: "0014823", ean: "8001234567890" }),
-        referenza("Pasta", ["ct", "cl", "ot", "ol", "st"].map(id => presenza(id))),
+        referenza("Latte", [presenza("ct", 1.19), presenza("cl", 1.29)], {
+          marca: "Granarolo", reparto: LAT, codice: "0014823", ean: "8001234567890", ruoli: ["Star", "Base"], linea: "Conad",
+        }),
+        referenza("Pasta", ["ct", "cl", "ot", "ol", "st"].map(id => presenza(id)), { ruoli: ["Base"], meccaniche: ["fidelity"] }),
         referenza("Yogurt", [presenza("st")], { reparto: LAT }),
       ],
       griglia
     );
-    const nomi = (filtro: Partial<Parameters<typeof filtraConfronto>[2]>) =>
-      filtraConfronto(prodotti, griglia, { vista: null, punto: null, cerca: "", reparto: null, soloDiversi: false, ...filtro }).map(p => p.referenza.nome);
+    const nomi = (filtro: Partial<Parameters<typeof filtraConfronto>[2]>) => filtraConfronto(prodotti, griglia, { ...SENZA_FILTRI, ...filtro }).map(p => p.referenza.nome);
     expect(nomi({ vista: { tipo: "insegna", id: CITY.id } })).toEqual(["Latte"]);
+    // Lo yogurt c'è solo nel kit Superstore Toscana: è dell'area Toscana soltanto
+    expect(nomi({ vista: { tipo: "area", id: TOSCANA.id } })).toEqual(["Yogurt"]);
     expect(nomi({ vista: { tipo: "base" } })).toEqual(["Pasta"]);
+    expect(nomi({ vista: { tipo: "marchio" } })).toEqual(["Latte"]);
+    expect(nomi({ vista: { tipo: "fidelity" } })).toEqual(["Pasta"]);
     expect(nomi({ vista: { tipo: "casella", casella: 5 } })).toEqual(["Yogurt"]);
     expect(nomi({ punto: SUPERSTORE.id })).toEqual(["Pasta", "Yogurt"]);
-    expect(nomi({ soloDiversi: true })).toEqual(["Latte"]);
+    expect(nomi({ ruoli: ["Star"] })).toEqual(["Latte"]);
+    expect(nomi({ ruoli: ["Base"] })).toEqual(["Latte", "Pasta"]);
+    expect(nomi({ ruoli: [SENZA_RUOLO] })).toEqual(["Yogurt"]);
+    // Più ruoli valgono in alternativa, anche con i prodotti senza ruolo
+    expect(nomi({ ruoli: ["Star", SENZA_RUOLO] })).toEqual(["Latte", "Yogurt"]);
+    expect(nomi({ ruoli: [] })).toEqual(["Latte", "Pasta", "Yogurt"]);
     expect(nomi({ reparto: "LAT" })).toEqual(["Latte", "Yogurt"]);
     expect(nomi({ reparto: SENZA_REPARTO })).toEqual(["Pasta"]);
     expect(nomi({ cerca: "GRANAROLO" })).toEqual(["Latte"]);
@@ -288,20 +364,102 @@ describe("assortimento a confronto", () => {
     expect(nomi({ cerca: "800123" })).toEqual(["Latte"]);
   });
 
-  it("ordina per differenza in %, per nome o per numero di volantini; a parità per nome", () => {
+  it("l'ordine di apertura: prima i prezzi diversi, dalla differenza più grande in %, poi gli altri per nome", () => {
     const prodotti = prodottiConfronto(
       [
+        referenza("D", [presenza("st")]),
         referenza("B", [presenza("ct", 1), presenza("cl", 1.5)]),
         referenza("A", [presenza("ct", 1), presenza("cl", 1.1), presenza("ot", 1)]),
         referenza("C", [presenza("st")]),
       ],
       griglia
     );
-    const nomi = (ordine: Parameters<typeof ordinaConfronto>[1]) => ordinaConfronto(prodotti, ordine).map(p => p.referenza.nome);
-    expect(nomi("differenza")).toEqual(["B", "A", "C"]);
-    expect(nomi("nome")).toEqual(["A", "B", "C"]);
-    expect(nomi("volantini")).toEqual(["A", "B", "C"]);
-    expect(ordineDaIndirizzo("storpiato")).toBe("differenza");
+    expect(ordinaConfronto(prodotti).map(p => p.referenza.nome)).toEqual(["B", "A", "C", "D"]);
+    // Senza un ordine scelto l'elenco resta nell'ordine di apertura
+    expect(ordinaElenco(prodotti, null).map(p => p.referenza.nome)).toEqual(["B", "A", "C", "D"]);
+  });
+
+  it("l'ordine scelto dalle intestazioni: nome, volantini, prezzo più basso, differenza; il prezzo mancante in fondo", () => {
+    const prodotti = prodottiConfronto(
+      [
+        referenza("Dado", [presenza("st", 2.5)]),
+        referenza("Burro", [presenza("ct", 1), presenza("cl", 1.5)]),
+        referenza("Aceto", [presenza("ct", 1.2), presenza("cl", 1.3), presenza("ot", 1.2)]),
+        referenza("Cacao", [presenza("st", null)]),
+      ],
+      griglia
+    );
+    const nomi = (ordinamento: Parameters<typeof ordinaElenco>[1]) => ordinaElenco(prodotti, ordinamento).map(p => p.referenza.nome);
+    expect(nomi({ colonna: "prodotto", verso: "crescente" })).toEqual(["Aceto", "Burro", "Cacao", "Dado"]);
+    expect(nomi({ colonna: "prodotto", verso: "decrescente" })).toEqual(["Dado", "Cacao", "Burro", "Aceto"]);
+    expect(nomi({ colonna: "volantini", verso: "decrescente" })).toEqual(["Aceto", "Burro", "Cacao", "Dado"]);
+    expect(nomi({ colonna: "prezzo", verso: "crescente" })).toEqual(["Burro", "Aceto", "Dado", "Cacao"]);
+    expect(nomi({ colonna: "prezzo", verso: "decrescente" })).toEqual(["Dado", "Aceto", "Burro", "Cacao"]);
+    expect(nomi({ colonna: "differenza", verso: "decrescente" })).toEqual(["Burro", "Aceto", "Cacao", "Dado"]);
+  });
+
+  it("l'ordine dell'elenco nell'indirizzo, la prossima scelta e aria-sort; un valore storpiato o di prima non è un ordine", () => {
+    const prezzo = { colonna: "prezzo", verso: "crescente" } as const;
+    expect(ordinamentoElencoInIndirizzo(prezzo)).toBe("prezzo:crescente");
+    expect(ordinamentoElencoDaIndirizzo("prezzo:crescente")).toEqual(prezzo);
+    for (const valore of [null, "", "nome", "prezzo", "prezzo:su", "colore:crescente"]) expect(ordinamentoElencoDaIndirizzo(valore)).toBeNull();
+    expect(prossimoOrdinamentoElenco(null, "prezzo")).toEqual(prezzo);
+    expect(prossimoOrdinamentoElenco(prezzo, "prezzo")).toEqual({ colonna: "prezzo", verso: "decrescente" });
+    expect(prossimoOrdinamentoElenco(prezzo, "differenza")).toEqual({ colonna: "differenza", verso: "decrescente" });
+    expect(prossimoOrdinamentoElenco(null, "prodotto")).toEqual({ colonna: "prodotto", verso: "crescente" });
+    expect(ariaSortElenco(prezzo, "prezzo")).toBe("ascending");
+    expect(ariaSortElenco(prezzo, "prodotto")).toBe("none");
+    expect(ariaSortElenco(null, "prezzo")).toBe("none");
+  });
+
+  it("i ruoli: per nome con quanti prodotti ha ciascuno e quanti non ne hanno; per prodotto, quanti volantini ha ciascun ruolo", () => {
+    const latte = referenza("Latte", [presenza("ct", 1, { ruolo: "Star" }), presenza("cl", 1, { ruolo: "Base" }), presenza("ot", 1, { ruolo: "Base" })], { ruoli: ["Base", "Star"] });
+    const burro = referenza("Burro", [presenza("ct", 1, { ruolo: "Base" })], { ruoli: ["Base"] });
+    const prodotti = prodottiConfronto([latte, burro, referenza("Pasta", [presenza("st")])], griglia);
+    expect(ruoliDelConfronto(prodotti)).toEqual({ ruoli: [{ ruolo: "Base", prodotti: 2 }, { ruolo: "Star", prodotti: 1 }], senzaRuolo: 1 });
+    expect(ruoliDelProdotto(latte)).toEqual([{ ruolo: "Base", volantini: 2, su: 3 }, { ruolo: "Star", volantini: 1, su: 3 }]);
+    // Un server che manda i ruoli del prodotto ma non quelli per volantino
+    expect(ruoliDelProdotto(referenza("Olio", [presenza("ct")], { ruoli: ["Vedette"] }))).toEqual([{ ruolo: "Vedette", volantini: null, su: 1 }]);
+    // Un server che non manda i ruoli
+    expect(ruoliDelProdotto(referenza("Sale", [presenza("ct")]))).toEqual([]);
+  });
+
+  it("il conteggio del ruolo in vista, come Star 1/3, solo con più ruoli; la frase intera per il suggerimento", () => {
+    const latte = referenza("Latte", [presenza("ct", 1, { ruolo: "Star" }), presenza("cl", 1, { ruolo: "Base" }), presenza("ot", 1, { ruolo: "Base" })], { ruoli: ["Base", "Star"] });
+    const [base, star] = ruoliDelProdotto(latte) as [ReturnType<typeof ruoliDelProdotto>[number], ReturnType<typeof ruoliDelProdotto>[number]];
+    expect(conteggioRuolo(star, 2)).toBe("1/3");
+    expect(conteggioRuolo(base, 2)).toBe("2/3");
+    expect(descrizioneRuolo(star, 2)).toBe("Star in 1 dei 3 volantini in cui compare");
+    // Con un ruolo solo il ruolo vale ovunque: niente conteggio
+    expect(conteggioRuolo(base, 1)).toBeNull();
+    expect(descrizioneRuolo(base, 1)).toBe("Base");
+    // Senza il ruolo per volantino il conteggio non si sa
+    expect(conteggioRuolo({ ruolo: "Vedette", volantini: null, su: 3 }, 2)).toBeNull();
+  });
+
+  it("i filtri a faccette: i reparti seguono ruoli e testo, i ruoli seguono reparto e testo", () => {
+    const tutti = ["ct", "cl", "ot", "ol", "st"];
+    const LAT = { codice: "LAT", descrizione: "Latticini" };
+    const DRO = { codice: "DRO", descrizione: "Drogheria" };
+    const prodotti = prodottiConfronto(
+      [
+        referenza("Latte", tutti.map(id => presenza(id)), { reparto: LAT, ruoli: ["Star"] }),
+        referenza("Burro", tutti.map(id => presenza(id)), { reparto: LAT, ruoli: ["Base"] }),
+        referenza("Pasta", tutti.map(id => presenza(id)), { reparto: DRO, ruoli: ["Base"] }),
+        referenza("Sale", tutti.map(id => presenza(id)), { reparto: DRO }),
+      ],
+      griglia
+    );
+    const conStar = facceConfronto(prodotti, griglia, { ...SENZA_FILTRI, ruoli: ["Star"] });
+    expect(conStar.reparti.map(voce => voce.nome)).toEqual(["Latticini"]);
+    // I ruoli non seguono sé stessi: scelto Star si vedono ancora tutti, con i loro conteggi
+    expect(conStar.ruoli).toEqual([{ ruolo: "Base", prodotti: 2 }, { ruolo: "Star", prodotti: 1 }]);
+    expect(conStar.senzaRuolo).toBe(1);
+    const drogheria = facceConfronto(prodotti, griglia, { ...SENZA_FILTRI, reparto: "DRO" });
+    expect(drogheria.ruoli).toEqual([{ ruolo: "Base", prodotti: 1 }]);
+    expect(drogheria.senzaRuolo).toBe(1);
+    expect(drogheria.reparti.map(voce => voce.nome)).toEqual(["Drogheria", "Latticini"]);
+    expect(facceConfronto(prodotti, griglia, { ...SENZA_FILTRI, cerca: "pasta" }).ruoli).toEqual([{ ruolo: "Base", prodotti: 1 }]);
   });
 
   it("i prodotti in comune: solo quelli in tutti i volantini, prima i prezzi diversi dalla differenza più grande, poi per nome", () => {
@@ -321,6 +479,28 @@ describe("assortimento a confronto", () => {
     expect(LIMITE_IN_COMUNE).toBe(36);
   });
 
+  it("i filtri dei prodotti in comune: testo, reparto e ruolo, sui soli prodotti in tutti i volantini", () => {
+    const tutti = ["ct", "cl", "ot", "ol", "st"];
+    const LAT = { codice: "LAT", descrizione: "Latticini" };
+    const prodotti = prodottiConfronto(
+      [
+        referenza("Latte", tutti.map(id => presenza(id)), { reparto: LAT, marca: "Granarolo", ruoli: ["Star"] }),
+        referenza("Burro", tutti.map(id => presenza(id)), { reparto: LAT, ruoli: ["Base"] }),
+        referenza("Pasta", tutti.map(id => presenza(id))),
+        // Star e dei Latticini, ma non in comune
+        referenza("Yogurt", [presenza("st")], { reparto: LAT, ruoli: ["Star"] }),
+      ],
+      griglia
+    );
+    const nomi = (filtri: Parameters<typeof prodottiInComune>[2]) => prodottiInComune(prodotti, griglia, filtri).map(p => p.referenza.nome);
+    expect(nomi({ cerca: "", reparto: "LAT", ruoli: [] })).toEqual(["Burro", "Latte"]);
+    expect(nomi({ cerca: "", reparto: null, ruoli: ["Star"] })).toEqual(["Latte"]);
+    expect(nomi({ cerca: "", reparto: null, ruoli: ["Star", "Base"] })).toEqual(["Burro", "Latte"]);
+    expect(nomi({ cerca: "granarolo", reparto: null, ruoli: [] })).toEqual(["Latte"]);
+    expect(nomi({ cerca: "", reparto: SENZA_REPARTO, ruoli: [SENZA_RUOLO] })).toEqual(["Pasta"]);
+    expect(nomi({ cerca: "pasta", reparto: null, ruoli: ["Star"] })).toEqual([]);
+  });
+
   it("con un solo volantino non ci sono prodotti in comune da confrontare", () => {
     const unico = grigliaVolantini([kit("ct")]);
     const prodotti = prodottiConfronto([referenza("Pasta", [presenza("ct")])], unico);
@@ -328,11 +508,17 @@ describe("assortimento a confronto", () => {
   });
 
   it("il file per Excel: punto e virgola, BOM, una colonna di prezzo per ogni volantino con la virgola decimale", () => {
-    const prodotti = prodottiConfronto([referenza("Latte \"intero\"", [presenza("ct", 1.19), presenza("cl", 1.29)], { marca: "Granarolo", meccaniche: ["fidelity"] })], griglia);
+    const prodotti = prodottiConfronto(
+      [referenza("Latte \"intero\"", [presenza("ct", 1.19), presenza("cl", 1.29)], { marca: "Granarolo", meccaniche: ["fidelity"], ruoli: ["Star", "Base"] })],
+      griglia
+    );
     const [testa, riga] = csvConfronto(prodotti, griglia).split("\r\n");
     expect(testa?.startsWith("\uFEFF")).toBe(true);
     expect(testa).toContain('"Prezzo City · Lazio";"Prezzo City · Toscana";"Prezzo Conad · Lazio";"Prezzo Conad · Toscana";"Prezzo Superstore · Toscana"');
-    expect(riga).toBe('"Latte ""intero""";"Granarolo";"";"";"";"";"Prezzo Fidelity";"Solo City";"1,29";"1,19";"";"";"";"0,10";"8"');
+    expect(testa).toContain('"Reparto";"Ruolo";"Meccanica";"Dove";"Unità del prezzo"');
+    expect(riga).toBe('"Latte ""intero""";"Granarolo";"";"";"";"";"Star, Base";"Prezzo Fidelity";"Solo City";"";"1,29";"1,19";"";"";"";"0,10";"8"');
+    const etto = prodottiConfronto([referenza("Speck", [presenza("ct", 2.49, { prezzoAllEtto: true })])], griglia);
+    expect(csvConfronto(etto, griglia).split("\r\n")[1]).toContain(`"Solo City · Toscana";"all'etto";`);
   });
 });
 

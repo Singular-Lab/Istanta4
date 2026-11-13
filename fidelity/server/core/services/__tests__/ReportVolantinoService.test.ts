@@ -137,7 +137,8 @@ describe('ReportVolantinoService.report: dati e intestazione', () => {
     expect(report).toMatchObject({
       generatoIl: '2026-11-09T08:30:00.000Z',
       idKit: ID_KIT,
-      titolo: 'Volantino 21',
+      // Insegna e area, non il titolo tecnico del kit
+      titolo: 'Conad City · Toscana',
       sottotitolo: 'Toscana · Conad City · dal 3 al 16 novembre 2026',
       pdf: { idOlimpoCloud: 'pdf-1', pagine: 4 },
       box: [BOX],

@@ -64,6 +64,7 @@ vi.mock("@/components/FlyerInsights", () => ({
 }));
 // Il visualizzatore ha i suoi test: qui conta cosa la pagina gli passa
 vi.mock("@/components/FlyerInsights/volantino", () => ({
+  ATTRIBUTO_LETTORE: "data-lettore-volantino",
   VolantinoSfogliabile: (props: {
     idKit: string;
     pagina?: number;
@@ -76,6 +77,7 @@ vi.mock("@/components/FlyerInsights/volantino", () => ({
     finti.propVolantino = Object.keys(props);
     return (
       <div>
+        <div data-lettore-volantino="" data-testid="barra-lettore" />
         <p>
           Volantino {idKit} pagina {pagina ?? "nessuna"} box iniziale {idBoxIniziale ?? "nessuno"} box {box.length}
         </p>
@@ -191,19 +193,19 @@ describe("Dettaglio del volantino", () => {
     finti.scarica.mockReset();
   });
 
-  it("intestazione compatta: titolo, canale, area, periodo e stato del volantino dagli insight, con il report PDF disattivato e Scarica il volantino", () => {
+  it("intestazione compatta: insegna e area come titolo, periodo e stato del volantino dagli insight, con il report PDF disattivato e Scarica il volantino", () => {
     // Le date vengono dagli insight, non dalla consultazione
     finti.file = caricato(undefined);
     apri();
 
     expect(finti.idKitRichiesti.at(-1)).toBe("k1");
-    const titolo = screen.getByRole("heading", { level: 1, name: "Volantino ottobre" });
+    // Il titolo tecnico del kit ("Volantino ottobre" nei dati di prova) non compare: insegna · area
+    const titolo = screen.getByRole("heading", { level: 1, name: "Super · Nord" });
     expect(titolo).not.toHaveClass("title-page");
-    expect(screen.getByTitle("Super")).toBeInTheDocument();
-    expect(screen.getByTitle("Nord")).toBeInTheDocument();
+    expect(screen.queryByText("Volantino ottobre")).not.toBeInTheDocument();
     expect(screen.getByTitle("1 – 14 gennaio 2020")).toBeInTheDocument();
     expect(screen.getByTitle("Concluso")).toHaveAttribute("data-tono", "neutral");
-    const report = screen.getByRole("button", { name: "Report PDF di k1: Volantino ottobre" });
+    const report = screen.getByRole("button", { name: "Report PDF di k1: Super · Nord" });
     expect(report).toBeDisabled();
     expect(report).toHaveAttribute("title", REPORT_DISATTIVATO);
     // Accanto al report si scarica il PDF del volantino
@@ -215,9 +217,27 @@ describe("Dettaglio del volantino", () => {
     finti.insights = caricato({ ...datiInsight, contesto: { titolo: "Volantino ottobre", nomeArea: "Nord", nomeCanale: "Super", idPromo: "p1" } });
     apri();
 
-    expect(screen.getByTitle("Super")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Super · Nord" })).toBeInTheDocument();
     expect(screen.queryByTitle(/gennaio/)).not.toBeInTheDocument();
     expect(screen.queryByTitle("Concluso")).not.toBeInTheDocument();
+  });
+
+  it("senza area il titolo è l'insegna; senza insegna né area non è mai il titolo tecnico del kit", () => {
+    finti.insights = caricato({ ...datiInsight, contesto: { titolo: "VOLANTINO_SSCNCY_SSLI_VOL_SSCNCY", nomeCanale: "Superstore", idPromo: "p1" } });
+    const { unmount } = apri();
+    expect(screen.getByRole("heading", { level: 1, name: "Superstore" })).toBeInTheDocument();
+    unmount();
+
+    // Senza insegna né area, il nome della promozione
+    finti.insights = caricato({ ...datiInsight, contesto: { titolo: "VOLANTINO_SSCNCY_SSLI_VOL_SSCNCY", idPromo: "p1", nomePromo: "Promo di novembre" } });
+    const secondo = apri();
+    expect(screen.getByRole("heading", { level: 1, name: "Promo di novembre" })).toBeInTheDocument();
+    secondo.unmount();
+
+    finti.insights = caricato({ ...datiInsight, contesto: { titolo: "VOLANTINO_SSCNCY_SSLI_VOL_SSCNCY", idPromo: "p1" } });
+    apri();
+    expect(screen.getByRole("heading", { level: 1, name: "Dettaglio volantino" })).toBeInTheDocument();
+    expect(screen.queryByText(/VOLANTINO_SSCNCY/)).not.toBeInTheDocument();
   });
 
   it("con le date null nemmeno; con la sola fine passata il volantino è concluso", () => {
@@ -247,6 +267,55 @@ describe("Dettaglio del volantino", () => {
     const referenze = screen.getByRole("heading", { level: 2, name: "Referenze in volantino · 4" });
     expect(marchi.compareDocumentPosition(analisi) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(analisi.compareDocumentPosition(referenze) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("con il menabò della libreria agenzia la sezione Menabò viene subito dopo il volantino; una pagina scelta apre il volantino lì", () => {
+    finti.insights = caricato({
+      ...datiInsight,
+      menabo: {
+        pagine: [
+          { pagina: 1, sezione: "COP-Copertina base", nome: "Copertina base" },
+          { pagina: 2, sezione: "N1-NUMERI1", nome: "Numeri1" },
+          { pagina: 5, sezione: "Og-OFFERTE generiche", nome: "Offerte generiche" },
+        ],
+      },
+    });
+    apri();
+
+    expect(titoliSezioni()).toEqual(["Il volantino", "Menabò", "Distribuzione nelle pagine", "Referenze in volantino · 4"]);
+    const menabo = screen.getByRole("region", { name: "Menabò" });
+    const pagine = within(menabo).getByRole("list", { name: "Menabò: le pagine con la loro sezione" });
+    // Tutte le 8 pagine del volantino, anche quelle senza sezione
+    expect(within(pagine).getAllByRole("listitem")).toHaveLength(8);
+    // Il reparto con più box della pagina sta sotto la sezione; una pagina senza box non ha prodotti
+    const offerte = within(pagine).getByRole("button", { name: "Pagina 5: Offerte generiche, reparto Latticini" });
+    expect(offerte).toHaveAttribute("title", "Og-OFFERTE generiche");
+    expect(within(pagine).getByRole("button", { name: "Pagina 3: nessun prodotto" })).toHaveTextContent("3Nessun prodotto");
+
+    // La pagina scelta porta in vista le pagine del volantino (la barra del lettore), non l'inizio della sezione
+    const scorri = vi.fn();
+    const originale = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scorri;
+    try {
+      fireEvent.click(offerte);
+    } finally {
+      Element.prototype.scrollIntoView = originale;
+    }
+    expect(screen.getByText(/^Volantino k1 pagina 5 /)).toBeInTheDocument();
+    expect(offerte).toHaveAttribute("aria-current", "page");
+    expect(scorri).toHaveBeenCalledTimes(1);
+    expect(scorri.mock.contexts[0]).toBe(screen.getByTestId("barra-lettore"));
+  });
+
+  it("senza menabò, o con un menabò vuoto, la sezione non c'è", () => {
+    finti.insights = caricato({ ...datiInsight, menabo: null });
+    const { unmount } = apri();
+    expect(screen.queryByRole("heading", { level: 2, name: "Menabò" })).not.toBeInTheDocument();
+    unmount();
+
+    finti.insights = caricato({ ...datiInsight, menabo: { pagine: [] } });
+    apri();
+    expect(screen.queryByRole("heading", { level: 2, name: "Menabò" })).not.toBeInTheDocument();
   });
 
   it("non confronta con altre edizioni o varianti: niente sezione Confronti", () => {

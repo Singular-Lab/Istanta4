@@ -108,6 +108,30 @@ describe("AnalisiPagina", () => {
     expect(righe[3]).toHaveTextContent("senza posizione");
   });
 
+  it("nella riga il ruolo ha la parola davanti, perché non sembri una marca; il prezzo all'etto lo dice", () => {
+    const prodotto = (ruolo: string) => ({
+      chiave: `c-${ruolo}`,
+      nome: "Gorgonzola",
+      marca: null,
+      formato: null,
+      gusto: null,
+      codice: null,
+      ean: [],
+      prezzo: null,
+      settore: null,
+      segmento: null,
+      tema: null,
+      ruolo,
+    });
+    const { pannello } = disegna({
+      box: [boxDi("etto", { nome: "Gorgonzola", marca: "Sapori & Dintorni", prezzo: 0.99, prezzoAllEtto: true, dettaglioProdotti: [prodotto("Star"), prodotto("Base")] })],
+    });
+
+    const riga = within(within(pannello).getByRole("region", { name: "Box della pagina" })).getByRole("button");
+    expect(riga).toHaveTextContent("Sapori & Dintorni · Ruolo Star, Base");
+    expect(riga).toHaveTextContent("€ 0,99 all'etto");
+  });
+
   it("passando su un box lo mette in rilievo, uscendo lo toglie; scegliendolo apre la scheda", () => {
     const { onRilievo, onApri } = disegna();
     const riga = screen.getByTestId("riga-box-medio");

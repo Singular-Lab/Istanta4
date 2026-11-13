@@ -1,6 +1,7 @@
 import type { RepartiDaSalvare, RepartoGdo } from '../../../lib/impostazioniGdo/tipi';
 import type { RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { type RepartoAnagrafica, stessoCodice, testoNormalizzato } from './campiInsights';
+import { comeFrase } from './referenzaStampata';
 
 /**
  * I reparti della GDO come li vede il marketing (Impostazioni GDO, spec impostazioni-gdo): nome per
@@ -51,15 +52,24 @@ export interface RisolutoreReparti {
   risolvi(reparto: RepartoInsight): RepartoInsight;
   /**
    * Il nome da mostrare per un reparto letto come testo (descrizione, sigla o "Reparto NN", come
-   * lo scrive la lettura generica nei riepiloghi dei kit): il nome per il marketing, o il testo.
+   * lo scrive la lettura generica nei riepiloghi dei kit): il nome per il marketing, o il testo
+   * scritto come frase quando e' tutto maiuscolo ("DROGHERIA ALIMENTARE" -> "Drogheria alimentare").
    */
   nome(letto: string): string;
 }
 
+/**
+ * Il nome di un reparto senza nome per il marketing: la descrizione dell'anagrafica, che arriva in
+ * maiuscolo, scritta come frase ("DROGHERIA ALIMENTARE" -> "Drogheria alimentare", spec
+ * insight-volantino, "Reparti e meccaniche leggibili per ogni fonte del volantino"). Un codice o una
+ * sigla senza una parola vera ("99", "PC") restano come sono.
+ */
+export const nomeRepartoLeggibile = (testo: string): string => (/\p{L}{4,}/u.test(testo) ? comeFrase(testo) ?? testo : testo);
+
 export const RISOLUTORE_NEUTRO: RisolutoreReparti = {
   vuoto: true,
   risolvi: reparto => reparto,
-  nome: letto => letto,
+  nome: nomeRepartoLeggibile,
 };
 
 /** Il risolutore dei reparti di una GDO: le voci salvate e l'anagrafica della sua configurazione degli insight. */
@@ -122,7 +132,7 @@ export function risolutoreReparti(salvati: readonly RepartoSalvato[], anagrafica
       const testo = letto.trim();
       if (testo === '') return letto;
       const voce = trova(testo, testo);
-      return (voce && delGruppo(voce)?.descrizione) || letto;
+      return (voce && delGruppo(voce)?.descrizione) || nomeRepartoLeggibile(letto);
     },
   };
 }
