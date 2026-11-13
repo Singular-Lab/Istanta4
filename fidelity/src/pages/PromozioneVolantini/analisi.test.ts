@@ -17,6 +17,7 @@ import {
   chiaveCella,
   grigliaVolantini,
   idFiltro,
+  LIMITE_IN_COMUNE,
   meccanicheImpilate,
   nomeCasella,
   ORDINAMENTO_INIZIALE,
@@ -25,6 +26,7 @@ import {
   ordineDaIndirizzo,
   prezziPerLuogo,
   prodottiConfronto,
+  prodottiInComune,
   type ProdottoConfronto,
   prossimoOrdinamento,
   SENZA_REPARTO,
@@ -300,6 +302,29 @@ describe("assortimento a confronto", () => {
     expect(nomi("nome")).toEqual(["A", "B", "C"]);
     expect(nomi("volantini")).toEqual(["A", "B", "C"]);
     expect(ordineDaIndirizzo("storpiato")).toBe("differenza");
+  });
+
+  it("i prodotti in comune: solo quelli in tutti i volantini, prima i prezzi diversi dalla differenza più grande, poi per nome", () => {
+    const tutti = ["ct", "cl", "ot", "ol", "st"];
+    const prodotti = prodottiConfronto(
+      [
+        referenza("Zucchero", tutti.map(id => presenza(id, 1))),
+        referenza("Olio", tutti.map(id => presenza(id, id === "st" ? 5.5 : 5))),
+        referenza("Burro", tutti.map(id => presenza(id, id === "cl" ? 2.4 : 2))),
+        referenza("Aceto", tutti.map(id => presenza(id, 1.2))),
+        // In 4 volantini su 5: non è in comune, anche se ha la differenza più grande
+        referenza("Caffè", ["ct", "cl", "ot", "ol"].map(id => presenza(id, id === "ct" ? 3 : 6))),
+      ],
+      griglia
+    );
+    expect(prodottiInComune(prodotti, griglia).map(p => p.referenza.nome)).toEqual(["Burro", "Olio", "Aceto", "Zucchero"]);
+    expect(LIMITE_IN_COMUNE).toBe(36);
+  });
+
+  it("con un solo volantino non ci sono prodotti in comune da confrontare", () => {
+    const unico = grigliaVolantini([kit("ct")]);
+    const prodotti = prodottiConfronto([referenza("Pasta", [presenza("ct")])], unico);
+    expect(prodottiInComune(prodotti, unico)).toEqual([]);
   });
 
   it("il file per Excel: punto e virgola, BOM, una colonna di prezzo per ogni volantino con la virgola decimale", () => {
