@@ -244,13 +244,12 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
             {menabo && (
               <Sezione
                 titolo="Menabò"
-                descrizione="La sezione di ogni pagina, come impostata nell'impaginazione del volantino, e il reparto con più prodotti: le pagine della stessa sezione hanno lo stesso colore. Scegli una pagina per aprirla nel volantino."
+                descrizione="La sezione di ogni pagina, come impostata nell'impaginazione del volantino: le pagine della stessa sezione hanno lo stesso colore. Scegli una pagina per aprirla nel volantino."
               >
                 <MenaboVolantino
                   menabo={menabo}
                   totalePagine={totalePagine}
                   pdf={dati.pdf ?? null}
-                  box={box}
                   proporzione={box.find(voce => voce.proporzionePagina)?.proporzionePagina}
                   paginaCorrente={paginaVolantino}
                   onVaiAllaPagina={vaiAllaPagina}

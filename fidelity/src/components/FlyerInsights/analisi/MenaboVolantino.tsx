@@ -2,8 +2,7 @@ import { formatNumero } from "@/utils/format";
 import { urlPaginaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useState } from "react";
-import type { BoxInsight, MenaboVolantino as Menabo, PdfVolantino } from "../../../../lib/insightVolantino/tipi";
-import { ordineLettura } from "../volantino/analisiPagina";
+import type { MenaboVolantino as Menabo, PdfVolantino } from "../../../../lib/insightVolantino/tipi";
 import { PROPORZIONE_PREDEFINITA } from "../volantino/geometria";
 
 /** Una pagina del menabò: con la sua sezione e il colore della sezione, o senza. */
@@ -14,10 +13,6 @@ export interface PaginaDelMenabo {
   nome: string | null;
   /** Indice del colore della sezione (coloreSezione); null senza sezione. */
   colore: number | null;
-  /** Il reparto con più box della pagina, per nome; null senza box o senza reparti. */
-  reparto: string | null;
-  /** La pagina ha box. Senza i box del volantino non si sa, e vale true: la pagina senza sezione mostra il trattino. */
-  conProdotti: boolean;
 }
 
 /** Una sezione del menabò con le sue pagine, nell'ordine in cui compare. */
@@ -114,54 +109,26 @@ export const intervalliPagine = (pagine: readonly number[]): string => {
   return intervalli.join(", ");
 };
 
-type BoxDelMenabo = Pick<BoxInsight, "pagina" | "geometria" | "nome" | "marca" | "formato" | "reparto">;
-
-/** Il reparto con più box di ogni pagina; a parità quello che si incontra prima leggendo la pagina. */
-const repartiPrevalenti = (box: readonly BoxDelMenabo[]): Map<number, string> => {
-  const perPagina = new Map<number, Map<string, { nome: string; box: number }>>();
-  for (const voce of [...box].sort(ordineLettura)) {
-    if (voce.pagina === null || !voce.reparto) continue;
-    const nome = voce.reparto.descrizione || voce.reparto.codice;
-    if (!nome) continue;
-    const chiave = voce.reparto.codice || nome;
-    const reparti = perPagina.get(voce.pagina) ?? new Map<string, { nome: string; box: number }>();
-    const attuale = reparti.get(chiave);
-    reparti.set(chiave, { nome, box: (attuale?.box ?? 0) + 1 });
-    perPagina.set(voce.pagina, reparti);
-  }
-  const prevalenti = new Map<number, string>();
-  for (const [pagina, reparti] of perPagina) {
-    let migliore: { nome: string; box: number } | null = null;
-    // Le mappe tengono l'ordine di inserimento: a parità resta il primo letto
-    for (const reparto of reparti.values()) if (!migliore || reparto.box > migliore.box) migliore = reparto;
-    if (migliore) prevalenti.set(pagina, migliore.nome);
-  }
-  return prevalenti;
-};
-
 /**
- * Tutte le pagine del volantino, dalla prima all'ultima, con la loro sezione e il reparto con più box.
- * Le sezioni prendono i colori per nome, nell'ordine in cui compaiono: lo stesso nome ha sempre lo
- * stesso colore ("Dispensa doppia" e "Dispensa singola" sono già "Dispensa"), nomi diversi colori
- * diversi. Con i box del volantino una pagina senza box è senza prodotti. Funzione pura.
+ * Tutte le pagine del volantino, dalla prima all'ultima, con la loro sezione. Le sezioni prendono i
+ * colori per nome, nell'ordine in cui compaiono: lo stesso nome ha sempre lo stesso colore ("Dispensa
+ * doppia" e "Dispensa singola" sono già "Dispensa"), nomi diversi colori diversi. Una pagina senza
+ * sezione, con o senza prodotti, non ha nome né colore. Funzione pura.
  */
-export const pagineDelMenabo = (menabo: Menabo, totalePagine: number, box?: readonly BoxDelMenabo[]): PaginaDelMenabo[] => {
+export const pagineDelMenabo = (menabo: Menabo, totalePagine: number): PaginaDelMenabo[] => {
   const perPagina = new Map(menabo.pagine.map(voce => [voce.pagina, voce]));
-  const conBox = box ? new Set(box.flatMap(voce => (voce.pagina !== null ? [voce.pagina] : []))) : null;
-  const reparti = box ? repartiPrevalenti(box) : new Map<number, string>();
   const ultima = Math.max(Number.isFinite(totalePagine) ? Math.floor(totalePagine) : 0, ...menabo.pagine.map(voce => voce.pagina));
   const colori = new Map<string, number>();
   const pagine: PaginaDelMenabo[] = [];
   for (let pagina = 1; pagina <= ultima; pagina++) {
     const voce = perPagina.get(pagina);
-    const reparto = reparti.get(pagina) ?? null;
     if (!voce) {
-      pagine.push({ pagina, sezione: null, nome: null, colore: null, reparto, conProdotti: conBox ? conBox.has(pagina) : true });
+      pagine.push({ pagina, sezione: null, nome: null, colore: null });
       continue;
     }
     const nome = voce.nome || voce.sezione;
     if (!colori.has(nome)) colori.set(nome, colori.size);
-    pagine.push({ pagina, sezione: voce.sezione, nome, colore: colori.get(nome) ?? null, reparto, conProdotti: conBox?.has(pagina) ?? true });
+    pagine.push({ pagina, sezione: voce.sezione, nome, colore: colori.get(nome) ?? null });
   }
   return pagine;
 };
@@ -207,20 +174,18 @@ function Copertina({ pdf, proporzione, corrente, onVai }: { pdf: PdfVolantino | 
   );
 }
 
-/** Il testo del riquadro di una pagina per chi non vede: sezione e reparto, oppure perché non li ha. */
-const descrizionePagina = (voce: PaginaDelMenabo): string => {
-  if (!voce.conProdotti) return `Pagina ${voce.pagina}: nessun prodotto`;
-  const reparto = voce.reparto ? `, reparto ${voce.reparto}` : "";
-  return voce.nome ? `Pagina ${voce.pagina}: ${voce.nome}${reparto}` : `Pagina ${voce.pagina}: nessuna sezione${reparto}`;
-};
+/** Al posto del nome, per una pagina di cui non si trova la sezione: senza referenze o senza mastro. */
+export const SEZIONE_NON_TROVATA = "Non trovata";
+
+/** Il testo del riquadro di una pagina per chi non vede: la sezione, o che non è stata trovata. */
+const descrizionePagina = (voce: PaginaDelMenabo): string =>
+  voce.nome ? `Pagina ${voce.pagina}: ${voce.nome}` : `Pagina ${voce.pagina}: sezione non trovata`;
 
 export interface MenaboVolantinoProps {
   menabo: Menabo;
   /** Le pagine del volantino: il menabò le mostra tutte, anche quelle senza sezione. */
   totalePagine: number;
   pdf: PdfVolantino | null;
-  /** I box del volantino: dicono le pagine senza prodotti e il reparto con più box di ogni pagina. */
-  box?: readonly BoxDelMenabo[];
   /** Larghezza/altezza della pagina, per la copertina; senza, quella di un A4. */
   proporzione?: number | null;
   /** La pagina che l'utente sta guardando nel volantino: è evidenziata. */
@@ -231,16 +196,15 @@ export interface MenaboVolantinoProps {
 
 /**
  * Il menabò del volantino (spec insight-volantino, "Menabò del volantino"): la copertina e un
- * riquadro per pagina, dalla prima all'ultima, con il numero, il nome della sezione (per Conad CNO la
- * mastro, col nome pulito) e il reparto con più box, nel colore della sezione; sezioni diverse hanno
- * colori diversi. Una pagina senza box dice che non ha prodotti, una con box ma senza sezione mostra
- * un trattino, spiegato sotto. Il nome intero della fonte sta nel suggerimento. Accanto, le sezioni con
- * le loro pagine a intervalli. Scegliendo una pagina il volantino va lì.
+ * riquadro per pagina, dalla prima all'ultima, con il numero e il nome della sezione (per Conad CNO la
+ * mastro, col nome pulito), nel colore della sezione; sezioni diverse hanno colori diversi. Niente
+ * reparto. Una pagina di cui non si trova la sezione, senza referenze o senza mastro, dice "Non
+ * trovata". Il nome intero della fonte sta nel suggerimento. Sotto, le sezioni con le loro pagine a
+ * intervalli. Scegliendo una pagina il volantino va lì.
  */
-export function MenaboVolantino({ menabo, totalePagine, pdf, box, proporzione, paginaCorrente, onVaiAllaPagina }: MenaboVolantinoProps) {
-  const pagine = pagineDelMenabo(menabo, totalePagine, box);
+export function MenaboVolantino({ menabo, totalePagine, pdf, proporzione, paginaCorrente, onVaiAllaPagina }: MenaboVolantinoProps) {
+  const pagine = pagineDelMenabo(menabo, totalePagine);
   const sezioni = sezioniDelMenabo(pagine);
-  const conTrattino = pagine.some(voce => voce.conProdotti && voce.nome === null);
   const formato = proporzione && Number.isFinite(proporzione) && proporzione > 0 ? proporzione : PROPORZIONE_PREDEFINITA;
 
   return (
@@ -270,17 +234,8 @@ export function MenaboVolantino({ menabo, totalePagine, pdf, box, proporzione, p
                 >
                   {voce.pagina}
                 </span>
-                <span className="min-w-0 leading-tight">
-                  {!voce.conProdotti ? (
-                    <span className="block truncate text-sm text-slate-400 dark:text-slate-500">Nessun prodotto</span>
-                  ) : (
-                    <>
-                      <span className={twMerge("block truncate text-sm", voce.nome ? "font-medium text-slate-800 dark:text-slate-100" : "text-slate-400 dark:text-slate-500")}>
-                        {voce.nome ?? "—"}
-                      </span>
-                      {voce.reparto && <span className="block truncate text-2xs text-slate-500 dark:text-slate-400">{voce.reparto}</span>}
-                    </>
-                  )}
+                <span className={twMerge("min-w-0 truncate text-sm", voce.nome ? "font-medium text-slate-800 dark:text-slate-100" : "text-slate-400 dark:text-slate-500")}>
+                  {voce.nome ?? SEZIONE_NON_TROVATA}
                 </span>
               </>
             );
@@ -327,7 +282,6 @@ export function MenaboVolantino({ menabo, totalePagine, pdf, box, proporzione, p
               </li>
             ))}
           </ul>
-          {conTrattino && <p className="text-2xs text-slate-500 dark:text-slate-400">— pagina con prodotti ma senza sezione: sotto il trattino c'è il reparto con più box.</p>}
         </div>
       )}
     </div>
