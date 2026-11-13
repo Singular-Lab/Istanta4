@@ -5,7 +5,7 @@ import { useFetchFlyerInsightsConfig } from "@/query/query";
 import { FlyerInsights as FlyerInsightsType } from "@/types/flyerInsights";
 import clsx from "clsx";
 import { FC } from "react";
-import { MarcheVolantino, PrezziSconti, RepartiVolantino } from "./analisi";
+import { PrezziSconti, RepartiVolantino } from "./analisi";
 import { sezioneAttiva } from "./configurazione";
 import { EXPORT_DI_SISTEMA } from "../../../lib/enums";
 
@@ -31,10 +31,12 @@ function NonDisponibile() {
 }
 
 /**
- * Le analisi del volantino come sezioni della pagina, una sotto l'altra e senza schede: Reparti e
- * Meccaniche e sconti affiancate sugli schermi larghi, poi Marche. La config della GDO puo' spegnere
- * reparti e meccaniche (enabled: false). Sintesi, distribuzione nelle pagine, volantino sfogliabile e
- * marchi del distributore li mette la pagina, fuori da qui.
+ * Le analisi del volantino come sezioni della pagina, senza schede: Reparti e Meccaniche e sconti,
+ * affiancate sugli schermi larghi. La config della GDO puo' spegnere reparti e meccaniche (enabled:
+ * false). Niente sezione delle marche con piu' spazio (spec insight-volantino, "Prezzi, sconti,
+ * spazio e marche del volantino"): il numero delle marche e la quota del distributore stanno negli
+ * indicatori in alto. Sintesi, distribuzione nelle pagine, volantino sfogliabile e marchi del
+ * distributore li mette la pagina, fuori da qui.
  */
 const FlyerInsights: FC<FlyerInsightsProps> = ({ insights, isLoading = false, className, exportCodes }) => {
   const { data: insightsConfig } = useFetchFlyerInsightsConfig();
@@ -105,14 +107,6 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({ insights, isLoading = false, cl
           )}
         </div>
       )}
-
-      <Sezione titolo="Marche" descrizione="Le marche con più spazio e più box, con lo sconto medio di ciascuna.">
-        {insights.marche ? (
-          <MarcheVolantino marche={insights.marche} conLineeDistributore={Boolean(insights.lineeDistributore)} copertura={copertura} />
-        ) : (
-          <NonDisponibile />
-        )}
-      </Sezione>
     </div>
   );
 };

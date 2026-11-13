@@ -1,11 +1,10 @@
 /**
  * Analisi del volantino lato pagina (contratto in lib/insightVolantino/tipi.ts): la sintesi per la
- * Direzione, il menabò, la distribuzione nelle pagine, i marchi del distributore e le sezioni Reparti,
- * Meccaniche e sconti e Marche. Valgono per ogni GDO e per i kit di Istanta e dello storico.
+ * Direzione, il menabò, la distribuzione nelle pagine, i marchi del distributore e le sezioni Reparti
+ * e Meccaniche e sconti. Valgono per ogni GDO e per i kit di Istanta e dello storico.
  */
 export { BarreAppaiate, type BarreAppaiateProps, type VoceAppaiata } from "./BarreAppaiate";
 export { DistribuzionePagine, distribuzionePagine, type ColonnaPagina, type DistribuzionePagineProps, type ParteColonna } from "./DistribuzionePagine";
-export { MarcheVolantino, type MarcheVolantinoProps } from "./MarcheVolantino";
 export { coloreSezione, intervalliPagine, MenaboVolantino, pagineDelMenabo, sezioniDelMenabo, testoSuColore, type MenaboVolantinoProps, type PaginaDelMenabo, type SezioneDelMenabo } from "./MenaboVolantino";
 export { MarchiDistributore, type MarchiDistributoreProps } from "./MarchiDistributore";
 export { PrezziSconti, type PrezziScontiProps } from "./PrezziSconti";

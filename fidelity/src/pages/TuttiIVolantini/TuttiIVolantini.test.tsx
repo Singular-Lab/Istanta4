@@ -55,7 +55,7 @@ vi.mock("@/components/FlyerInsights/report", () => ({
     </button>
   ),
 }));
-// Le sezioni Reparti, Meccaniche e sconti e Marche hanno i loro test
+// Le sezioni Reparti e Meccaniche e sconti hanno i loro test
 vi.mock("@/components/FlyerInsights", () => ({
   FlyerInsights: (props: { insights: { guidIdKitRuntime: string } | null; isLoading?: boolean }) => {
     finti.propAnalisi = props;
@@ -287,10 +287,11 @@ describe("Dettaglio del volantino", () => {
     const pagine = within(menabo).getByRole("list", { name: "Menabò: le pagine con la loro sezione" });
     // Tutte le 8 pagine del volantino, anche quelle senza sezione
     expect(within(pagine).getAllByRole("listitem")).toHaveLength(8);
-    // Il reparto con più box della pagina sta sotto la sezione; una pagina senza box non ha prodotti
-    const offerte = within(pagine).getByRole("button", { name: "Pagina 5: Offerte generiche, reparto Latticini" });
+    // Solo la sezione, senza reparto; una pagina senza sezione dice "Non trovata"
+    const offerte = within(pagine).getByRole("button", { name: "Pagina 5: Offerte generiche" });
     expect(offerte).toHaveAttribute("title", "Og-OFFERTE generiche");
-    expect(within(pagine).getByRole("button", { name: "Pagina 3: nessun prodotto" })).toHaveTextContent("3Nessun prodotto");
+    expect(offerte).toHaveTextContent("5Offerte generiche");
+    expect(within(pagine).getByRole("button", { name: "Pagina 3: sezione non trovata" })).toHaveTextContent("3Non trovata");
 
     // La pagina scelta porta in vista le pagine del volantino (la barra del lettore), non l'inizio della sezione
     const scorri = vi.fn();
