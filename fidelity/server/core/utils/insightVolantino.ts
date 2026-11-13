@@ -5,6 +5,7 @@ import {
   type EstensioneInsight,
   type FasciaSconto,
   type MarcaInsight,
+  type MenaboVolantino,
   type MarcheVolantino,
   type ParteDescrizione,
   type PrezziSconti,
@@ -21,7 +22,9 @@ import type { BoxKit } from './analisiKit';
 import { repartoInAnagrafica, type RepartoAnagrafica } from './campiInsights';
 import { lineaEBolli, lineeDelVolantino, type RegoleLinee } from './lineeDistributore';
 import { DESCRIZIONE_ASSENTE, type ProdottoStampato, type ReferenzaStampata } from './referenzaStampata';
+import { nomeRepartoLeggibile } from './repartiGdo';
 import { descrizioneStandard, variantiDei } from '../../../lib/insightVolantino/descrizione';
+import { etichettaRuolo } from '../../../lib/insightVolantino/ruolo';
 
 /**
  * Le sezioni nuove degli insight del volantino (lib/insightVolantino/tipi.ts) dai box del kit
@@ -59,6 +62,20 @@ export interface OpzioniInsight {
   urlLogo?: (sigla: string) => string | null;
   /** La descrizione completa del box come la compone la libreria agenzia; senza, quella standard. */
   descrizioneBox?: (testi: TestiDescrizioneBox) => ParteDescrizione[];
+  /** Le etichette dei ruoli dichiarate dalla libreria agenzia (chiaveRuolo); senza, iniziale maiuscola. */
+  ruoli?: Readonly<Record<string, string>>;
+  /** Le etichette dei temi dichiarate dalla libreria agenzia (chiaveRuolo); senza, iniziale maiuscola. */
+  temi?: Readonly<Record<string, string>>;
+  /**
+   * La sezione della pagina del menabò dai dati di una referenza (per Conad CNO la mastro), per id
+   * referenza; senza, il menabò e' null.
+   */
+  sezionePagina?: (idReferenza: string) => string | null;
+  /**
+   * Il nome leggibile di una sezione del menabò; senza, il valore com'e'. Null per un valore che non
+   * e' una sezione (per Conad CNO la mastro della pagina bianca): quei box non decidono la sezione.
+   */
+  nomeSezione?: (sezione: string) => string | null;
 }
 
 /** I gruppi dei box che non hanno il dato: chiave vuota, cosi' non si confondono con un valore vero. */
@@ -131,11 +148,16 @@ function repartoLetto(singolo: BoxKit, opzioni: OpzioniInsight): RepartoInsight 
 
 /**
  * Il reparto del box, con il nome per il marketing e il colore della GDO quando ci sono: piu'
- * codici con lo stesso nome diventano un solo reparto, anche nei gruppi per reparto qui sotto.
+ * codici con lo stesso nome diventano un solo reparto, anche nei gruppi per reparto qui sotto. Senza
+ * nome per il marketing la descrizione dell'anagrafica, che arriva in maiuscolo, si scrive come frase
+ * ("DROGHERIA ALIMENTARE" -> "Drogheria alimentare"), cosi' accanto ai nomi per il marketing non
+ * stona (spec insight-volantino, "Reparti e meccaniche leggibili per ogni fonte del volantino").
  */
 function repartoDelBox(singolo: BoxKit, opzioni: OpzioniInsight): RepartoInsight | null {
-  const reparto = repartoLetto(singolo, opzioni);
-  return reparto && opzioni.risolviReparto ? opzioni.risolviReparto(reparto) : reparto;
+  const letto = repartoLetto(singolo, opzioni);
+  if (!letto) return null;
+  const reparto = opzioni.risolviReparto ? opzioni.risolviReparto(letto) : letto;
+  return reparto.marketing ? reparto : { ...reparto, descrizione: nomeRepartoLeggibile(reparto.descrizione) };
 }
 
 /** Linea e bolli del box dalla referenza pilota, solo se la libreria agenzia dichiara le linee. */
@@ -157,8 +179,12 @@ function lineaDelBox(singolo: BoxKit, opzioni: OpzioniInsight): Pick<BoxInsight,
 export const eanDi = (valore: string | null): string[] =>
   valore ? [...new Set(valore.split(/[\s_,;|/]+/).map(parte => parte.trim()).filter(Boolean))] : [];
 
-/** Un prodotto del box con i suoi dati anagrafici, per la scheda e per l'interrogazione del volantino. */
-const prodottoInsight = (prodotto: ProdottoStampato): ProdottoInsight => ({
+/**
+ * Un prodotto del box con i suoi dati anagrafici, per la scheda e per l'interrogazione del volantino.
+ * Ruolo e tema con le etichette della libreria agenzia: lo stesso valore scritto in modi diversi e'
+ * uno solo; il tema come lo scrive la fonte resta per il suggerimento.
+ */
+const prodottoInsight = (prodotto: ProdottoStampato, { ruoli, temi }: Pick<OpzioniInsight, 'ruoli' | 'temi'>): ProdottoInsight => ({
   chiave: prodotto.chiave,
   nome: prodotto.nome,
   marca: prodotto.marca,
@@ -169,8 +195,9 @@ const prodottoInsight = (prodotto: ProdottoStampato): ProdottoInsight => ({
   prezzo: prodotto.prezzo,
   settore: prodotto.settore,
   segmento: prodotto.segmento,
-  tema: prodotto.tema,
-  ruolo: prodotto.ruolo,
+  tema: etichettaRuolo(prodotto.tema, temi),
+  temaOriginale: prodotto.tema?.trim() || null,
+  ruolo: etichettaRuolo(prodotto.ruolo, ruoli),
 });
 
 function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
@@ -205,7 +232,7 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
     prodotti: singolo.prodotti.length,
     idReferenze: referenze.map(referenza => referenza.id),
     ...lineaDelBox(singolo, opzioni),
-    dettaglioProdotti: singolo.prodotti.map(prodottoInsight),
+    dettaglioProdotti: singolo.prodotti.map(prodotto => prodottoInsight(prodotto, opzioni)),
     descrizione: (opzioni.descrizioneBox ?? descrizioneStandard)({
       nome: pilota.nome === DESCRIZIONE_ASSENTE ? null : pilota.nome,
       marca: pilota.marca,
@@ -214,6 +241,7 @@ function insightDelBox(singolo: BoxKit, opzioni: OpzioniInsight): BoxInsight {
     }),
   };
   if (prezzoCalcolato !== null) insight.prezzoCalcolato = true;
+  if (conPrezzo.prezzo !== null && conPrezzo.prezzoAllEtto) insight.prezzoAllEtto = true;
   const origine = opzioni.origine?.(singolo.codiceBox);
   if (origine) insight.origine = origine;
   return insight;
@@ -384,6 +412,52 @@ export function marcheDi(box: readonly BoxInsight[], marcheDistributore: readonl
   };
 }
 
+// ─── Menabò ─────────────────────────────────────────────────────────
+
+/**
+ * Il menabò del volantino (spec insight-volantino, "Menabò del volantino"): per ogni pagina la
+ * sezione delle sue referenze, dalla pilota di ogni box in giu'. Le sezioni si contano per nome
+ * leggibile, senza distinguere maiuscole e spazi ("GAdx-GASTRONOMIA dx" e "GA-GASTRONOMIA" sono
+ * "Gastronomia", "Focus Pulizia Casa" e "Focus puliziacasa" una sezione sola, col primo nome visto
+ * nel volantino), con il primo valore della fonte per il suggerimento; con piu' sezioni nella stessa pagina vince quella del maggior numero di
+ * box, a parita' quella che compare prima. Un valore che il nome dichiara non sezione (null) non conta.
+ * Null senza la lettura della sezione o quando nessun box ne ha una.
+ */
+export function menaboDi(box: readonly BoxKit[], opzioni: Pick<OpzioniInsight, 'sezionePagina' | 'nomeSezione'>): MenaboVolantino | null {
+  const leggi = opzioni.sezionePagina;
+  if (!leggi) return null;
+  // Lo stesso nome scritto in modi diversi e' la stessa sezione: vale il primo visto nel volantino
+  const nomi = new Map<string, string>();
+  // Per pagina: nome leggibile -> primo valore della fonte e numero di box
+  const perPagina = new Map<number, Map<string, { sezione: string; box: number }>>();
+  for (const singolo of box) {
+    if (singolo.pagina === null) continue;
+    const sezione = primo(singolo.referenze, referenza => leggi(referenza.id)?.trim() || null);
+    if (!sezione) continue;
+    const nome = opzioni.nomeSezione ? opzioni.nomeSezione(sezione) : sezione;
+    if (nome === null) continue;
+    const letto = nome || sezione;
+    const chiaveNome = letto.toLocaleLowerCase('it-IT').replace(/\s+/g, '');
+    if (!nomi.has(chiaveNome)) nomi.set(chiaveNome, letto);
+    const chiave = nomi.get(chiaveNome) ?? letto;
+    const conti = perPagina.get(singolo.pagina) ?? new Map<string, { sezione: string; box: number }>();
+    const voce = conti.get(chiave);
+    if (voce) voce.box += 1;
+    else conti.set(chiave, { sezione, box: 1 });
+    perPagina.set(singolo.pagina, conti);
+  }
+  if (perPagina.size === 0) return null;
+  const pagine = [...perPagina]
+    .sort(([a], [b]) => a - b)
+    .map(([pagina, conti]) => {
+      // Map tiene l'ordine d'inserimento: a parita' di box resta la sezione vista per prima
+      let scelta = { nome: '', sezione: '', box: 0 };
+      for (const [nome, voce] of conti) if (voce.box > scelta.box) scelta = { nome, ...voce };
+      return { pagina, sezione: scelta.sezione, nome: scelta.nome };
+    });
+  return { pagine };
+}
+
 /** Box e sezioni degli insight del volantino; il PDF lo aggiunge chi conosce il kit. */
 export function sezioniInsight(box: readonly BoxKit[], opzioni: OpzioniInsight): Omit<EstensioneInsight, 'pdf'> {
   const pagine = pagineDelVolantino(box, opzioni.totalePagine);
@@ -395,5 +469,6 @@ export function sezioniInsight(box: readonly BoxKit[], opzioni: OpzioniInsight):
     spazio: usoSpazioDi(insight, pagine),
     marche: marcheDi(insight, opzioni.marcheDistributore),
     lineeDistributore: opzioni.lineeDistributore ? lineeDelVolantino(insight, opzioni.lineeDistributore, opzioni.urlLogo) : null,
+    menabo: menaboDi(box, opzioni),
   };
 }

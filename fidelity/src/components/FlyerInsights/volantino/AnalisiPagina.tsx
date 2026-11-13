@@ -5,7 +5,9 @@ import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useMemo, useState } from "react";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
+import { unitaPrezzo } from "../../../../lib/insightVolantino/unita";
 import { perSpazio, ripartizionePagina, sintesiPagina } from "./analisiPagina";
+import { testoRuoli } from "../referenze/tabella";
 import { descrizioneBox, marcaFormato, NOTA_PREZZO_CALCOLATO } from "./box";
 import type { GruppoBox } from "./colori";
 import { riquadroBox, testoApertura } from "./geometria";
@@ -141,7 +143,7 @@ function Analisi({ pagine, totale, box: tuttiIBox, gruppo, titoloRipartizione, s
                 const scelto = voce.id === selezionato;
                 const trovato = trovati?.has(voce.id) ?? false;
                 const senzaPosizione = !riquadroBox(voce.geometria);
-                const dettagli = [piuPagine && voce.pagina !== null ? `pag. ${formatNumero(voce.pagina)}` : null, marcaFormato(voce)].filter(Boolean).join(" · ");
+                const dettagli = [piuPagine && voce.pagina !== null ? `pag. ${formatNumero(voce.pagina)}` : null, marcaFormato(voce), testoRuoli(voce)].filter(Boolean).join(" · ");
                 return (
                   <li key={voce.id}>
                     <button
@@ -177,6 +179,7 @@ function Analisi({ pagine, totale, box: tuttiIBox, gruppo, titoloRipartizione, s
                         {voce.prezzo !== null && (
                           <span className="text-xs font-semibold text-slate-800 dark:text-slate-100" title={voce.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
                             {formatEuro(voce.prezzo)}
+                            {unitaPrezzo(voce.prezzoAllEtto)}
                           </span>
                         )}
                         <span>

@@ -1,4 +1,5 @@
 import { ElementoMenu, Menu } from "@/stores/sideMenuSlice_istanta";
+import { sezioneDiPercorso } from "../../../lib/accessi/pagine";
 import { eSezioneMenu, SEZIONI } from "../../../lib/accessi/sezioni";
 import type { MenuSezione } from "../../../lib/types";
 import { NavigateFunction } from "react-router-dom";
@@ -223,6 +224,16 @@ const gruppiAttiviDelleAree = (aree: ReadonlyArray<AreaMenu>): string[] =>
 const areaDellaPagina = (aree: ReadonlyArray<AreaMenu>): AreaMenu | undefined =>
   aree.find((area) => area.elementi.some((elemento) => typeof elemento !== "string" && elemento.active));
 
+/**
+ * L'area di una pagina che non è una voce del menu (dettaglio di una promozione, insight di un
+ * volantino...): quella che il catalogo delle pagine le assegna, se il menu la mostra. Così la
+ * consultazione resta in Visualizzazione invece di ricadere sulla prima area.
+ */
+const areaDelPercorso = (aree: ReadonlyArray<AreaMenu>, percorso: string | undefined): AreaMenu | undefined => {
+  const sezione = percorso ? sezioneDiPercorso(percorso) : undefined;
+  return sezione ? aree.find((area) => area.chiave === sezione) : undefined;
+};
+
 /** Indirizzo della voce attiva più interna, per accorgersi che la pagina corrente è cambiata. */
 const percorsoAttivo = (voci: ReadonlyArray<FormattedMenu | string>): string | undefined => {
   for (const voce of voci) {
@@ -259,6 +270,7 @@ const contaVoci = (voci: ReadonlyArray<FormattedMenu | string>): number =>
 export {
   AREA_UNICA,
   areaDellaPagina,
+  areaDelPercorso,
   areaIniziale,
   areeDelMenu,
   contaVoci,

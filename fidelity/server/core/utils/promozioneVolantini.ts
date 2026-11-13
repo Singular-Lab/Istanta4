@@ -176,25 +176,34 @@ function kitPerProdotto(kit: readonly KitConInsight[]): Map<string, number> {
 const primaNelVolantino = (box: BoxInsight, rispettoA: BoxInsight): boolean =>
   (box.pagina ?? Number.POSITIVE_INFINITY) < (rispettoA.pagina ?? Number.POSITIVE_INFINITY);
 
+/** Il prodotto pilota del box con i dati anagrafici (codice, EAN, ruolo), se il server li ha letti. */
+const pilota = (box: BoxInsight) => box.dettaglioProdotti?.[0];
+
 const presenzaDa = (idKit: string, box: BoxInsight): PresenzaReferenzaPromozione => ({
   idKit,
   pagina: box.pagina,
   prezzo: box.prezzo,
   ...(box.prezzoCalcolato ? { prezzoCalcolato: true } : {}),
+  ...(box.prezzoAllEtto ? { prezzoAllEtto: true } : {}),
   sconto: box.sconto,
   barrato: box.barrato,
   idReferenza: box.idReferenze[0] ?? null,
+  ruolo: pilota(box)?.ruolo ?? null,
 });
 
-/** Il prodotto pilota del box con i dati anagrafici (codice, EAN), se il server li ha letti. */
-const pilota = (box: BoxInsight) => box.dettaglioProdotti?.[0];
+/** I ruoli delle presenze, senza ripetizioni: dal piu' frequente, a parita' per nome. */
+function ruoliDelle(presenze: readonly PresenzaReferenzaPromozione[]): string[] {
+  const conti = new Map<string, number>();
+  for (const presenza of presenze) if (presenza.ruolo) conti.set(presenza.ruolo, (conti.get(presenza.ruolo) ?? 0) + 1);
+  return [...conti].sort(([a, na], [b, nb]) => nb - na || a.localeCompare(b, 'it')).map(([ruolo]) => ruolo);
+}
 
 /**
  * I prodotti dei kit con i kit che li stampano (spec volantini-pop, elenchi del "Comune o locale"):
  * la stessa chiave del prodotto pilota di kitPerProdotto, cosi' gli elenchi coincidono con i numeri.
  * Un prodotto stampato piu' volte nello stesso kit vale una volta, con il box della pagina piu' bassa;
- * marca, formato, reparto, foto, codice, EAN, prezzo al kg e linea dal primo kit che li ha; meccaniche
- * e sottocosto da tutti i kit. Dal piu' condiviso al piu' locale, poi per nome.
+ * marca, formato, reparto, foto, codice, EAN, prezzo al kg e linea dal primo kit che li ha; meccaniche,
+ * sottocosto e ruoli da tutti i kit. Dal piu' condiviso al piu' locale, poi per nome.
  */
 function referenzePromozione(kit: readonly KitConInsight[]): ReferenzaPromozione[] {
   const perChiave = new Map<string, ReferenzaPromozione>();
@@ -248,6 +257,7 @@ function referenzePromozione(kit: readonly KitConInsight[]): ReferenzaPromozione
   for (const [chiave, referenza] of perChiave) {
     const meccaniche = meccanichePerChiave.get(chiave);
     referenza.meccaniche = meccaniche ? MECCANICHE.filter(m => meccaniche.has(m)) : [];
+    referenza.ruoli = ruoliDelle(referenza.presenze);
   }
   return [...perChiave.values()].sort((a, b) => b.presenze.length - a.presenze.length || a.nome.localeCompare(b.nome, 'it'));
 }

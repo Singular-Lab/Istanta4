@@ -3,6 +3,7 @@ import { ElementoMenu, Menu } from "@/stores/sideMenuSlice_istanta";
 import {
   AREA_UNICA,
   areaDellaPagina,
+  areaDelPercorso,
   areaIniziale,
   areeDelMenu,
   contaVoci,
@@ -144,6 +145,19 @@ describe("aree del menu laterale", () => {
     expect(areaDellaPagina(areeIn("/volantini/attivi"))?.chiave).toBe("visualizzazione");
     expect(areaDellaPagina(areeIn("/gestione-interna/aree"))?.chiave).toBe("gestione");
     expect(areaDellaPagina(areeIn("/profilo"))).toBeUndefined();
+  });
+
+  it("una pagina fuori dal menu ha l'area che le dà il catalogo delle pagine, se il menu la mostra", () => {
+    const aree = areeIn("/volantini/promozioni/p1");
+
+    expect(areaDellaPagina(aree)).toBeUndefined();
+    expect(areaDelPercorso(aree, "/volantini/promozioni/p1")?.chiave).toBe("visualizzazione");
+    expect(areaDelPercorso(aree, "/volantini/tutti_i_volantini")?.chiave).toBe("visualizzazione");
+    // Fuori dal catalogo, o senza indirizzo, nessuna area
+    expect(areaDelPercorso(aree, "/profilo")).toBeUndefined();
+    expect(areaDelPercorso(aree, undefined)).toBeUndefined();
+    // Un'area che il menu non mostra non vale
+    expect(areaDelPercorso(aree.filter((a) => a.chiave !== "visualizzazione"), "/volantini/promozioni/p1")).toBeUndefined();
   });
 
   it("percorsoAttivo restituisce l'indirizzo della voce attiva più interna", () => {

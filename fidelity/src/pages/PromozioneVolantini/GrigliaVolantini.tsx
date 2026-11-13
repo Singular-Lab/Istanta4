@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import type { KitPromozioneConsultazione } from "../../../lib/consultazione/tipi";
 import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
-import { celleConPiuKit, chiaveCella, nomeKit } from "./analisi";
+import { nomeKit, numeriNellaCella } from "./analisi";
 import { Copertina } from "./Copertina";
 import { LogoInsegna } from "./LogoInsegna";
 
@@ -15,8 +15,10 @@ export const TITOLO_GRIGLIA = "I volantini";
 /**
  * "I volantini": una scheda per kit mostrato, nell'ordine del dettaglio (insegna, area, titolo), in
  * colonne di almeno 12rem. In alto la miniatura della copertina, dritta e con aria intorno; sotto
- * il logo e il nome dell'insegna e l'area, e il titolo solo quando insegna e area hanno più di un
- * volantino. Tutta la scheda apre gli insight del suo volantino.
+ * il logo e il nome dell'insegna e l'area e, solo quando insegna e area hanno più di un volantino,
+ * quale volantino è ("volantino 2 di 2"), altrimenti le due schede sarebbero uguali. Mai il titolo
+ * tecnico del kit (spec insight-volantino, "Nome leggibile del volantino"). Tutta la scheda apre gli
+ * insight del suo volantino.
  */
 export function GrigliaVolantini({
   kit,
@@ -25,7 +27,7 @@ export function GrigliaVolantini({
   kit: readonly KitPromozioneConsultazione[];
   tinta: (idCanale: string) => Tinta;
 }) {
-  const conTitolo = useMemo(() => celleConPiuKit(kit), [kit]);
+  const numeri = useMemo(() => numeriNellaCella(kit), [kit]);
 
   return (
     <Sezione
@@ -37,13 +39,14 @@ export function GrigliaVolantini({
         className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))] gap-5"
       >
         {kit.map(k => {
-          const titolo = conTitolo.has(chiaveCella(k.canale.id, k.area.id));
+          const numero = numeri.get(k.id);
+          const quale = numero ? `volantino ${numero.numero} di ${numero.di}` : null;
           return (
             <li key={k.id} className="h-full">
               <Link
                 to={percorsoDettaglioVolantino(k.id)}
-                aria-label={`Insight del volantino ${nomeKit(k)}${titolo ? ` – ${k.titolo}` : ""}`}
-                title={`${nomeKit(k)} – ${k.titolo}`}
+                aria-label={`Insight del volantino ${nomeKit(k)}${quale ? ` – ${quale}` : ""}`}
+                title={nomeKit(k)}
                 className={twMerge(
                   "group/kit flex h-full flex-col overflow-hidden rounded-card border border-slate-200 bg-white shadow-card outline-none",
                   "hover:border-theme-1/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-theme-1/40",
@@ -71,7 +74,7 @@ export function GrigliaVolantini({
                       <Lucide icon="MapPin" aria-hidden="true" className="h-3 w-3 flex-none" />
                       <span className="truncate">{k.area.nome}</span>
                     </span>
-                    {titolo && <span className="truncate text-2xs text-slate-400 dark:text-slate-500">{k.titolo}</span>}
+                    {quale && <span className="truncate text-2xs text-slate-400 dark:text-slate-500">{quale.charAt(0).toUpperCase() + quale.slice(1)}</span>}
                   </span>
                 </span>
               </Link>

@@ -63,12 +63,14 @@ function Pagina({ voci = menu, compresso, onSeleziona }: PaginaProps) {
   const location = useLocation();
   return (
     <>
-      <SideMenu menu={nestedMenu(voci, location)} compresso={compresso} onSeleziona={onSeleziona} />
+      <SideMenu menu={nestedMenu(voci, location)} percorso={location.pathname} compresso={compresso} onSeleziona={onSeleziona} />
       <output data-testid="percorso">{location.pathname}</output>
       <div data-testid="contenuto">
         <Link to="/promozioni/storico">Vai allo storico</Link>
         <Link to="/volantini/attivi">Vai ai volantini</Link>
         <Link to="/profilo">Vai al profilo</Link>
+        <Link to="/volantini/promozioni/p1">Vai alla promozione</Link>
+        <Link to="/volantini/tutti_i_volantini?kit=k1">Vai al volantino</Link>
       </div>
     </>
   );
@@ -236,7 +238,7 @@ describe("SideMenu ad area attiva", () => {
     expect(vocePagina()!.textContent).toContain("Storico promozioni");
   });
 
-  it("se la pagina corrente non è nel menu resta l'ultima area; all'inizio quella della pagina iniziale", () => {
+  it("se la pagina corrente non è nel menu né nel catalogo delle pagine resta l'ultima area; all'inizio quella della pagina iniziale", () => {
     apri("/profilo", menuAree);
     expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Visualizzazione");
 
@@ -247,6 +249,39 @@ describe("SideMenu ad area attiva", () => {
     expect(percorso()).toBe("/profilo");
     expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Produzione");
     expect(vociMostrate()).toEqual(["Promozioni in corso", "Storico promozioni"]);
+  });
+
+  it("una pagina fuori dal menu prende l'area del catalogo: il dettaglio di una promozione è in Visualizzazione", () => {
+    apri("/promozioni/in-corso", menuAree);
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Produzione");
+
+    clic(collegamento("Vai alla promozione"));
+
+    expect(percorso()).toBe("/volantini/promozioni/p1");
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Visualizzazione");
+    expect(vociMostrate()).toEqual(["Volantini attivi"]);
+    // Non è una voce del menu: nessuna voce è segnata come pagina corrente
+    expect(vocePagina()).toBeNull();
+  });
+
+  it("aperta direttamente, una pagina fuori dal menu non mostra l'area della pagina iniziale ma la sua", () => {
+    // La pagina iniziale è in Produzione: prima ci si ricadeva
+    const conInizioInProduzione = menuAree.map((voce) =>
+      typeof voce === "object" && "pathname" in voce && voce.pathname === "/volantini/attivi"
+        ? { ...voce, start_page: false }
+        : typeof voce === "object" && "pathname" in voce && voce.pathname === "/promozioni/in-corso"
+          ? { ...voce, start_page: true }
+          : voce
+    );
+    apri("/volantini/tutti_i_volantini", conInizioInProduzione);
+
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Visualizzazione");
+
+    // Dal selettore si cambia area senza cambiare pagina; aprendo un'altra pagina fuori menu si torna alla sua area
+    scegliArea("Gestione interna");
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Gestione interna");
+    clic(collegamento("Vai alla promozione"));
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Visualizzazione");
   });
 
   it("l'elenco mette le aree di lavoro prima di \"Amministrazione\", con la spunta sull'area corrente", () => {

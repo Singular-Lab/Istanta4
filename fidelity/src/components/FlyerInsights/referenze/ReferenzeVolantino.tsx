@@ -6,6 +6,7 @@ import Lucide from "@/components/Base/Lucide";
 import Segmenti from "@/components/Base/Segmenti";
 import Sezione from "@/components/Base/Sezione";
 import EmptyState from "@/components/EmptyState";
+import { SceltaRuoli } from "@/components/SceltaRuoli";
 import { formatEuro, formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
 import IntestazioneOrdinabile, { ARIA_SORT } from "@/pages/shared/IntestazioneOrdinabile";
 import type { ReferenzaPosizione } from "@/types/flyerInsights";
@@ -13,11 +14,14 @@ import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { Fragment, useId, useMemo, useState, type ReactNode } from "react";
 import type { BoxInsight, LineeDistributore } from "../../../../lib/insightVolantino/tipi";
+import { chiaveRuolo } from "../../../../lib/insightVolantino/ruolo";
+import { unitaPrezzo } from "../../../../lib/insightVolantino/unita";
 import { ETICHETTA_MECCANICA, MECCANICHE } from "../../../../lib/puntiVendita/analisi";
 import { marcaFormato, NOTA_PREZZO_CALCOLATO } from "../volantino/box";
 import { tintaMeccanica } from "../volantino/colori";
 import {
   contaRapidi,
+  contaRuoli,
   DIREZIONE_INIZIALE,
   FILTRI_VUOTI,
   filtraRighe,
@@ -25,7 +29,10 @@ import {
   ORDINAMENTO_PREDEFINITO,
   ricercaUtile,
   righeReferenze,
+  ruoliDeiBox,
+  ruoliDelBox,
   SENZA,
+  senzaFiltri,
   TUTTI,
   type ColonnaOrdinabile,
   type FiltriReferenze,
@@ -113,9 +120,10 @@ const CLASSI_TD = "border-b border-slate-100 px-3 py-2 align-middle dark:border-
 
 /**
  * "Referenze in volantino": una tabella con un box per riga (prodotto pilota, linea del distributore,
- * reparto, meccanica, prezzo, sconto, spazio e pagina), con ricerca, filtri rapidi e a tendina e
- * colonne ordinabili. "p. N" apre il box nel volantino sfogliabile; un box con più prodotti si apre
- * per elencarli. Dalle prime 50 righe si va avanti con "Mostra altre".
+ * reparto, ruolo, meccanica, prezzo, sconto, spazio e pagina), con ricerca, filtri rapidi e a tendina,
+ * i ruoli a scelta multipla con i loro conteggi e colonne ordinabili. Con un filtro il titolo dice
+ * quanti box mostra sul totale. "p. N" apre il box nel volantino sfogliabile; un box con più prodotti
+ * si apre per elencarli. Dalle prime 50 righe si va avanti con "Mostra altre".
  */
 export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleReferenze, ricercaIniziale = "", onApriBox }: ReferenzeVolantinoProps) {
   const righe = useMemo(() => righeReferenze(box, referenze), [box, referenze]);
@@ -143,6 +151,14 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
   const meccanichePresenti = useMemo(() => MECCANICHE.filter(meccanica => box.some(voce => voce.meccanica === meccanica)), [box]);
   const senzaMeccanica = box.some(voce => !voce.meccanica);
   const pagine = useMemo(() => [...new Set(box.flatMap(voce => (voce.pagina !== null ? [voce.pagina] : [])))].sort((a, b) => a - b), [box]);
+  // Colonna e filtro del ruolo solo se qualche box ne ha uno (i volantini dello storico spesso no)
+  const { ruoli, senzaRuolo } = useMemo(() => ruoliDeiBox(box), [box]);
+  const conRuoli = ruoli.length > 0;
+  const contiRuoli = useMemo(() => contaRuoli(righe, filtri), [righe, filtri]);
+  const vociRuoli = [
+    ...ruoli.map(ruolo => ({ valore: ruolo, etichetta: ruolo, conteggio: contiRuoli.get(chiaveRuolo(ruolo)) ?? 0 })),
+    ...(senzaRuolo ? [{ valore: SENZA, etichetta: "Senza ruolo", conteggio: contiRuoli.get(SENZA) ?? 0 }] : []),
+  ];
 
   // Cambiando filtri si riparte dalle prime righe
   const cambia = (parziale: Partial<FiltriReferenze>) => {
@@ -161,9 +177,13 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
       return nuovi;
     });
 
-  const filtriAttivi = filtri.testo.trim() !== "" || filtri.rapido !== "tutte" || filtri.reparto !== TUTTI || filtri.meccanica !== TUTTI || filtri.pagina !== TUTTI;
+  const filtriAttivi = !senzaFiltri(filtri);
   const numeroReferenze = totaleReferenze ?? box.reduce((somma, voce) => somma + Math.max(1, voce.prodotti), 0);
-  const colonne = conLinee ? 9 : 8;
+  // Con un filtro il titolo dice quanti box mostra sul totale; senza, le referenze del volantino
+  const titolo = filtriAttivi
+    ? `Referenze in volantino · ${contaBox(filtrate.length)} su ${formatNumero(righe.length)}`
+    : `Referenze in volantino · ${formatNumero(numeroReferenze)}`;
+  const colonne = 8 + (conLinee ? 1 : 0) + (conRuoli ? 1 : 0);
 
   const opzioniRapide: Array<{ valore: FiltroRapido; etichetta: string; conteggio: number }> = [
     { valore: "tutte", etichetta: "Tutte", conteggio: conti.tutte },
@@ -212,6 +232,11 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
             </td>
           )}
           <td className={twMerge(CLASSI_TD, "min-w-28 text-xs text-slate-700 dark:text-slate-200")}>{voce.reparto?.descrizione || voce.reparto?.codice || VUOTO}</td>
+          {conRuoli && (
+            <td className={twMerge(CLASSI_TD, "whitespace-nowrap text-xs text-slate-700 dark:text-slate-200")}>
+              {ruoliDelBox(voce).join(" · ") || <span className="text-slate-400 dark:text-slate-500">{VUOTO}</span>}
+            </td>
+          )}
           <td className={twMerge(CLASSI_TD, "whitespace-nowrap")}>
             {voce.meccanica ? (
               <Pastiglia colore={tinta?.colore} classeColore="bg-slate-400">
@@ -223,7 +248,7 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
           </td>
           <td className={twMerge(CLASSI_TD, "whitespace-nowrap text-right tabular-nums")}>
             <span className="block font-semibold text-slate-800 dark:text-slate-100" title={voce.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
-              {voce.prezzo !== null ? formatEuro(voce.prezzo) : VUOTO}
+              {voce.prezzo !== null ? `${formatEuro(voce.prezzo)}${unitaPrezzo(voce.prezzoAllEtto)}` : VUOTO}
               {voce.prezzoCalcolato && <span className="sr-only"> calcolato dal barrato e dallo sconto</span>}
             </span>
             {voce.barrato !== null && (
@@ -286,7 +311,7 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
     <Sezione
       senzaPadding
       icona="Package"
-      titolo={`Referenze in volantino · ${formatNumero(numeroReferenze)}`}
+      titolo={titolo}
       descrizione={`${contaBox(box.length)}, uno per riga: la pagina apre il box nel volantino.`}
     >
       <BarraFiltri>
@@ -329,6 +354,8 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
             </option>
           ))}
         </FormSelect>
+        {/* I ruoli sono pochi: pillole sempre in vista, più d'una insieme, con quanti box ha ciascuno */}
+        {conRuoli && <SceltaRuoli etichetta="Ruolo" voci={vociRuoli} scelti={filtri.ruoli} onCambia={scelti => cambia({ ruoli: scelti })} unita={["box", "box"]} className="basis-full" />}
       </BarraFiltri>
 
       {ordinate.length === 0 ? (
@@ -370,6 +397,11 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
                   <th scope="col" className={CLASSI_TH}>
                     Reparto
                   </th>
+                  {conRuoli && (
+                    <th scope="col" className={CLASSI_TH}>
+                      Ruolo
+                    </th>
+                  )}
                   <th scope="col" className={CLASSI_TH}>
                     Meccanica
                   </th>

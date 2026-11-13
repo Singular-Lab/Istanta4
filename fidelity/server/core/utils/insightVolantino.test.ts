@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { BoxInsight, RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { boxDelKit } from './analisiKit';
 import { boxInsight, chiaveMarca, sezioniInsight, type OpzioniInsight } from './insightVolantino';
+import { opzioniDellAgenzia } from './insightAgenzia';
 import { regoleLinee } from './lineeDistributore';
 import { leggiReferenza, type RigaReferenza } from './referenzaStampata';
 import { risolutoreReparti } from './repartiGdo';
+import { menaboConadCno } from '../agenzia_lib/conadcno/ruoli-menabo';
 
 // Le sezioni nuove degli insight del volantino (spec insight-volantino): uguali per ogni GDO e per
 // i kit di Istanta e dello storico, perche' vengono dalla lettura generica delle referenze.
@@ -160,8 +162,8 @@ describe('sezioniInsight: uso dello spazio', () => {
     const { spazio } = sezioniInsight(boxDi(righe), opzioni({ totalePagine: 3, repartoConfigurato: reparti }));
 
     expect(spazio.perReparto).toEqual([
-      { chiave: '01', etichetta: 'DROGHERIA ALIMENTARE', referenze: 2, spazio: 40, quotaReferenze: 50, quotaSpazio: 66.7 },
-      { chiave: '03', etichetta: 'BEVANDE', referenze: 1, spazio: 20, quotaReferenze: 25, quotaSpazio: 33.3 },
+      { chiave: '01', etichetta: 'Drogheria alimentare', referenze: 2, spazio: 40, quotaReferenze: 50, quotaSpazio: 66.7 },
+      { chiave: '03', etichetta: 'Bevande', referenze: 1, spazio: 20, quotaReferenze: 25, quotaSpazio: 33.3 },
       { chiave: '', etichetta: 'Reparto non indicato', referenze: 1, spazio: 0, quotaReferenze: 25, quotaSpazio: 0 },
     ]);
     expect(spazio.perMeccanica).toEqual([
@@ -236,7 +238,7 @@ describe('niente visibilita\' stimata ne\' zone calde', () => {
   it('le sezioni non hanno zone calde e nessun box ha la visibilita\'', () => {
     const sezioni = sezioniInsight(boxDi(righe), opzioni({ totalePagine: 8 }));
 
-    expect(Object.keys(sezioni).sort()).toEqual(['box', 'lineeDistributore', 'marche', 'prezziSconti', 'sintesi', 'spazio']);
+    expect(Object.keys(sezioni).sort()).toEqual(['box', 'lineeDistributore', 'marche', 'menabo', 'prezziSconti', 'sintesi', 'spazio']);
     expect(sezioni).not.toHaveProperty('zoneCalde');
     expect(sezioni.box).toHaveLength(3);
     for (const singolo of sezioni.box) expect(singolo).not.toHaveProperty('visibilita');
@@ -336,6 +338,24 @@ describe('boxInsight: il box come lo vede la scheda', () => {
     expect(box).not.toHaveProperty('prezzoCalcolato');
   });
 
+  it('prezzo stampato all\'etto: il box lo dice, con il prezzo al kg stampato nella descrizione', () => {
+    const box = perId(boxInsight(boxDi([
+      riga('e1', {
+        compiled_fields: [
+          campo('prezzo_offerta_etto', '0,99', 'PREZ_NoSconto_boxetto'),
+          campo('sy_etto', 'ALL’ETTO', '[Paragrafo base]'),
+          campo('descrizione', '<DES_descr_nome>Gorgonzola dolce</DES_descr_nome><CPREZ_CampoOfferta>al kg </CPREZ_CampoOfferta><EURO piccolo>€</EURO piccolo><CPREZ_CampoOfferta> 9,90</CPREZ_CampoOfferta>', 'DIC_Rep_25'),
+        ],
+        data_fields: { prezzo_offerta_kgl: 9.9, prezzo_anziche_kgl: 16.8 },
+      }),
+      riga('e2', { x: 50, compiled_fields: [campo('prezzo_offerta', '1,29', 'PREZ_NoSconto')] }),
+    ], true), opzioni()));
+
+    expect(box.get('e1')).toMatchObject({ prezzo: 0.99, prezzoAllEtto: true, prezzoAlKg: 'al kg € 9,90' });
+    expect(box.get('e2')).toMatchObject({ prezzo: 1.29 });
+    expect(box.get('e2')).not.toHaveProperty('prezzoAllEtto');
+  });
+
   it('prodotti del box con i dati anagrafici: EAN separati, codice, settore, tema e ruolo, anche per il gruppo', () => {
     const righe = [
       riga('p1', {
@@ -371,7 +391,9 @@ describe('boxInsight: il box come lo vede la scheda', () => {
       prezzo: 29.9,
       settore: 'Tessile casa',
       segmento: 'Letto',
-      tema: 'EXCONVENIENTE',
+      // Il tema senza etichetta dichiarata con l'iniziale maiuscola; quello della fonte per il suggerimento
+      tema: 'Exconveniente',
+      temaOriginale: 'EXCONVENIENTE',
       ruolo: 'Base',
     });
     expect(box.dettaglioProdotti?.[1]).toMatchObject({ codice: '7332164', ean: ['8001420012484'], nome: 'Federa', gusto: 'Bianco' });
@@ -429,9 +451,9 @@ describe('boxInsight: il box come lo vede la scheda', () => {
       repartoConfigurato: repartiConfigurati({ k1: { codice: '24', descrizione: 'DEPERIBILI LIBERO SERVIZIO' } }),
     })));
 
-    expect(box.get('k1')?.reparto).toEqual({ codice: '24', descrizione: 'DEPERIBILI LIBERO SERVIZIO' });
-    expect(box.get('k2')?.reparto).toEqual({ codice: '01', descrizione: 'DROGHERIA ALIMENTARE' });
-    expect(box.get('k3')?.reparto).toEqual({ codice: '33', descrizione: 'ORTOFRUTTA' });
+    expect(box.get('k1')?.reparto).toEqual({ codice: '24', descrizione: 'Deperibili libero servizio' });
+    expect(box.get('k2')?.reparto).toEqual({ codice: '01', descrizione: 'Drogheria alimentare' });
+    expect(box.get('k3')?.reparto).toEqual({ codice: '33', descrizione: 'Ortofrutta' });
     expect(box.get('k4')?.reparto).toEqual({ codice: 'Enoteca', descrizione: 'Enoteca' });
     expect(box.get('k5')?.reparto).toBeNull();
   });
@@ -457,13 +479,13 @@ describe('reparti della GDO (Impostazioni GDO)', () => {
 
     expect(box.get('d1')?.reparto).toEqual({ codice: '01', descrizione: 'Dispensa', colore: '#3b82f6', marketing: true });
     expect(box.get('d2')?.reparto).toEqual(box.get('d1')?.reparto);
-    expect(box.get('d3')?.reparto).toEqual({ codice: '33', descrizione: 'ORTOFRUTTA', colore: '#22c55e' });
+    expect(box.get('d3')?.reparto).toEqual({ codice: '33', descrizione: 'Ortofrutta', colore: '#22c55e' });
     expect(box.get('d4')?.reparto).toEqual({ codice: 'Enoteca', descrizione: 'Enoteca' });
     expect(sezioni.spazio.perReparto.map(voce => [voce.chiave, voce.etichetta, voce.referenze])).toEqual([
       ['01', 'Dispensa', 2],
       // A parita' di spazio e referenze, per etichetta
       ['Enoteca', 'Enoteca', 1],
-      ['33', 'ORTOFRUTTA', 1],
+      ['33', 'Ortofrutta', 1],
     ]);
     expect(sezioni.prezziSconti.perReparto.find(voce => voce.chiave === '01')).toMatchObject({ etichetta: 'Dispensa', box: 2, scontoMedio: 37.5 });
   });
@@ -471,8 +493,8 @@ describe('reparti della GDO (Impostazioni GDO)', () => {
   it('senza risoluzione i reparti restano quelli dell\'anagrafica', () => {
     const box = perId(boxInsight(boxDi(righe, true), opzioni({ anagraficaReparti: ANAGRAFICA })));
 
-    expect(box.get('d1')?.reparto).toEqual({ codice: '01', descrizione: 'DROGHERIA ALIMENTARE' });
-    expect(box.get('d2')?.reparto).toEqual({ codice: '03', descrizione: 'BEVANDE' });
+    expect(box.get('d1')?.reparto).toEqual({ codice: '01', descrizione: 'Drogheria alimentare' });
+    expect(box.get('d2')?.reparto).toEqual({ codice: '03', descrizione: 'Bevande' });
   });
 });
 
@@ -523,5 +545,109 @@ describe('linee del distributore', () => {
       expect(singolo).not.toHaveProperty('linea');
       expect(singolo).not.toHaveProperty('bolli');
     }
+  });
+});
+
+describe('ruolo della referenza leggibile', () => {
+  const ruoloDi = (ruolo: string, altre: Partial<OpzioniInsight> = {}) =>
+    boxInsight(boxDi([riga('r', { data_fields: { descrizione_uno: 'Latte', ruolo } })]), opzioni(altre))[0].dettaglioProdotti?.[0].ruolo;
+
+  it('con le etichette della libreria agenzia: lo stesso ruolo scritto in modi diversi e\' uno solo', () => {
+    const ruoli = { 'richiamo b&f': 'Richiamo B&F', star: 'Star' };
+    expect(ruoloDi('richiamo b&f', { ruoli })).toBe('Richiamo B&F');
+    expect(ruoloDi('RICHIAMO  B&F', { ruoli })).toBe('Richiamo B&F');
+    expect(ruoloDi('STAR', { ruoli })).toBe('Star');
+  });
+
+  it('un ruolo non dichiarato, o senza libreria, con l\'iniziale maiuscola e il resto minuscolo', () => {
+    expect(ruoloDi('PROMO TOP', { ruoli: { star: 'Star' } })).toBe('Promo top');
+    expect(ruoloDi('richiamo cvs')).toBe('Richiamo cvs');
+    expect(ruoloDi('base')).toBe('Base');
+  });
+
+  it('un ruolo vuoto non c\'e\'', () => {
+    expect(ruoloDi('   ')).toBeNull();
+  });
+});
+
+describe('tema della referenza leggibile', () => {
+  const prodottoCon = (tema: string, altre: Partial<OpzioniInsight> = {}) =>
+    boxInsight(boxDi([riga('t', { data_fields: { descrizione_uno: 'Latte', tema } })]), opzioni(altre))[0].dettaglioProdotti?.[0];
+
+  it('con le etichette della libreria agenzia, comunque sia scritto, e il valore della fonte per il suggerimento', () => {
+    const temi = { tantealtreoff: 'Tante altre offerte' };
+    expect(prodottoCon('TANTEALTREOFF', { temi })).toMatchObject({ tema: 'Tante altre offerte', temaOriginale: 'TANTEALTREOFF' });
+    expect(prodottoCon('tantealtreoff', { temi })).toMatchObject({ tema: 'Tante altre offerte', temaOriginale: 'tantealtreoff' });
+  });
+
+  it('un tema non dichiarato con l\'iniziale maiuscola e il resto minuscolo; un tema vuoto non c\'e\'', () => {
+    expect(prodottoCon('FMONDORCHIDEE', { temi: { uva: 'Uva' } })?.tema).toBe('Fmondorchidee');
+    expect(prodottoCon('   ')).toMatchObject({ tema: null, temaOriginale: null });
+  });
+});
+
+describe('menabo\' del volantino', () => {
+  /** Box di Conad CNO: la mastro nei dati della referenza, una pagina per box. */
+  const conMastro = (id: string, pag: number, mastro?: string) =>
+    riga(id, { pag, data_fields: { descrizione_uno: `Prodotto ${id}`, ...(mastro ? { mastro } : {}) } });
+  const agenzia = { menabo: { campo: 'mastro', nome: (valore: string) => valore.slice(valore.indexOf('-') + 1).toLowerCase() } };
+
+  it('la sezione di ogni pagina dalle sue referenze, la piu\' frequente; solo le pagine con una sezione, in ordine', () => {
+    const righe = [
+      conMastro('a', 3, 'N1-NUMERI1'),
+      conMastro('b', 10, 'Og-OFFERTE generiche'),
+      conMastro('c', 10, 'OF-ORTOFRUTTA'),
+      conMastro('d', 10, 'OF-ORTOFRUTTA'),
+      conMastro('e', 2),
+      conMastro('f', 1, 'COP-Copertina base'),
+    ];
+    const { menabo } = sezioniInsight(boxDi(righe), opzioni(opzioniDellAgenzia(agenzia, righe)));
+
+    expect(menabo).toEqual({
+      pagine: [
+        { pagina: 1, sezione: 'COP-Copertina base', nome: 'copertina base' },
+        { pagina: 3, sezione: 'N1-NUMERI1', nome: 'numeri1' },
+        { pagina: 10, sezione: 'OF-ORTOFRUTTA', nome: 'ortofrutta' },
+      ],
+    });
+  });
+
+  it('a parita\' di box vale la sezione vista per prima; senza nome dichiarato, il valore com\'e\'', () => {
+    const righe = [conMastro('a', 4, 'FRE-FRESCHI_doppia'), conMastro('b', 4, 'DIS-DISPENSA_doppia')];
+    const { menabo } = sezioniInsight(boxDi(righe), opzioni(opzioniDellAgenzia({ menabo: { campo: 'mastro' } }, righe)));
+
+    expect(menabo?.pagine).toEqual([{ pagina: 4, sezione: 'FRE-FRESCHI_doppia', nome: 'FRE-FRESCHI_doppia' }]);
+  });
+
+  it('Conad CNO: la pagina bianca non e\' una sezione, lo stesso nome scritto in modi diversi e\' una sezione sola', () => {
+    const righe = [
+      conMastro('a', 5, 'PB-Pagina bianca'),
+      conMastro('b', 5, 'PB-Pagina bianca'),
+      conMastro('c', 5, 'GAdx-GASTRONOMIA dx'),
+      conMastro('d', 6, 'FPC-FOCUS_PULIZIACASA'),
+      conMastro('e', 7, 'FPC-Focus Pulizia Casa'),
+      conMastro('f', 8, 'PB-Pagina bianca'),
+      conMastro('g', 9, 'DIS-DISPENSA_doppia'),
+      conMastro('h', 10, 'DIS-DISPENSA_singola'),
+    ];
+    const { menabo } = sezioniInsight(boxDi(righe), opzioni(opzioniDellAgenzia({ menabo: menaboConadCno }, righe)));
+
+    // Pagina 5: due box sulla pagina bianca non battono l'unico della gastronomia; pagina 8 senza sezione
+    expect(menabo?.pagine).toEqual([
+      { pagina: 5, sezione: 'GAdx-GASTRONOMIA dx', nome: 'Gastronomia' },
+      { pagina: 6, sezione: 'FPC-FOCUS_PULIZIACASA', nome: 'Focus puliziacasa' },
+      { pagina: 7, sezione: 'FPC-Focus Pulizia Casa', nome: 'Focus puliziacasa' },
+      { pagina: 9, sezione: 'DIS-DISPENSA_doppia', nome: 'Dispensa' },
+      { pagina: 10, sezione: 'DIS-DISPENSA_singola', nome: 'Dispensa' },
+    ]);
+  });
+
+  it('senza dichiarazione della libreria agenzia, o senza nessuna sezione nelle referenze, il menabo\' e\' null', () => {
+    const conDati = [conMastro('a', 1, 'N1-NUMERI1')];
+    expect(sezioniInsight(boxDi(conDati), opzioni(opzioniDellAgenzia({}, conDati))).menabo).toBeNull();
+    expect(sezioniInsight(boxDi(conDati), opzioni()).menabo).toBeNull();
+
+    const senzaDati = [conMastro('a', 1), conMastro('b', 2)];
+    expect(sezioniInsight(boxDi(senzaDati), opzioni(opzioniDellAgenzia(agenzia, senzaDati))).menabo).toBeNull();
   });
 });

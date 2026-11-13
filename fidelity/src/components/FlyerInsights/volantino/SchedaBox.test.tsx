@@ -288,6 +288,14 @@ describe("SchedaBox: descrizione completa vicino al prezzo", () => {
 
     expect(within(cartellino()).getByText("€ 1,69")).toBeInTheDocument();
     expect(within(cartellino()).queryByText(/Calcolato dal prezzo barrato/)).not.toBeInTheDocument();
+    expect(cartellino()).not.toHaveTextContent("all'etto");
+  });
+
+  it("il prezzo stampato all'etto lo dice accanto all'importo, col prezzo al kg com'è stampato", () => {
+    disegna({ box: boxDi({ nome: "Gorgonzola", prezzo: 0.99, prezzoAllEtto: true, barrato: null, sconto: null, prezzoAlKg: "al kg € 9,90" }) });
+
+    expect(cartellino()).toHaveTextContent("€ 0,99 all'etto");
+    expect(within(cartellino()).getByText("al kg € 9,90")).toBeInTheDocument();
   });
 
   it("le varianti dei prodotti del box, senza doppioni", () => {

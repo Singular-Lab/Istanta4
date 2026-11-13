@@ -66,6 +66,11 @@ export interface ProdottoStampato {
    * mostra come calcolato, gli insight del volantino.
    */
   prezzoCalcolato?: number | null;
+  /**
+   * true quando il prezzo e' stampato nel riquadro del prezzo all'etto (prezzo_offerta_etto, anche con
+   * l'euro davanti o il prefisso X_): il prezzo e' per 100 g, non a pezzo. Assente altrimenti.
+   */
+  prezzoAllEtto?: boolean;
   prezzoAlKg: string | null;
   punti: string | null;
   meccanica: MeccanicaReferenza | null;
@@ -223,6 +228,9 @@ function campiStampati(valore: unknown): CampoStampato[] {
 
 const datiDi = (valore: unknown): Dati =>
   valore && typeof valore === 'object' && !Array.isArray(valore) ? valore as Dati : {};
+
+/** Un dato della referenza (data_fields), come testo senza spazi ai lati; null se manca o e' vuoto. */
+export const datoDellaRiga = (riga: Pick<RigaReferenza, 'data_fields'>, campo: string): string | null => dato(datiDi(riga.data_fields), campo);
 
 /** Il primo dei campi indicati che ha un valore, come testo. */
 function dato(dati: Dati, ...chiavi: string[]): string | null {
@@ -485,13 +493,31 @@ function puntiStampati(campi: readonly CampoStampato[], dati: Dati): string | nu
 
 const UNITA: Readonly<Record<string, string>> = { kg: 'kg', chilogrammo: 'kg', litro: 'l', litri: 'l', l: 'l', lt: 'l', pezzo: 'pezzo', pz: 'pezzo' };
 
-function prezzoAlKgDaiDati(dati: Dati): string | null {
+/**
+ * Il prezzo al kg o al litro dai dati della referenza. Nello storico il prezzo al kg "anziche'" e' il
+ * listino DB1 (uguale a prezzo_base_KgL), non un barrato stampato: li' niente "da ... a ...", che
+ * farebbe leggere un ribasso che il volantino non stampa.
+ */
+function prezzoAlKgDaiDati(dati: Dati, contesto: ContestoReferenza): string | null {
   const offerta = prezzoValido(datoNumerico(dati, 'prezzo_offerta_kgl'));
   if (offerta === null) return null;
   const unita = UNITA[(dato(dati, 'descrizione_unita_misura', 'Descrizioni.Um', 'um') ?? 'kg').toLowerCase()] ?? 'kg';
   const euro = (valore: number) => `€ ${valore.toFixed(2).replace('.', ',')}`;
-  const prima = prezzoValido(datoNumerico(dati, 'prezzo_anziche_kgl', 'anziche_kgl'));
+  const prima = contesto.storico ? null : prezzoValido(datoNumerico(dati, 'prezzo_anziche_kgl', 'anziche_kgl'));
   return prima !== null && prima > offerta ? `al ${unita} da ${euro(prima)} a ${euro(offerta)}` : `al ${unita} ${euro(offerta)}`;
+}
+
+/**
+ * Il prezzo al kg che lo storico stampa dentro la descrizione, dopo nome e marca, con lo stile del
+ * barrato ("<CPREZ_CampoOfferta>al kg </CPREZ_CampoOfferta><EURO ...>€</EURO ...><CPREZ_CampoOfferta>
+ * 9,90</CPREZ_CampoOfferta>"): "al kg € 9,90". Null se la descrizione non lo stampa.
+ */
+function alKgNellaDescrizione(descrizione: CampoStampato | null): string | null {
+  if (!descrizione) return null;
+  const inizio = descrizione.contenuto.search(/<CPREZ_/i);
+  if (inizio < 0) return null;
+  const testo = testoStampato(descrizione.contenuto.slice(inizio));
+  return /\bal\b|\ba conf/i.test(testo) && /\d/.test(testo) ? testo : null;
 }
 
 const fotoDi = (valore: unknown): string[] => {
@@ -540,7 +566,8 @@ function prodottoDelGruppo(elemento: Dati, box: ProdottoStampato, contesto: Cont
     prezzo: prezzi.prezzo,
     barrato: prezzi.barrato,
     sconto: scontoDaiPrezzi(prezzi.prezzo, prezzi.barrato) ?? (propri.prezzo === null ? box.sconto : null),
-    prezzoAlKg: prezzoAlKgDaiDati(elemento),
+    ...(propri.prezzo === null && box.prezzoAllEtto ? { prezzoAllEtto: true } : {}),
+    prezzoAlKg: prezzoAlKgDaiDati(elemento, contesto),
     punti: box.punti,
     meccanica: box.meccanica,
     sottocosto: box.sottocosto,
@@ -593,7 +620,9 @@ function prodottoPilota(riga: RigaReferenza, campi: readonly CampoStampato[], da
     barrato,
     sconto,
     prezzoCalcolato,
-    prezzoAlKg: alKgStampato ? testoStampato(alKgStampato.contenuto) : prezzoAlKgDaiDati(dati),
+    // Il prezzo stampato nel riquadro all'etto e' per 100 g: chi lo mostra scrive "all'etto"
+    ...(prezzo !== null && prezzoStampato !== null && /_etto(_|$)/.test(senzaX(prezzoStampato.etichetta)) ? { prezzoAllEtto: true } : {}),
+    prezzoAlKg: alKgStampato ? testoStampato(alKgStampato.contenuto) : alKgNellaDescrizione(descrizione) ?? prezzoAlKgDaiDati(dati, contesto),
     punti: puntiStampati(campi, dati),
     meccanica: meccanicaDaiSegnali(segnali),
     sottocosto: segnali.sottocosto,

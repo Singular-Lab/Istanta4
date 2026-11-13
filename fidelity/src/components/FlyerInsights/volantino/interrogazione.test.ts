@@ -139,6 +139,35 @@ describe("interroga: condizioni combinate", () => {
     expect(ids(interroga(elenco, alternaValore(INTERROGAZIONE_VUOTA, "settore", "latticini")))).toEqual(["a"]);
     expect(ids(interroga(elenco, alternaValore(INTERROGAZIONE_VUOTA, "ruolo", "star")))).toEqual(["a"]);
   });
+
+  it("un box senza ruolo ha 'Senza ruolo', proposto accanto agli altri ruoli e in fondo", () => {
+    const elenco = [
+      box("a", { dettaglioProdotti: [prodotto({ ruolo: "Star" })] }),
+      box("b", { dettaglioProdotti: [prodotto({ ruolo: "Star" })] }),
+      box("senza", { dettaglioProdotti: [prodotto({ ruolo: null })] }),
+    ];
+
+    const ruolo = condizioniDisponibili(elenco, elenco, INTERROGAZIONE_VUOTA).find(condizione => condizione.id === "ruolo");
+    expect(ruolo?.valori.map(valore => [valore.etichetta, valore.box])).toEqual([
+      ["Star", 2],
+      ["Senza ruolo", 1],
+    ]);
+    expect(ids(interroga(elenco, alternaValore(INTERROGAZIONE_VUOTA, "ruolo", "senza")))).toEqual(["senza"]);
+  });
+
+  it("il tema arriva già leggibile: scritture diverse sono un valore, con quella della fonte per il suggerimento", () => {
+    const elenco = [
+      box("a", { dettaglioProdotti: [prodotto({ tema: "Tante altre offerte", temaOriginale: "tantealtreoff" })] }),
+      box("b", { dettaglioProdotti: [prodotto({ tema: "Tante altre offerte", temaOriginale: "TANTEALTREOFF" })] }),
+      box("c", { dettaglioProdotti: [prodotto({ tema: "I numeri 1", temaOriginale: "mnumeri1" })] }),
+    ];
+
+    const tema = condizioniDisponibili(elenco, elenco, INTERROGAZIONE_VUOTA).find(condizione => condizione.id === "tema");
+    expect(tema?.valori.map(valore => [valore.etichetta, valore.fonte, valore.box])).toEqual([
+      ["Tante altre offerte", "tantealtreoff", 2],
+      ["I numeri 1", "mnumeri1", 1],
+    ]);
+  });
 });
 
 describe("interroga: l'EAN scritto", () => {

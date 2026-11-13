@@ -7,6 +7,7 @@ import { twMerge } from "@/utils/twMerge";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { PresenzaReferenzaPromozione } from "../../../lib/consultazione/tipi";
+import { unitaPrezzo } from "../../../lib/insightVolantino/unita";
 import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 import type { GrigliaVolantini, ProdottoConfronto } from "./analisi";
 import { LogoInsegna } from "./LogoInsegna";
@@ -42,7 +43,10 @@ export const presenzePerCasella = (prodotto: ProdottoConfronto, griglia: Griglia
   return perCasella;
 };
 
-/** Prezzo, sconto, barrato e pagina per insegna e area; la pagina apre gli insight del kit su quel prodotto. */
+/**
+ * Prezzo, sconto, barrato e pagina per insegna e area, con l'unità quando il prezzo è stampato all'etto
+ * ("€ 0,99 all'etto"); la pagina apre gli insight del kit su quel prodotto.
+ */
 export function PrezziEPagine({ prodotto, griglia, tinta }: { prodotto: ProdottoConfronto; griglia: GrigliaVolantini; tinta: (idCanale: string) => Tinta }) {
   const r = prodotto.referenza;
   const n = griglia.aree.length;
@@ -86,6 +90,7 @@ export function PrezziEPagine({ prodotto, griglia, tinta }: { prodotto: Prodotto
                         <div key={presenza.idKit} className="flex flex-col items-center gap-0.5">
                           <span className="font-bold text-slate-800 dark:text-slate-100" title={presenza.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
                             {presenza.prezzo !== null ? formatEuro(presenza.prezzo) : VUOTO}
+                            {presenza.prezzo !== null && presenza.prezzoAllEtto && <span className="font-normal text-slate-500 dark:text-slate-400">{unitaPrezzo(true)}</span>}
                             {presenza.sconto !== null && <span className="ml-1 font-medium text-slate-600 dark:text-slate-300">−{formatPercentuale(Math.round(presenza.sconto))}</span>}
                           </span>
                           {presenza.barrato !== null && presenza.barrato !== undefined && (

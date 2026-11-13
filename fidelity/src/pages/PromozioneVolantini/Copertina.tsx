@@ -18,11 +18,13 @@ export interface CopertinaProps {
 export const conMiniatura = (kit: Pick<KitPromozioneConsultazione, "copertina">): boolean => Boolean(kit.copertina?.anteprima);
 
 /**
- * La copertina del volantino dalla sua miniatura; senza miniatura, o se non si carica, un foglio
- * segnaposto con canale e area. È decorativa: il nome del kit lo dice il collegamento che la contiene.
+ * La copertina del volantino dalla sua miniatura; finché non arriva un fondo che pulsa, così non resta
+ * un riquadro bianco; senza miniatura, o se non si carica, un foglio segnaposto con canale e area. È
+ * decorativa: il nome del kit lo dice il collegamento che la contiene.
  */
 export function Copertina({ kit, className, conNome = true, carta = false }: CopertinaProps) {
   const [rotta, setRotta] = useState(false);
+  const [caricata, setCaricata] = useState(false);
   const anteprima = kit.copertina?.anteprima;
 
   if (!anteprima || rotta) {
@@ -55,8 +57,10 @@ export function Copertina({ kit, className, conNome = true, carta = false }: Cop
       src={anteprima}
       alt=""
       loading="lazy"
+      onLoad={() => setCaricata(true)}
       onError={() => setRotta(true)}
-      className={twMerge("block bg-white object-cover", className)}
+      data-caricata={caricata || undefined}
+      className={twMerge("block object-cover", caricata ? "bg-white" : "bg-slate-200 motion-safe:animate-pulse dark:bg-darkmode-400", className)}
     />
   );
 }

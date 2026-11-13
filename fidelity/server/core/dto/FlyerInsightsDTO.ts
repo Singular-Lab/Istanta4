@@ -70,6 +70,8 @@ export interface ContestoFlyerInsightsDTO {
   nomeArea?: string;
   nomeCanale?: string;
   idPromo: string;
+  /** Il nome della promozione: titolo degli insight quando il kit non ha insegna ne' area. */
+  nomePromo?: string | null;
   /** Validita' della promo del kit, YYYY-MM-DD nel calendario della promo; null se non c'e'. */
   validitaDal?: string | null;
   validitaAl?: string | null;

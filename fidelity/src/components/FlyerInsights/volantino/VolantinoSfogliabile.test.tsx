@@ -398,7 +398,7 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
   });
 });
 
-// Mappa della config dell'installazione: un colore per codice reparto, con il nome in legenda.
+// Mappa della config dell'installazione: un colore per codice reparto (la label non va in legenda).
 // Il server riconduce già ogni referenza al codice dell'anagrafica ("1" dello storico diventa "01").
 const MAPPA = {
   mappa: {
@@ -414,11 +414,12 @@ const MAPPA = {
 } as unknown as FlyerInsightsConfig;
 
 describe("VolantinoSfogliabile: colori dei riquadri", () => {
-  it("per reparto dalla config: il reparto fuori mappa prende il predefinito, la legenda dice il nome", () => {
+  it("per reparto dalla config: il reparto fuori mappa prende il predefinito, la legenda dice il nome del reparto", () => {
+    // Il nome in legenda è quello del reparto (il server lo scrive come frase), non la label della config
     disegna({
       configurazione: MAPPA,
       box: [
-        boxDi("r1", { reparto: { codice: "01", descrizione: "DROGHERIA ALIMENTARE" } }),
+        boxDi("r1", { reparto: { codice: "01", descrizione: "Drogheria alimentare" } }),
         boxDi("r2", { reparto: { codice: "99", descrizione: "VARIE" }, geometria: { x: 0.1, y: 0.6, w: 0.4, h: 0.2 } }),
       ],
     });

@@ -1,6 +1,7 @@
 import { indiciPerNome, tintaCategoria, TINTA_NEUTRA, type CategoriaImpilata, type Tinta } from "@/components/Grafici";
 import { periodoValidita, tintaMeccanica } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { ETICHETTA_MECCANICA } from "../../../lib/puntiVendita/analisi";
+import { UNITA_ETTO } from "../../../lib/insightVolantino/unita";
 import { formatNumero } from "@/utils/format";
 import type { FasciaSconto } from "../../../lib/insightVolantino/tipi";
 import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
@@ -84,8 +85,8 @@ export const conValoreScelto = (opzioni: readonly Riferimento[], scelto: string 
     : [...opzioni, { id: scelto, nome: nomeGenerico }];
 
 /**
- * Le chiavi canale+area con piu' di un kit: nelle miniature quei kit dicono anche il titolo, che
- * altrimenti sarebbero indistinguibili.
+ * Le chiavi canale+area con piu' di un kit: nelle miniature quei kit dicono anche quale volantino
+ * sono (numeriNellaCella), che altrimenti sarebbero indistinguibili.
  */
 export const celleConPiuKit = (kit: readonly Pick<Kit, "canale" | "area">[]): ReadonlySet<string> => {
   const conteggi = new Map<string, number>();
@@ -94,6 +95,24 @@ export const celleConPiuKit = (kit: readonly Pick<Kit, "canale" | "area">[]): Re
     conteggi.set(cella, (conteggi.get(cella) ?? 0) + 1);
   }
   return new Set([...conteggi].filter(([, numero]) => numero > 1).map(([cella]) => cella));
+};
+
+/**
+ * Per i kit di un'insegna e un'area con piu' di un volantino, quale sono nell'ordine ricevuto e di
+ * quanti: "volantino 2 di 2". Il titolo tecnico del kit non si mostra mai (spec insight-volantino,
+ * "Nome leggibile del volantino"). Gli altri kit non ci sono.
+ */
+export const numeriNellaCella = (kit: readonly Pick<Kit, "id" | "canale" | "area">[]): ReadonlyMap<string, { numero: number; di: number }> => {
+  const perCella = new Map<string, string[]>();
+  for (const k of kit) {
+    const cella = chiaveCella(k.canale.id, k.area.id);
+    perCella.set(cella, [...(perCella.get(cella) ?? []), k.id]);
+  }
+  const numeri = new Map<string, { numero: number; di: number }>();
+  for (const ids of perCella.values()) {
+    if (ids.length > 1) ids.forEach((id, indice) => numeri.set(id, { numero: indice + 1, di: ids.length }));
+  }
+  return numeri;
 };
 
 /** Chiave di insegna e area di un kit. */
@@ -280,6 +299,8 @@ export interface PrezzoPerLuogo {
   luogo: string;
   /** Più alto del prezzo più basso del prodotto. */
   piuAlto: boolean;
+  /** Stampato all'etto in almeno un volantino: si scrive "€ 0,99 all'etto" (unitaPrezzo). */
+  allEtto: boolean;
 }
 
 /**
@@ -288,23 +309,26 @@ export interface PrezzoPerLuogo {
  */
 export const prezziPerLuogo = (prodotto: ProdottoConfronto, griglia: GrigliaVolantini): PrezzoPerLuogo[] => {
   const perPrezzo = new Map<number, Set<number>>();
+  const allEtto = new Set<number>();
   for (const presenza of prodotto.referenza.presenze) {
     const casella = griglia.casellaDelKit.get(chiaveId(presenza.idKit));
     if (presenza.prezzo === null || casella === undefined) continue;
     const caselle = perPrezzo.get(presenza.prezzo) ?? new Set<number>();
     caselle.add(casella);
     perPrezzo.set(presenza.prezzo, caselle);
+    if (presenza.prezzoAllEtto) allEtto.add(presenza.prezzo);
   }
   const voci = [...perPrezzo].sort((a, b) => a[0] - b[0]);
   if (voci.length === 0) return [];
   const minimo = voci[0]?.[0] ?? 0;
-  if (voci.length === 1) return [{ prezzo: minimo, luogo: "", piuAlto: false }];
+  if (voci.length === 1) return [{ prezzo: minimo, luogo: "", piuAlto: false, allEtto: allEtto.has(minimo) }];
   const piuDiffuso = voci.reduce((scelto, voce) => (voce[1].size > scelto[1].size ? voce : scelto))[0];
   const tutte = new Set(prodotto.caselle);
   return voci.map(([prezzo, caselle]) => ({
     prezzo,
     luogo: prezzo === piuDiffuso ? "altrove" : luogoDelleCaselle(caselle, tutte, griglia),
     piuAlto: prezzo > minimo,
+    allEtto: allEtto.has(prezzo),
   }));
 };
 
@@ -324,30 +348,70 @@ export interface SintesiConfronto {
   totale: number;
   /** In tutti i kit (con più di un kit). */
   base: number;
-  prezziDiversi: number;
-  /** Prodotti di una sola insegna, per id dell'insegna (minuscolo), nell'ordine della griglia. */
+  /** A marchio del distributore: con una linea del distributore. */
+  aMarchio: number;
+  /** I prodotti a marchio per linea, dalla linea con più prodotti, a parità per nome. */
+  perLinea: Array<{ linea: string; prodotti: number }>;
+  /** Con la meccanica Prezzo Fidelity in almeno uno dei kit mostrati. */
+  fidelity: number;
+  /** Prodotti di una sola insegna, nell'ordine della griglia. */
   perInsegna: Array<{ insegna: Riferimento; prodotti: number }>;
   perArea: Array<{ area: Riferimento; prodotti: number }>;
   /** Prodotti di una sola casella. */
   perCasella: ReadonlyMap<number, number>;
-  /** Il prodotto con la differenza di prezzo più grande in %. */
-  piuDistante: ProdottoConfronto | null;
 }
+
+/** La parte sul totale in percentuale intera; 0 senza totale. */
+export const percentualeDi = (parte: number, totale: number): number => (totale > 0 ? Math.round((parte / totale) * 100) : 0);
+
+/**
+ * La percentuale da scrivere (spec volantini-pop): "27%"; "meno dell'1%" quando la parte c'è ma
+ * arrotondata all'intero sarebbe 0%, così una linea con un prodotto non si legge come assente.
+ */
+export const testoPercentuale = (parte: number, totale: number): string => {
+  const percentuale = percentualeDi(parte, totale);
+  return parte > 0 && percentuale === 0 ? "meno dell'1%" : `${formatNumero(percentuale)}%`;
+};
+
+/** Le linee del distributore mostrate una per una; le altre vanno insieme in "altre N linee". */
+export const LINEE_IN_VISTA = 4;
+
+/**
+ * Le linee del distributore da mostrare sotto la percentuale a marchio: le LINEE_IN_VISTA con più
+ * prodotti, nell'ordine di perLinea, e le altre sommate; `altre` è null quando non ce ne sono.
+ */
+export const lineeInVista = (
+  perLinea: SintesiConfronto["perLinea"],
+  quante = LINEE_IN_VISTA
+): { linee: SintesiConfronto["perLinea"]; altre: { linee: number; prodotti: number } | null } => {
+  if (perLinea.length <= quante) return { linee: [...perLinea], altre: null };
+  const resto = perLinea.slice(quante);
+  return { linee: perLinea.slice(0, quante), altre: { linee: resto.length, prodotti: resto.reduce((somma, voce) => somma + voce.prodotti, 0) } };
+};
+
+/** A marchio del distributore: il prodotto ha una linea del distributore. */
+const aMarchio = (p: ProdottoConfronto): boolean => Boolean(p.referenza.linea);
+
+/** Con Prezzo Fidelity in almeno uno dei kit mostrati. */
+const conFidelity = (p: ProdottoConfronto): boolean => (p.referenza.meccaniche ?? []).includes("fidelity");
 
 export const sintesiConfronto = (prodotti: readonly ProdottoConfronto[], griglia: GrigliaVolantini): SintesiConfronto => {
   const perInsegna = new Map(griglia.insegne.map((_, i) => [i, 0]));
   const perArea = new Map(griglia.aree.map((_, i) => [i, 0]));
   const perCasella = new Map<number, number>();
+  const perLinea = new Map<string, number>();
   const n = Math.max(1, griglia.aree.length);
   let base = 0;
-  let prezziDiversi = 0;
-  let piuDistante: ProdottoConfronto | null = null;
+  let marchio = 0;
+  let fidelity = 0;
   for (const p of prodotti) {
     if (griglia.numeroKit > 1 && descriviPresenze(p, griglia).eccezione === false) base++;
-    if (p.differenza > 0) {
-      prezziDiversi++;
-      if (!piuDistante || p.percentuale > piuDistante.percentuale) piuDistante = p;
+    if (aMarchio(p)) {
+      marchio++;
+      const linea = p.referenza.linea ?? "";
+      perLinea.set(linea, (perLinea.get(linea) ?? 0) + 1);
     }
+    if (conFidelity(p)) fidelity++;
     const insegne = new Set(p.caselle.map(c => Math.floor(c / n)));
     const aree = new Set(p.caselle.map(c => c % n));
     if (insegne.size === 1) perInsegna.set([...insegne][0] ?? 0, (perInsegna.get([...insegne][0] ?? 0) ?? 0) + 1);
@@ -357,25 +421,30 @@ export const sintesiConfronto = (prodotti: readonly ProdottoConfronto[], griglia
   return {
     totale: prodotti.length,
     base,
-    prezziDiversi,
+    aMarchio: marchio,
+    perLinea: [...perLinea]
+      .map(([linea, numero]) => ({ linea, prodotti: numero }))
+      .sort((a, b) => b.prodotti - a.prodotti || a.linea.localeCompare(b.linea, "it")),
+    fidelity,
     perInsegna: griglia.insegne.map((insegna, i) => ({ insegna, prodotti: perInsegna.get(i) ?? 0 })),
     perArea: griglia.aree.map((area, i) => ({ area, prodotti: perArea.get(i) ?? 0 })),
     perCasella,
-    piuDistante,
   };
 };
 
-/** Cosa mostra l'elenco: un messaggio, un'insegna o un'area sole, una casella della mappa. */
+/**
+ * Cosa mostra l'elenco: uno dei numeri del confronto (base comune, a marchio, Fidelity), i prodotti di
+ * una sola insegna o di una sola area (i margini della mappa), una casella della mappa.
+ */
 export type VistaConfronto =
   | { tipo: "base" }
-  | { tipo: "prezzi" }
-  | { tipo: "insegne" }
-  | { tipo: "aree" }
+  | { tipo: "marchio" }
+  | { tipo: "fidelity" }
   | { tipo: "insegna"; id: string }
   | { tipo: "area"; id: string }
   | { tipo: "casella"; casella: number };
 
-/** Nell'indirizzo (?vista=): "base", "prezzi", "insegne", "aree", "insegna:<id>", "area:<id>", "casella:<insegna>:<area>". */
+/** Nell'indirizzo (?vista=): "base", "marchio", "fidelity", "insegna:<id>", "area:<id>", "casella:<insegna>:<area>". */
 export const vistaInIndirizzo = (vista: VistaConfronto, griglia: GrigliaVolantini): string => {
   switch (vista.tipo) {
     case "insegna":
@@ -391,7 +460,8 @@ export const vistaInIndirizzo = (vista: VistaConfronto, griglia: GrigliaVolantin
 /** Dall'indirizzo: un valore storpiato, o di un'insegna o un'area che non ci sono più, non è una vista. */
 export const vistaDaIndirizzo = (valore: string | null, griglia: GrigliaVolantini): VistaConfronto | null => {
   if (!valore) return null;
-  if (valore === "base" || valore === "prezzi" || valore === "insegne" || valore === "aree") return { tipo: valore };
+  // Le viste dei numeri tolti (prezzi diversi, una sola insegna, una sola area) non lo sono più: tutti i prodotti
+  if (valore === "base" || valore === "marchio" || valore === "fidelity") return { tipo: valore };
   const [tipo, primo = "", secondo = ""] = valore.split(":");
   const insegna = griglia.insegne.findIndex(i => chiaveId(i.id) === chiaveId(primo));
   if (tipo === "insegna" && insegna >= 0) return { tipo, id: griglia.insegne[insegna]?.id ?? primo };
@@ -410,6 +480,9 @@ export const stessaVista = (a: VistaConfronto | null, b: VistaConfronto | null):
 /** Il prodotto senza reparto, nel filtro per reparto. */
 export const SENZA_REPARTO = "senza-reparto";
 
+/** Il prodotto senza ruolo, nel filtro per ruolo. */
+export const SENZA_RUOLO = "senza-ruolo";
+
 export interface FiltroConfronto {
   vista: VistaConfronto | null;
   /** Il punto di vista: i soli prodotti che questa insegna stampa. */
@@ -417,20 +490,59 @@ export interface FiltroConfronto {
   cerca: string;
   /** Codice del reparto, SENZA_REPARTO o null per tutti. */
   reparto: string | null;
-  soloDiversi: boolean;
+  /**
+   * I ruoli scelti come li scrive il server (già leggibili) o SENZA_RUOLO; nessuno vuol dire tutti. Più
+   * ruoli valgono in alternativa: il prodotto risponde con almeno uno.
+   */
+  ruoli: readonly string[];
 }
 
+/** Nessun filtro: tutti i prodotti. */
+export const SENZA_FILTRI: FiltroConfronto = { vista: null, punto: null, cerca: "", reparto: null, ruoli: [] };
+
+/** I ruoli del prodotto nei kit mostrati; il ?? tiene in piedi la pagina con un server che non li manda. */
+const ruoliDi = (p: ProdottoConfronto): readonly string[] => p.referenza.ruoli ?? [];
+
+/** Un ruolo del prodotto: in quanti volantini lo ha (null senza il ruolo per volantino) su quanti lo stampano. */
+export interface RuoloDelProdotto {
+  ruolo: string;
+  volantini: number | null;
+  /** I volantini in cui il prodotto compare. */
+  su: number;
+}
+
+/**
+ * I ruoli del prodotto con il numero di volantini in cui li ha, nell'ordine dei ruoli del prodotto (dal
+ * più frequente). Senza il ruolo per volantino (server non aggiornato) il numero è null.
+ */
+export const ruoliDelProdotto = (referenza: Pick<ReferenzaPromozione, "ruoli" | "presenze">): RuoloDelProdotto[] => {
+  const conti = new Map<string, number>();
+  for (const presenza of referenza.presenze) if (presenza.ruolo) conti.set(presenza.ruolo, (conti.get(presenza.ruolo) ?? 0) + 1);
+  return (referenza.ruoli ?? []).map(ruolo => ({ ruolo, volantini: conti.get(ruolo) ?? null, su: referenza.presenze.length }));
+};
+
+/**
+ * Il conteggio da scrivere sull'etichetta del ruolo (spec volantini-pop, "Ruolo e filtri dei prodotti
+ * della promozione"): "13/15" quando il prodotto ha ruoli diversi nei volantini mostrati e il server
+ * dice il ruolo per volantino; null con un ruolo solo, che vale ovunque.
+ */
+export const conteggioRuolo = (voce: RuoloDelProdotto, ruoliDelProdotto: number): string | null =>
+  ruoliDelProdotto > 1 && voce.volantini !== null ? `${formatNumero(voce.volantini)}/${formatNumero(voce.su)}` : null;
+
+/** "Star in 13 dei 15 volantini in cui compare", per il suggerimento e per chi non vede. */
+export const descrizioneRuolo = (voce: RuoloDelProdotto, ruoliDelProdotto: number): string =>
+  ruoliDelProdotto > 1 && voce.volantini !== null
+    ? `${voce.ruolo} in ${formatNumero(voce.volantini)} ${voce.su === 1 ? "volantino" : `dei ${formatNumero(voce.su)} volantini`} in cui compare`
+    : voce.ruolo;
+
 const nellaVista = (p: ProdottoConfronto, vista: VistaConfronto, griglia: GrigliaVolantini): boolean => {
-  const n = Math.max(1, griglia.aree.length);
   switch (vista.tipo) {
     case "base":
       return griglia.numeroKit > 1 && !descriviPresenze(p, griglia).eccezione;
-    case "prezzi":
-      return p.differenza > 0;
-    case "insegne":
-      return new Set(p.caselle.map(c => Math.floor(c / n))).size === 1;
-    case "aree":
-      return new Set(p.caselle.map(c => c % n)).size === 1;
+    case "marchio":
+      return aMarchio(p);
+    case "fidelity":
+      return conFidelity(p);
     case "insegna":
       return p.caselle.length > 0 && p.caselle.every(c => chiaveId(insegnaDellaCasella(griglia, c)?.id ?? "") === chiaveId(vista.id));
     case "area":
@@ -445,45 +557,107 @@ export const filtraConfronto = (prodotti: readonly ProdottoConfronto[], griglia:
   return prodotti.filter(p => {
     if (filtro.vista && !nellaVista(p, filtro.vista, griglia)) return false;
     if (filtro.punto && !p.caselle.some(c => chiaveId(insegnaDellaCasella(griglia, c)?.id ?? "") === chiaveId(filtro.punto ?? ""))) return false;
-    if (filtro.soloDiversi && p.differenza === 0) return false;
     const reparto = p.referenza.reparto;
     if (filtro.reparto && (filtro.reparto === SENZA_REPARTO ? reparto !== null : reparto?.codice !== filtro.reparto)) return false;
+    const ruoli = ruoliDi(p);
+    if (filtro.ruoli.length > 0 && !filtro.ruoli.some(scelto => (scelto === SENZA_RUOLO ? ruoli.length === 0 : ruoli.includes(scelto)))) return false;
     if (!cercato) return true;
     const r = p.referenza;
     return testoConfrontabile(`${r.nome} ${r.marca ?? ""} ${r.codice ?? ""} ${r.ean ?? ""}`).includes(cercato);
   });
 };
 
-export type OrdineConfronto = "differenza" | "nome" | "volantini";
-
-export const ORDINI_CONFRONTO: ReadonlyArray<{ id: OrdineConfronto; etichetta: string }> = [
-  { id: "differenza", etichetta: "Differenza di prezzo" },
-  { id: "nome", etichetta: "Nome" },
-  { id: "volantini", etichetta: "Numero di volantini" },
-];
-
-export const ordineDaIndirizzo = (valore: string | null): OrdineConfronto => ORDINI_CONFRONTO.find(o => o.id === valore)?.id ?? "differenza";
-
 const perNomeProdotto = (a: ProdottoConfronto, b: ProdottoConfronto) =>
   a.referenza.nome.localeCompare(b.referenza.nome, "it") || (a.referenza.marca ?? "").localeCompare(b.referenza.marca ?? "", "it");
 
-/** Differenza: dalla più grande in %, poi in euro; volantini: dal più presente; a parità per nome e marca. */
-export const ordinaConfronto = (prodotti: readonly ProdottoConfronto[], ordine: OrdineConfronto): ProdottoConfronto[] =>
-  [...prodotti].sort((a, b) => {
-    if (ordine === "differenza") return b.percentuale - a.percentuale || b.differenza - a.differenza || perNomeProdotto(a, b);
-    if (ordine === "volantini") return b.numeroKit - a.numeroKit || perNomeProdotto(a, b);
-    return perNomeProdotto(a, b);
+/**
+ * L'ordine di apertura dell'elenco e quello dei prodotti in comune: prima i prezzi diversi, dalla
+ * differenza più grande in % e poi in euro, poi gli altri; a parità per nome e marca.
+ */
+export const ordinaConfronto = (prodotti: readonly ProdottoConfronto[]): ProdottoConfronto[] =>
+  [...prodotti].sort((a, b) => b.percentuale - a.percentuale || b.differenza - a.differenza || perNomeProdotto(a, b));
+
+/** Le colonne dell'elenco di tutti i prodotti che si ordinano scegliendo l'intestazione. */
+export type ColonnaElenco = "prodotto" | "volantini" | "prezzo" | "differenza";
+
+export interface OrdinamentoElenco {
+  colonna: ColonnaElenco;
+  verso: VersoOrdinamento;
+}
+
+const COLONNE_ELENCO: readonly ColonnaElenco[] = ["prodotto", "volantini", "prezzo", "differenza"];
+
+/** Il verso della prima scelta: il nome dalla A e il prezzo dal più basso; volantini e differenza dal più alto. */
+const VERSO_NATURALE: Readonly<Record<ColonnaElenco, VersoOrdinamento>> = {
+  prodotto: "crescente",
+  volantini: "decrescente",
+  prezzo: "crescente",
+  differenza: "decrescente",
+};
+
+/** Nell'indirizzo (?ordina=prezzo:crescente). Un valore storpiato, o di prima ("nome"), non è un ordine: vale quello di apertura. */
+export const ordinamentoElencoDaIndirizzo = (valore: string | null): OrdinamentoElenco | null => {
+  const [colonna, verso] = (valore ?? "").split(":");
+  if (!COLONNE_ELENCO.includes(colonna as ColonnaElenco) || (verso !== "crescente" && verso !== "decrescente")) return null;
+  return { colonna: colonna as ColonnaElenco, verso };
+};
+
+export const ordinamentoElencoInIndirizzo = ({ colonna, verso }: OrdinamentoElenco): string => `${colonna}:${verso}`;
+
+/** Scegliendo un'intestazione: sulla colonna già scelta il verso si inverte; su un'altra parte dal suo verso naturale. */
+export const prossimoOrdinamentoElenco = (attuale: OrdinamentoElenco | null, colonna: ColonnaElenco): OrdinamentoElenco =>
+  attuale?.colonna === colonna
+    ? { colonna, verso: attuale.verso === "crescente" ? "decrescente" : "crescente" }
+    : { colonna, verso: VERSO_NATURALE[colonna] };
+
+export const ariaSortElenco = (ordinamento: OrdinamentoElenco | null, colonna: ColonnaElenco): "ascending" | "descending" | "none" =>
+  ordinamento?.colonna !== colonna ? "none" : ordinamento.verso === "crescente" ? "ascending" : "descending";
+
+const valoreElenco = (p: ProdottoConfronto, colonna: Exclude<ColonnaElenco, "prodotto">): number | null => {
+  switch (colonna) {
+    case "volantini":
+      return p.numeroKit;
+    case "prezzo":
+      return p.min;
+    case "differenza":
+      return p.differenza > 0 ? p.percentuale : 0;
+  }
+};
+
+/**
+ * L'elenco nell'ordine scelto dalle intestazioni (spec volantini-pop); senza scelta l'ordine di
+ * apertura (ordinaConfronto). Un prezzo mancante resta in fondo in entrambi i versi; a parità decide
+ * l'ordine di apertura, così l'elenco non salta.
+ */
+export const ordinaElenco = (prodotti: readonly ProdottoConfronto[], ordinamento: OrdinamentoElenco | null): ProdottoConfronto[] => {
+  const base = ordinaConfronto(prodotti);
+  if (!ordinamento) return base;
+  const posizione = new Map(base.map((p, i) => [p, i]));
+  const segno = ordinamento.verso === "crescente" ? 1 : -1;
+  const { colonna } = ordinamento;
+  return [...base].sort((a, b) => {
+    const pari = (posizione.get(a) ?? 0) - (posizione.get(b) ?? 0);
+    if (colonna === "prodotto") return segno * perNomeProdotto(a, b) || pari;
+    const va = valoreElenco(a, colonna);
+    const vb = valoreElenco(b, colonna);
+    if (va === null || vb === null) return va === vb ? pari : va === null ? 1 : -1;
+    return segno * (va - vb) || (colonna === "differenza" ? segno * (a.differenza - b.differenza) : 0) || pari;
   });
+};
 
 /** Le schede dei prodotti in comune mostrate prima di "Mostra tutti". */
 export const LIMITE_IN_COMUNE = 36;
 
 /**
  * I prodotti in comune (spec volantini-pop): quelli stampati in tutti i volantini mostrati, prima quelli
- * con prezzi diversi, dalla differenza più grande, poi per nome. Nessuno con un solo volantino.
+ * con prezzi diversi, dalla differenza più grande, poi per nome. Nessuno con un solo volantino. I loro
+ * filtri (testo, reparto, ruolo) sono propri e non cambiano l'elenco di tutti i prodotti.
  */
-export const prodottiInComune = (prodotti: readonly ProdottoConfronto[], griglia: GrigliaVolantini): ProdottoConfronto[] =>
-  ordinaConfronto(filtraConfronto(prodotti, griglia, { vista: { tipo: "base" }, punto: null, cerca: "", reparto: null, soloDiversi: false }), "differenza");
+export const prodottiInComune = (
+  prodotti: readonly ProdottoConfronto[],
+  griglia: GrigliaVolantini,
+  filtri: Pick<FiltroConfronto, "cerca" | "reparto" | "ruoli"> = SENZA_FILTRI
+): ProdottoConfronto[] => ordinaConfronto(filtraConfronto(prodotti, griglia, { ...SENZA_FILTRI, ...filtri, vista: { tipo: "base" } }));
 
 /** I reparti dei prodotti, per nome; `senzaReparto` se qualcuno non ne ha. */
 export const repartiDelConfronto = (prodotti: readonly ProdottoConfronto[]): { reparti: Array<{ codice: string; nome: string }>; senzaReparto: boolean } => {
@@ -499,6 +673,36 @@ export const repartiDelConfronto = (prodotti: readonly ProdottoConfronto[]): { r
   };
 };
 
+/** I ruoli dei prodotti, per nome, con quanti prodotti ha ciascuno; `senzaRuolo` è quanti non ne hanno. */
+export const ruoliDelConfronto = (prodotti: readonly ProdottoConfronto[]): { ruoli: Array<{ ruolo: string; prodotti: number }>; senzaRuolo: number } => {
+  const ruoli = new Map<string, number>();
+  let senzaRuolo = 0;
+  for (const p of prodotti) {
+    const suoi = ruoliDi(p);
+    if (suoi.length === 0) senzaRuolo++;
+    for (const ruolo of new Set(suoi)) ruoli.set(ruolo, (ruoli.get(ruolo) ?? 0) + 1);
+  }
+  return {
+    ruoli: [...ruoli].map(([ruolo, numero]) => ({ ruolo, prodotti: numero })).sort((a, b) => a.ruolo.localeCompare(b.ruolo, "it")),
+    senzaRuolo,
+  };
+};
+
+/**
+ * Le voci dei filtri a faccette (spec volantini-pop, "Ruolo e filtri dei prodotti della promozione"):
+ * i reparti dei prodotti che rispondono a tutti gli altri filtri (vista, punto di vista, testo, ruoli)
+ * e i ruoli, con i loro conteggi, di quelli che rispondono a tutti gli altri (testo e reparto compresi).
+ * Così scegliendo un ruolo il filtro dei reparti propone solo i reparti che hanno quel ruolo.
+ */
+export const facceConfronto = (
+  prodotti: readonly ProdottoConfronto[],
+  griglia: GrigliaVolantini,
+  filtro: FiltroConfronto
+): ReturnType<typeof repartiDelConfronto> & ReturnType<typeof ruoliDelConfronto> => ({
+  ...repartiDelConfronto(filtraConfronto(prodotti, griglia, { ...filtro, reparto: null })),
+  ...ruoliDelConfronto(filtraConfronto(prodotti, griglia, { ...filtro, ruoli: [] })),
+});
+
 /** "1,19" per Excel: virgola decimale, niente simbolo. */
 const numeroExcel = (valore: number | null) => (valore === null ? "" : formatNumero(valore, 2).replace(/\./g, ""));
 const cellaCsv = (valore: string | number) => `"${String(valore).replace(/"/g, '""')}"`;
@@ -509,7 +713,7 @@ const cellaCsv = (valore: string | number) => `"${String(valore).replace(/"/g, '
  */
 export const csvConfronto = (prodotti: readonly ProdottoConfronto[], griglia: GrigliaVolantini): string => {
   const caselle = [...griglia.esistenti].sort((a, b) => a - b);
-  const testa = ["Prodotto", "Marca", "Formato", "Codice", "EAN", "Reparto", "Meccanica", "Dove", ...caselle.map(c => `Prezzo ${nomeCasella(griglia, c)}`), "Differenza €", "Differenza %"];
+  const testa = ["Prodotto", "Marca", "Formato", "Codice", "EAN", "Reparto", "Ruolo", "Meccanica", "Dove", "Unità del prezzo", ...caselle.map(c => `Prezzo ${nomeCasella(griglia, c)}`), "Differenza €", "Differenza %"];
   const righe = prodotti.map(p => {
     const r = p.referenza;
     const prezzoNellaCasella = (c: number) =>
@@ -521,8 +725,11 @@ export const csvConfronto = (prodotti: readonly ProdottoConfronto[], griglia: Gr
       r.codice ?? "",
       r.ean ?? "",
       r.reparto?.descrizione || r.reparto?.codice || "",
+      (r.ruoli ?? []).join(", "),
       (r.meccaniche ?? []).map(m => ETICHETTA_MECCANICA[m]).join(" + "),
       descriviPresenze(p, griglia).testo,
+      // L'unità vale per tutti i prezzi della riga: un prodotto stampato all'etto lo è ovunque
+      r.presenze.some(presenza => presenza.prezzoAllEtto) ? UNITA_ETTO : "",
       ...caselle.map(c => numeroExcel(prezzoNellaCasella(c))),
       numeroExcel(p.differenza),
       String(p.percentuale),

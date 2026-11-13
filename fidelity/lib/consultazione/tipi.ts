@@ -257,12 +257,19 @@ export interface PresenzaReferenzaPromozione {
   prezzo: number | null;
   /** true quando il prezzo non e' stampato ed e' calcolato dal barrato e dallo sconto. Assente altrimenti. */
   prezzoCalcolato?: boolean;
+  /** true quando il prezzo e' stampato all'etto (lib/insightVolantino/unita.ts). Assente altrimenti. */
+  prezzoAllEtto?: boolean;
   /** Sconto in % (0-100). */
   sconto: number | null;
   /** Prezzo barrato stampato; null se il box non lo stampa. */
   barrato: number | null;
   /** Id della referenza pilota del box: apre gli insight del kit su quel box (?referenza=). */
   idReferenza: string | null;
+  /**
+   * Ruolo del prodotto pilota nel box, gia' leggibile (lib/insightVolantino/ruolo.ts); null se non c'e'.
+   * Assente nelle risposte dei server non aggiornati.
+   */
+  ruolo?: string | null;
 }
 
 /**
@@ -290,6 +297,11 @@ export interface ReferenzaPromozione {
   linea: string | null;
   /** In sottocosto in almeno un kit. */
   sottocosto: boolean;
+  /**
+   * I ruoli del prodotto nei kit, gia' leggibili, senza ripetizioni, dal piu' frequente. Assente nelle
+   * risposte dei server non aggiornati.
+   */
+  ruoli?: string[];
   /** Una per kit, nell'ordine dei kit del dettaglio. */
   presenze: PresenzaReferenzaPromozione[];
 }

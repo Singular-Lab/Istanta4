@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   confrontaCodici,
   dizionarioNormalizzato,
+  nomeRepartoLeggibile,
   RISOLUTORE_NEUTRO,
   repartiDellaGdo,
   risolutoreReparti,
@@ -30,6 +31,15 @@ describe('risolutoreReparti', () => {
     expect(risolutore.vuoto).toBe(true);
     expect(risolutore.risolvi({ codice: '01', descrizione: 'DROGHERIA ALIMENTARE' })).toEqual({ codice: '01', descrizione: 'DROGHERIA ALIMENTARE' });
     expect(risolutore.nome('Reparto 01')).toBe('Reparto 01');
+    // Spec insight-volantino, "Reparti e meccaniche leggibili": la descrizione in maiuscolo come frase
+    expect(risolutore.nome('DROGHERIA ALIMENTARE')).toBe('Drogheria alimentare');
+  });
+
+  it('nomeRepartoLeggibile: la descrizione in maiuscolo come frase, codici e sigle come sono', () => {
+    expect(nomeRepartoLeggibile('DEPERIBILI LIBERO SERVIZIO')).toBe('Deperibili libero servizio');
+    expect(nomeRepartoLeggibile('Ortofrutta')).toBe('Ortofrutta');
+    expect(nomeRepartoLeggibile('99')).toBe('99');
+    expect(nomeRepartoLeggibile('PC')).toBe('PC');
   });
 
   it('con il nome per il marketing il reparto prende quel nome, com\'e\' scritto, e il colore salvato', () => {
@@ -84,6 +94,8 @@ describe('risolutoreReparti', () => {
     expect(risolutore.nome('Reparto 05')).toBe('Dispensa');
     expect(risolutore.nome('PC')).toBe('Pulizia');
     expect(risolutore.nome('Profumeria')).toBe('Profumeria');
+    // Senza nome per il marketing, la descrizione dell'anagrafica come frase
+    expect(risolutore.nome('DEPERIBILI LIBERO SERVIZIO')).toBe('Deperibili libero servizio');
     expect(risolutore.nome('')).toBe('');
   });
 });

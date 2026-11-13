@@ -122,16 +122,17 @@ describe("DistribuzionePagine", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("sotto il grafico un riquadro per pagina con referenze e ingombro; sceglierlo porta il volantino a quella pagina", () => {
+  it("sotto il grafico un riquadro per pagina con referenze e pagina coperta, a parole intere; sceglierlo porta il volantino a quella pagina", () => {
     const onVaiAllaPagina = vi.fn();
     render(<DistribuzionePagine box={BOX} totalePagine={4} paginaCorrente={3} onVaiAllaPagina={onVaiAllaPagina} />);
 
     const riquadri = within(screen.getByRole("list", { name: "Pagine del volantino" })).getAllByRole("button");
     expect(riquadri).toHaveLength(4);
-    expect(riquadri[0]).toHaveTextContent("13 ref.50% ing.");
-    expect(riquadri[0]).toHaveAccessibleName("Pagina 1: 3 referenze, 50% di ingombro");
+    expect(riquadri[0]).toHaveTextContent("13 referenze50% della pagina");
+    expect(riquadri[0]).not.toHaveTextContent(/ref\.|ing\./);
+    expect(riquadri[0]).toHaveAccessibleName("Pagina 1: 3 referenze, 50% della pagina coperta dai box");
     expect(riquadri[2]).toHaveAttribute("aria-current", "page");
-    expect(riquadri[3]).toHaveTextContent("40 ref.0% ing.");
+    expect(riquadri[3]).toHaveTextContent("40 referenze0% della pagina");
 
     fireEvent.click(riquadri[1]);
     expect(onVaiAllaPagina).toHaveBeenLastCalledWith(2);

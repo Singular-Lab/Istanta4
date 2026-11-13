@@ -171,7 +171,8 @@ function Marche({ marche }: { marche: readonly MarcaPromozione[] }) {
                     </div>
                   </td>
                   <td className="whitespace-nowrap py-1.5 pl-3 pr-1 text-right tabular-nums text-slate-600 dark:text-slate-300">
-                    {formatPercentuale(marca.scontoMedio, 0)}
+                    {/* Senza box scontati la marca non ha uno sconto medio: lo si dice, invece di "N/D" */}
+                    {marca.scontoMedio === null ? <span className="text-slate-400 dark:text-slate-500">nessuno sconto</span> : formatPercentuale(marca.scontoMedio, 0)}
                   </td>
                 </tr>
               ))}

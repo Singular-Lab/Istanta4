@@ -85,6 +85,11 @@ export interface BoxInsight {
    * stampati (i sottocosto dello storico): si mostra come calcolato. Assente altrimenti.
    */
   prezzoCalcolato?: boolean;
+  /**
+   * true quando il prezzo e' stampato nel riquadro del prezzo all'etto (prezzo_offerta_etto...): si
+   * scrive "€ 0,99 all'etto" (lib/insightVolantino/unita.ts). Assente altrimenti.
+   */
+  prezzoAllEtto?: boolean;
   barrato: number | null;
   /** Sconto in % (0-100). */
   sconto: number | null;
@@ -157,7 +162,10 @@ export interface ProdottoInsight {
   prezzo: number | null;
   settore: string | null;
   segmento: string | null;
+  /** Il tema gia' leggibile, con le etichette dichiarate dalla libreria agenzia (etichettaRuolo di lib/insightVolantino/ruolo.ts); null se non c'e'. */
   tema: string | null;
+  /** Il tema come lo scrive la fonte ("tantealtreoff"), per il suggerimento; assente nei server non aggiornati. */
+  temaOriginale?: string | null;
   ruolo: string | null;
 }
 
@@ -289,6 +297,23 @@ export interface LineeDistributore {
   bolli: BolloInsight[];
 }
 
+/** La sezione di una pagina del menabò (per Conad CNO la mastro), dalle referenze della pagina. */
+export interface PaginaMenabo {
+  pagina: number;
+  /** Il valore come lo scrive la fonte (es. "N1-NUMERI1"): distingue le sezioni e va nel suggerimento. */
+  sezione: string;
+  /**
+   * Il nome leggibile dichiarato dalla libreria agenzia (es. "Numeri 1"): sezioni con lo stesso nome
+   * ("DIS-DISPENSA_doppia" e "DIS-DISPENSA_singola" sono "Dispensa") hanno lo stesso colore.
+   */
+  nome: string;
+}
+
+/** Il menabò del volantino: solo le pagine con una sezione, in ordine di pagina. */
+export interface MenaboVolantino {
+  pagine: PaginaMenabo[];
+}
+
 /** Le sezioni nuove di GET /api/flyer-insights/:idKit, accanto ai campi di sempre. */
 export interface EstensioneInsight {
   pdf: PdfVolantino | null;
@@ -302,6 +327,11 @@ export interface EstensioneInsight {
    * linee. Assente nelle risposte dei server non aggiornati.
    */
   lineeDistributore?: LineeDistributore | null;
+  /**
+   * Il menabò del volantino (spec insight-volantino, "Menabò del volantino"); null quando la libreria
+   * agenzia del cliente non lo dichiara o nessuna referenza ha la sezione. Assente nei server non aggiornati.
+   */
+  menabo?: MenaboVolantino | null;
 }
 
 // ─── Confronto con l'edizione precedente (solo report PDF) ───────────

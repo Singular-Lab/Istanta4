@@ -5,9 +5,10 @@ import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
+import { useRipristinoScorrimento } from "@/hooks/useRipristinoScorrimento";
 import { useDettaglioPromozioneVolantini } from "@/query/consultazione";
 import { twMerge } from "@/utils/twMerge";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ETICHETTA_PERIODO_CONSULTAZIONE, percorsoVolantini, type PeriodoConsultazione } from "../../../lib/consultazione/periodi";
 import type { OpzioniDettaglioPromozioneVolantini } from "../../../lib/consultazione/tipi";
@@ -19,7 +20,9 @@ import { ConfrontoAssortimento } from "./ConfrontoAssortimento";
 import { ConfrontoKit } from "./ConfrontoKit";
 import { FiltriPromozione } from "./FiltriPromozione";
 import { GrigliaVolantini } from "./GrigliaVolantini";
+import { ID_PRODOTTI_IN_COMUNE, ID_TUTTI_I_PRODOTTI, IndicePromozione, type VoceIndice } from "./IndicePromozione";
 import { LoghiInsegneContext } from "./LogoInsegna";
+import { PannelliAnalisi, type PannelloAnalisi } from "./PannelliAnalisi";
 
 const titoloVista = (periodo: PeriodoConsultazione) => `Volantini ${ETICHETTA_PERIODO_CONSULTAZIONE[periodo]}`;
 
@@ -52,10 +55,13 @@ function Caricamento() {
 /**
  * Consultazione di una promozione (/volantini/promozioni/:idPromo, "materiali.visualizza"), dalle
  * schede delle viste Volantini: un'infografica di tutti i suoi volantini pubblicati. Banda con
- * validità e insegne, filtri per insegna e area, griglia delle miniature, assortimento a confronto per
- * insegna e area con in primo piano i prodotti in comune e l'elenco di tutti i prodotti in un riquadro
- * che scorre da sé (?vista=&punto=&cerca=&reparto=&diversi=&ordina=), grafici dell'assortimento e
- * confronto fra i kit; ogni kit apre i suoi insight. Niente sezione "Dove arriva" (regioni, mappa ed elenco
+ * validità e insegne, filtri per insegna e area con sotto l'indice delle parti della pagina, griglia
+ * delle miniature, assortimento a confronto per
+ * insegna e area (base comune, % a marchio, % Fidelity) con in primo piano i prodotti in comune, con i
+ * loro filtri (?cercaComuni=&repartoComuni=&ruoloComuni=&vistaComuni=), e l'elenco di tutti i prodotti
+ * in un riquadro che scorre da sé (?vista=&punto=&cerca=&reparto=&ruolo=&ordina=); sotto, in pannelli
+ * chiusi (?analisi=), grafici dell'assortimento e confronto fra i kit; ogni kit apre i suoi insight, e
+ * tornando indietro la pagina riprende dove l'utente l'aveva lasciata. Niente sezione "Dove arriva" (regioni, mappa ed elenco
  * dei punti vendita stampati). I filtri stanno nell'indirizzo (?canale=&area=) e il server ricalcola
  * tutto sui soli kit filtrati. Solo materiali pubblicati della GDO, dalle API di consultazione:
  * niente stato di lavorazione né collegamenti alla produzione, e nessun dato di vendita,
@@ -75,6 +81,10 @@ function PromozioneVolantini() {
   const insegne = dettaglio?.insegne;
   const kit = dettaglio?.kit;
   const tinta = useMemo(() => tinteCanaliPromozione(insegne ?? (kit ?? []).map(k => k.canale)), [insegne, kit]);
+  // Il pannello chiesto dall'indice: si apre e la pagina lo porta in vista
+  const [pannelloDaMostrare, setPannelloDaMostrare] = useState<string | null>(null);
+  // Tornando dagli insight di un kit la pagina riprende dove l'utente l'aveva lasciata
+  useRipristinoScorrimento(!query.isLoading && Boolean(dettaglio));
 
   if (query.isLoading) return <Caricamento />;
 
@@ -117,6 +127,34 @@ function PromozioneVolantini() {
   const scegliInsegna = (id: string) => cambiaInsegna(idCanale?.toLowerCase() === id.toLowerCase() ? "" : id);
   const conKit = dettaglio.kit.length > 0;
   const opzioni = dettaglio.opzioni ?? OPZIONI_VUOTE;
+  const pannelli: PannelloAnalisi[] = [
+    {
+      chiave: "assortimento",
+      titolo: "Sconti, reparti, meccaniche e marche",
+      descrizione: "Quanto è profondo lo sconto, spazio e referenze per reparto, meccaniche per insegna e marche con più spazio.",
+      icona: "ChartColumn",
+      contenuto: () => <Assortimento assortimento={dettaglio.assortimento} />,
+    },
+    {
+      chiave: "volantini",
+      titolo: "Confronto fra i volantini",
+      descrizione: "Punti vendita, referenze, pagine, sconto medio, quota Fidelity e sottocosto di ogni volantino.",
+      icona: "LayoutGrid",
+      contenuto: () => <ConfrontoKit kit={dettaglio.kit} tinta={tinta} />,
+    },
+  ];
+  // I prodotti in comune e l'elenco ci sono solo con più volantini e qualche prodotto (ConfrontoAssortimento)
+  const conConfronto = dettaglio.kit.length > 1 && (dettaglio.assortimento.referenze ?? []).length > 0;
+  const voci: VoceIndice[] = [
+    ...(conConfronto
+      ? [
+          { etichetta: "Prodotti in comune", id: ID_PRODOTTI_IN_COMUNE },
+          { etichetta: "Tutti i prodotti", id: ID_TUTTI_I_PRODOTTI },
+        ]
+      : []),
+    { etichetta: "Sconti e reparti", pannello: "assortimento" },
+    { etichetta: "Confronto fra i volantini", pannello: "volantini" },
+  ];
 
   return (
     <LoghiInsegneContext.Provider value={dettaglio.loghiInsegne ?? {}}>
@@ -137,6 +175,7 @@ function PromozioneVolantini() {
           totale={dettaglio.numeroKitTotale ?? dettaglio.kit.length}
           inAttesa={inAttesa}
         />
+        {conKit && <IndicePromozione voci={voci} onApriPannello={setPannelloDaMostrare} />}
         {/* Mentre arriva il dettaglio dei filtri nuovi resta quello di prima, attenuato */}
         <div aria-busy={inAttesa || undefined} className={twMerge("flex flex-col gap-6 transition-opacity", inAttesa && "opacity-60")}>
           {conKit ? (
@@ -144,8 +183,8 @@ function PromozioneVolantini() {
               <GrigliaVolantini kit={dettaglio.kit} tinta={tinta} />
               {/* Il ?. tiene in piedi la pagina con un server che non manda ancora i prodotti */}
               <ConfrontoAssortimento referenze={dettaglio.assortimento.referenze ?? []} kit={dettaglio.kit} tinta={tinta} nomePromo={dettaglio.promo.nome} />
-              <Assortimento assortimento={dettaglio.assortimento} />
-              <ConfrontoKit kit={dettaglio.kit} tinta={tinta} />
+              {/* Le analisi dopo l'elenco dei prodotti: chiuse all'apertura, si aprono una per una */}
+              <PannelliAnalisi pannelli={pannelli} daMostrare={pannelloDaMostrare} onMostra={setPannelloDaMostrare} />
             </>
           ) : (
             <Sezione>

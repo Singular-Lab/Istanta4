@@ -1,5 +1,6 @@
 import type { ReferenzaPosizione } from "@/types/flyerInsights";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
+import { chiaveRuolo } from "../../../../lib/insightVolantino/ruolo";
 import type { MeccanicaReferenza } from "../../../../lib/puntiVendita/analisi";
 import { normalizzaRicerca, ordineLettura } from "../volantino/analisiPagina";
 
@@ -42,9 +43,58 @@ export interface FiltriReferenze {
   meccanica: MeccanicaReferenza | typeof SENZA | typeof TUTTI;
   /** Numero di pagina come testo, o TUTTI. */
   pagina: string;
+  /**
+   * I ruoli scelti, come li scrive il server, o SENZA per i box senza ruolo: un box risponde con almeno
+   * uno dei ruoli scelti. Nessuno vuol dire tutti.
+   */
+  ruoli: readonly string[];
 }
 
-export const FILTRI_VUOTI: FiltriReferenze = { testo: "", rapido: "tutte", reparto: TUTTI, meccanica: TUTTI, pagina: TUTTI };
+export const FILTRI_VUOTI: FiltriReferenze = { testo: "", rapido: "tutte", reparto: TUTTI, meccanica: TUTTI, pagina: TUTTI, ruoli: [] };
+
+/**
+ * I ruoli dei prodotti del box, senza ripetizioni e nell'ordine dei prodotti: lo stesso ruolo scritto
+ * in modi diversi (server non aggiornati) vale una volta, con la prima scrittura.
+ */
+export const ruoliDelBox = (box: Pick<BoxInsight, "dettaglioProdotti">): string[] => {
+  const ruoli = new Map<string, string>();
+  for (const prodotto of box.dettaglioProdotti ?? []) {
+    const ruolo = prodotto.ruolo?.trim();
+    if (ruolo && !ruoli.has(chiaveRuolo(ruolo))) ruoli.set(chiaveRuolo(ruolo), ruolo);
+  }
+  return [...ruoli.values()];
+};
+
+/**
+ * I ruoli del box per le righe dell'analisi della pagina e dell'interrogazione: "Ruolo Star", "Ruolo
+ * Star, Base", con la parola davanti perché non si confondano con la marca; null senza ruolo.
+ */
+export const testoRuoli = (box: Pick<BoxInsight, "dettaglioProdotti">): string | null => {
+  const ruoli = ruoliDelBox(box);
+  return ruoli.length > 0 ? `Ruolo ${ruoli.join(", ")}` : null;
+};
+
+/** I ruoli dei box del volantino, per nome, e se qualche box non ne ha. */
+export const ruoliDeiBox = (box: readonly BoxInsight[]): { ruoli: string[]; senzaRuolo: boolean } => {
+  const ruoli = new Map<string, string>();
+  let senzaRuolo = false;
+  for (const voce of box) {
+    const suoi = ruoliDelBox(voce);
+    if (suoi.length === 0) senzaRuolo = true;
+    for (const ruolo of suoi) if (!ruoli.has(chiaveRuolo(ruolo))) ruoli.set(chiaveRuolo(ruolo), ruolo);
+  }
+  return { ruoli: [...ruoli.values()].sort((a, b) => a.localeCompare(b, "it")), senzaRuolo };
+};
+
+/**
+ * Il box risponde quando almeno un suo prodotto ha uno dei ruoli scelti (SENZA: nessun prodotto ne ha
+ * uno); senza ruoli scelti risponde sempre.
+ */
+const passaRuoli = (box: BoxInsight, scelti: readonly string[]): boolean => {
+  if (scelti.length === 0) return true;
+  const suoi = ruoliDelBox(box).map(chiaveRuolo);
+  return scelti.some(ruolo => (ruolo === SENZA ? suoi.length === 0 : suoi.includes(chiaveRuolo(ruolo))));
+};
 
 export type ColonnaOrdinabile = "pagina" | "prezzo" | "sconto" | "spazio";
 export type Direzione = "asc" | "desc";
@@ -128,9 +178,33 @@ export const filtraRighe = (righe: readonly RigaReferenza[], filtri: FiltriRefer
     if (filtri.reparto !== TUTTI && (box.reparto?.codice ?? SENZA) !== filtri.reparto) return false;
     if (filtri.meccanica !== TUTTI && (box.meccanica ?? SENZA) !== filtri.meccanica) return false;
     if (filtri.pagina !== TUTTI && String(box.pagina ?? "") !== filtri.pagina) return false;
+    if (!passaRuoli(box, filtri.ruoli)) return false;
     return true;
   });
 };
+
+/**
+ * Quanti box ha ogni ruolo con gli altri filtri, per chiave del ruolo (chiaveRuolo), e quanti non ne
+ * hanno, sotto SENZA: i numeri accanto alle pillole del filtro.
+ */
+export const contaRuoli = (righe: readonly RigaReferenza[], filtri: FiltriReferenze): Map<string, number> => {
+  const conti = new Map<string, number>();
+  for (const { box } of filtraRighe(righe, { ...filtri, ruoli: [] })) {
+    const suoi = ruoliDelBox(box);
+    if (suoi.length === 0) conti.set(SENZA, (conti.get(SENZA) ?? 0) + 1);
+    for (const ruolo of suoi) conti.set(chiaveRuolo(ruolo), (conti.get(chiaveRuolo(ruolo)) ?? 0) + 1);
+  }
+  return conti;
+};
+
+/** I filtri sono quelli di partenza: niente testo, nessun filtro rapido, a tendina o ruolo scelto. */
+export const senzaFiltri = (filtri: FiltriReferenze): boolean =>
+  filtri.testo.trim() === "" &&
+  filtri.rapido === "tutte" &&
+  filtri.reparto === TUTTI &&
+  filtri.meccanica === TUTTI &&
+  filtri.pagina === TUTTI &&
+  filtri.ruoli.length === 0;
 
 /** Quante righe ha ogni filtro rapido, sul resto dei filtri. */
 export const contaRapidi = (righe: readonly RigaReferenza[], filtri: FiltriReferenze): Record<FiltroRapido, number> => {

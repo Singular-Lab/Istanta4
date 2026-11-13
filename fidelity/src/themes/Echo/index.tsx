@@ -357,6 +357,7 @@ function Layout() {
               >
                 <SideMenu
                   menu={formattedMenu}
+                  percorso={location.pathname}
                   compresso={menuRidotto}
                   errore={!!sideMenuError}
                   onRiprova={() => dispatch(fetchSideMenu())}

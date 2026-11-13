@@ -5,11 +5,11 @@ import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import StatusBadge from "@/components/Base/StatusBadge";
 import { FlyerInsights as FlyerInsightsComponent } from "@/components/FlyerInsights";
-import { DistribuzionePagine, MarchiDistributore, SintesiInsight } from "@/components/FlyerInsights/analisi";
+import { DistribuzionePagine, MarchiDistributore, MenaboVolantino, SintesiInsight } from "@/components/FlyerInsights/analisi";
 import { sezioneAttiva } from "@/components/FlyerInsights/configurazione";
 import { ScaricaReportPdf } from "@/components/FlyerInsights/report";
 import { ReferenzeVolantino } from "@/components/FlyerInsights/referenze";
-import { VolantinoSfogliabile } from "@/components/FlyerInsights/volantino";
+import { ATTRIBUTO_LETTORE, VolantinoSfogliabile } from "@/components/FlyerInsights/volantino";
 import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
@@ -21,6 +21,7 @@ import { useCallback, useId, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { percorsoPromozioneVolantini, percorsoVolantini } from "../../../lib/consultazione/periodi";
 import { EXPORT_DI_SISTEMA } from "../../../lib/enums";
+import { nomeVolantino } from "../../../lib/insightVolantino/nome";
 import type { BoxInsight } from "../../../lib/insightVolantino/tipi";
 import { ScaricaVolantino } from "./ScaricaVolantino";
 import { statoValidita } from "./validita";
@@ -65,16 +66,34 @@ const boxDellaReferenza = (box: readonly BoxInsight[], referenza: string): BoxIn
   return box.find(voce => normalizza(voce.nome) === nome) ?? null;
 };
 
-/** Porta in vista il volantino sfogliabile, dopo che la distribuzione o la tabella l'hanno mosso. */
+/** Il titolo quando il volantino non ha né insegna né area, e prima che arrivino gli insight. */
+const TITOLO_PREDEFINITO = "Dettaglio volantino";
+
+/**
+ * Porta in vista le pagine del volantino sfogliabile, dopo che il menabò, la distribuzione o la tabella
+ * l'hanno mosso: la barra dei comandi del lettore, subito sopra le pagine, e non l'inizio della sezione
+ * con la descrizione, che su uno schermo stretto lascerebbe le pagine fuori vista. Senza la barra (il
+ * lettore non c'è ancora) la sezione.
+ */
 const mostraVolantino = (id: string) => {
-  const elemento = document.getElementById(id);
+  const sezione = document.getElementById(id);
+  const elemento = sezione?.querySelector<HTMLElement>(`[${ATTRIBUTO_LETTORE}]`) ?? sezione;
   // jsdom e i browser vecchi non hanno scrollIntoView con le opzioni
   if (elemento && typeof elemento.scrollIntoView === "function") elemento.scrollIntoView({ behavior: "smooth", block: "start" });
 };
 
 /**
+ * Il titolo della pagina (spec insight-volantino, "Nome leggibile del volantino"): insegna e area
+ * ("Superstore · Liguria"), o quella delle due che c'è, altrimenti il nome della promozione; mai il
+ * titolo tecnico del kit ("VOLANTINO_SSCNCY_SSLI_VOL_SSCNCY").
+ */
+const titoloVolantino = (contesto: { nomeCanale?: string; nomeArea?: string; nomePromo?: string | null } | null | undefined): string =>
+  nomeVolantino({ insegna: contesto?.nomeCanale, area: contesto?.nomeArea, promo: contesto?.nomePromo }) ?? TITOLO_PREDEFINITO;
+
+/**
  * Dettaglio di sola consultazione del volantino, dall'alto: intestazione compatta (canale, area,
- * periodo, stato e "Scarica il volantino"), i numeri chiave, il volantino sfogliabile in grande, la
+ * periodo, stato e "Scarica il volantino"), i numeri chiave, il volantino sfogliabile in grande, il
+ * menabò quando la libreria agenzia lo dichiara (per Conad CNO la mastro di ogni pagina), la
  * distribuzione nelle pagine, i marchi del distributore, le analisi per reparto, meccanica e marca e
  * la tabella delle referenze. Il report PDF resta visibile ma disattivato per tutti; niente confronti con altre edizioni o
  * varianti. Il kit è nella chiave: aprendo un altro volantino pagina, scelte e filtri ripartono da capo.
@@ -125,7 +144,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
 
   if (!idKit) {
     return (
-      <Pagina compatta titolo="Dettaglio volantino" indietro={indietro}>
+      <Pagina compatta titolo={TITOLO_PREDEFINITO} indietro={indietro}>
         <PageError compatta titolo="Volantino non indicato" motivo="L'indirizzo non contiene il volantino da consultare." />
       </Pagina>
     );
@@ -133,7 +152,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
 
   if (insights.isError) {
     return (
-      <Pagina compatta titolo="Dettaglio volantino" indietro={indietro}>
+      <Pagina compatta titolo={TITOLO_PREDEFINITO} indietro={indietro}>
         <PageError
           compatta
           titolo="Insight non caricati"
@@ -145,7 +164,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
   }
 
   const contesto = dati?.contesto;
-  const titolo = contesto?.titolo || "Dettaglio volantino";
+  const titolo = titoloVolantino(contesto);
   // Le date della promo arrivano con gli insight; senza (server non aggiornato o promo senza date) niente periodo né stato
   const periodo = contesto?.validitaDal || contesto?.validitaAl ? periodoValidita(contesto.validitaDal, contesto.validitaAl) : null;
   const stato = contesto ? statoValidita(contesto.validitaDal, contesto.validitaAl) : null;
@@ -154,12 +173,13 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
   // Le pagine della sintesi (PDF in Olimpo, o fino all'ultimo box): le stesse del volantino e della distribuzione
   const totalePagine = dati?.sintesi?.pagine ?? dati?.totalePagine ?? 0;
   const conDistribuzione = box.length > 0 && sezioneAttiva(configurazione.data, "pagine");
+  // Il menabò solo se la libreria agenzia del cliente lo dichiara e qualche pagina ha la sezione
+  const menabo = dati?.menabo && dati.menabo.pagine.length > 0 ? dati.menabo : null;
 
   const meta =
-    contesto?.nomeCanale || contesto?.nomeArea || periodo || stato ? (
+    // Insegna e area sono già nel titolo: qui periodo e stato
+    periodo || stato ? (
       <>
-        {contesto?.nomeCanale && <StatusBadge tono="neutral" icon="Store" etichetta={contesto.nomeCanale} />}
-        {contesto?.nomeArea && <StatusBadge tono="neutral" icon="MapPin" etichetta={contesto.nomeArea} />}
         {periodo && <StatusBadge tono="neutral" icon="CalendarDays" etichetta={periodo} />}
         {stato && <StatusBadge tono={stato.tono} icon={stato.icona} etichetta={stato.testo} />}
       </>
@@ -217,6 +237,23 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
                   onCambiaPagina={setPaginaSfogliata}
                   idBoxIniziale={boxIniziale?.id ?? null}
                   apriBox={boxDaAprire}
+                />
+              </Sezione>
+            )}
+
+            {menabo && (
+              <Sezione
+                titolo="Menabò"
+                descrizione="La sezione di ogni pagina, come impostata nell'impaginazione del volantino, e il reparto con più prodotti: le pagine della stessa sezione hanno lo stesso colore. Scegli una pagina per aprirla nel volantino."
+              >
+                <MenaboVolantino
+                  menabo={menabo}
+                  totalePagine={totalePagine}
+                  pdf={dati.pdf ?? null}
+                  box={box}
+                  proporzione={box.find(voce => voce.proporzionePagina)?.proporzionePagina}
+                  paginaCorrente={paginaVolantino}
+                  onVaiAllaPagina={vaiAllaPagina}
                 />
               </Sezione>
             )}
