@@ -18,6 +18,7 @@ import { Materiali } from './models/materiali.model';
 import { PrivateSession } from './models/private_session.model';
 import { Video } from './models/video.model';
 import { WebsocketGateway } from './websocket/websocket.getaway';
+import { MigrazioniService } from './db/migrazioni/migrazioni.service';
 
 @Module({
   imports: [
@@ -42,7 +43,8 @@ import { WebsocketGateway } from './websocket/websocket.getaway';
     forwardRef(() => FtpModule), // Utilizza forwardRef per evitare la dipendenza circolare
   ],
   controllers: [OlimpoController, MaterialiController, ImpostazioniController],
-  providers: [MaterialiService, OlimpoService, ImpostazioniService, WebsocketGateway, {
+  // MigrazioniService applica le migrazioni del database all'avvio, prima che Olimpo accetti richieste
+  providers: [MigrazioniService, MaterialiService, OlimpoService, ImpostazioniService, WebsocketGateway, {
     provide: 'WS_SERVER',
     useFactory: (gateway: WebsocketGateway) => gateway.server,
     inject: [WebsocketGateway],
