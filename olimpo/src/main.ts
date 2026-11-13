@@ -6,7 +6,7 @@ import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { AppClusterService } from './app-cluster.service';
+import { avviaInCluster, avviaProcesso } from './cluster/cluster-olimpo';
 import { OlimpoModule } from './app.module';
 import { AuthService } from './auth/auth.service';
 import { HttpExceptionFilter } from './exception/exeptions';
@@ -251,4 +251,7 @@ async function bootstrap() {
   await app.listen(configService.get<number>('PORT') || 3000, '0.0.0.0');
 }
 
-process.env.NODE_ENV === 'production' ? AppClusterService.clusterize(bootstrap) : bootstrap();
+// In produzione piu' processi (OLIMPO_WORKERS, 2 se manca), avviati uno alla volta e riavviati con
+// un'attesa crescente; altrimenti un processo solo. Un avvio che fallisce termina con codice 1.
+if (process.env.NODE_ENV === 'production') avviaInCluster(bootstrap);
+else avviaProcesso(bootstrap);

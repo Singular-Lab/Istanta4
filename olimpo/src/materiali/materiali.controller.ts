@@ -6,6 +6,7 @@ import {
     Get,
     HttpException,
     HttpStatus,
+    OnModuleInit,
     Post,
     Query,
     Req,
@@ -42,15 +43,19 @@ type GroupPDFsByEqualityResult = {
 };
 
 @Controller('materiali')
-export class MaterialiController {
+export class MaterialiController implements OnModuleInit {
 
     private PATH_WEB_ASSOLUTO: AbsolutePaths;
     private PATH_ARCHIVIO_ASSOLUTO: AbsolutePaths;
     private PATH_VIDEO_ASSOLUTO: AbsolutePaths;
     private PATH_MATERIALI_ASSOLUTO: AbsolutePaths;
-    constructor(private readonly olimpoService: OlimpoService, private readonly materialiService: MaterialiService, private readonly websocketGateway: WebsocketGateway) {
-        this.init();
+    constructor(private readonly olimpoService: OlimpoService, private readonly materialiService: MaterialiService, private readonly websocketGateway: WebsocketGateway) { }
+
+    /** Le cartelle si leggono prima che il processo accetti richieste (prima: nel costruttore, senza await). */
+    async onModuleInit(): Promise<void> {
+        await this.init();
     }
+
     async init() {
         this.PATH_WEB_ASSOLUTO = await this.olimpoService.getAbsolutePathFromType(ABSOLUTE_PATH_TYPE.WEB);
         this.PATH_ARCHIVIO_ASSOLUTO = await this.olimpoService.getAbsolutePathFromType(ABSOLUTE_PATH_TYPE.ARCHIVIO);
