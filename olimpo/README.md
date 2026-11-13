@@ -145,6 +145,23 @@ già.
 `sql/alterazione_tipo_utente.sql` è lo script storico che creò `tipo_utenti_finale`. La migrazione
 `0001` ci aggiunge i tipi di utente di Fidelity che mancavano: Category, Marketing e IT.
 
+## Processi in produzione
+
+Con `NODE_ENV=production` Olimpo distribuisce le richieste su più processi Node (cluster). Il codice
+è in `src/cluster/cluster-olimpo.ts`.
+
+- **Quanti:** `OLIMPO_WORKERS`, oppure 2 se la variabile manca. Mai più delle CPU disponibili.
+  In passato erano tanti quante le CPU dell'host, anche dentro Docker: troppi pool verso Postgres e
+  processi che morivano all'avvio.
+- **Avvio:** i processi partono uno alla volta. Il successivo parte solo quando il precedente accetta
+  richieste, così `synchronize` e le migrazioni le esegue il primo processo.
+- **Cartelle:** ogni processo legge le cartelle attive WEB, ARCHIVIO, VIDEO e MATERIALI di
+  `absolute_paths` prima di accettare richieste. Se ne manca una, il processo non parte e il log
+  dice quale manca.
+- **Riavvio:** un processo che termina riparte dopo 1, 2, 4… secondi, fino a 30 secondi. L'attesa
+  torna a 1 secondo dopo un minuto di vita.
+- **Chiusura:** con SIGTERM i processi non vengono riavviati.
+
 ## Test senza Docker
 
 - **Test d'integrazione delle migrazioni:** girano su un PostgreSQL locale, senza Docker. Il database
@@ -165,8 +182,11 @@ già.
   Lo script:
   1. prepara la tabella `auth` come sulle installazioni esistenti;
   2. avvia `node dist/src/main.js` come nel container;
-  3. controlla che la migrazione 0001 sia applicata e che un utente Marketing ottenga il passaporto;
-  4. alla fine elimina il database e i file temporanei.
+  3. controlla che, in produzione con `OLIMPO_WORKERS=2`, partano 2 processi uno dopo l'altro;
+  4. controlla che la migrazione 0001 sia applicata e che un utente Marketing ottenga il passaporto;
+  5. controlla che, senza la cartella VIDEO, Olimpo non accetti richieste e che le attese prima dei
+     riavvii crescano (1, 2 e 4 secondi);
+  6. alla fine elimina il database e i file temporanei.
 
 - **pikepdf:** i test sullo spazio colore dei file `.ai` richiedono `pikepdf`
   (`apt install python3-pikepdf`). In locale, se manca, si saltano con un avviso. In CI non si
