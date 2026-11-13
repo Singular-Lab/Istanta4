@@ -187,6 +187,11 @@ const FicoProcess=
 
                 try {
                     await pluginMiddleware.getCustomPlugin();
+                    //I20-1231: i bolli nofoto e fotonofound si rileggono con la configurazione, cosi' un
+                    //file cambiato nell'archivio Loghi e bolli vale dal documento successivo.
+                    if (typeof ReperimentoFoto !== "undefined") {
+                        ReperimentoFoto.caricaBolliDiRipiego();
+                    }
 
                     // Aspetta che refreshPromo finisca
                     await this.refreshPromo();

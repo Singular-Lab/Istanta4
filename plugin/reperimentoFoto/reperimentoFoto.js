@@ -815,15 +815,15 @@ const ReperimentoFoto = {
                             //confrontiamo le foto in mappa, foto è un array di elementi { nomeFoto: nomeFile, element: rect, statoSelezione: statoSelezione, codiceFoto: codiceFoto}
                             for (let j = 0; j < item.foto.length; j++) {
                                 let foto = item.foto[j];
-                                if (!ricollegaFotoPresentiModificate && foto.nomeFoto != "nofoto.png" && foto.nomeFoto != "fotoNoFound.png") {
-                                    //se ricollegaFotoPresentiModificate è true e il nomeFoto non è "nofoto.png" o "fotoNoFound.png" allora saltiamo l'iterazione
+                                if (!ricollegaFotoPresentiModificate && !pluginMiddleware.eSegnapostoFoto(foto.nomeFoto)) {
+                                    //se ricollegaFotoPresentiModificate è false e la foto non è un segnaposto (I20-1231: anche il bollo nofoto/fotonofound dell'archivio) saltiamo l'iterazione
                                     continue;
                                 }
                                 //se lo statoSelezione è 1 confrontiamo il nomeFoto con Foto.Nome del primario
                                 if (foto.statoSelezione == 1) {
                                     let fotoAssente = false;
                                     //controlliamo se è un nofoto o fotoNoFound
-                                    if (foto.nomeFoto == "nofoto.png" || foto.nomeFoto == "fotoNoFound.png") {
+                                    if (pluginMiddleware.eSegnapostoFoto(foto.nomeFoto)) {
                                         fotoAssente = true;
                                     }
 
@@ -876,7 +876,7 @@ const ReperimentoFoto = {
 
                                             let fotoAssente = false;
                                             //controlliamo se è un nofoto o fotoNoFound
-                                            if (foto.nomeFoto == "nofoto.png" || foto.nomeFoto == "fotoNoFound.png") {
+                                            if (pluginMiddleware.eSegnapostoFoto(foto.nomeFoto)) {
                                                 fotoAssente = true;
                                             }
 
@@ -910,7 +910,7 @@ const ReperimentoFoto = {
                                     else {
                                         let fotoAssente = false;
                                         //controlliamo se è un nofoto o fotoNoFound
-                                        if (foto.nomeFoto == "nofoto.png" || foto.nomeFoto == "fotoNoFound.png") {
+                                        if (pluginMiddleware.eSegnapostoFoto(foto.nomeFoto)) {
                                             fotoAssente = true;
                                         }
 
@@ -1206,6 +1206,26 @@ const ReperimentoFoto = {
         }
     },
 
+    /// I20-1231: chiede a Istanta i nomi dei bolli nofoto e fotonofound dell'archivio e li da' al
+    /// pluginMiddleware. Gira all'accesso e dopo ogni ricarica della configurazione del cliente, cosi'
+    /// un file cambiato in archivio vale dal documento successivo. Se Istanta non ha il bollo o non
+    /// risponde il nome resta vuoto, e il Plugin usa nofoto.png / fotoNoFound.png.
+    caricaBolliDiRipiego() {
+        ReperimentoFoto.getBolloNOFOTO(function (nome) {
+            pluginMiddleware.setBolloNOFOTO(nome);
+        }, function (err) {
+            console.error("Bollo nofoto non letto da Istanta: " + err);
+            pluginMiddleware.setBolloNOFOTO("");
+        });
+
+        ReperimentoFoto.getBolloFOTONOFOUND(function (nome) {
+            pluginMiddleware.setBolloFOTONOFOUND(nome);
+        }, function (err) {
+            console.error("Bollo fotonofound non letto da Istanta: " + err);
+            pluginMiddleware.setBolloFOTONOFOUND("");
+        });
+    },
+
     getBolloNOFOTO(callback, callbackError)
     {
         this.getNomeFotoLogoBolloBySigla("nofoto", callback, callbackError);
@@ -1231,30 +1251,30 @@ const ReperimentoFoto = {
                         return;
                     }
                 }
-                // Chiamata alla callback con il risultato ottenuto
-                if (objResult.esito)
+                //I20-1231: il nome va a callback solo se Istanta l'ha dato. Un errore, anche di rete,
+                //va a callbackError: passato a callback diventava il "nome" del file da impaginare.
+                var nome = objResult != null && objResult.esito && objResult.item != null ? objResult.item.nome : null;
+                if (typeof nome === "string" && nome.trim() !== "")
                 {
                     if (callback) {
-                        callback(objResult.item.nome); // Passiamo `null` come primo argomento per indicare che non c'è errore
+                        callback(nome);
                     }
                 }
                 else
                 {
                     if (callbackError)
-                        callbackError(objResult.error);
+                        callbackError(objResult != null && objResult.error ? objResult.error : "bollo " + sigla + " senza nome");
                 }
             } catch (e) {
-                // Gestione dell'errore e chiamata alla callback con l'errore
-                if (callback) {
-                    callback(e, null);
+                if (callbackError) {
+                    callbackError(e);
                 }
             }
         };
-    
+
         xhr.onerror = function (e) {
-            // Gestione degli errori di rete e chiamata alla callback con l'errore
-            if (callback) {
-                callback(e, null);
+            if (callbackError) {
+                callbackError("errore di rete: " + e);
             }
         };
     

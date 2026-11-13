@@ -37,17 +37,9 @@ const FotoPlacer =
     placeFoto:function(nomeFoto, fotoRectangle, callback)
     {
         var warningMessage = "";
-        let nomeNoFoto = pluginMiddleware.getCampo("nomeNoFoto");
-        if(nomeNoFoto == null || nomeNoFoto == "")
-        {
-            nomeNoFoto = "nofoto.png";
-        }
-
-        let nomeFotoNoFound = pluginMiddleware.getCampo("fotoNotFound");
-        if(nomeFotoNoFound == null || nomeFotoNoFound == "")
-        {
-            nomeFotoNoFound = "fotoNoFound.png";
-        }
+        //I20-1231: i bolli nofoto e fotonofound dell'archivio, o i file incorporati se l'archivio non li ha.
+        let nomeNoFoto = pluginMiddleware.nomeNoFoto();
+        let nomeFotoNoFound = pluginMiddleware.nomeFotoNonTrovata();
 
         var path = /*pathLavorazione +*/ (nomeFoto != null && nomeFoto != "" ? percorsoLinks + nomeFoto : percorsoLoghi + nomeNoFoto);
         try {
@@ -77,6 +69,8 @@ const FotoPlacer =
             //fotoRectangle.fit(FitOptions.FRAME_TO_CONTENT);
         }
         catch (ex) {
+            //I20-1231: il file cercato e l'errore vero, per sapere se mancava il file o e' successo altro.
+            console.error("Impaginazione della foto non riuscita su " + path + ": " + ex);
             let fotoNotFoundErr = false;
             if (nomeFoto != null && nomeFoto != "") {
                 //Non è stato trovato la foto prodotto
@@ -87,17 +81,18 @@ const FotoPlacer =
                     //fotoRectangle.fillColor = "None";
                     fotoRectangle.fit(FitOptions.PROPORTIONALLY);
                     //fotoRectangle.fit(FitOptions.FRAME_TO_CONTENT);
-                    warningMessage = "Foto non trovata, è stata inserita fotoNoFound.png";
+                    warningMessage = "Foto non trovata, è stata inserita " + nomeFotoNoFound;
                     fotoNotFoundErr = true;
                 }
                 catch (ex) {
-                    //non è stato trovato il file nofoto            
-                    warningMessage = "errore FotoNoFound non presente";
+                    //non è stato trovato il file fotonofound
+                    console.error("Segnaposto fotonofound non impaginato da " + path + ": " + ex);
+                    warningMessage = "FotoNoFound non trovato: " + nomeFotoNoFound;
                 }
             }
             else {
                 //Non è stato trovato il file nofoto
-                warningMessage = "Nofoto not found";
+                warningMessage = "Nofoto non trovato: " + nomeNoFoto;
             }
 
             if (!fotoNotFoundErr && warningMessage != "") {

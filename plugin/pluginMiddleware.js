@@ -13,6 +13,11 @@ const pluginMiddleware = {
 
     callCustom: true,
     customPluginDB: null,
+    /// I20-1231: i nomi dei bolli nofoto e fotonofound dell'archivio Loghi e bolli, letti da Istanta.
+    /// Stanno fuori da customPluginDB perche' quello si azzera e si riscarica a ogni cambio di
+    /// documento (ficoProcess.scaricaFicoData): li' dentro il nome si perdeva e il Plugin tornava a
+    /// nofoto.png anche con un altro file in archivio.
+    bolliDiRipiego: { nomeNoFoto: "", fotoNotFound: "" },
 
     async getCustomPlugin() {
         let me = this;
@@ -935,11 +940,10 @@ const pluginMiddleware = {
             }
         }
 
-        if (!me.customPluginDB) {
-            return null;
+        me.bolliDiRipiego.nomeNoFoto = pluginMiddleware.nomeDiBollo(name);
+        if (me.customPluginDB) {
+            me.customPluginDB.nomeNoFoto = me.bolliDiRipiego.nomeNoFoto;
         }
-
-        me.customPluginDB.nomeNoFoto = name;
     },
 
     setBolloFOTONOFOUND(name) {
@@ -953,12 +957,51 @@ const pluginMiddleware = {
             }
         }
 
-        if (!me.customPluginDB) {
-            return null;
+        me.bolliDiRipiego.fotoNotFound = pluginMiddleware.nomeDiBollo(name);
+        if (me.customPluginDB) {
+            me.customPluginDB.fotoNotFound = me.bolliDiRipiego.fotoNotFound;
         }
-
-        me.customPluginDB.fotoNotFound = name;
     },
+
+    /// I20-1231: un nome di file valido o "": un errore o un oggetto non diventano un nome.
+    nomeDiBollo(valore) {
+        return typeof valore === "string" ? valore.trim() : "";
+    },
+
+    /// I20-1231: il file da mettere nel riquadro di una referenza senza foto: il bollo "nofoto"
+    /// dell'archivio, oppure nofoto.png quando l'archivio non lo ha o Istanta non ha risposto.
+    nomeNoFoto() {
+        let me = this;
+        let nome = me.callCustom ? me.getCampo("nomeNoFoto") : me.bolliDiRipiego.nomeNoFoto;
+        nome = pluginMiddleware.nomeDiBollo(nome);
+        return nome !== "" ? nome : pluginMiddleware.NOFOTO_INCORPORATO;
+    },
+
+    /// I20-1231: come nomeNoFoto, per la foto che non si trova (bollo "fotonofound").
+    nomeFotoNonTrovata() {
+        let me = this;
+        let nome = me.callCustom ? me.getCampo("fotoNotFound") : me.bolliDiRipiego.fotoNotFound;
+        nome = pluginMiddleware.nomeDiBollo(nome);
+        return nome !== "" ? nome : pluginMiddleware.FOTONOFOUND_INCORPORATO;
+    },
+
+    /// I20-1231: vero se il file e' un segnaposto e non una foto: i bolli in uso o quelli incorporati,
+    /// che restano nei box impaginati prima del cambio di file in archivio. Senza maiuscole.
+    eSegnapostoFoto(nomeFile) {
+        let nome = pluginMiddleware.nomeDiBollo(nomeFile).toLowerCase();
+        if (nome === "") {
+            return false;
+        }
+        return [
+            this.nomeNoFoto(),
+            this.nomeFotoNonTrovata(),
+            pluginMiddleware.NOFOTO_INCORPORATO,
+            pluginMiddleware.FOTONOFOUND_INCORPORATO
+        ].some(segnaposto => segnaposto.toLowerCase() === nome);
+    },
+
+    NOFOTO_INCORPORATO: "nofoto.png",
+    FOTONOFOUND_INCORPORATO: "fotoNoFound.png",
 
     applicaSchemaDiOrdinamentoConPesi(_lista, field, chiaveSchema) {
         let me = this;
