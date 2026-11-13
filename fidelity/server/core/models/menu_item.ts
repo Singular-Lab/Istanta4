@@ -15,6 +15,7 @@ class MenuItemClass extends Model<MenuItemAttributes, MenuItemCreationAttributes
   declare icona?: string | null;
   declare pathname?: string | null;
   declare codice_permesso?: string | null;
+  declare sezione?: string | null;
   declare disabilitato?: boolean;
   declare start_page?: boolean;
   declare ordinamento: number;
@@ -60,6 +61,11 @@ const MenuItem = sequelize.define<MenuItemClass>("menu_items", {
   },
   codice_permesso: {
     type: DataTypes.STRING(100),
+    allowNull: true,
+  },
+  // Area del menu scelta dall'amministratore (lib/accessi/sezioni.ts); NULL = area della pagina nel catalogo.
+  sezione: {
+    type: DataTypes.STRING(20),
     allowNull: true,
   },
   disabilitato: {

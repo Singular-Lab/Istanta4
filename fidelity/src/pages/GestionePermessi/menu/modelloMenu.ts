@@ -6,16 +6,17 @@ import {
   VOCI_DI_MENU,
   type VoceDiMenu,
 } from '../../../../lib/accessi/pagine';
-import { eSezioneMenu, SEZIONI, sezionaMenu, type SezionePagina } from '../../../../lib/accessi/sezioni';
+import { eSezioneMenu, eSezionePagina, SEZIONI, sezionaMenu, type SezionePagina } from '../../../../lib/accessi/sezioni';
 import type { MenuElement, MenuItem } from '../../../../lib/types';
 
 /**
  * Logica dell'editor del menu, senza React.
  *
  * Il server salva il menu come elenco piatto (GET e PUT /menu/:tipo): separatori con il titolo di un
- * gruppo e voci con il percorso di una pagina. L'editor lo mostra per area: ogni voce sta nell'area
- * della pagina che apre (lib/accessi/sezioni.ts), dentro i gruppi; al salvataggio torna piatto,
- * area per area nell'ordine di SEZIONI.
+ * gruppo e voci con il percorso di una pagina e, se scelta, l'area. L'editor lo mostra per area
+ * (lib/accessi/sezioni.ts), dentro i gruppi: una pagina può stare in qualunque area, anche in più
+ * aree, al più una volta per area; senza un'area scelta sta in quella del catalogo. Al salvataggio
+ * il menu torna piatto, area per area nell'ordine di SEZIONI.
  */
 
 /** Voce del menu come la scambia il server. */
@@ -28,6 +29,8 @@ export interface MenuItemDTO {
   icona?: string | null;
   pathname?: string | null;
   codice_permesso?: string | null;
+  /** Area scelta per la voce; null o assente = area della pagina nel catalogo. */
+  sezione?: string | null;
   disabilitato?: boolean;
   start_page?: boolean;
   ordinamento: number;
@@ -60,7 +63,7 @@ export interface AreaMenu {
   gruppi: GruppoMenu[];
 }
 
-/** Il menu nell'editor: le aree presenti, nell'ordine di SEZIONI. */
+/** Il menu nell'editor: le aree con almeno un gruppo, nell'ordine di SEZIONI. */
 export interface ModelloMenu {
   aree: AreaMenu[];
 }
@@ -85,17 +88,19 @@ export interface Destinazione {
 
 export const MODELLO_VUOTO: ModelloMenu = { aree: [] };
 
-/** Tipi del trascinamento (react-dnd): una pagina del catalogo o una voce del menu. */
+/** Tipi del trascinamento (react-dnd): una pagina del catalogo, una voce o il titolo di un gruppo. */
 export const TRASCINA_PAGINA = 'menu-pagina';
 export const TRASCINA_VOCE = 'menu-voce';
+export const TRASCINA_TITOLO = 'menu-titolo';
 export type PaginaTrascinata = { percorso: string; sezione: SezionePagina };
-export type VoceTrascinata = { voceId: string; sezione: SezionePagina };
+export type VoceTrascinata = { voceId: string; sezione: SezionePagina; percorso: string };
+export type TitoloTrascinato = { gruppoId: string; sezione: SezionePagina };
 
 /* =======================
    CATALOGO DELLE PAGINE
    ======================= */
 
-/** Pagina che si può mettere nel menu, con la sua area. */
+/** Pagina che si può mettere nel menu, con la sua area predefinita (quella del catalogo). */
 export interface PaginaCatalogo extends VoceDiMenu {
   sezione: SezionePagina;
 }
@@ -149,9 +154,56 @@ export const trovaGruppo = (modello: ModelloMenu, gruppoId: string): PosizioneGr
 export const vociDelModello = (modello: ModelloMenu): VoceMenu[] =>
   ordinaAree(modello.aree).flatMap((area) => area.gruppi.flatMap((gruppo) => gruppo.voci));
 
-/** I percorsi (normalizzati) delle pagine già nel menu. */
-export const percorsiNelMenu = (modello: ModelloMenu): Set<string> =>
-  new Set(vociDelModello(modello).map((v) => normalizzaPercorso(v.pathname)));
+/** Per ogni pagina già nel menu (percorso normalizzato), le aree in cui compare, nell'ordine di SEZIONI. */
+export const areeDellePagine = (modello: ModelloMenu): Map<string, SezionePagina[]> => {
+  const aree = new Map<string, SezionePagina[]>();
+  for (const area of ordinaAree(modello.aree)) {
+    for (const voce of area.gruppi.flatMap((g) => g.voci)) {
+      const percorso = normalizzaPercorso(voce.pathname);
+      const giaViste = aree.get(percorso) ?? [];
+      if (!giaViste.includes(area.sezione)) aree.set(percorso, [...giaViste, area.sezione]);
+    }
+  }
+  return aree;
+};
+
+/** Vero se l'area contiene già una voce della pagina (esclusa, se indicata, la voce `tranne`). */
+const areaHaPagina = (area: AreaMenu | undefined, percorso: string, tranne?: string): boolean =>
+  !!area &&
+  area.gruppi.some((g) => g.voci.some((v) => v.id !== tranne && normalizzaPercorso(v.pathname) === normalizzaPercorso(percorso)));
+
+/**
+ * Vero se l'oggetto trascinato non si può lasciare nell'area perché l'area ha già la sua pagina.
+ * Una voce si può sempre riordinare nella sua area.
+ */
+export const rilascioVietato = (area: AreaMenu, oggetto: PaginaTrascinata | VoceTrascinata): boolean =>
+  'voceId' in oggetto
+    ? oggetto.sezione !== area.sezione && areaHaPagina(area, oggetto.percorso, oggetto.voceId)
+    : areaHaPagina(area, oggetto.percorso);
+
+/** Le aree in cui l'editor accetta voci: tutte tranne Account, che raccoglie pagine fuori dal menu. */
+export const AREE_EDITOR: readonly SezionePagina[] = ORDINE_SEZIONI.filter((sezione) => sezione !== 'account');
+
+/**
+ * Le aree da mostrare nell'editor: sempre tutte quelle di AREE_EDITOR, anche senza gruppi, così
+ * una pagina si può mettere anche in un'area ancora vuota; Account solo se il menu ne ha.
+ */
+export const areeDaMostrare = (modello: ModelloMenu): AreaMenu[] =>
+  ORDINE_SEZIONI.flatMap((sezione) => {
+    const area = modello.aree.find((a) => a.sezione === sezione);
+    if (area) return [area];
+    return AREE_EDITOR.includes(sezione) ? [{ sezione, gruppi: [] }] : [];
+  });
+
+/** L'area del modello, creata in ordine se manca. */
+const areaDi = (modello: ModelloMenu, sezione: SezionePagina): AreaMenu => {
+  let area = modello.aree.find((a) => a.sezione === sezione);
+  if (!area) {
+    area = { sezione, gruppi: [] };
+    modello.aree = ordinaAree([...modello.aree, area]);
+  }
+  return area;
+};
 
 export const contaVoci = (area: AreaMenu): number => area.gruppi.reduce((n, g) => n + g.voci.length, 0);
 
@@ -160,12 +212,12 @@ export const contaVoci = (area: AreaMenu): number => area.gruppi.reduce((n, g) =
    ======================= */
 
 /**
- * Dal menu salvato al modello per area. Ogni voce va nell'area della sua pagina; un separatore apre
- * un gruppo, e un gruppo con voci di aree diverse diventa un gruppo per ciascuna area, con lo stesso
- * titolo. Le voci prima del primo separatore stanno in un gruppo senza titolo. Un separatore senza
- * titolo non apre un gruppo: nel menu dell'utente non compare. Le voci senza pagina e i doppioni di
- * una pagina già letta non entrano nel modello: tornano in `scartate`. Resta pagina iniziale solo la
- * prima voce segnata.
+ * Dal menu salvato al modello per area. Ogni voce va nell'area salvata con lei o, se non ce l'ha,
+ * in quella della sua pagina; un separatore apre un gruppo, e un gruppo con voci di aree diverse
+ * diventa un gruppo per ciascuna area, con lo stesso titolo. Le voci prima del primo separatore
+ * stanno in un gruppo senza titolo. Un separatore senza titolo non apre un gruppo: nel menu
+ * dell'utente non compare. Le voci senza pagina e i doppioni di una pagina già letta nella stessa
+ * area non entrano nel modello: tornano in `scartate`. Resta pagina iniziale solo la prima voce segnata.
  */
 export const leggiMenu = (voci: readonly MenuItemDTO[]): LetturaMenu => {
   const ordinate = [...voci].sort((a, b) => (a.ordinamento ?? 0) - (b.ordinamento ?? 0));
@@ -183,17 +235,18 @@ export const leggiMenu = (voci: readonly MenuItemDTO[]): LetturaMenu => {
       continue;
     }
     const pathname = dto.pathname ?? '';
-    const sezione = pathname ? sezioneDiPercorso(pathname) : undefined;
-    if (!sezione) {
+    const predefinita = pathname ? sezioneDiPercorso(pathname) : undefined;
+    if (!predefinita) {
       scartate.push({ titolo: dto.titolo ?? '', pathname: dto.pathname ?? null, motivo: 'senza-pagina' });
       continue;
     }
-    const percorso = normalizzaPercorso(pathname);
-    if (presenti.has(percorso)) {
+    const sezione = eSezionePagina(dto.sezione) ? dto.sezione : predefinita;
+    const presente = `${sezione}|${normalizzaPercorso(pathname)}`;
+    if (presenti.has(presente)) {
       scartate.push({ titolo: dto.titolo ?? '', pathname, motivo: 'doppione' });
       continue;
     }
-    presenti.add(percorso);
+    presenti.add(presente);
 
     let area = aree.get(sezione);
     if (!area) {
@@ -230,7 +283,8 @@ export const titoloDaSalvare = (voce: VoceMenu): string =>
 /**
  * Dal modello al menu da salvare: area per area nell'ordine di SEZIONI, gruppo per gruppo. Un gruppo
  * con titolo apre con il suo separatore, uno senza titolo è solo una sequenza di voci; i gruppi vuoti
- * non si salvano. `ordinamento` è progressivo; le sottovoci restano come sono.
+ * non si salvano. `ordinamento` è progressivo; le sottovoci restano come sono. Una voce porta
+ * `sezione` solo se sta in un'area diversa da quella della sua pagina nel catalogo.
  */
 export const serializzaMenu = (modello: ModelloMenu, tipoUtente: string): MenuItemDTO[] => {
   const risultato: MenuItemDTO[] = [];
@@ -242,12 +296,14 @@ export const serializzaMenu = (modello: ModelloMenu, tipoUtente: string): MenuIt
         risultato.push({ tipo_utente: tipoUtente, tipo: 'separator', titolo, ordinamento: risultato.length });
       }
       for (const voce of gruppo.voci) {
+        const altraArea = sezioneDiPercorso(voce.pathname) !== area.sezione;
         risultato.push({
           tipo_utente: tipoUtente,
           tipo: 'item',
           titolo: titoloDaSalvare(voce),
           icona: voce.icona,
           pathname: voce.pathname,
+          ...(altraArea ? { sezione: area.sezione } : {}),
           disabilitato: voce.disabilitato,
           start_page: voce.iniziale,
           ordinamento: risultato.length,
@@ -285,18 +341,23 @@ export const titoliEreditati = (modello: ModelloMenu): Map<string, string> => {
    ======================= */
 
 export type EsitoInserimento =
-  | { esito: 'aggiunta'; modello: ModelloMenu; voceId: string; sezione: SezionePagina; altraArea: boolean }
-  | { esito: 'gia-presente' | 'non-pagina'; modello: ModelloMenu };
+  | { esito: 'aggiunta'; modello: ModelloMenu; voceId: string; sezione: SezionePagina }
+  | { esito: 'gia-presente'; modello: ModelloMenu; sezione: SezionePagina }
+  | { esito: 'non-pagina'; modello: ModelloMenu };
 
 /**
- * Mette una pagina nel menu. Lasciata in un gruppo della sua area va nel punto indicato; senza
- * destinazione, o lasciata in un'altra area, va in fondo alla sua area (creata con un gruppo senza
- * titolo se manca) e `altraArea` lo segnala. Una pagina già nel menu non si aggiunge di nuovo.
+ * Mette una pagina nel menu. Lasciata in un gruppo va nel punto indicato, qualunque sia l'area del
+ * gruppo; senza destinazione va in fondo alla sua area predefinita (creata con un gruppo senza
+ * titolo se manca). Una pagina già presente nell'area di arrivo non si aggiunge di nuovo.
  */
 export const inserisciPagina = (modello: ModelloMenu, percorso: string, destinazione?: Destinazione): EsitoInserimento => {
-  const sezione = sezioneDiPercorso(percorso);
-  if (!sezione) return { esito: 'non-pagina', modello };
-  if (percorsiNelMenu(modello).has(normalizzaPercorso(percorso))) return { esito: 'gia-presente', modello };
+  const predefinita = sezioneDiPercorso(percorso);
+  if (!predefinita) return { esito: 'non-pagina', modello };
+  const dove = destinazione ? trovaGruppo(modello, destinazione.gruppoId) : undefined;
+  const sezione = dove?.area.sezione ?? predefinita;
+  if (areaHaPagina(modello.aree.find((a) => a.sezione === sezione), percorso)) {
+    return { esito: 'gia-presente', modello, sezione };
+  }
 
   const proposta = voceDiMenuPer(percorso);
   const voce: VoceMenu = {
@@ -309,31 +370,31 @@ export const inserisciPagina = (modello: ModelloMenu, percorso: string, destinaz
   };
 
   const nuovo = clona(modello);
-  const dove = destinazione ? trovaGruppo(nuovo, destinazione.gruppoId) : undefined;
-  if (dove && destinazione && dove.area.sezione === sezione) {
-    dove.gruppo.voci.splice(limita(destinazione.indice, 0, dove.gruppo.voci.length), 0, voce);
-    return { esito: 'aggiunta', modello: nuovo, voceId: voce.id, sezione, altraArea: false };
+  const arrivo = destinazione ? trovaGruppo(nuovo, destinazione.gruppoId) : undefined;
+  if (arrivo && destinazione) {
+    arrivo.gruppo.voci.splice(limita(destinazione.indice, 0, arrivo.gruppo.voci.length), 0, voce);
+    return { esito: 'aggiunta', modello: nuovo, voceId: voce.id, sezione };
   }
 
-  let area = nuovo.aree.find((a) => a.sezione === sezione);
-  if (!area) {
-    area = { sezione, gruppi: [] };
-    nuovo.aree = ordinaAree([...nuovo.aree, area]);
-  }
+  const area = areaDi(nuovo, sezione);
   if (area.gruppi.length === 0) area.gruppi.push({ id: nuovoId('g'), titolo: '', voci: [] });
   area.gruppi[area.gruppi.length - 1].voci.push(voce);
-  return { esito: 'aggiunta', modello: nuovo, voceId: voce.id, sezione, altraArea: !!dove };
+  return { esito: 'aggiunta', modello: nuovo, voceId: voce.id, sezione };
 };
 
-export type EsitoSpostamento = { esito: 'spostata' | 'altra-area' | 'invariata'; modello: ModelloMenu };
+export type EsitoSpostamento =
+  | { esito: 'spostata' | 'invariata'; modello: ModelloMenu }
+  | { esito: 'gia-presente'; modello: ModelloMenu; sezione: SezionePagina };
 
-/** Sposta una voce in un gruppo della stessa area; un'altra area non si accetta. */
+/** Sposta una voce in un gruppo di qualunque area, se quell'area non ha già la stessa pagina. */
 export const spostaVoce = (modello: ModelloMenu, voceId: string, destinazione: Destinazione): EsitoSpostamento => {
   const nuovo = clona(modello);
   const da = trovaVoce(nuovo, voceId);
   const a = trovaGruppo(nuovo, destinazione.gruppoId);
   if (!da || !a) return { esito: 'invariata', modello };
-  if (a.area.sezione !== da.area.sezione) return { esito: 'altra-area', modello };
+  if (a.area !== da.area && areaHaPagina(a.area, da.gruppo.voci[da.indice].pathname, voceId)) {
+    return { esito: 'gia-presente', modello, sezione: a.area.sezione };
+  }
 
   const [voce] = da.gruppo.voci.splice(da.indice, 1);
   let indice = destinazione.indice;
@@ -342,11 +403,15 @@ export const spostaVoce = (modello: ModelloMenu, voceId: string, destinazione: D
   return { esito: 'spostata', modello: nuovo };
 };
 
-export type EsitoTastiera = { esito: 'spostata' | 'prima' | 'ultima' | 'invariata'; modello: ModelloMenu };
+export type EsitoTastiera =
+  | { esito: 'spostata' | 'prima' | 'ultima' | 'invariata'; modello: ModelloMenu }
+  | { esito: 'gia-presente'; modello: ModelloMenu; sezione: SezionePagina };
 
 /**
- * Sposta una voce di un posto verso l'alto (-1) o il basso (1) dentro la sua area: in cima o in fondo
- * a un gruppo passa al gruppo precedente o successivo. 'prima' e 'ultima': non può andare oltre.
+ * Sposta una voce di un posto verso l'alto (-1) o il basso (1): in cima o in fondo a un gruppo passa
+ * al gruppo precedente o successivo; in cima o in fondo all'area passa in fondo all'area precedente
+ * o in cima alla successiva, fra quelle dell'editor (areeDaMostrare), anche vuota. 'gia-presente':
+ * l'area vicina ha già la stessa pagina. 'prima' e 'ultima': non può andare oltre.
  */
 export const spostaConTastiera = (modello: ModelloMenu, voceId: string, direzione: -1 | 1): EsitoTastiera => {
   const nuovo = clona(modello);
@@ -354,26 +419,129 @@ export const spostaConTastiera = (modello: ModelloMenu, voceId: string, direzion
   if (!da) return { esito: 'invariata', modello };
   const { area, gruppo, indiceGruppo, indice } = da;
 
-  if (direzione === -1) {
-    if (indice > 0) {
-      const [voce] = gruppo.voci.splice(indice, 1);
-      gruppo.voci.splice(indice - 1, 0, voce);
-    } else if (indiceGruppo > 0) {
-      const [voce] = gruppo.voci.splice(indice, 1);
-      area.gruppi[indiceGruppo - 1].voci.push(voce);
-    } else {
-      return { esito: 'prima', modello };
-    }
-  } else if (indice < gruppo.voci.length - 1) {
+  if (direzione === -1 && indice > 0) {
+    const [voce] = gruppo.voci.splice(indice, 1);
+    gruppo.voci.splice(indice - 1, 0, voce);
+  } else if (direzione === -1 && indiceGruppo > 0) {
+    const [voce] = gruppo.voci.splice(indice, 1);
+    area.gruppi[indiceGruppo - 1].voci.push(voce);
+  } else if (direzione === 1 && indice < gruppo.voci.length - 1) {
     const [voce] = gruppo.voci.splice(indice, 1);
     gruppo.voci.splice(indice + 1, 0, voce);
-  } else if (indiceGruppo < area.gruppi.length - 1) {
+  } else if (direzione === 1 && indiceGruppo < area.gruppi.length - 1) {
     const [voce] = gruppo.voci.splice(indice, 1);
     area.gruppi[indiceGruppo + 1].voci.unshift(voce);
   } else {
-    return { esito: 'ultima', modello };
+    const ordine = areeDaMostrare(nuovo).map((a) => a.sezione);
+    const vicina = ordine[ordine.indexOf(area.sezione) + direzione];
+    if (!vicina) return { esito: direzione === -1 ? 'prima' : 'ultima', modello };
+    const pathname = gruppo.voci[indice].pathname;
+    if (areaHaPagina(nuovo.aree.find((a) => a.sezione === vicina), pathname)) {
+      return { esito: 'gia-presente', modello, sezione: vicina };
+    }
+    const [voce] = gruppo.voci.splice(indice, 1);
+    const arrivo = areaDi(nuovo, vicina);
+    if (arrivo.gruppi.length === 0) arrivo.gruppi.push({ id: nuovoId('g'), titolo: '', voci: [] });
+    if (direzione === -1) arrivo.gruppi[arrivo.gruppi.length - 1].voci.push(voce);
+    else arrivo.gruppi[0].voci.unshift(voce);
   }
   return { esito: 'spostata', modello: nuovo };
+};
+
+/* =======================
+   TITOLI DEI GRUPPI
+   ======================= */
+
+/**
+ * Toglie il titolo di un gruppo dalla sua posizione: le sue voci passano in fondo al gruppo che lo
+ * precede nell'area o, se è il primo, restano in un gruppo senza titolo al suo posto. Restituisce
+ * il gruppo che le ha accolte e da quale posizione ci stanno. Lavora sul modello passato.
+ */
+const staccaTitolo = (area: AreaMenu, indiceGruppo: number): { ospite: GruppoMenu; inizio: number } => {
+  const [gruppo] = area.gruppi.splice(indiceGruppo, 1);
+  if (indiceGruppo > 0) {
+    const ospite = area.gruppi[indiceGruppo - 1];
+    const inizio = ospite.voci.length;
+    ospite.voci.push(...gruppo.voci);
+    return { ospite, inizio };
+  }
+  const ospite: GruppoMenu = { id: nuovoId('g'), titolo: '', voci: gruppo.voci };
+  area.gruppi.splice(0, 0, ospite);
+  return { ospite, inizio: 0 };
+};
+
+/**
+ * Rimette il titolo davanti alla voce `indice` del gruppo `arrivo` (in fondo, con indice pari alle
+ * sue voci): le voci da lì in poi passano al gruppo del titolo, che conserva id e titolo. Il gruppo
+ * di arrivo e quello che ha accolto le voci (`ospite`), se restano vuoti e senza titolo, spariscono;
+ * un gruppo con titolo rimasto vuoto resta, come un gruppo appena creato.
+ */
+const rimettiTitolo = (modello: ModelloMenu, titolo: GruppoMenu, arrivo: GruppoMenu, indice: number, ospite: GruppoMenu) => {
+  const dove = trovaGruppo(modello, arrivo.id);
+  if (!dove) return;
+  const voci = arrivo.voci.splice(limita(indice, 0, arrivo.voci.length));
+  dove.area.gruppi.splice(dove.indiceGruppo + 1, 0, { id: titolo.id, titolo: titolo.titolo, voci });
+  const superfluo = (g: GruppoMenu) => (g === arrivo || g === ospite) && !g.titolo.trim() && g.voci.length === 0;
+  for (const area of modello.aree) area.gruppi = area.gruppi.filter((g) => !superfluo(g));
+  modello.aree = modello.aree.filter((a) => a.gruppi.length > 0);
+};
+
+export type EsitoTitolo = { esito: 'spostato' | 'prima' | 'ultima' | 'invariato'; modello: ModelloMenu };
+
+/**
+ * Sposta il titolo di un gruppo davanti alla voce `destinazione.indice` del gruppo indicato, anche in
+ * un'altra area: il titolo fa da separatore. Le voci che lo seguono, fino al titolo successivo,
+ * entrano nel suo gruppo; quelle che lascia restano al loro posto, sotto il titolo che ora le
+ * precede. Le voci non cambiano area. Un gruppo senza titolo non ha un titolo da spostare.
+ */
+export const spostaTitolo = (modello: ModelloMenu, gruppoId: string, destinazione: Destinazione): EsitoTitolo => {
+  const nuovo = clona(modello);
+  const da = trovaGruppo(nuovo, gruppoId);
+  const a = trovaGruppo(nuovo, destinazione.gruppoId);
+  if (!da || !a || !da.gruppo.titolo.trim()) return { esito: 'invariato', modello };
+  if (a.gruppo === da.gruppo && destinazione.indice <= 0) return { esito: 'invariato', modello };
+
+  const titolo = da.gruppo;
+  const { ospite, inizio } = staccaTitolo(da.area, da.indiceGruppo);
+  // Dentro il proprio gruppo la posizione si conta da dove le sue voci sono finite
+  const nelSuo = a.gruppo === titolo;
+  const arrivo = nelSuo ? ospite : a.gruppo;
+  const indice = nelSuo ? inizio + destinazione.indice : destinazione.indice;
+  rimettiTitolo(nuovo, titolo, arrivo, indice, ospite);
+  return { esito: 'spostato', modello: nuovo };
+};
+
+/**
+ * Sposta il titolo di un gruppo di una voce verso l'alto (-1) o il basso (1), dentro la sua area:
+ * scendendo lascia la sua prima voce al gruppo precedente, salendo prende l'ultima voce che lo
+ * precede. I titoli e i gruppi vuoti che incontra non contano. 'prima' e 'ultima': è già in cima
+ * o in fondo all'area.
+ */
+export const spostaTitoloConTastiera = (modello: ModelloMenu, gruppoId: string, direzione: -1 | 1): EsitoTitolo => {
+  const nuovo = clona(modello);
+  const da = trovaGruppo(nuovo, gruppoId);
+  if (!da || !da.gruppo.titolo.trim()) return { esito: 'invariato', modello };
+
+  const prima = da.area.gruppi.slice(0, da.indiceGruppo).reduce((n, g) => n + g.voci.length, 0);
+  const totale = da.area.gruppi.reduce((n, g) => n + g.voci.length, 0);
+  const posizione = prima + direzione;
+  if (posizione < 0) return { esito: 'prima', modello };
+  if (posizione > totale) return { esito: 'ultima', modello };
+
+  const titolo = da.gruppo;
+  const { ospite } = staccaTitolo(da.area, da.indiceGruppo);
+  // La posizione conta le voci dell'area; al confine fra due gruppi il titolo va in cima al secondo
+  let contate = 0;
+  for (let i = 0; i < da.area.gruppi.length; i++) {
+    const gruppo = da.area.gruppi[i];
+    const ultimo = i === da.area.gruppi.length - 1;
+    if (posizione < contate + gruppo.voci.length || (posizione === contate + gruppo.voci.length && ultimo)) {
+      rimettiTitolo(nuovo, titolo, gruppo, posizione - contate, ospite);
+      return { esito: 'spostato', modello: nuovo };
+    }
+    contate += gruppo.voci.length;
+  }
+  return { esito: 'invariato', modello };
 };
 
 /** La voce che prende il posto di quella tolta (la successiva nell'area, se no la precedente). */
@@ -418,11 +586,7 @@ export const impostaPaginaIniziale = (modello: ModelloMenu, voceId: string): Mod
 
 export const aggiungiGruppo = (modello: ModelloMenu, sezione: SezionePagina): { modello: ModelloMenu; gruppoId: string } => {
   const nuovo = clona(modello);
-  let area = nuovo.aree.find((a) => a.sezione === sezione);
-  if (!area) {
-    area = { sezione, gruppi: [] };
-    nuovo.aree = ordinaAree([...nuovo.aree, area]);
-  }
+  const area = areaDi(nuovo, sezione);
   const gruppo: GruppoMenu = { id: nuovoId('g'), titolo: '', voci: [] };
   area.gruppi.push(gruppo);
   return { modello: nuovo, gruppoId: gruppo.id };
@@ -437,7 +601,7 @@ export const rinominaGruppo = (modello: ModelloMenu, gruppoId: string, titolo: s
   return nuovo;
 };
 
-/** Toglie un gruppo vuoto; un'area senza più gruppi sparisce. */
+/** Toglie un gruppo vuoto; un'area senza più gruppi esce dal modello (l'editor la mostra vuota). */
 export const togliGruppo = (modello: ModelloMenu, gruppoId: string): ModelloMenu => {
   const nuovo = clona(modello);
   const dove = trovaGruppo(nuovo, gruppoId);
@@ -462,6 +626,7 @@ const voceDaDto = (dto: MenuItemDTO): MenuItem => ({
   pathname: dto.pathname || undefined,
   disabled: dto.disabilitato || undefined,
   start_page: dto.start_page || undefined,
+  ...(eSezionePagina(dto.sezione) ? { area: dto.sezione } : {}),
   subMenu: (dto.subMenu ?? []).map(voceDaDto),
 });
 

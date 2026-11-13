@@ -49,7 +49,8 @@ export class MenuItemRepository {
 
   /**
    * Restituisce direttamente il menu nel formato runtime frontend
-   * (string separatori + object items), costruito da query SQL.
+   * (string separatori + object items), costruito da query SQL. `area` è l'area del menu scelta
+   * per la voce (colonna sezione): manca quando la voce sta nell'area della sua pagina.
    */
   async findMenuRuntimeByTipoUtente(tipoUtente: string, idRuoloGdo: string | null): Promise<any[]> {
     const rows = await MenuItem.sequelize!.query<{ menu_entry: unknown }>(
@@ -62,6 +63,7 @@ export class MenuItemRepository {
               'icon', COALESCE(NULLIF(parent.icona, ''), 'Circle'),
               'pathname', NULLIF(parent.pathname, ''),
               'title', parent.titolo,
+              'area', NULLIF(parent.sezione, ''),
               'disabled', CASE WHEN parent.disabilitato THEN true ELSE NULL END,
               'start_page', CASE WHEN parent.start_page THEN true ELSE NULL END,
               'subMenu', COALESCE(

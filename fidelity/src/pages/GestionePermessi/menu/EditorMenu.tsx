@@ -26,21 +26,25 @@ import {
   aggiungiGruppo,
   anteprimaMenu,
   aperturaConsentita,
+  areeDellePagine,
   firmaMenu,
   impostaPaginaIniziale,
   inserisciPagina,
   leggiMenu,
   MODELLO_VUOTO,
-  percorsiNelMenu,
   rinominaGruppo,
   serializzaMenu,
   spostaConTastiera,
+  spostaTitolo,
+  spostaTitoloConTastiera,
   spostaVoce,
   titoliEreditati,
   togliGruppo,
   togliVoce,
   trovaVoce,
+  TRASCINA_TITOLO,
   TRASCINA_VOCE,
+  trovaGruppo,
   vicinaDi,
   vociDelModello,
   type MenuItemDTO,
@@ -48,6 +52,9 @@ import {
   type VoceScartata,
 } from './modelloMenu';
 import StrutturaMenu, { type AzioniStruttura } from './StrutturaMenu';
+
+/** Argomenti di un rilascio nella struttura: tipo trascinato, oggetto, destinazione. */
+type Rilascio = Parameters<AzioniStruttura['onRilascia']>;
 
 interface RuoloGdoOption {
   id: string;
@@ -163,7 +170,7 @@ export default function EditorMenu() {
   const daSalvare = sporco || scartate.length > 0;
   const modificheVisibili = sporco ? Math.max(modifiche, 1) : 0;
 
-  const percorsiUsati = useMemo(() => percorsiNelMenu(modello), [modello]);
+  const areeUsate = useMemo(() => areeDellePagine(modello), [modello]);
   const ereditati = useMemo(() => titoliEreditati(modello), [modello]);
   const anteprima = useMemo(() => anteprimaMenu(modello, puoAprire), [modello, puoAprire]);
 
@@ -190,10 +197,14 @@ export default function EditorMenu() {
 
   const avvisa = (testo: string, variant: 'info' | 'warning' = 'info') => showNotification(testo, { variant });
 
-  const aggiungiPagina = (percorso: string, destinazione?: { gruppoId: string; indice: number }) => {
-    const esito = inserisciPagina(modello, percorso, destinazione);
+  const giaNellArea = (sezione: Parameters<typeof titoloSezione>[0]) =>
+    avvisa(`Questa pagina è già in ${titoloSezione(sezione)}: ogni area la può avere una volta sola`, 'warning');
+
+  /** Mette una pagina nel menu, partendo da `base` (il modello, o il modello con un gruppo nuovo). */
+  const aggiungiPagina = (percorso: string, destinazione?: { gruppoId: string; indice: number }, base: ModelloMenu = modello) => {
+    const esito = inserisciPagina(base, percorso, destinazione);
     if (esito.esito === 'gia-presente') {
-      avvisa('Questa pagina è già nel menu');
+      giaNellArea(esito.sezione);
       return;
     }
     if (esito.esito !== 'aggiunta') return;
@@ -203,21 +214,39 @@ export default function EditorMenu() {
     if (aggiunta && puoAprire(aggiunta.gruppo.voci[aggiunta.indice].pathname)) {
       setPaginaAnteprima(aggiunta.gruppo.voci[aggiunta.indice].pathname);
     }
-    if (esito.altraArea) avvisa(`Aggiunta in ${titoloSezione(esito.sezione)}: l'area dipende dalla pagina`, 'warning');
+  };
+
+  /** Lascia una pagina, una voce o il titolo di un gruppo nel punto indicato, in qualunque area. */
+  const rilascia = (
+    tipoTrascinato: Rilascio[0],
+    oggetto: Rilascio[1],
+    destinazione: Rilascio[2],
+    base: ModelloMenu = modello
+  ) => {
+    if (tipoTrascinato === TRASCINA_TITOLO && 'gruppoId' in oggetto) {
+      const esito = spostaTitolo(base, oggetto.gruppoId, destinazione);
+      if (esito.esito === 'spostato') applica(esito.modello);
+      return;
+    }
+    if ('gruppoId' in oggetto) return;
+    if (tipoTrascinato !== TRASCINA_VOCE || !('voceId' in oggetto)) {
+      aggiungiPagina(oggetto.percorso, destinazione, base);
+      return;
+    }
+    const esito = spostaVoce(base, oggetto.voceId, destinazione);
+    if (esito.esito === 'gia-presente') {
+      giaNellArea(esito.sezione);
+      return;
+    }
+    if (esito.esito === 'spostata') applica(esito.modello);
   };
 
   const azioni: AzioniStruttura = {
-    onRilascia: (tipoTrascinato, oggetto, destinazione) => {
-      if (tipoTrascinato !== TRASCINA_VOCE || !('voceId' in oggetto)) {
-        if ('percorso' in oggetto) aggiungiPagina(oggetto.percorso, destinazione);
-        return;
-      }
-      const esito = spostaVoce(modello, oggetto.voceId, destinazione);
-      if (esito.esito === 'altra-area') {
-        avvisa(`Le voci di ${titoloSezione(oggetto.sezione)} restano nella loro area`, 'warning');
-        return;
-      }
-      if (esito.esito === 'spostata') applica(esito.modello);
+    onRilascia: (tipoTrascinato, oggetto, destinazione) => rilascia(tipoTrascinato, oggetto, destinazione),
+    // In un'area senza gruppi si crea un gruppo senza titolo: resta solo se il rilascio riesce
+    onRilasciaInArea: (tipoTrascinato, oggetto, sezione) => {
+      const conGruppo = aggiungiGruppo(modello, sezione);
+      rilascia(tipoTrascinato, oggetto, { gruppoId: conGruppo.gruppoId, indice: 0 }, conGruppo.modello);
     },
     onTastiera: (voceId, direzione) => {
       const esito = spostaConTastiera(modello, voceId, direzione);
@@ -225,8 +254,20 @@ export default function EditorMenu() {
       if (esito.esito === 'spostata') {
         daFocalizzare.current = `[data-presa="${voceId}"]`;
         applica(esito.modello);
+      } else if (esito.esito === 'gia-presente') {
+        giaNellArea(esito.sezione);
       } else if (area && esito.esito !== 'invariata') {
-        avvisa(`È già ${esito.esito === 'prima' ? 'la prima' : "l'ultima"} voce di ${titoloSezione(area.sezione)}`);
+        avvisa(`È già ${esito.esito === 'prima' ? 'la prima' : "l'ultima"} voce del menu`);
+      }
+    },
+    onTastieraTitolo: (gruppoId, direzione) => {
+      const esito = spostaTitoloConTastiera(modello, gruppoId, direzione);
+      const area = trovaGruppo(modello, gruppoId)?.area;
+      if (esito.esito === 'spostato') {
+        daFocalizzare.current = `[data-presa-titolo="${gruppoId}"]`;
+        applica(esito.modello);
+      } else if (area && esito.esito !== 'invariato') {
+        avvisa(`Il titolo è già ${esito.esito === 'prima' ? 'in cima' : 'in fondo'} a ${titoloSezione(area.sezione)}`);
       }
     },
     onTogli: (voceId, daTastiera) => {
@@ -441,7 +482,7 @@ export default function EditorMenu() {
       ) : (
         <DndProvider backend={HTML5Backend}>
           <div ref={griglia} className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[17rem_minmax(0,1fr)_20rem]">
-            <CatalogoPagine percorsiUsati={percorsiUsati} puoAprire={puoAprire} onAggiungi={(percorso) => aggiungiPagina(percorso)} />
+            <CatalogoPagine areeUsate={areeUsate} puoAprire={puoAprire} onAggiungi={(percorso) => aggiungiPagina(percorso)} />
             <StrutturaMenu modello={modello} scartate={scartate} ereditati={ereditati} puoAprire={puoAprire} azioni={azioni} />
             <AnteprimaMenu
               anteprima={anteprima}

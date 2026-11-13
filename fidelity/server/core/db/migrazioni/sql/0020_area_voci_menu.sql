@@ -1,0 +1,12 @@
+-- schema-dopo: 2d73a8fc2bb4dfb416f6c6c4df3ed16c9cc44ad47048c6660503f35dcea69f3e
+-- L'area del menu in cui l'amministratore ha messo una voce (spec gestione-menu e
+-- interfaccia-operatore): una pagina puo' stare in qualunque area, anche in piu' aree dello stesso
+-- menu, al piu' una volta per area.
+--
+-- sezione: 'produzione', 'visualizzazione', 'comunicazione', 'gestione', 'sistema' o 'account'
+-- (lib/accessi/sezioni.ts). NULL vuol dire l'area della pagina nel catalogo (lib/accessi/pagine.ts),
+-- come prima: i menu gia' salvati non cambiano e una voce lasciata nella sua area segue il catalogo
+-- se la pagina cambia area. Il valore lo controlla il server al salvataggio del menu.
+--
+-- Rieseguibile: la colonna si aggiunge solo se manca; nessun dato riscritto.
+ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS sezione VARCHAR(20);

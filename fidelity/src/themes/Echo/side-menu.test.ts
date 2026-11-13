@@ -5,6 +5,7 @@ import {
   areaDellaPagina,
   areaDelPercorso,
   areaIniziale,
+  areeDellaPagina,
   areeDelMenu,
   contaVoci,
   ElementoMenuFormattato,
@@ -145,6 +146,24 @@ describe("aree del menu laterale", () => {
     expect(areaDellaPagina(areeIn("/volantini/attivi"))?.chiave).toBe("visualizzazione");
     expect(areaDellaPagina(areeIn("/gestione-interna/aree"))?.chiave).toBe("gestione");
     expect(areaDellaPagina(areeIn("/profilo"))).toBeUndefined();
+  });
+
+  it("una pagina in più aree: vale l'area preferita se la contiene, altrimenti la prima che la contiene", () => {
+    const inDueAree: ElementoMenu[] = [
+      { sezione: "produzione", title: "Produzione" },
+      { icon: "Newspaper", title: "Volantini", pathname: "/volantini/attivi", area: "produzione" },
+      { sezione: "visualizzazione", title: "Visualizzazione" },
+      { icon: "Newspaper", title: "Volantini attivi", pathname: "/volantini/attivi" },
+      { sezione: "comunicazione", title: "Comunicazione" },
+      { icon: "Send", title: "Campagne", pathname: "/whatsapp/campagne-whatsapp" },
+    ];
+    const aree = areeDelMenu(nestedMenu(inDueAree, { pathname: "/volantini/attivi", search: "" }));
+
+    expect(areeDellaPagina(aree).map((a) => a.chiave)).toEqual(["produzione", "visualizzazione"]);
+    expect(areaDellaPagina(aree, "visualizzazione")?.chiave).toBe("visualizzazione");
+    expect(areaDellaPagina(aree, "produzione")?.chiave).toBe("produzione");
+    expect(areaDellaPagina(aree, "comunicazione")?.chiave).toBe("produzione");
+    expect(areaDellaPagina(aree)?.chiave).toBe("produzione");
   });
 
   it("una pagina fuori dal menu ha l'area che le dà il catalogo delle pagine, se il menu la mostra", () => {

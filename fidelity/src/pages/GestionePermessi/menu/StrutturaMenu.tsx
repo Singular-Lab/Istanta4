@@ -6,25 +6,35 @@ import { useRef, useState, type KeyboardEvent } from 'react';
 import { useDrag, useDrop, type DropTargetMonitor } from 'react-dnd';
 import { descrizioneSezione, type SezionePagina } from '../../../../lib/accessi/sezioni';
 import {
+  areeDaMostrare,
   contaVoci,
+  rilascioVietato,
   titoloDaSalvare,
   TRASCINA_PAGINA,
+  TRASCINA_TITOLO,
   TRASCINA_VOCE,
+  type AreaMenu,
   type Destinazione,
   type GruppoMenu,
   type ModelloMenu,
   type PaginaTrascinata,
+  type TitoloTrascinato,
   type VoceMenu,
   type VoceScartata,
   type VoceTrascinata,
 } from './modelloMenu';
 
-type Trascinato = PaginaTrascinata | VoceTrascinata;
+type Trascinato = PaginaTrascinata | VoceTrascinata | TitoloTrascinato;
+type TipoTrascinato = typeof TRASCINA_PAGINA | typeof TRASCINA_VOCE | typeof TRASCINA_TITOLO;
+const ACCETTATI = [TRASCINA_PAGINA, TRASCINA_VOCE, TRASCINA_TITOLO];
 
 /** Azioni della struttura: le esegue l'editor, che tiene il modello. */
 export interface AzioniStruttura {
-  onRilascia: (tipo: typeof TRASCINA_PAGINA | typeof TRASCINA_VOCE, oggetto: Trascinato, destinazione: Destinazione) => void;
+  onRilascia: (tipo: TipoTrascinato, oggetto: Trascinato, destinazione: Destinazione) => void;
+  /** Rilascio in un'area ancora senza gruppi: l'editor crea il gruppo e ci mette la voce o il titolo. */
+  onRilasciaInArea: (tipo: TipoTrascinato, oggetto: Trascinato, sezione: SezionePagina) => void;
   onTastiera: (voceId: string, direzione: -1 | 1) => void;
+  onTastieraTitolo: (gruppoId: string, direzione: -1 | 1) => void;
   onTogli: (voceId: string, daTastiera: boolean) => void;
   onTitoloVoce: (voceId: string, titolo: string) => void;
   onAttiva: (voceId: string) => void;
@@ -34,9 +44,18 @@ export interface AzioniStruttura {
   onTogliGruppo: (gruppoId: string) => void;
 }
 
-/** Una voce dell'altra area non si può lasciare qui: la sua area dipende dalla pagina. */
-const eVietato = (monitor: DropTargetMonitor<Trascinato>, sezione: SezionePagina) =>
-  monitor.getItemType() === TRASCINA_VOCE && monitor.getItem()?.sezione !== sezione;
+/** Vero se l'oggetto trascinato non si può lasciare nell'area (rilascioVietato). */
+type Vietato = (oggetto: Trascinato) => boolean;
+
+const eVietato = (monitor: DropTargetMonitor<Trascinato>, vietato: Vietato) => {
+  const oggetto = monitor.getItem();
+  return !!oggetto && vietato(oggetto);
+};
+
+const tipoDi = (monitor: DropTargetMonitor<Trascinato>): TipoTrascinato => {
+  const tipo = monitor.getItemType();
+  return tipo === TRASCINA_VOCE || tipo === TRASCINA_TITOLO ? tipo : TRASCINA_PAGINA;
+};
 
 /** Nella metà bassa della voce il rilascio va dopo, in quella alta prima. */
 const sottoMeta = (monitor: DropTargetMonitor<Trascinato>, nodo: HTMLElement | null) => {
@@ -62,37 +81,37 @@ interface RigaVoceProps {
   gruppoId: string;
   indice: number;
   sezione: SezionePagina;
+  vietato: Vietato;
   senzaPermesso: boolean;
   azioni: AzioniStruttura;
 }
 
-function RigaVoce({ voce, gruppoId, indice, sezione, senzaPermesso, azioni }: RigaVoceProps) {
+function RigaVoce({ voce, gruppoId, indice, sezione, vietato: eVietatoQui, senzaPermesso, azioni }: RigaVoceProps) {
   const riga = useRef<HTMLDivElement | null>(null);
   const [dopo, setDopo] = useState(false);
 
   const [{ trascinata }, trascina, anteprima] = useDrag<VoceTrascinata, unknown, { trascinata: boolean }>(
     () => ({
       type: TRASCINA_VOCE,
-      item: { voceId: voce.id, sezione },
+      item: { voceId: voce.id, sezione, percorso: voce.pathname },
       collect: (monitor) => ({ trascinata: monitor.isDragging() }),
     }),
-    [voce.id, sezione]
+    [voce.id, sezione, voce.pathname]
   );
 
   const [{ sopra, vietato }, rilascia] = useDrop<Trascinato, unknown, { sopra: boolean; vietato: boolean }>(
     () => ({
-      accept: [TRASCINA_PAGINA, TRASCINA_VOCE],
+      accept: ACCETTATI,
       hover: (_oggetto, monitor) => setDopo(sottoMeta(monitor, riga.current)),
       drop: (oggetto, monitor) => {
-        const tipo = monitor.getItemType() === TRASCINA_VOCE ? TRASCINA_VOCE : TRASCINA_PAGINA;
-        azioni.onRilascia(tipo, oggetto, { gruppoId, indice: indice + (sottoMeta(monitor, riga.current) ? 1 : 0) });
+        azioni.onRilascia(tipoDi(monitor), oggetto, { gruppoId, indice: indice + (sottoMeta(monitor, riga.current) ? 1 : 0) });
       },
       collect: (monitor) => {
         const qui = monitor.isOver({ shallow: true });
-        return { sopra: qui, vietato: qui && eVietato(monitor, sezione) };
+        return { sopra: qui, vietato: qui && eVietato(monitor, eVietatoQui) };
       },
     }),
-    [gruppoId, indice, sezione, azioni]
+    [gruppoId, indice, eVietatoQui, azioni]
   );
 
   // Una voce senza titolo si salva con quello proposto dal catalogo
@@ -195,21 +214,36 @@ function RigaVoce({ voce, gruppoId, indice, sezione, senzaPermesso, azioni }: Ri
   );
 }
 
-/** Gruppo vuoto: riquadro tratteggiato in cui lasciare una pagina della sua area. */
-function GruppoVuoto({ gruppoId, sezione, titoloArea, azioni }: { gruppoId: string; sezione: SezionePagina; titoloArea: string; azioni: AzioniStruttura }) {
+/**
+ * Riquadro tratteggiato in cui lasciare una pagina o una voce: in un gruppo vuoto (`gruppoId`) o in
+ * un'area ancora senza gruppi (`sezione`). Rosso se l'area ha già quella pagina.
+ */
+function ZonaVuota({
+  gruppoId,
+  sezione,
+  vietato: eVietatoQui,
+  testo,
+  azioni,
+}: {
+  gruppoId?: string;
+  sezione: SezionePagina;
+  vietato: Vietato;
+  testo: string;
+  azioni: AzioniStruttura;
+}) {
   const [{ sopra, vietato }, rilascia] = useDrop<Trascinato, unknown, { sopra: boolean; vietato: boolean }>(
     () => ({
-      accept: [TRASCINA_PAGINA, TRASCINA_VOCE],
+      accept: ACCETTATI,
       drop: (oggetto, monitor) => {
-        const tipo = monitor.getItemType() === TRASCINA_VOCE ? TRASCINA_VOCE : TRASCINA_PAGINA;
-        azioni.onRilascia(tipo, oggetto, { gruppoId, indice: 0 });
+        if (gruppoId) azioni.onRilascia(tipoDi(monitor), oggetto, { gruppoId, indice: 0 });
+        else azioni.onRilasciaInArea(tipoDi(monitor), oggetto, sezione);
       },
       collect: (monitor) => {
         const qui = monitor.isOver({ shallow: true });
-        return { sopra: qui, vietato: qui && eVietato(monitor, sezione) };
+        return { sopra: qui, vietato: qui && eVietato(monitor, eVietatoQui) };
       },
     }),
-    [gruppoId, sezione, azioni]
+    [gruppoId, sezione, eVietatoQui, azioni]
   );
 
   return (
@@ -223,7 +257,7 @@ function GruppoVuoto({ gruppoId, sezione, titoloArea, azioni }: { gruppoId: stri
         vietato && 'border-danger text-danger'
       )}
     >
-      Trascina qui una pagina di {titoloArea}
+      {testo}
     </div>
   );
 }
@@ -231,17 +265,49 @@ function GruppoVuoto({ gruppoId, sezione, titoloArea, azioni }: { gruppoId: stri
 interface GruppoProps {
   gruppo: GruppoMenu;
   sezione: SezionePagina;
-  titoloArea: string;
+  vietato: Vietato;
   ereditato?: string;
   senzaPermesso: (percorso: string) => boolean;
   azioni: AzioniStruttura;
 }
 
-function Gruppo({ gruppo, sezione, titoloArea, ereditato, senzaPermesso, azioni }: GruppoProps) {
+function Gruppo({ gruppo, sezione, vietato, ereditato, senzaPermesso, azioni }: GruppoProps) {
   const segnaposto = ereditato ? `Senza titolo: segue ${ereditato}` : 'Senza titolo';
+  const titolo = gruppo.titolo.trim();
+  // Il titolo si sposta fra le voci come un separatore: trascinandolo o con le frecce
+  const [{ trascinato }, trascina] = useDrag<TitoloTrascinato, unknown, { trascinato: boolean }>(
+    () => ({
+      type: TRASCINA_TITOLO,
+      item: { gruppoId: gruppo.id, sezione },
+      canDrag: () => titolo !== '',
+      collect: (monitor) => ({ trascinato: monitor.isDragging() }),
+    }),
+    [gruppo.id, sezione, titolo]
+  );
+  const gestisciTasto = (evento: KeyboardEvent<HTMLButtonElement>) => {
+    if (evento.key === 'ArrowUp' || evento.key === 'ArrowDown') {
+      evento.preventDefault();
+      azioni.onTastieraTitolo(gruppo.id, evento.key === 'ArrowUp' ? -1 : 1);
+    }
+  };
   return (
-    <div>
+    <div className={twMerge(trascinato && 'opacity-40')}>
       <div className="flex items-center gap-1 px-0.5 pb-1 pt-0.5">
+        {titolo && (
+          <button
+            type="button"
+            ref={(nodo) => {
+              trascina(nodo);
+            }}
+            data-presa-titolo={gruppo.id}
+            aria-label={`Sposta il titolo ${titolo}: frecce su e giù`}
+            title="Trascina il titolo fra le voci"
+            onKeyDown={gestisciTasto}
+            className="grid h-6 w-6 flex-none cursor-grab place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-darkmode-400 dark:hover:text-slate-200"
+          >
+            <Lucide icon="GripVertical" aria-hidden="true" className="h-3.5 w-3.5" />
+          </button>
+        )}
         <input
           type="text"
           value={gruppo.titolo}
@@ -277,12 +343,13 @@ function Gruppo({ gruppo, sezione, titoloArea, ereditato, senzaPermesso, azioni 
               gruppoId={gruppo.id}
               indice={indice}
               sezione={sezione}
+              vietato={vietato}
               senzaPermesso={senzaPermesso(voce.pathname)}
               azioni={azioni}
             />
           ))
         ) : (
-          <GruppoVuoto gruppoId={gruppo.id} sezione={sezione} titoloArea={titoloArea} azioni={azioni} />
+          <ZonaVuota gruppoId={gruppo.id} sezione={sezione} vietato={vietato} testo="Trascina qui una pagina" azioni={azioni} />
         )}
       </div>
     </div>
@@ -298,8 +365,8 @@ const testoScartate = (voci: VoceScartata[], motivo: VoceScartata['motivo']) => 
       : `${n} voci non aprono una pagina e verranno tolte al salvataggio`;
   }
   return n === 1
-    ? '1 voce ripete una pagina già nel menu e verrà tolta al salvataggio'
-    : `${n} voci ripetono una pagina già nel menu e verranno tolte al salvataggio`;
+    ? '1 voce ripete una pagina già presente nella stessa area e verrà tolta al salvataggio'
+    : `${n} voci ripetono una pagina già presente nella stessa area e verranno tolte al salvataggio`;
 };
 
 interface StrutturaMenuProps {
@@ -310,7 +377,10 @@ interface StrutturaMenuProps {
   azioni: AzioniStruttura;
 }
 
-/** Colonna "Struttura del menu": per ogni area con voci, i gruppi e le voci, modificabili in linea. */
+/**
+ * Colonna "Struttura del menu": per ogni area, anche vuota, i gruppi e le voci, modificabili in
+ * linea. Una pagina può stare in qualunque area, al più una volta per area.
+ */
 export default function StrutturaMenu({ modello, scartate, ereditati, puoAprire, azioni }: StrutturaMenuProps) {
   const avvisi = [testoScartate(scartate, 'senza-pagina'), testoScartate(scartate, 'doppione')].filter(
     (testo): testo is string => testo !== null
@@ -321,7 +391,7 @@ export default function StrutturaMenu({ modello, scartate, ereditati, puoAprire,
     <Sezione
       compatta
       titolo="Struttura del menu"
-      descrizione="L'area di ogni voce dipende dalla pagina che apre"
+      descrizione="Ogni pagina può stare in qualunque area, una volta per area"
       className="min-w-0"
     >
       <div className="flex flex-col gap-3.5">
@@ -343,14 +413,16 @@ export default function StrutturaMenu({ modello, scartate, ereditati, puoAprire,
           </Alert>
         )}
 
-        {modello.aree.length === 0 ? (
-          <div className="rounded-control border-2 border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 dark:border-darkmode-400">
-            Il menu è vuoto: trascina una pagina dal catalogo o premi + accanto a una pagina.
-          </div>
-        ) : (
-          modello.aree.map((area) => {
+        {modello.aree.length === 0 && (
+          <p className="text-sm text-slate-500">
+            Il menu è vuoto: trascina una pagina in un'area o premi + accanto a una pagina.
+          </p>
+        )}
+        {areeDaMostrare(modello).map((area: AreaMenu) => {
             const descrizione = descrizioneSezione(area.sezione);
             const conta = contaVoci(area);
+            // Un titolo si può lasciare ovunque: le voci non cambiano area
+            const vietato: Vietato = (oggetto) => !('gruppoId' in oggetto) && rilascioVietato(area, oggetto);
             return (
               <section
                 key={area.sezione}
@@ -376,22 +448,30 @@ export default function StrutturaMenu({ modello, scartate, ereditati, puoAprire,
                   </button>
                 </div>
                 <div className="flex flex-col gap-2.5 px-2.5 pb-2.5 pt-2">
-                  {area.gruppi.map((gruppo) => (
-                    <Gruppo
-                      key={gruppo.id}
-                      gruppo={gruppo}
+                  {area.gruppi.length === 0 ? (
+                    <ZonaVuota
                       sezione={area.sezione}
-                      titoloArea={descrizione.titolo}
-                      ereditato={ereditati.get(gruppo.id)}
-                      senzaPermesso={senzaPermesso}
+                      vietato={vietato}
+                      testo={`Nessuna voce in ${descrizione.titolo}: trascina qui una pagina`}
                       azioni={azioni}
                     />
-                  ))}
+                  ) : (
+                    area.gruppi.map((gruppo) => (
+                      <Gruppo
+                        key={gruppo.id}
+                        gruppo={gruppo}
+                        sezione={area.sezione}
+                        vietato={vietato}
+                        ereditato={ereditati.get(gruppo.id)}
+                        senzaPermesso={senzaPermesso}
+                        azioni={azioni}
+                      />
+                    ))
+                  )}
                 </div>
               </section>
             );
-          })
-        )}
+          })}
       </div>
     </Sezione>
   );

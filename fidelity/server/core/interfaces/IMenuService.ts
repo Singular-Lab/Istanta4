@@ -13,6 +13,8 @@ export interface MenuItemDTO {
   pathname?: string | null;
   /** Permesso richiesto dalla pagina: ricavato dal catalogo delle pagine, in sola lettura. */
   codice_permesso?: string | null;
+  /** Area del menu scelta per la voce (lib/accessi/sezioni.ts); null = area della pagina nel catalogo. */
+  sezione?: string | null;
   disabilitato?: boolean;
   start_page?: boolean;
   ordinamento: number;

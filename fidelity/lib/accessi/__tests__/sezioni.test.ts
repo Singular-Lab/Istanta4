@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MenuElement } from '../../types';
 import { sezioneDiPercorso } from '../pagine';
-import { SEZIONI, eSezioneMenu, sezionaMenu, titoloSezione } from '../sezioni';
+import { SEZIONI, eSezioneMenu, eSezionePagina, sezionaMenu, titoloSezione } from '../sezioni';
 
 const voce = (pathname: string, extra: Record<string, unknown> = {}) => ({ title: pathname, pathname, icon: 'Circle', ...extra });
 const sezione = (s: string) => ({ sezione: s, title: titoloSezione(s as never) });
@@ -111,8 +111,81 @@ describe('sezionaMenu', () => {
     ]);
   });
 
+  it('una voce con l\'area scelta sta in quell\'area, anche se la sua pagina è di un\'altra', () => {
+    const menu: MenuElement[] = [
+      'PROMOZIONI',
+      voce('/promozioni/in-corso'),
+      voce('/volantini/attivi', { area: 'produzione' }),
+    ];
+
+    expect(struttura(sezionaMenu(menu, sezioneDiPercorso))).toEqual([
+      '== Produzione',
+      '# PROMOZIONI',
+      '/promozioni/in-corso',
+      '/volantini/attivi',
+    ]);
+  });
+
+  it('la stessa pagina compare in ogni area in cui è stata messa', () => {
+    const menu: MenuElement[] = [
+      'PROMOZIONI',
+      voce('/volantini/attivi', { area: 'produzione' }),
+      'CONSULTA',
+      voce('/volantini/attivi'),
+      'CANALI',
+      voce('/volantini/attivi', { area: 'comunicazione' }),
+    ];
+
+    expect(struttura(sezionaMenu(menu, sezioneDiPercorso))).toEqual([
+      '== Produzione',
+      '# PROMOZIONI',
+      '/volantini/attivi',
+      '== Visualizzazione',
+      '# CONSULTA',
+      '/volantini/attivi',
+      '== Comunicazione',
+      '# CANALI',
+      '/volantini/attivi',
+    ]);
+  });
+
+  it('un\'area scelta non valida vale come nessuna scelta, e una voce senza pagina sparisce anche con l\'area', () => {
+    const menu: MenuElement[] = [
+      voce('/volantini/attivi', { area: 'inesistente' }),
+      voce('/gestione-pagine-singular', { area: 'produzione' }),
+    ];
+
+    expect(struttura(sezionaMenu(menu, sezioneDiPercorso))).toEqual(['== Visualizzazione', '/volantini/attivi']);
+  });
+
+  it('una voce con l\'area scelta porta con sé le sottovoci che aprono una pagina', () => {
+    const menu: MenuElement[] = [
+      {
+        title: 'Promozioni', icon: 'Tag', pathname: '/promozioni/in-corso', area: 'sistema',
+        subMenu: [voce('/promozioni/storico'), voce('/volantini/storico'), voce('/inesistente')],
+      },
+    ];
+
+    expect(sezionaMenu(menu, sezioneDiPercorso)).toEqual([
+      sezione('sistema'),
+      {
+        title: 'Promozioni', icon: 'Tag', pathname: '/promozioni/in-corso', area: 'sistema',
+        subMenu: [voce('/promozioni/storico'), voce('/volantini/storico')],
+      },
+    ]);
+  });
+
   it('ignora le sezioni già presenti e restituisce un menu vuoto senza voci', () => {
     expect(sezionaMenu([sezione('produzione') as MenuElement, 'VUOTO'], sezioneDiPercorso)).toEqual([]);
+  });
+});
+
+describe('eSezionePagina', () => {
+  it('riconosce solo le sezioni del menu', () => {
+    expect(SEZIONI.every(s => eSezionePagina(s.sezione))).toBe(true);
+    expect(eSezionePagina('inesistente')).toBe(false);
+    expect(eSezionePagina(null)).toBe(false);
+    expect(eSezionePagina(undefined)).toBe(false);
   });
 });
 

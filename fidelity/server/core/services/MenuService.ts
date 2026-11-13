@@ -1,7 +1,7 @@
 import { TIPO_MENU_ITEM, TIPO_UTENTI } from '../../../lib/enums';
 import { BadRequestError } from '../../../lib/errors';
-import { paginaPer, puoAprirePagina, sezioneDiPercorso } from '../../../lib/accessi/pagine';
-import { eSezioneMenu, sezionaMenu } from '../../../lib/accessi/sezioni';
+import { normalizzaPercorso, paginaPer, puoAprirePagina, sezioneDiPercorso } from '../../../lib/accessi/pagine';
+import { eSezioneMenu, eSezionePagina, sezionaMenu, type SezionePagina } from '../../../lib/accessi/sezioni';
 import type { CodicePermesso } from '../../../lib/accessi/catalogo';
 import type { MenuElement, MenuItem as MenuItemType, MenuSezione } from '../../../lib/types';
 import type { ContestoAccesso } from '../accessi/contestoAccesso';
@@ -63,6 +63,15 @@ export const paginaInizialeDi = (menu: readonly MenuElement[]): string | null =>
   return (navigabili.find(voce => voce.start_page) ?? navigabili[0])?.pathname ?? null;
 };
 
+/**
+ * L'area da salvare per una voce: quella scelta, se diversa dall'area della pagina nel catalogo;
+ * null se coincide o se non è stata scelta, così la voce segue il catalogo se la pagina cambia area.
+ */
+export const sezioneDaSalvare = (pathname: string | null | undefined, sezione: string | null | undefined): SezionePagina | null => {
+  if (!pathname || !eSezionePagina(sezione)) return null;
+  return sezione === sezioneDiPercorso(pathname) ? null : sezione;
+};
+
 /** Segna come pagina iniziale solo la prima voce con quel percorso: menu, hub e client usano la stessa. */
 const segnaPaginaIniziale = (menu: MenuElement[], percorso: string | null): MenuElement[] => {
   let segnata = false;
@@ -107,7 +116,7 @@ export class MenuService implements IMenuService {
 
   /**
    * Menu dell'utente diviso nelle sezioni (Produzione, Visualizzazione...): solo le pagine che può
-   * aprire, ciascuna nella sezione dichiarata dal catalogo. Le voci senza pagina nel catalogo non
+   * aprire, ciascuna nell'area scelta nella gestione dei menu o, senza scelta, in quella del catalogo. Le voci senza pagina nel catalogo non
    * compaiono, nemmeno al Superadmin. Una sola voce resta segnata come pagina iniziale.
    */
   async getMenuDiUtente(contesto: ContestoAccesso): Promise<MenuElement[]> {
@@ -154,6 +163,27 @@ export class MenuService implements IMenuService {
       throw new BadRequestError({ message: 'Il menu contiene voci che non aprono una pagina di Fidelity', details: { senzaPagina } });
     }
 
+    // Una pagina può stare in qualunque area, anche in più aree, ma al più una volta per area
+    const voci = items.filter(item => item.tipo !== TIPO_MENU_ITEM.SEPARATOR);
+    const areeNonValide = voci
+      .filter(item => item.sezione !== null && item.sezione !== undefined && !eSezionePagina(item.sezione))
+      .map(item => item.sezione as string);
+    if (areeNonValide.length > 0) {
+      throw new BadRequestError({ message: 'Il menu contiene voci con un\'area non valida', details: { areeNonValide } });
+    }
+    const viste = new Set<string>();
+    const ripetute: Array<{ pathname: string; sezione: string }> = [];
+    for (const item of voci) {
+      if (!item.pathname) continue;
+      const sezione = (eSezionePagina(item.sezione) ? item.sezione : sezioneDiPercorso(item.pathname)) as string;
+      const chiave = `${sezione}|${normalizzaPercorso(item.pathname)}`;
+      if (viste.has(chiave)) ripetute.push({ pathname: item.pathname, sezione });
+      viste.add(chiave);
+    }
+    if (ripetute.length > 0) {
+      throw new BadRequestError({ message: 'Il menu contiene la stessa pagina due volte nella stessa area', details: { ripetute } });
+    }
+
     await sequelize.transaction(async (transaction) => {
       await this.repository.deleteByTipoUtente(tipoUtente, idRuoloGdo, transaction);
       for (const item of items) {
@@ -162,7 +192,7 @@ export class MenuService implements IMenuService {
         if (sottovoci.length > 0) {
           const idPadre = padre.getDataValue('id_menu_item') as string;
           await this.repository.bulkCreateItems(
-            sottovoci.map(sub => this.recordDa({ ...sub, tipo: TIPO_MENU_ITEM.ITEM as 'item', start_page: false }, tipoUtente, idRuoloGdo, idPadre)),
+            sottovoci.map(sub => this.recordDa({ ...sub, tipo: TIPO_MENU_ITEM.ITEM as 'item', start_page: false, sezione: null }, tipoUtente, idRuoloGdo, idPadre)),
             transaction
           );
         }
@@ -206,6 +236,7 @@ export class MenuService implements IMenuService {
       pathname,
       // Non si sceglie a mano: è il permesso che la pagina richiede nel catalogo.
       codice_permesso: pathname ? (paginaPer(pathname)?.permesso ?? null) : null,
+      sezione: item.tipo === TIPO_MENU_ITEM.SEPARATOR ? null : sezioneDaSalvare(pathname, item.sezione),
       disabilitato: item.disabilitato || false,
       start_page: item.start_page || false,
       ordinamento: item.ordinamento,
@@ -271,6 +302,7 @@ export class MenuService implements IMenuService {
       icona: item.getDataValue('icona'),
       pathname,
       codice_permesso: pathname ? (paginaPer(pathname)?.permesso ?? null) : null,
+      sezione: item.getDataValue('sezione') ?? null,
       disabilitato: item.getDataValue('disabilitato'),
       start_page: item.getDataValue('start_page'),
       ordinamento: item.getDataValue('ordinamento'),

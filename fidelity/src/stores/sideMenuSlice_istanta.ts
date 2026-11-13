@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { ServerCall } from "../../lib/server_call";
-import { eSezioneMenu } from "../../lib/accessi/sezioni";
+import { eSezioneMenu, type SezionePagina } from "../../lib/accessi/sezioni";
 import type { MenuSezione } from "../../lib/types";
 import { RootState } from "./store";
 
@@ -18,6 +18,8 @@ export interface Menu {
   disabled?: boolean;
   visible?: boolean;
   start_page?: boolean;
+  /** Area scelta dall'amministratore per la voce, se diversa da quella della pagina (dal server). */
+  area?: SezionePagina;
 }
 
 /** Una voce del menu laterale, l'intestazione di un gruppo (stringa) o di una sezione. */
