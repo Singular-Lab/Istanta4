@@ -7,6 +7,7 @@ import { Sequelize } from 'sequelize-typescript';
 import { OlimpoController } from '../app.controller';
 import { AbsolutePaths } from '../models/absolute_path.model';
 import { Foto } from '../models/foto.model';
+import { PIKEPDF } from '../../test/strumenti-nativi';
 
 /*
  * Contratto di upload per i .ai e regressione degli altri formati.
@@ -152,7 +153,9 @@ describe('OlimpoController.uploadSingoloFileFotoInArchivio con file .ai', () => 
     expect(res.codice).toBe(200);
     expect(res.corpo.error).toBe('');
     expect(res.corpo.record.Id).toBe(creaFotoRecord.mock.calls[0][0].id);
-    expect(res.corpo.conversione).toMatchObject({ stato: 'completed', colorspaceOriginale: 'cmyk', colorspaceAnteprima: 'srgb', pagine: 1 });
+    expect(res.corpo.conversione).toMatchObject({ stato: 'completed', colorspaceAnteprima: 'srgb', pagine: 1 });
+    // lo spazio colore del documento lo legge pikepdf, che in locale puo' mancare (test/strumenti-nativi.ts)
+    if (PIKEPDF) expect(res.corpo.conversione.colorspaceOriginale).toBe('cmyk');
     const foto = creaFotoRecord.mock.calls[0][0];
     expect(path.extname(foto.file_name)).toBe('.ai');
     expect(path.extname(foto.file_name_web)).toBe('.png');

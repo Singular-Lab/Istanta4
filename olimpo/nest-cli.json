@@ -8,6 +8,10 @@
       {
         "include": "../src/wasm_module/pkg/**/*",
         "outDir": "dist/src/wasm_module/pkg"
+      },
+      {
+        "include": "db/migrazioni/sql/*.sql",
+        "outDir": "dist/src"
       }
     ]
   }

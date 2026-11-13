@@ -12,13 +12,15 @@ import {
   riconosciContenutoIllustrator,
   sintesiColorspace,
 } from '@lib/illustrator';
+import { itConPikepdf, PIKEPDF } from '../../test/strumenti-nativi';
 
 /*
  * Un .ai PDF-compatible (Illustrator 27.2, %PDF-1.6) faceva fallire l'upload:
  * ConversionService chiedeva il colorspace a ImageMagick, la cui policy blocca
  * la lettura dei PDF. Questi test usano i convertitori reali (pdfinfo,
  * pdftocairo, pdftotext, Ghostscript, pikepdf) sulle fixture sintetiche di
- * test/fixtures/ai, rigenerabili con genera-fixture.sh.
+ * test/fixtures/ai, rigenerabili con genera-fixture.sh. Senza pikepdf in locale i test sullo spazio
+ * colore si saltano (test/strumenti-nativi.ts); in CI e nell'immagine Docker pikepdf c'e' sempre.
  */
 const FIXTURE = path.resolve(__dirname, '../../test/fixtures/ai');
 
@@ -93,7 +95,7 @@ describe('convertiIllustrator', () => {
     expect(await residuiDiLavoro()).toEqual([]);
   });
 
-  it('legge lo spazio colore del documento vettoriale dai content stream compressi', async () => {
+  itConPikepdf('legge lo spazio colore del documento vettoriale dai content stream compressi', async () => {
     const { esito } = await converti('vettoriale-cmyk.ai');
 
     expect(esito.colorspaceOriginale).toBe('cmyk');
@@ -103,14 +105,14 @@ describe('convertiIllustrator', () => {
     expect(esito.colorspaceDettaglio?.tinte).toContain('PANTONE 485 C');
   });
 
-  it('distingue lo spazio colore dell\'anteprima (sRGB) da quello del documento (CMYK)', async () => {
+  itConPikepdf('distingue lo spazio colore dell\'anteprima (sRGB) da quello del documento (CMYK)', async () => {
     const { esito } = await converti('vettoriale-cmyk.ai');
 
     expect(esito.colorspaceAnteprima).toBe('srgb');
     expect(esito.colorspaceOriginale).toBe('cmyk');
   });
 
-  it('riconosce lo spazio colore di un\'immagine raster incorporata', async () => {
+  itConPikepdf('riconosce lo spazio colore di un\'immagine raster incorporata', async () => {
     const { esito } = await converti('raster-rgb.ai');
 
     expect(esito.stato).toBe('completed');
@@ -199,7 +201,8 @@ describe('convertiIllustrator', () => {
     expect(esito.nomeFile).toBeNull();
     // il documento resta descritto anche senza anteprima
     expect(esito.pagine).toBe(1);
-    expect(esito.colorspaceOriginale).toBe('cmyk');
+    // lo spazio colore lo legge pikepdf: senza, in locale, resta da verificare solo la pulizia
+    if (PIKEPDF) expect(esito.colorspaceOriginale).toBe('cmyk');
     expect(fs.existsSync(file.outputPng)).toBe(false);
     expect(originaleInvariato).toBe(true);
     expect(await residuiDiLavoro()).toEqual([]);
@@ -236,9 +239,11 @@ describe('convertiIllustrator', () => {
 });
 
 describe('eseguiProcesso', () => {
+  // Comandi di sistema e non node: sotto prlimit --as=1GB un node recente (V8 riserva molta memoria
+  // virtuale) muore prima di partire, e il test dipenderebbe dalla versione di Node installata.
   it('termina un processo che supera il timeout', async () => {
     const inizio = Date.now();
-    const errore = await eseguiProcesso(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { timeoutMs: 300, memoriaMassimaMb: 1024 })
+    const errore = await eseguiProcesso('sleep', ['10'], { timeoutMs: 300, memoriaMassimaMb: 1024 })
       .catch((e) => e);
 
     expect(errore).toBeInstanceOf(ErroreProcesso);
@@ -251,8 +256,8 @@ describe('eseguiProcesso', () => {
     try {
       const segnale = path.join(cartella, 'iniettato');
       const { stdout } = await eseguiProcesso(
-        process.execPath,
-        ['-e', 'process.stdout.write(process.argv[1])', `x"; touch ${segnale}; echo "`],
+        'printf',
+        ['%s', `x"; touch ${segnale}; echo "`],
         { timeoutMs: 5000, memoriaMassimaMb: 1024 },
       );
 

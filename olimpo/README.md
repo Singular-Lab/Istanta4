@@ -119,6 +119,59 @@ $ yarn start:dev
 $ yarn start:prod
 ```
 
+## Migrazioni del database
+
+All'avvio Olimpo applica le migrazioni dello schema che il database non ha ancora
+(`src/db/migrazioni/`). Lo schema di partenza lo crea ancora `synchronize` di Sequelize. Le migrazioni
+servono per quello che `synchronize` non fa, per esempio aggiungere un valore a un tipo enum che esiste
+già.
+
+- **File:** ogni migrazione è un file `src/db/migrazioni/sql/NNNN_nome.sql`, con quattro cifre numerate
+  di seguito da `0001` e il nome in minuscolo con trattini bassi. La build li copia in `dist`
+  (`nest-cli.json`).
+- **Transazione:** le migrazioni mancanti si applicano nell'ordine, in una sola transazione con un
+  advisory lock, perché in produzione partono più worker insieme.
+- **Storico:** ogni migrazione applicata si registra nella tabella `migrazioni_schema`, con l'impronta
+  sha256 del file.
+- **Errori:** se una migrazione fallisce, l'avvio si ferma e il database resta com'era. L'avvio si ferma
+  anche se una migrazione già applicata è stata modificata: una migrazione applicata non si cambia più,
+  e la correzione va in una migrazione nuova.
+- **Rieseguibili:** scrivi le migrazioni in modo che si possano rilanciare (`IF NOT EXISTS`, controlli
+  in un blocco `DO`). Devono funzionare sia sui database esistenti sia su quelli appena creati da
+  `synchronize`.
+- **Esclusione:** `OLIMPO_MIGRAZIONI_ALL_AVVIO=false` esclude le migrazioni dall'avvio, e il log lo
+  segnala.
+
+`sql/alterazione_tipo_utente.sql` è lo script storico che creò `tipo_utenti_finale`. La migrazione
+`0001` ci aggiunge i tipi di utente di Fidelity che mancavano: Category, Marketing e IT.
+
+## Test senza Docker
+
+- **Test d'integrazione delle migrazioni:** girano su un PostgreSQL locale, senza Docker. Il database
+  di prova lo indica `OLIMPO_TEST_DB_URL` e viene cancellato e ricreato a ogni esecuzione, quindi il
+  nome deve finire in `_test`. Senza la variabile i test si saltano.
+
+  ```bash
+  OLIMPO_TEST_DB_URL=postgres://utente:password@localhost:5433/olimpo_test yarn test --runInBand
+  ```
+
+- **Prova di avvio,** al posto di `docker build` quando Docker non c'è (PostgreSQL 13 o superiore):
+
+  ```bash
+  yarn build
+  OLIMPO_TEST_DB_URL=postgres://utente:password@localhost:5433/olimpo_test yarn prova:avvio
+  ```
+
+  Lo script:
+  1. prepara la tabella `auth` come sulle installazioni esistenti;
+  2. avvia `node dist/src/main.js` come nel container;
+  3. controlla che la migrazione 0001 sia applicata e che un utente Marketing ottenga il passaporto;
+  4. alla fine elimina il database e i file temporanei.
+
+- **pikepdf:** i test sullo spazio colore dei file `.ai` richiedono `pikepdf`
+  (`apt install python3-pikepdf`). In locale, se manca, si saltano con un avviso. In CI non si
+  saltano mai.
+
 ## Run tests
 
 ```bash
