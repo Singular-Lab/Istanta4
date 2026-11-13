@@ -38,6 +38,15 @@ const separatore = (ordinamento: number, titolo: string): MenuItemDTO => ({
 
 const MENU: MenuItemDTO[] = [separatore(0, "CONSULTA"), voce(1, "Volantini attivi", "/volantini/attivi"), voce(2, "POP attivi", "/pop/attivi")];
 
+/** "Volantini attivi" messa dall'amministratore anche in Produzione. */
+const MENU_DUE_AREE: MenuItemDTO[] = [
+  separatore(0, "LAVORO"),
+  voce(1, "Nuova promozione", "/promozioni/nuova"),
+  { ...voce(2, "Volantini in produzione", "/volantini/attivi"), sezione: "produzione" },
+  separatore(3, "CONSULTA"),
+  voce(4, "Volantini attivi", "/volantini/attivi"),
+];
+
 /** Permessi di un ruolo come li restituisce GET /permessi/configurazione: solo i codici abilitati. */
 const configurazione = (codici: string[]) => ({
   ambito: { tipo: "Agenzia", idRuoloGdo: null, idGdo: null },
@@ -63,10 +72,10 @@ const apri = () =>
 const struttura = () => screen.getByRole("region", { name: "Struttura del menu" });
 const catalogo = () => screen.getByRole("region", { name: "Pagine" });
 const anteprima = () => screen.getByRole("region", { name: "Anteprima" });
-/** Le voci della struttura nell'ordine in cui compaiono, dalle loro maniglie. */
+/** Le voci della struttura nell'ordine in cui compaiono, dalle loro maniglie (non quelle dei titoli). */
 const vociInStruttura = () =>
   within(struttura())
-    .getAllByRole("button", { name: /^Sposta / })
+    .getAllByRole("button", { name: /^Sposta (?!il titolo )/ })
     .map((presa) => presa.getAttribute("aria-label")?.replace(/^Sposta (.*): frecce.*$/, "$1"));
 
 describe("Gestione accessi: menu", () => {
@@ -109,7 +118,7 @@ describe("Gestione accessi: menu", () => {
     expect(within(avviso).getByRole("button", { name: "Riprova" })).toBeInTheDocument();
   });
 
-  it("ogni voce sta nell'area della pagina che apre, qualunque sia il gruppo salvato", async () => {
+  it("senza un'area scelta, ogni voce sta nell'area della pagina che apre, qualunque sia il gruppo salvato", async () => {
     rispondi([separatore(0, "LAVORO"), voce(1, "Volantini attivi", "/volantini/attivi"), voce(2, "Nuova promozione", "/promozioni/nuova")]);
     apri();
 
@@ -122,6 +131,38 @@ describe("Gestione accessi: menu", () => {
     // Il gruppo diviso fra le due aree tiene il suo titolo in entrambe
     expect(within(produzione).getByRole("textbox", { name: "Titolo del gruppo" })).toHaveValue("LAVORO");
     expect(within(visualizzazione).getByRole("textbox", { name: "Titolo del gruppo" })).toHaveValue("LAVORO");
+  });
+
+  it("una voce salvata con un'area scelta sta in quell'area, e la stessa pagina può stare in due aree", async () => {
+    rispondi(MENU_DUE_AREE);
+    apri();
+
+    const produzione = await within(await screen.findByRole("region", { name: "Struttura del menu" })).findByRole("region", {
+      name: "Area Produzione",
+    });
+    const visualizzazione = within(struttura()).getByRole("region", { name: "Area Visualizzazione" });
+    expect(within(produzione).getByRole("button", { name: /^Sposta Volantini in produzione/ })).toBeInTheDocument();
+    expect(within(visualizzazione).getByRole("button", { name: /^Sposta Volantini attivi/ })).toBeInTheDocument();
+    // Il catalogo dice in quali aree la pagina c'è già
+    expect(within(catalogo()).getByTitle("Già nel menu: Produzione · Visualizzazione")).toBeInTheDocument();
+    // Nessuna voce scartata: le due voci sono in aree diverse
+    expect(screen.queryByText(/ripete una pagina/)).not.toBeInTheDocument();
+  });
+
+  it("mostra anche le aree senza voci, e da tastiera l'ultima voce di un'area passa alla successiva", async () => {
+    apri();
+    const struttura_ = await screen.findByRole("region", { name: "Struttura del menu" });
+    const comunicazione = await within(struttura_).findByRole("region", { name: "Area Comunicazione" });
+    expect(within(comunicazione).getByText("Nessuna voce in Comunicazione: trascina qui una pagina")).toBeInTheDocument();
+    expect(within(struttura_).getByRole("region", { name: "Area Gestione interna" })).toBeInTheDocument();
+    expect(within(struttura_).getByRole("region", { name: "Area Sistema" })).toBeInTheDocument();
+
+    within(struttura_).getByRole("button", { name: /^Sposta POP attivi/ }).focus();
+    await userEvent.keyboard("{ArrowDown}");
+
+    const dopo = within(struttura()).getByRole("region", { name: "Area Comunicazione" });
+    expect(within(dopo).getByRole("button", { name: /^Sposta POP attivi/ })).toHaveFocus();
+    expect(within(struttura()).getByRole("region", { name: "Area Visualizzazione" })).not.toHaveTextContent("POP attivi");
   });
 
   it("il + aggiunge la pagina in fondo alla sua area e l'anteprima la mostra", async () => {
@@ -209,6 +250,53 @@ describe("Gestione accessi: menu", () => {
       ["separator", "LAVORO", null, 2],
       ["item", "Volantini attivi", "/volantini/attivi", 3],
       ["item", "POP attivi", "/pop/attivi", 4],
+    ]);
+  });
+
+  it("con il focus sulla maniglia di un titolo, freccia su porta nel gruppo la voce sopra, e il Salva sposta il separatore", async () => {
+    rispondi([
+      separatore(0, "PROMOZIONI"),
+      voce(1, "Nuova promozione", "/promozioni/nuova"),
+      voce(2, "Promozioni in corso", "/promozioni/in-corso"),
+      separatore(3, "STAMPA"),
+      voce(4, "Nuovo ordine", "/nuovo-ods"),
+    ]);
+    apri();
+    const presa = await within(await screen.findByRole("region", { name: "Struttura del menu" })).findByRole("button", {
+      name: "Sposta il titolo STAMPA: frecce su e giù",
+    });
+
+    presa.focus();
+    await userEvent.keyboard("{ArrowUp}");
+
+    expect(within(struttura()).getByRole("button", { name: "Sposta il titolo STAMPA: frecce su e giù" })).toHaveFocus();
+    await userEvent.click(screen.getByRole("button", { name: "Salva" }));
+    await waitFor(() => expect(ServerCall.put).toHaveBeenCalledTimes(1));
+    const [, corpo] = vi.mocked(ServerCall.put).mock.calls[0] as [string, { items: MenuItemDTO[] }];
+    expect(corpo.items.map((v) => [v.tipo, v.titolo])).toEqual([
+      ["separator", "PROMOZIONI"],
+      ["item", "Nuova promozione"],
+      ["separator", "STAMPA"],
+      ["item", "Promozioni in corso"],
+      ["item", "Nuovo ordine"],
+    ]);
+  });
+
+  it("Salva invia l'area solo per le voci che stanno fuori dalla loro area predefinita", async () => {
+    rispondi(MENU_DUE_AREE);
+    apri();
+    await screen.findByRole("region", { name: "Struttura del menu" });
+    await userEvent.click(within(catalogo()).getByRole("button", { name: "Aggiungi POP attivi al menu" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Salva" }));
+
+    await waitFor(() => expect(ServerCall.put).toHaveBeenCalledTimes(1));
+    const [, corpo] = vi.mocked(ServerCall.put).mock.calls[0] as [string, { items: MenuItemDTO[] }];
+    expect(corpo.items.filter((v) => v.tipo === "item").map((v) => [v.titolo, v.sezione ?? null])).toEqual([
+      ["Nuova promozione", null],
+      ["Volantini in produzione", "produzione"],
+      ["Volantini attivi", null],
+      ["POP attivi", null],
     ]);
   });
 

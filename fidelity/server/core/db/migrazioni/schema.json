@@ -5832,6 +5832,15 @@
           "tipo": "character varying(100)",
           "unico": false
         },
+        "sezione": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "character varying(20)",
+          "unico": false
+        },
         "start_page": {
           "autoIncremento": false,
           "chiavePrimaria": false,

@@ -220,9 +220,18 @@ const prefissoArea = (chiave: string) => `${chiave}:`;
 const gruppiAttiviDelleAree = (aree: ReadonlyArray<AreaMenu>): string[] =>
   aree.flatMap((area) => gruppiAttivi(area.elementi, prefissoArea(area.chiave)));
 
-/** L'area che contiene la pagina corrente (voce attiva, anche tramite una sottovoce). */
-const areaDellaPagina = (aree: ReadonlyArray<AreaMenu>): AreaMenu | undefined =>
-  aree.find((area) => area.elementi.some((elemento) => typeof elemento !== "string" && elemento.active));
+/** Le aree che contengono la pagina corrente (voce attiva, anche tramite una sottovoce), nell'ordine del menu. */
+const areeDellaPagina = (aree: ReadonlyArray<AreaMenu>): AreaMenu[] =>
+  aree.filter((area) => area.elementi.some((elemento) => typeof elemento !== "string" && elemento.active));
+
+/**
+ * L'area della pagina corrente. Una pagina può stare in più aree: vale l'area `preferita` (quella
+ * mostrata) se la contiene, altrimenti la prima area del menu che la contiene.
+ */
+const areaDellaPagina = (aree: ReadonlyArray<AreaMenu>, preferita?: string): AreaMenu | undefined => {
+  const conPagina = areeDellaPagina(aree);
+  return conPagina.find((area) => area.chiave === preferita) ?? conPagina[0];
+};
 
 /**
  * L'area di una pagina che non è una voce del menu (dettaglio di una promozione, insight di un
@@ -272,6 +281,7 @@ export {
   areaDellaPagina,
   areaDelPercorso,
   areaIniziale,
+  areeDellaPagina,
   areeDelMenu,
   contaVoci,
   gruppiAttivi,

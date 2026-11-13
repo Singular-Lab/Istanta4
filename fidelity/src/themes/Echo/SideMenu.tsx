@@ -7,6 +7,7 @@ import SelettoreArea from "./SelettoreArea";
 import {
   areaDellaPagina,
   areaDelPercorso,
+  areeDellaPagina,
   areaIniziale,
   areeDelMenu,
   ElementoMenuFormattato,
@@ -81,24 +82,26 @@ function SideMenu({
     });
   }, [aree]);
 
-  // L'area segue la pagina corrente solo quando la pagina cambia: un'area scelta dal selettore
-  // resta finché non si apre un'altra pagina. Una pagina che non è nel menu prende l'area del catalogo
-  const areaVoce = areaDellaPagina(aree);
-  const areaPagina = areaVoce ?? areaDelPercorso(aree, percorso);
-  const pagina = areaVoce
-    ? `${areaVoce.chiave}|${percorsoAttivo(areaVoce.elementi) ?? ""}`
-    : areaPagina
-      ? `${areaPagina.chiave}|${percorso ?? ""}`
-      : undefined;
+  // L'area segue la pagina corrente solo quando la pagina (o l'elenco delle aree che la contengono)
+  // cambia: un'area scelta dal selettore resta finché non si apre un'altra pagina. Una pagina che sta
+  // in più aree lascia il menu sull'area mostrata, se la contiene; altrimenti va nella prima che la
+  // contiene. Una pagina che non è nel menu prende l'area del catalogo
+  const conPagina = areeDellaPagina(aree);
+  const pagina =
+    conPagina.length > 0
+      ? `${conPagina.map((a) => a.chiave).join(",")}|${percorsoAttivo(conPagina[0].elementi) ?? ""}`
+      : `|${percorso ?? ""}`;
   const [paginaVista, setPaginaVista] = useState(pagina);
-  const [areaScelta, setAreaScelta] = useState(areaPagina?.chiave);
+  const [areaScelta, setAreaScelta] = useState(() => (areaDellaPagina(aree) ?? areaDelPercorso(aree, percorso))?.chiave);
+  const mostrata = aree.find((a) => a.chiave === areaScelta) ?? areaIniziale(aree);
   if (pagina !== paginaVista) {
     setPaginaVista(pagina);
+    const areaPagina = areaDellaPagina(aree, mostrata?.chiave) ?? areaDelPercorso(aree, percorso);
     if (areaPagina) {
       setAreaScelta(areaPagina.chiave);
     }
   }
-  const area = aree.find((a) => a.chiave === areaScelta) ?? areaIniziale(aree);
+  const area = mostrata;
 
   const vociDi = (voci: Array<FormattedMenu | string>, prefisso: string, livello: number) =>
     voci.map((voce, indice) => {

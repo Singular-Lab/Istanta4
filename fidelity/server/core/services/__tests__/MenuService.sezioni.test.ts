@@ -14,7 +14,7 @@ import { eSezioneMenu } from '../../../../lib/accessi/sezioni';
 import { TIPO_UTENTI } from '../../../../lib/enums';
 import type { MenuElement } from '../../../../lib/types';
 import type { ContestoAccesso } from '../../accessi/contestoAccesso';
-import { MenuService, paginaInizialeDi } from '../MenuService';
+import { MenuService, paginaInizialeDi, sezioneDaSalvare } from '../MenuService';
 
 const voce = (pathname: string, extra: Record<string, unknown> = {}) => ({ title: pathname, pathname, icon: 'Circle', subMenu: [], ...extra });
 
@@ -113,7 +113,56 @@ describe('pagina iniziale', () => {
   });
 });
 
+describe('voci messe dall\'amministratore in un\'altra area', () => {
+  const MENU_DUE_AREE: MenuElement[] = [
+    'PROMOZIONI', voce('/promozioni/in-corso'), voce('/volantini/attivi', { area: 'produzione' }),
+    'CONSULTA', voce('/volantini/attivi'),
+  ];
+
+  it('la voce compare nell\'area scelta e la stessa pagina in ogni area in cui è stata messa', async () => {
+    const permessi = [PERMESSI.PROMO.VISUALIZZA, PERMESSI.MATERIALI.VISUALIZZA];
+    const menu = await servizio(MENU_DUE_AREE, permessi).getMenuDiUtente(contesto(TIPO_UTENTI.AGENZIA));
+
+    expect(struttura(menu)).toEqual([
+      '== Produzione', '# PROMOZIONI', '/promozioni/in-corso *', '/volantini/attivi',
+      '== Visualizzazione', '# CONSULTA', '/volantini/attivi',
+    ]);
+  });
+
+  it('i permessi valgono anche nell\'area scelta: senza i materiali la voce sparisce da tutte le aree', async () => {
+    const menu = await servizio(MENU_DUE_AREE, [PERMESSI.PROMO.VISUALIZZA]).getMenuDiUtente(contesto(TIPO_UTENTI.AGENZIA));
+
+    expect(struttura(menu)).toEqual(['== Produzione', '# PROMOZIONI', '/promozioni/in-corso *']);
+  });
+
+  it('sezioneDaSalvare tiene l\'area solo se è valida e diversa da quella della pagina', () => {
+    expect(sezioneDaSalvare('/volantini/attivi', 'produzione')).toBe('produzione');
+    expect(sezioneDaSalvare('/volantini/attivi', 'visualizzazione')).toBeNull();
+    expect(sezioneDaSalvare('/volantini/attivi', null)).toBeNull();
+    expect(sezioneDaSalvare('/volantini/attivi', 'inesistente')).toBeNull();
+    expect(sezioneDaSalvare(null, 'produzione')).toBeNull();
+  });
+});
+
 describe('salvataggio del menu', () => {
+  const item = (pathname: string, ordinamento: number, sezione?: string | null) => ({
+    tipo_utente: TIPO_UTENTI.SUPERADMIN, titolo: pathname, tipo: 'item' as const, pathname, ordinamento, sezione,
+  });
+
+  it('rifiuta un\'area che non è una delle aree del menu', async () => {
+    await expect(servizio([]).saveMenu(TIPO_UTENTI.SUPERADMIN, null, [item('/volantini/attivi', 0, 'magazzino')])).rejects.toMatchObject({
+      details: { areeNonValide: ['magazzino'] },
+    });
+  });
+
+  it('rifiuta la stessa pagina due volte nella stessa area, anche quando una delle due ha l\'area scritta', async () => {
+    const voci = [item('/promozioni/in-corso', 0), item('/volantini/attivi', 1, 'produzione'), item('/volantini/attivi', 2), item('/volantini/attivi', 3, 'visualizzazione')];
+
+    await expect(servizio([]).saveMenu(TIPO_UTENTI.SUPERADMIN, null, voci)).rejects.toMatchObject({
+      details: { ripetute: [{ pathname: '/volantini/attivi', sezione: 'visualizzazione' }] },
+    });
+  });
+
   it('rifiuta le voci che non aprono una pagina di Fidelity, prima di toccare il menu salvato', async () => {
     const voci = [
       { tipo_utente: TIPO_UTENTI.SUPERADMIN, titolo: 'PROMOZIONI', tipo: 'separator' as const, ordinamento: 0 },

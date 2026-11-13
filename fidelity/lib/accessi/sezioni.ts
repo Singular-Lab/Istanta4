@@ -33,6 +33,10 @@ export const SEZIONI: ReadonlyArray<DescrizioneSezione> = [
   { sezione: 'account', titolo: 'Account', icona: 'CircleUser', descrizione: 'Profilo e pagine personali', amministrazione: true },
 ];
 
+/** Vero se il valore è una delle sezioni del menu (per esempio l'area salvata in una voce). */
+export const eSezionePagina = (valore: unknown): valore is SezionePagina =>
+  typeof valore === 'string' && SEZIONI.some(s => s.sezione === valore);
+
 export const descrizioneSezione = (sezione: SezionePagina): DescrizioneSezione =>
   SEZIONI.find(s => s.sezione === sezione) ?? SEZIONI[0];
 
@@ -52,6 +56,9 @@ type Collocata = { sezione: SezionePagina; gruppo: number; voce: MenuItem };
  * Divide una voce fra le sezioni delle pagine che apre. Una voce con sottovoci compare in ogni
  * sezione delle sue sottovoci, con le sole sottovoci di quella sezione; il suo indirizzo resta
  * solo nella sezione della sua pagina. Una voce o sottovoce senza pagina nel catalogo sparisce.
+ *
+ * Una voce con l'area scelta dall'amministratore (`area`) sta tutta in quell'area, sottovoci
+ * comprese: l'area del catalogo vale solo per le voci senza un'area scelta.
  */
 const collocaVoce = (
   voce: MenuItem,
@@ -59,6 +66,15 @@ const collocaVoce = (
 ): Array<{ sezione: SezionePagina; voce: MenuItem }> => {
   const propria = voce.pathname ? sezioneDi(voce.pathname) : undefined;
   const sottovoci = Array.isArray(voce.subMenu) ? voce.subMenu : [];
+
+  if (eSezionePagina(voce.area)) {
+    const conPagina = sottovoci.filter(sottovoce => !!sottovoce.pathname && sezioneDi(sottovoce.pathname) !== undefined);
+    if (propria) return [{ sezione: voce.area, voce: { ...voce, subMenu: conPagina } }];
+    if (conPagina.length === 0) return [];
+    const { pathname: _senzaPagina, ...gruppo } = voce;
+    return [{ sezione: voce.area, voce: { ...gruppo, subMenu: conPagina } }];
+  }
+
   if (sottovoci.length === 0) {
     return propria ? [{ sezione: propria, voce: { ...voce, subMenu: [] } }] : [];
   }
@@ -80,9 +96,10 @@ const collocaVoce = (
 
 /**
  * Raggruppa un menu nelle sezioni di primo livello, nell'ordine di SEZIONI. La sezione di una voce
- * dipende dalla pagina che apre (`sezioneDi`), non dal gruppo in cui l'amministratore l'ha messa:
- * un gruppo con pagine di sezioni diverse compare, col suo titolo, in ciascuna di quelle sezioni con
- * le sole voci che le appartengono. Dentro una sezione voci e gruppi restano nell'ordine del menu.
+ * è l'area scelta dall'amministratore (`area`), se c'è; altrimenti quella della pagina che apre
+ * (`sezioneDi`), non del gruppo in cui l'amministratore l'ha messa. La stessa pagina può comparire
+ * in più sezioni. Un gruppo con voci di sezioni diverse compare, col suo titolo, in ciascuna di
+ * quelle sezioni con le sole voci che le appartengono. Dentro una sezione voci e gruppi restano nell'ordine del menu.
  * Sezioni e gruppi senza voci non compaiono; un gruppo che si chiama come una sezione non ripete
  * l'intestazione; una voce senza pagina nel catalogo non compare.
  */

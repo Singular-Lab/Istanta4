@@ -238,6 +238,50 @@ describe("SideMenu ad area attiva", () => {
     expect(vocePagina()!.textContent).toContain("Storico promozioni");
   });
 
+  /** "Volantini attivi" messa anche in Produzione dall'amministratore. */
+  const menuDueAree: ElementoMenu[] = [
+    { sezione: "produzione", title: "Produzione" },
+    "PROMOZIONI",
+    { icon: "Tag", title: "Promozioni in corso", pathname: "/promozioni/in-corso" },
+    { icon: "Newspaper", title: "Volantini da Produzione", pathname: "/volantini/attivi", area: "produzione" },
+    { sezione: "visualizzazione", title: "Visualizzazione" },
+    "MATERIALI VOLANTINO",
+    { icon: "Newspaper", title: "Volantini attivi", pathname: "/volantini/attivi" },
+    { sezione: "comunicazione", title: "Comunicazione" },
+    { icon: "Send", title: "Campagne", pathname: "/whatsapp/campagne-whatsapp" },
+  ];
+
+  it("una pagina in due aree, aperta dall'area mostrata, lascia il menu su quell'area", () => {
+    apri("/promozioni/in-corso", menuDueAree);
+    clic(voceMenu("Volantini da Produzione"));
+    expect(percorso()).toBe("/volantini/attivi");
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Produzione");
+    expect(vocePagina()!.textContent).toContain("Volantini da Produzione");
+
+    clic(voceMenu("Promozioni in corso"));
+    scegliArea("Visualizzazione");
+    clic(voceMenu("Volantini attivi"));
+    expect(percorso()).toBe("/volantini/attivi");
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Visualizzazione");
+    expect(vocePagina()!.textContent).toContain("Volantini attivi");
+  });
+
+  it("una pagina in due aree, aperta da un'area che non la contiene, porta il menu sulla prima area che la contiene", () => {
+    apri("/promozioni/in-corso", menuDueAree);
+    scegliArea("Comunicazione");
+
+    clic(collegamento("Vai ai volantini"));
+
+    expect(percorso()).toBe("/volantini/attivi");
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Produzione");
+    expect(vocePagina()!.textContent).toContain("Volantini da Produzione");
+  });
+
+  it("aperta direttamente, una pagina in due aree mostra la prima area che la contiene", () => {
+    apri("/volantini/attivi", menuDueAree);
+    expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Produzione");
+  });
+
   it("se la pagina corrente non è nel menu né nel catalogo delle pagine resta l'ultima area; all'inizio quella della pagina iniziale", () => {
     apri("/profilo", menuAree);
     expect(pulsanteArea()!.getAttribute("aria-label")).toBe("Area: Visualizzazione");

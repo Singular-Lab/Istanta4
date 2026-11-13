@@ -6,27 +6,33 @@ import { twMerge } from '@/utils/twMerge';
 import { useState } from 'react';
 import { useDrag } from 'react-dnd';
 import { normalizzaPercorso } from '../../../../lib/accessi/pagine';
-import { SEZIONI } from '../../../../lib/accessi/sezioni';
+import { SEZIONI, titoloSezione, type SezionePagina } from '../../../../lib/accessi/sezioni';
 import { PAGINE_CATALOGO, TRASCINA_PAGINA, type PaginaCatalogo, type PaginaTrascinata } from './modelloMenu';
 
 interface PaginaDelCatalogoProps {
   pagina: PaginaCatalogo;
-  usata: boolean;
+  /** Aree del menu in cui la pagina c'è già. */
+  aree: readonly SezionePagina[];
   senzaPermesso: boolean;
   onAggiungi: (percorso: string) => void;
 }
 
-/** Una pagina del catalogo: si trascina nella struttura o si aggiunge in fondo alla sua area col +. */
-function PaginaDelCatalogo({ pagina, usata, senzaPermesso, onAggiungi }: PaginaDelCatalogoProps) {
+/**
+ * Una pagina del catalogo: si trascina in qualunque area della struttura, anche se è già nel menu,
+ * o si aggiunge col + in fondo alla sua area predefinita, se lì non c'è ancora.
+ */
+function PaginaDelCatalogo({ pagina, aree, senzaPermesso, onAggiungi }: PaginaDelCatalogoProps) {
   const [{ trascinata }, trascina] = useDrag<PaginaTrascinata, unknown, { trascinata: boolean }>(
     () => ({
       type: TRASCINA_PAGINA,
       item: { percorso: pagina.percorso, sezione: pagina.sezione },
-      canDrag: () => !usata,
       collect: (monitor) => ({ trascinata: monitor.isDragging() }),
     }),
-    [pagina.percorso, pagina.sezione, usata]
+    [pagina.percorso, pagina.sezione]
   );
+  // "Usata": già nella sua area predefinita, dove la porterebbe il +
+  const usata = aree.includes(pagina.sezione);
+  const doveSta = aree.map(titoloSezione).join(' · ');
 
   return (
     <li
@@ -36,7 +42,7 @@ function PaginaDelCatalogo({ pagina, usata, senzaPermesso, onAggiungi }: PaginaD
       title={pagina.percorso}
       className={twMerge(
         'group flex min-h-[34px] items-center gap-2.5 rounded-control px-2 py-1.5 text-sm text-slate-900 dark:text-slate-200',
-        usata ? 'cursor-default text-slate-400 dark:text-slate-500' : 'cursor-grab hover:bg-slate-100 dark:hover:bg-darkmode-400',
+        usata ? 'cursor-grab text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-darkmode-400' : 'cursor-grab hover:bg-slate-100 dark:hover:bg-darkmode-400',
         trascinata && 'opacity-40'
       )}
     >
@@ -46,9 +52,13 @@ function PaginaDelCatalogo({ pagina, usata, senzaPermesso, onAggiungi }: PaginaD
         className={twMerge('h-4 w-4 flex-none text-primary', usata ? 'opacity-35' : 'opacity-70')}
       />
       <span className="min-w-0 flex-1 truncate">{pagina.titolo}</span>
-      {usata ? (
-        <span className="flex-none rounded-full bg-slate-100 px-2 py-px text-3xs font-semibold text-slate-500 dark:bg-darkmode-400 dark:text-slate-300">
-          Nel menu
+      {aree.length > 0 ? (
+        <span
+          title={`Già nel menu: ${doveSta}`}
+          className="max-w-[9rem] flex-none truncate rounded-full bg-slate-100 px-2 py-px text-3xs font-semibold text-slate-500 dark:bg-darkmode-400 dark:text-slate-300"
+        >
+          <span className="sr-only">Nel menu: </span>
+          {doveSta}
         </span>
       ) : (
         senzaPermesso && (
@@ -61,7 +71,7 @@ function PaginaDelCatalogo({ pagina, usata, senzaPermesso, onAggiungi }: PaginaD
         <button
           type="button"
           aria-label={`Aggiungi ${pagina.titolo} al menu`}
-          title="Aggiungi in fondo alla sua area"
+          title={`Aggiungi in fondo a ${titoloSezione(pagina.sezione)}`}
           onClick={() => onAggiungi(pagina.percorso)}
           className="grid h-[26px] w-[26px] flex-none place-items-center rounded-md text-primary opacity-0 transition-opacity hover:bg-primary/10 focus-visible:opacity-100 group-hover:opacity-100"
         >
@@ -73,13 +83,14 @@ function PaginaDelCatalogo({ pagina, usata, senzaPermesso, onAggiungi }: PaginaD
 }
 
 interface CatalogoPagineProps {
-  percorsiUsati: ReadonlySet<string>;
+  /** Per ogni pagina nel menu (percorso normalizzato), le aree in cui compare. */
+  areeUsate: ReadonlyMap<string, readonly SezionePagina[]>;
   puoAprire: (percorso: string) => boolean;
   onAggiungi: (percorso: string) => void;
 }
 
-/** Colonna "Pagine": le pagine che si possono mettere nel menu, per area, con la ricerca. */
-export default function CatalogoPagine({ percorsiUsati, puoAprire, onAggiungi }: CatalogoPagineProps) {
+/** Colonna "Pagine": le pagine che si possono mettere nel menu, per area predefinita, con la ricerca. */
+export default function CatalogoPagine({ areeUsate, puoAprire, onAggiungi }: CatalogoPagineProps) {
   const [cerca, setCerca] = useState('');
   const testo = cerca.trim().toLowerCase();
   const aree = SEZIONI.map((sezione) => ({
@@ -92,7 +103,7 @@ export default function CatalogoPagine({ percorsiUsati, puoAprire, onAggiungi }:
   })).filter((area) => area.pagine.length > 0);
 
   return (
-    <Sezione compatta titolo="Pagine" descrizione="Trascinale nel menu o premi +" className="min-w-0">
+    <Sezione compatta titolo="Pagine" descrizione="Trascinale in qualunque area o premi +" className="min-w-0">
       <div className="relative mb-2">
         <Lucide
           icon="Search"
@@ -123,7 +134,7 @@ export default function CatalogoPagine({ percorsiUsati, puoAprire, onAggiungi }:
                   <PaginaDelCatalogo
                     key={pagina.percorso}
                     pagina={pagina}
-                    usata={percorsiUsati.has(normalizzaPercorso(pagina.percorso))}
+                    aree={areeUsate.get(normalizzaPercorso(pagina.percorso)) ?? []}
                     senzaPermesso={!puoAprire(pagina.percorso)}
                     onAggiungi={onAggiungi}
                   />

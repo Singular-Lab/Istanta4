@@ -680,6 +680,8 @@ export type MenuItemAttributes = {
   icona?: string | null;
   pathname?: string | null;
   codice_permesso?: string | null;
+  /** Area del menu scelta dall'amministratore; null = area della pagina nel catalogo. */
+  sezione?: string | null;
   disabilitato?: boolean;
   start_page?: boolean;
   ordinamento: number;
@@ -1957,6 +1959,11 @@ export interface MenuItem {
   subMenu?: MenuItem[];
   disabled?: boolean;
   start_page?: boolean;
+  /**
+   * Area del menu scelta dall'amministratore, se diversa da quella della pagina nel catalogo.
+   * Non si chiama `sezione`: quella chiave distingue le intestazioni d'area (eSezioneMenu).
+   */
+  area?: SezionePagina;
 }
 
 // Tipo per un separatore (stringa)
