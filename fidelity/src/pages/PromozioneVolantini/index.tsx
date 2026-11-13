@@ -53,7 +53,8 @@ function Caricamento() {
  * Consultazione di una promozione (/volantini/promozioni/:idPromo, "materiali.visualizza"), dalle
  * schede delle viste Volantini: un'infografica di tutti i suoi volantini pubblicati. Banda con
  * validità e insegne, filtri per insegna e area, griglia delle miniature, assortimento a confronto per
- * insegna e area (?vista=&punto=&cerca=&reparto=&diversi=&ordina=), grafici dell'assortimento e
+ * insegna e area con in primo piano i prodotti in comune e l'elenco di tutti i prodotti in un riquadro
+ * che scorre da sé (?vista=&punto=&cerca=&reparto=&diversi=&ordina=), grafici dell'assortimento e
  * confronto fra i kit; ogni kit apre i suoi insight. Niente sezione "Dove arriva" (regioni, mappa ed elenco
  * dei punti vendita stampati). I filtri stanno nell'indirizzo (?canale=&area=) e il server ricalcola
  * tutto sui soli kit filtrati. Solo materiali pubblicati della GDO, dalle API di consultazione:

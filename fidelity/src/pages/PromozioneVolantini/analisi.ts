@@ -475,6 +475,16 @@ export const ordinaConfronto = (prodotti: readonly ProdottoConfronto[], ordine: 
     return perNomeProdotto(a, b);
   });
 
+/** Le schede dei prodotti in comune mostrate prima di "Mostra tutti". */
+export const LIMITE_IN_COMUNE = 36;
+
+/**
+ * I prodotti in comune (spec volantini-pop): quelli stampati in tutti i volantini mostrati, prima quelli
+ * con prezzi diversi, dalla differenza più grande, poi per nome. Nessuno con un solo volantino.
+ */
+export const prodottiInComune = (prodotti: readonly ProdottoConfronto[], griglia: GrigliaVolantini): ProdottoConfronto[] =>
+  ordinaConfronto(filtraConfronto(prodotti, griglia, { vista: { tipo: "base" }, punto: null, cerca: "", reparto: null, soloDiversi: false }), "differenza");
+
 /** I reparti dei prodotti, per nome; `senzaReparto` se qualcuno non ne ha. */
 export const repartiDelConfronto = (prodotti: readonly ProdottoConfronto[]): { reparti: Array<{ codice: string; nome: string }>; senzaReparto: boolean } => {
   const reparti = new Map<string, string>();

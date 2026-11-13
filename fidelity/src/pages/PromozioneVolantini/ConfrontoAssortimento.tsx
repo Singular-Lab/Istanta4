@@ -5,16 +5,13 @@ import Lucide from "@/components/Base/Lucide";
 import Sezione from "@/components/Base/Sezione";
 import EmptyState from "@/components/EmptyState";
 import type { Tinta } from "@/components/Grafici";
-import { NOTA_PREZZO_CALCOLATO } from "@/components/FlyerInsights/volantino/box";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
 import { useRicercaDifferita } from "@/hooks/useRicercaDifferita";
 import { formatEuro, formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
-import { Fragment, useId, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
-import type { KitPromozioneConsultazione, PresenzaReferenzaPromozione, ReferenzaPromozione, Riferimento } from "../../../lib/consultazione/tipi";
-import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import type { KitPromozioneConsultazione, ReferenzaPromozione, Riferimento } from "../../../lib/consultazione/tipi";
 import { ETICHETTA_MECCANICA } from "../../../lib/puntiVendita/analisi";
 import {
   csvConfronto,
@@ -40,6 +37,8 @@ import {
   vistaInIndirizzo,
 } from "./analisi";
 import { LogoInsegna } from "./LogoInsegna";
+import { Foto, PrezziEPagine, presenzePerCasella, VUOTO } from "./PrezziEPagine";
+import { ProdottiInComune } from "./ProdottiInComune";
 
 export interface ConfrontoAssortimentoProps {
   referenze: readonly ReferenzaPromozione[];
@@ -49,8 +48,6 @@ export interface ConfrontoAssortimentoProps {
   /** Per il nome del file Excel. */
   nomePromo: string;
 }
-
-const VUOTO = "—";
 
 const titoloVista = (vista: VistaConfronto | null, griglia: GrigliaVolantini): string => {
   if (!vista) return "Tutti i prodotti";
@@ -75,9 +72,11 @@ const titoloVista = (vista: VistaConfronto | null, griglia: GrigliaVolantini): s
 /**
  * "Assortimento a confronto" (spec volantini-pop): i prodotti dei volantini mostrati per insegna e area.
  * In alto quattro numeri da leggere senza scegliere nulla (base comune, prezzi diversi, una sola
- * insegna, una sola area), poi la mappa dei prodotti di un solo volantino, poi l'elenco subito sotto:
- * dove c'è a parole e a pallini, prezzi per luogo, differenza, e per ogni prodotto prezzi e pagine per
- * insegna e area. Vista, punto di vista, ricerca, reparto, "solo diversi" e ordine stanno nell'indirizzo.
+ * insegna, una sola area), poi in primo piano le schede dei prodotti in comune a tutti i volantini, poi
+ * la mappa dei prodotti di un solo volantino, infine l'elenco di tutti i prodotti, il dettaglio, in un
+ * riquadro di altezza fissa che scorre da sé: dove c'è a parole e a pallini, prezzi per luogo,
+ * differenza, e per ogni prodotto prezzi e pagine per insegna e area. Scegliere un numero porta
+ * all'elenco. Vista, punto di vista, ricerca, reparto, "solo diversi" e ordine stanno nell'indirizzo.
  */
 export function ConfrontoAssortimento({ referenze, kit, tinta, nomePromo }: ConfrontoAssortimentoProps) {
   const [parametri, aggiorna] = useParametriUrl();
@@ -88,12 +87,17 @@ export function ConfrontoAssortimento({ referenze, kit, tinta, nomePromo }: Conf
   const vista = vistaDaIndirizzo(parametri.get("vista"), griglia);
   const puntoLetto = parametri.get("punto");
   const punto = griglia.insegne.find(i => i.id.toLowerCase() === puntoLetto?.toLowerCase()) ?? null;
-  const scegli = (scelta: VistaConfronto) => aggiorna({ vista: stessaVista(scelta, vista) ? null : vistaInIndirizzo(scelta, griglia) });
   const idElenco = useId();
+  // Fra i numeri e l'elenco ci sono i prodotti in comune e la mappa: scegliendo un numero la pagina porta all'elenco
+  const scegli = (scelta: VistaConfronto) => {
+    const nuova = stessaVista(scelta, vista) ? null : vistaInIndirizzo(scelta, griglia);
+    aggiorna({ vista: nuova });
+    if (nuova) document.getElementById(idElenco)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  };
 
   const descrizione =
     kit.length > 1
-      ? `${plurale(prodotti.length, "prodotto", "prodotti")} nei ${formatNumero(kit.length)} volantini mostrati: ${plurale(griglia.insegne.length, "insegna", "insegne")} in ${plurale(griglia.aree.length, "area", "aree")}. Scegli un numero: l'elenco si apre qui sotto.`
+      ? `${plurale(prodotti.length, "prodotto", "prodotti")} nei ${formatNumero(kit.length)} volantini mostrati: ${plurale(griglia.insegne.length, "insegna", "insegne")} in ${plurale(griglia.aree.length, "area", "aree")}. Scegli un numero per vedere i suoi prodotti nell'elenco in fondo.`
       : undefined;
 
   if (kit.length <= 1 || prodotti.length === 0) {
@@ -138,6 +142,7 @@ export function ConfrontoAssortimento({ referenze, kit, tinta, nomePromo }: Conf
     >
       <div className="flex flex-col gap-6">
         <NumeriChiave sintesi={sintesi} griglia={griglia} punto={punto} vista={vista} tinta={tinta} onScegli={scegli} idElenco={idElenco} />
+        <ProdottiInComune prodotti={prodotti} griglia={griglia} tinta={tinta} />
         {griglia.esistenti.size > 1 && <MappaEsclusive sintesi={sintesi} griglia={griglia} punto={punto} vista={vista} tinta={tinta} onScegli={scegli} />}
         <Elenco
           id={idElenco}
@@ -489,6 +494,7 @@ function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostr
   const ordine = ordineDaIndirizzo(parametri.get("ordina"));
   const [testoRicerca, setTestoRicerca] = useRicercaDifferita(cerca, testo => aggiorna({ cerca: testo }));
   const [aperti, setAperti] = useState<ReadonlySet<string>>(new Set());
+  const riquadro = useRef<HTMLDivElement>(null);
 
   const { reparti, senzaReparto } = useMemo(() => repartiDelConfronto(prodotti), [prodotti]);
   const mostrati = useMemo(
@@ -497,6 +503,11 @@ function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostr
   );
   const titolo = titoloVista(vista, griglia);
   const conFiltri = Boolean(cerca || reparto || soloDiversi);
+  // Un'altra scelta o un altro filtro: il riquadro riparte dal primo prodotto
+  const scelta = [vista ? vistaInIndirizzo(vista, griglia) : "", punto?.id ?? "", cerca, reparto ?? "", soloDiversi, ordine].join("|");
+  useEffect(() => {
+    if (riquadro.current) riquadro.current.scrollTop = 0;
+  }, [scelta]);
   const apriChiudi = (chiave: string) =>
     setAperti(attuali => {
       const prossimi = new Set(attuali);
@@ -514,9 +525,10 @@ function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostr
   };
 
   return (
-    <div id={id} className="flex scroll-mt-24 flex-col gap-3 border-t border-dashed border-slate-200 pt-4 dark:border-darkmode-400">
-      {/* Titolo e strumenti restano in vista scorrendo l'elenco */}
-      <div className="sticky top-[9.5rem] z-10 flex flex-col gap-2 bg-white/95 py-2 backdrop-blur dark:bg-darkmode-600/95">
+    // scroll-mt: la pagina porta l'elenco sotto la barra dei filtri, che resta in alto
+    <div id={id} className="flex scroll-mt-[9.5rem] flex-col gap-3 border-t border-dashed border-slate-200 pt-4 dark:border-darkmode-400">
+      {/* Titolo e strumenti stanno sopra il riquadro: restano in vista mentre l'elenco scorre al suo interno */}
+      <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">{titolo}</h3>
           <span aria-live="polite" className="text-sm tabular-nums text-slate-500 dark:text-slate-400">
@@ -583,15 +595,23 @@ function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostr
       {mostrati.length === 0 ? (
         <EmptyState compatta icon="SearchX" title="Nessun prodotto" description="Nessun prodotto corrisponde a questa scelta e ai filtri." />
       ) : (
-        <div className="overflow-x-auto">
+        // Il dettaglio di tutti i prodotti: un riquadro di altezza fissa che scorre da sé, senza pagine,
+        // così la pagina prosegue subito con l'assortimento e il confronto fra i kit
+        <div
+          ref={riquadro}
+          role="region"
+          aria-label={`Elenco: ${titolo}`}
+          tabIndex={0}
+          className="max-h-[min(40rem,70vh)] overflow-auto rounded-card border border-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 dark:border-darkmode-400"
+        >
           <table aria-label={titolo} className="w-full min-w-[56rem] border-collapse text-sm">
-            <thead>
+            <thead className="sticky top-0 z-[1] bg-white shadow-[inset_0_-1px_0_rgb(226_232_240)] dark:bg-darkmode-600 dark:shadow-[inset_0_-1px_0_rgb(var(--color-darkmode-400))]">
               <tr className="text-left text-2xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                <th scope="col" className="border-b border-slate-200 px-3 py-2 font-medium dark:border-darkmode-400">Prodotto</th>
-                <th scope="col" className="border-b border-slate-200 px-3 py-2 font-medium dark:border-darkmode-400">In quali volantini</th>
-                <th scope="col" className="border-b border-slate-200 px-3 py-2 font-medium dark:border-darkmode-400">Prezzo</th>
-                <th scope="col" className="border-b border-slate-200 px-3 py-2 font-medium dark:border-darkmode-400">Differenza</th>
-                <th scope="col" className="border-b border-slate-200 px-3 py-2 dark:border-darkmode-400">
+                <th scope="col" className="px-3 py-2 font-medium">Prodotto</th>
+                <th scope="col" className="px-3 py-2 font-medium">In quali volantini</th>
+                <th scope="col" className="px-3 py-2 font-medium">Prezzo</th>
+                <th scope="col" className="px-3 py-2 font-medium">Differenza</th>
+                <th scope="col" className="px-3 py-2">
                   <span className="sr-only">Prezzi e pagine</span>
                 </th>
               </tr>
@@ -624,22 +644,20 @@ function Legenda() {
       <span className="inline-flex items-center gap-1.5">
         <Pallino stato="assente" /> non c'è
       </span>
-      <span className="inline-flex items-center gap-1.5">
-        <Pallino stato="caro" /> c'è, a un prezzo più alto del più basso
-      </span>
     </div>
   );
 }
 
-function Pallino({ stato, titolo }: { stato: "presente" | "assente" | "caro" | "vuota"; titolo?: string }) {
+/** Solo due stati, c'è e non c'è; "vuota" è la casella insegna × area senza volantino. */
+function Pallino({ stato, titolo }: { stato: "presente" | "assente" | "vuota"; titolo?: string }) {
   return (
     <span
       title={titolo}
       aria-hidden="true"
+      data-stato={stato}
       className={twMerge(
         "inline-block h-3 w-3 flex-none rounded-full",
         stato === "presente" && "bg-theme-1 dark:bg-indigo-300",
-        stato === "caro" && "bg-amber-600 dark:bg-amber-400",
         stato === "assente" && "ring-[1.5px] ring-inset ring-slate-300 dark:ring-darkmode-300",
         stato === "vuota" && "bg-transparent"
       )}
@@ -647,30 +665,12 @@ function Pallino({ stato, titolo }: { stato: "presente" | "assente" | "caro" | "
   );
 }
 
-/** La foto del prodotto; se manca o non si carica, un'icona. */
-function Foto({ url }: { url: string | null }) {
-  const [rotta, setRotta] = useState(false);
-  return (
-    <span className="flex h-14 w-14 flex-none items-center justify-center overflow-hidden rounded-control border border-slate-200 bg-white dark:border-darkmode-400">
-      {url && !rotta ? (
-        <img src={url} alt="" loading="lazy" onError={() => setRotta(true)} className="h-full w-full object-contain" />
-      ) : (
-        <Lucide icon="Image" aria-hidden="true" className="h-5 w-5 text-slate-400" />
-      )}
-    </span>
-  );
-}
-
 const CLASSI_CHIP = "inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-medium whitespace-nowrap";
 
-/** I pallini insegne × aree: c'è, non c'è, c'è a un prezzo più alto del più basso. */
+/** I pallini insegne × aree: c'è oppure non c'è, a qualunque prezzo; il prezzo resta nel suggerimento. */
 function GrigliaPallini({ prodotto, griglia }: { prodotto: ProdottoConfronto; griglia: GrigliaVolantini }) {
   const n = griglia.aree.length;
-  const perCasella = new Map<number, PresenzaReferenzaPromozione[]>();
-  for (const presenza of prodotto.referenza.presenze) {
-    const casella = griglia.casellaDelKit.get(presenza.idKit.toLowerCase());
-    if (casella !== undefined) perCasella.set(casella, [...(perCasella.get(casella) ?? []), presenza]);
-  }
+  const perCasella = presenzePerCasella(prodotto, griglia);
   return (
     <div
       className="grid w-max items-center gap-x-1 gap-y-0.5 text-2xs text-slate-500 dark:text-slate-400"
@@ -691,9 +691,8 @@ function GrigliaPallini({ prodotto, griglia }: { prodotto: ProdottoConfronto; gr
             const presenze = perCasella.get(casella);
             if (!griglia.esistenti.has(casella)) return <Pallino key={area.id} stato="vuota" />;
             if (!presenze) return <Pallino key={area.id} stato="assente" titolo={`${insegna.nome} · ${area.nome}: non c'è`} />;
-            const caro = prodotto.min !== null && presenze.some(p => p.prezzo !== null && p.prezzo > (prodotto.min ?? 0));
             const prezzo = presenze[0]?.prezzo ?? null;
-            return <Pallino key={area.id} stato={caro ? "caro" : "presente"} titolo={`${insegna.nome} · ${area.nome}: ${prezzo !== null ? formatEuro(prezzo) : "senza prezzo"}`} />;
+            return <Pallino key={area.id} stato="presente" titolo={`${insegna.nome} · ${area.nome}: ${prezzo !== null ? formatEuro(prezzo) : "senza prezzo"}`} />;
           })}
         </Fragment>
       ))}
@@ -719,14 +718,14 @@ function RigaProdotto({
   const dove = descriviPresenze(prodotto, griglia);
   const prezzi = prezziPerLuogo(prodotto, griglia);
   const sottotitolo = [r.formato, r.codice ? `cod. ${r.codice}` : null].filter(Boolean).join(" · ");
-  const classeTd = "border-b border-slate-100 px-3 py-3 align-top dark:border-darkmode-400";
+  const classeTd = "border-b border-slate-100 px-3 py-2 align-top dark:border-darkmode-400";
 
   return (
     <>
       <tr className="[&:hover>td]:bg-slate-50 dark:[&:hover>td]:bg-darkmode-400/40">
         <td className={classeTd}>
           <div className="flex gap-3">
-            <Foto key={r.foto ?? ""} url={r.foto} />
+            <Foto key={r.foto ?? ""} url={r.foto} className="h-10 w-10" />
             <div className="min-w-0">
               <p className="font-medium text-slate-800 [overflow-wrap:anywhere] dark:text-slate-100">
                 {r.nome || "Prodotto senza nome"}
@@ -804,83 +803,6 @@ function RigaProdotto({
         </tr>
       )}
     </>
-  );
-}
-
-/** Prezzo, sconto, barrato e pagina per insegna e area; la pagina apre gli insight del kit su quel prodotto. */
-function PrezziEPagine({ prodotto, griglia, tinta }: { prodotto: ProdottoConfronto; griglia: GrigliaVolantini; tinta: (idCanale: string) => Tinta }) {
-  const r = prodotto.referenza;
-  const n = griglia.aree.length;
-  const perCasella = new Map<number, PresenzaReferenzaPromozione[]>();
-  for (const presenza of r.presenze) {
-    const casella = griglia.casellaDelKit.get(presenza.idKit.toLowerCase());
-    if (casella !== undefined) perCasella.set(casella, [...(perCasella.get(casella) ?? []), presenza]);
-  }
-  return (
-    <div className="overflow-x-auto">
-      <table aria-label={`${r.nome || "Prodotto"}: prezzi e pagine per insegna e area`} className="border-separate border-spacing-1 text-xs tabular-nums">
-        <thead>
-          <tr>
-            <td />
-            {griglia.aree.map(area => (
-              <th key={area.id} scope="col" className="px-2 text-center font-medium text-slate-600 dark:text-slate-300">
-                {area.nome}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {griglia.insegne.map((insegna, a) => (
-            <tr key={insegna.id}>
-              <th scope="row" className="whitespace-nowrap pr-2 text-left font-semibold text-slate-700 dark:text-slate-200">
-                <span className="inline-flex items-center gap-1.5">
-                  <LogoInsegna idCanale={insegna.id} nome={insegna.nome} tinta={tinta(insegna.id)} />
-                  {insegna.nome}
-                </span>
-              </th>
-              {griglia.aree.map((area, b) => {
-                const presenze = perCasella.get(a * n + b) ?? [];
-                if (presenze.length === 0) {
-                  return (
-                    <td key={area.id} className="min-w-[6.5rem] px-2 py-1.5 text-center text-slate-400 dark:text-slate-500">
-                      {VUOTO}
-                    </td>
-                  );
-                }
-                return (
-                  <td key={area.id} className="min-w-[6.5rem] rounded-control bg-white px-2 py-1.5 text-center dark:bg-darkmode-600">
-                    {presenze.map(presenza => {
-                      const caro = prodotto.min !== null && presenza.prezzo !== null && presenza.prezzo > prodotto.min;
-                      return (
-                        <div key={presenza.idKit} className="flex flex-col items-center gap-0.5">
-                          <span className={twMerge("font-bold", caro ? "text-amber-700 dark:text-amber-300" : "text-slate-800 dark:text-slate-100")} title={presenza.prezzoCalcolato ? NOTA_PREZZO_CALCOLATO : undefined}>
-                            {presenza.prezzo !== null ? formatEuro(presenza.prezzo) : VUOTO}
-                            {presenza.sconto !== null && <span className="ml-1 font-medium text-slate-600 dark:text-slate-300">−{formatPercentuale(Math.round(presenza.sconto))}</span>}
-                          </span>
-                          {presenza.barrato !== null && presenza.barrato !== undefined && (
-                            <span className="text-slate-500 dark:text-slate-400">
-                              <span className="sr-only">invece di </span>
-                              <s>{formatEuro(presenza.barrato)}</s>
-                            </span>
-                          )}
-                          <Link
-                            to={percorsoDettaglioVolantino(presenza.idKit, presenza.pagina, presenza.idReferenza ?? r.nome)}
-                            aria-label={`Apri ${r.nome || "il prodotto"} nel volantino ${insegna.nome} · ${area.nome}${presenza.pagina !== null ? `, pagina ${presenza.pagina}` : ""}`}
-                            className="font-semibold text-theme-1 hover:underline dark:text-indigo-200"
-                          >
-                            {presenza.pagina !== null ? `pagina ${formatNumero(presenza.pagina)}` : "Apri"} →
-                          </Link>
-                        </div>
-                      );
-                    })}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }
 

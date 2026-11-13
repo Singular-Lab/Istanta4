@@ -12,9 +12,16 @@ import type {
 } from "../../../lib/consultazione/tipi";
 
 // Consultazione di una promozione (/volantini/promozioni/:idPromo): banda con le insegne, filtri per
-// insegna e area, griglia delle miniature, assortimento con gli elenchi dei prodotti comuni e locali
-// e confronto fra i kit, senza la sezione "Dove arriva". Ogni kit apre i suoi insight; nessun
-// collegamento alla produzione.
+// insegna e area, griglia delle miniature, assortimento a confronto con in primo piano i prodotti in
+// comune e l'elenco di tutti i prodotti in un riquadro che scorre da sé, e confronto fra i kit, senza la
+// sezione "Dove arriva". Ogni kit apre i suoi insight; nessun collegamento alla produzione.
+
+// jsdom non implementa ResizeObserver, usato da Headless UI all'apertura del pannello di un prodotto
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
 
 const finti = vi.hoisted(() => ({
   risultato: {} as Record<string, unknown>,
@@ -381,6 +388,8 @@ describe("Consultazione di una promozione", () => {
     expect(screen.getByText("La promozione ha un solo volantino: tutti i suoi 5 prodotti sono lì.")).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: /Prodotti di un solo volantino/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Vedi / })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Prodotti in comune" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /^Elenco/ })).not.toBeInTheDocument();
   });
 
   describe("assortimento a confronto", () => {
@@ -407,6 +416,124 @@ describe("Consultazione di una promozione", () => {
       expect(within(mappa()).queryByRole("button", { name: /Superstore · Lazio/ })).not.toBeInTheDocument();
 
       expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
+    });
+
+    describe("prodotti in comune", () => {
+      const comuni = () => screen.getByRole("list", { name: "Prodotti in comune" });
+      const schede = () => within(comuni()).getAllByRole("listitem");
+      const nomiSchede = () => schede().map(scheda => scheda.querySelector("button > span:nth-child(2)")?.firstChild?.textContent);
+      const tuttiIKit = (prezzo: (idKit: string) => number) => KIT.map(k => presenza(k.id, { prezzo: prezzo(k.id) }));
+
+      it("in primo piano dopo i numeri, prima della mappa e dell'elenco: una scheda per prodotto in tutti i volantini, prima i prezzi diversi", async () => {
+        finti.risultato = caricato(
+          dettaglio({
+            assortimento: {
+              ...dettaglio().assortimento,
+              referenze: [
+                ...REFERENZE,
+                prodotto("acqua", "Acqua naturale", tuttiIKit(() => 0.25), { marca: "Levissima", formato: "1,5 l", foto: "/foto/acqua.jpg" }),
+                prodotto("caffe", "Caffè macinato", tuttiIKit(id => (id === "k2" ? 4.99 : 3.99)), { marca: "Lavazza" }),
+              ],
+            },
+          })
+        );
+        await apri();
+
+        const sezione = screen.getByRole("region", { name: "Prodotti in comune" });
+        expect(sezione).toHaveTextContent("3 prodotti in tutti i 3 volantini · 2 con prezzo diverso, qui per primi");
+        // Caffè +25%, Pasta +11%, poi l'acqua allo stesso prezzo ovunque
+        expect(nomiSchede()).toEqual(["Caffè macinato", "Pasta di semola", "Acqua naturale"]);
+        // Dopo i numeri, prima della mappa e dell'elenco
+        const numeri = riquadro("3 in tutti i 3 volantini");
+        expect(numeri.compareDocumentPosition(sezione) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(sezione.compareDocumentPosition(mappa()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(sezione.compareDocumentPosition(elenco("Tutti i prodotti")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+        const [, pasta, acqua] = schede() as [HTMLElement, HTMLElement, HTMLElement];
+        expect(within(pasta).getByText("Barilla").tagName).toBe("STRONG");
+        expect(within(pasta).getByText("500 g")).toBeInTheDocument();
+        expect(within(pasta).getByText("Drogheria")).toBeInTheDocument();
+        expect(within(pasta).getByText("€ 0,89").parentElement).toHaveTextContent("€ 0,89 altrove");
+        expect(within(pasta).getByText("€ 0,99").parentElement).toHaveTextContent("€ 0,99 Superstore");
+        expect(within(pasta).getByText("+€ 0,10 · +11%")).toBeInTheDocument();
+        expect(acqua.querySelector("img")).toHaveAttribute("src", "/foto/acqua.jpg");
+        expect(within(acqua).getByText("€ 0,25")).toBeInTheDocument();
+        expect(within(acqua).getByText("uguale in tutti i 3 volantini")).toBeInTheDocument();
+        expect(within(acqua).queryByText(/^\+€/)).not.toBeInTheDocument();
+      });
+
+      it("una scheda apre prezzi, sconti e pagine per insegna e area, e da una pagina gli insight del kit su quel prodotto", async () => {
+        await apri();
+
+        fireEvent.click(within(comuni()).getByRole("button", { name: /Pasta di semola/ }));
+
+        const pannello = await screen.findByRole("dialog", { name: /Pasta di semola Barilla/ });
+        expect(within(pannello).getByText("In tutti i 3 volantini")).toBeInTheDocument();
+        const tabella = within(pannello).getByRole("table", { name: "Pasta di semola: prezzi e pagine per insegna e area" });
+        expect(within(tabella).getAllByText("−20%")).toHaveLength(2);
+        expect(within(tabella).getByRole("link", { name: /Superstore · Toscana, pagina 5/ })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k2&pagina=5&referenza=r-k2");
+
+        fireEvent.click(within(pannello).getByRole("button", { name: "Chiudi" }));
+        await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      });
+
+      it("oltre 36 prodotti in comune mostra le prime 36 schede e, a richiesta, tutte", async () => {
+        const molti = Array.from({ length: 40 }, (_, i) => prodotto(`c${i}`, `Comune ${String(i).padStart(2, "0")}`, tuttiIKit(() => 1)));
+        finti.risultato = caricato(dettaglio({ assortimento: { ...dettaglio().assortimento, referenze: molti } }));
+        await apri();
+
+        expect(schede()).toHaveLength(36);
+        const comando = screen.getByRole("button", { name: "Mostra tutti i 40 prodotti in comune" });
+        expect(comando).toHaveAttribute("aria-expanded", "false");
+
+        fireEvent.click(comando);
+        expect(schede()).toHaveLength(40);
+        fireEvent.click(screen.getByRole("button", { name: "Mostra meno" }));
+        expect(schede()).toHaveLength(36);
+      });
+
+      it("senza prodotti in tutti i volantini lo dice, al posto delle schede", async () => {
+        finti.risultato = caricato(dettaglio({ assortimento: { ...dettaglio().assortimento, referenze: REFERENZE.slice(1) } }));
+        await apri();
+
+        expect(screen.getByRole("region", { name: "Prodotti in comune" })).toHaveTextContent("Nessun prodotto è in tutti i 3 volantini mostrati.");
+        expect(screen.queryByRole("list", { name: "Prodotti in comune" })).not.toBeInTheDocument();
+      });
+    });
+
+    it("l'elenco di tutti i prodotti scorre dentro un riquadro: ricerca e filtri stanno fuori, sempre in vista", async () => {
+      await apri();
+
+      const riquadroElenco = screen.getByRole("region", { name: "Elenco: Tutti i prodotti" });
+      expect(riquadroElenco).toHaveClass("overflow-auto");
+      expect(riquadroElenco.className).toMatch(/max-h-/);
+      expect(riquadroElenco).toHaveAttribute("tabindex", "0");
+      expect(within(riquadroElenco).getByRole("table", { name: "Tutti i prodotti" })).toBeInTheDocument();
+      expect(within(riquadroElenco).queryByRole("searchbox")).not.toBeInTheDocument();
+      expect(within(riquadroElenco).queryByRole("combobox")).not.toBeInTheDocument();
+      // Dopo il riquadro la pagina prosegue con l'assortimento e il confronto fra i kit
+      expect(riquadroElenco.compareDocumentPosition(tabellaConfronto()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("scegliendo un numero la pagina porta all'elenco; togliendo la scelta resta dov'è", async () => {
+      const scorri = vi.fn();
+      const originale = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scorri;
+      try {
+        await apri();
+
+        fireEvent.click(within(riquadro("4 di una sola insegna")).getByRole("button", { name: /^City/ }));
+        expect(scorri).toHaveBeenCalledTimes(1);
+        expect(scorri.mock.contexts[0]).toContainElement(elenco("Solo City"));
+
+        fireEvent.click(within(riquadro("4 di una sola insegna")).getByRole("button", { name: /^City/ }));
+        expect(scorri).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo in Superstore · Toscana" }));
+        expect(scorri).toHaveBeenCalledTimes(2);
+      } finally {
+        Element.prototype.scrollIntoView = originale;
+      }
     });
 
     it("un numero mostra i suoi prodotti nell'elenco e sta nell'indirizzo; di nuovo, o con Mostra tutti, si torna a tutti", async () => {
@@ -454,6 +581,27 @@ describe("Consultazione di una promozione", () => {
         "href",
         "/volantini/tutti_i_volantini?kit=k1&pagina=4&referenza=r-latte"
       );
+    });
+
+    it("la griglia di ogni prodotto dice solo c'è o non c'è, a qualunque prezzo; la legenda ha solo queste due voci", async () => {
+      await apri();
+
+      const pallini = (nome: string) => Array.from(riga("Tutti i prodotti", nome).querySelectorAll<HTMLElement>("[data-stato]"));
+      const statoDi = (nome: string, casella: string) => pallini(nome).find(p => p.title.startsWith(`${casella}:`))?.dataset.stato;
+
+      // La pasta costa € 0,89 nei due City e € 0,99 nel Superstore: il Superstore è "c'è" come gli altri
+      expect(statoDi("Pasta di semola", "Superstore · Toscana")).toBe("presente");
+      expect(statoDi("Pasta di semola", "City · Toscana")).toBe("presente");
+      expect(statoDi("Pasta di semola", "City · Lazio")).toBe("presente");
+      // L'olio non è nel Superstore
+      expect(statoDi("Olio extravergine", "Superstore · Toscana")).toBe("assente");
+      for (const nome of ["Pasta di semola", "Olio extravergine", "Latte intero"]) {
+        for (const pallino of pallini(nome)) expect(["presente", "assente", "vuota"]).toContain(pallino.dataset.stato);
+      }
+
+      const legenda = screen.getByText("non c'è").parentElement as HTMLElement;
+      expect(Array.from(legenda.children).map(voce => voce.textContent?.trim())).toEqual(["c'è", "non c'è"]);
+      expect(screen.queryByText(/a un prezzo più alto/)).not.toBeInTheDocument();
     });
 
     it("i dati minimi del prodotto: foto, marca in evidenza, formato e codice, prezzo al litro, reparto, meccanica, linea e sottocosto", async () => {
