@@ -10,6 +10,7 @@ vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
+// Il permesso (sistema.elimina_tracciati) lo verifica permessiRouteMutanti.test.ts
 vi.mock('../../middleware/permissionGuard', () => ({
   permissionGuard: () => (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
@@ -22,11 +23,31 @@ vi.mock('../../models/promo', () => ({
   Promo: { findByPk: vi.fn(async (id: string) => (id === 'promo-1' ? { nome_promo: 'A2625_SC_20-11-26' } : null)) },
 }));
 
+// Tracciati in coda verso Istanta: id -> stato della coda
+const coda = vi.hoisted(() => new Map<string, 'in_attesa' | 'errore'>());
+vi.mock('../../services/AllineamentoIstanta', () => ({
+  statoIstantaTracciati: vi.fn(async (ids: string[]) =>
+    new Map(ids.map((id) => [id, { stato: coda.get(id) ?? 'inviato', errore: null, tentativi: coda.get(id) === 'errore' ? 2 : 0 }]))),
+  aggiornaContestoInAttesa: vi.fn(),
+  inviaPrenotata: vi.fn(),
+  prenotaTracciato: vi.fn(),
+}));
+
+vi.mock('../../models/tracciati_invio_istanta', () => ({
+  TracciatiInvioIstanta: { destroy: vi.fn(async () => 1) },
+}));
+
+import { TracciatiInvioIstanta } from '../../models/tracciati_invio_istanta';
+
 /**
- * Eliminare un tracciato lo cancella per davvero: nome, file e promo si leggono prima, per il
- * Registro Audit, cosi' resta chi l'ha eliminato e quando.
+ * Eliminare un tracciato lo cancella per davvero, e si puo' solo se Istanta non l'ha importato
+ * (spec ciclo-promozione-importazione, "Eliminazione di un tracciato non importato"). Nome, file e
+ * promo si leggono prima, per il Registro Audit, cosi' resta chi l'ha eliminato e quando.
  */
-function createApp(righe: Record<string, Record<string, unknown>>) {
+function createApp(
+  righe: Record<string, Record<string, unknown>>,
+  statoImportazione: () => Promise<{ stato: string } | null> = async () => ({ stato: 'Terminata' }),
+) {
   // Repository in memoria: controller e service sono quelli reali
   const repository = {
     findById: vi.fn(async (id: string) => righe[id] ?? null),
@@ -38,25 +59,30 @@ function createApp(righe: Record<string, Record<string, unknown>>) {
   };
   const audit = { entityChanged: vi.fn(), configurationChanged: vi.fn() };
   vi.spyOn(AuditLogService, 'getInstance').mockReturnValue(audit as unknown as AuditLogService);
+  const istanta = { getStatusImportazione: vi.fn(statoImportazione) };
 
   const app = express();
   app.use(express.json());
-  new TracciatoController(new TracciatoService(repository as unknown as ITracciatiRepository)).registerRoutes(app);
-  return { app, repository, audit };
+  new TracciatoController(new TracciatoService(repository as unknown as ITracciatiRepository), istanta).registerRoutes(app);
+  return { app, repository, audit, istanta };
 }
 
+// Scartato in FP: si elimina senza chiedere niente a Istanta
 const tracciato = (extra: Record<string, unknown> = {}) => ({
   id_tracciati: 't1',
   id_promo_tracciati: 'promo-1',
   context_tracciati: [],
   filename_tracciati: '01_TECNICO_Export.xlsx',
   nome_tracciati: 'Tecnico ottobre',
+  stato_tracciati: 'Scartato',
   blobfile_tracciati: Buffer.from('contenuto'),
   ...extra,
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  coda.clear();
+  vi.mocked(TracciatiInvioIstanta.destroy).mockClear();
 });
 
 describe('DELETE /api/tracciati/:idTracciato - Registro Audit', () => {
@@ -91,5 +117,73 @@ describe('DELETE /api/tracciati/:idTracciato - Registro Audit', () => {
 
     expect(res.status).toBe(404);
     expect(audit.entityChanged).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/tracciati/:idTracciato - solo un tracciato non importato', () => {
+  it('un tracciato in attesa di Istanta si elimina e lascia la coda di invio', async () => {
+    coda.set('t1', 'in_attesa');
+    const { app, repository, istanta } = createApp({ t1: tracciato({ stato_tracciati: null }) });
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(200);
+    expect(repository.delete).toHaveBeenCalledWith('t1');
+    expect(TracciatiInvioIstanta.destroy).toHaveBeenCalledWith({ where: { id_tracciato: 't1' } });
+    // In attesa: Istanta non ne sa niente, non si chiede lo stato dell'importazione
+    expect(istanta.getStatusImportazione).not.toHaveBeenCalled();
+  });
+
+  it('anche uno che Istanta non ha accettato', async () => {
+    coda.set('t1', 'errore');
+    const { app, repository } = createApp({ t1: tracciato({ stato_tracciati: null }) });
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(200);
+    expect(repository.delete).toHaveBeenCalledWith('t1');
+  });
+
+  it("si elimina quando Istanta dice che l'importazione e' scartata", async () => {
+    const { app, repository } = createApp({ t1: tracciato({ stato_tracciati: null }) }, async () => ({ stato: 'Scartata' }));
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(200);
+    expect(repository.delete).toHaveBeenCalledWith('t1');
+  });
+
+  it('un tracciato importato resta, con il motivo', async () => {
+    const { app, repository, audit } = createApp({ t1: tracciato({ stato_tracciati: 'Terminata' }) }, async () => ({ stato: 'Terminata' }));
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe('Il tracciato è già importato in Istanta: non si può eliminare.');
+    expect(repository.delete).not.toHaveBeenCalled();
+    expect(TracciatiInvioIstanta.destroy).not.toHaveBeenCalled();
+    expect(audit.entityChanged).not.toHaveBeenCalled();
+  });
+
+  it("un tracciato con l'importazione ancora in corso resta", async () => {
+    const { app, repository } = createApp({ t1: tracciato({ stato_tracciati: null }) }, async () => ({ stato: 'ElaborazioneDati' }));
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/non è conclusa/);
+    expect(repository.delete).not.toHaveBeenCalled();
+  });
+
+  it('se Istanta non risponde non si elimina niente', async () => {
+    const { app, repository } = createApp({ t1: tracciato({ stato_tracciati: null }) }, async () => {
+      throw new Error('ECONNREFUSED');
+    });
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(503);
+    expect(res.body.message).toMatch(/Non è stato possibile verificare/);
+    expect(repository.delete).not.toHaveBeenCalled();
   });
 });
