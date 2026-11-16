@@ -1627,3 +1627,137 @@ test("I20-1211: la scelta del filtro c'e' solo se il cliente ne ha; scelto Solo 
         SchermataSegnalazioni._recordsDellaLavorazione = prima.records;
     }
 });
+
+/* ---- I20-1234: la schermata resta al suo documento ---- */
+
+/// Due documenti finti, riconosciuti come li riconosce il ciclo degli eventi (indesignEvents.lastActiveDocument).
+/// La schermata aperta e' un elenco finto con il suo documento e le sue pagine; apri e chiudiAperta si registrano.
+function conDueDocumenti(prova) {
+    const eventi = [];
+    const stato = { elenco: null };
+    const salva = { $: global.$, indesignEvents: global.indesignEvents };
+    const originali = {
+        apri: SchermataSegnalazioni.apri,
+        chiudiAperta: SchermataSegnalazioni.chiudiAperta,
+        _schedaAperta: SchermataSegnalazioni._schedaAperta,
+        _lasciatePerDocumento: SchermataSegnalazioni._lasciatePerDocumento,
+        _ultimaLettura: SchermataSegnalazioni._ultimaLettura
+    };
+    global.indesignEvents = { lastActiveDocument: "/Volantini/A.indd" };
+    global.$ = (selettore) => selettore === "#" + SchermataSegnalazioni.ID_ELENCO && stato.elenco != null
+        ? stato.elenco
+        : { length: 0, data: () => undefined };
+    SchermataSegnalazioni.chiudiAperta = () => { eventi.push("chiudi"); stato.elenco = null; };
+    SchermataSegnalazioni.apri = (opzioni = {}) => {
+        eventi.push({ apri: global.indesignEvents.lastActiveDocument, pagine: Array.isArray(opzioni.pagine) ? opzioni.pagine : null, lette: opzioni.lette || null });
+        return Promise.resolve(true);
+    };
+    SchermataSegnalazioni._schedaAperta = null;
+    SchermataSegnalazioni._lasciatePerDocumento = {};
+    SchermataSegnalazioni._ultimaLettura = null;
+    const aiuti = {
+        eventi,
+        aperta: (pagine) => {
+            const dati = { pagine: pagine, documento: global.indesignEvents.lastActiveDocument };
+            stato.elenco = { length: 1, data: (k) => dati[k] };
+        },
+        vaiSu: (documento) => { global.indesignEvents.lastActiveDocument = documento; }
+    };
+    return Promise.resolve(prova(aiuti)).finally(() => {
+        Object.assign(SchermataSegnalazioni, originali);
+        Object.keys(salva).forEach(k => { if (salva[k] === undefined) { delete global[k]; } else { global[k] = salva[k]; } });
+    });
+}
+
+test("I20-1234: cambiando documento la schermata si chiude, e tornandoci si riapre con le sue pagine", () => conDueDocumenti(async (d) => {
+    d.aperta(["10", "11"]);
+
+    d.vaiSu("/Volantini/B.indd");
+    assert.strictEqual(SchermataSegnalazioni.lasciaAlDocumento(), true);
+    assert.deepStrictEqual(d.eventi, ["chiudi"]);
+    //Sull'altro documento non si riapre niente.
+    assert.strictEqual(await SchermataSegnalazioni.riprendiDelDocumento(), false);
+
+    d.vaiSu("/Volantini/A.indd");
+    assert.strictEqual(await SchermataSegnalazioni.riprendiDelDocumento(), true);
+    assert.deepStrictEqual(d.eventi, ["chiudi", { apri: "/Volantini/A.indd", pagine: ["10", "11"], lette: null }]);
+    //Una volta sola: riaperta, e' di nuovo una schermata come le altre.
+    assert.strictEqual(await SchermataSegnalazioni.riprendiDelDocumento(), false);
+}));
+
+test("I20-1234: la schermata di tutto il documento torna di tutto il documento", () => conDueDocumenti(async (d) => {
+    d.aperta(null);
+    d.vaiSu("/Volantini/B.indd");
+    SchermataSegnalazioni.lasciaAlDocumento();
+    d.vaiSu("/Volantini/A.indd");
+
+    await SchermataSegnalazioni.riprendiDelDocumento();
+
+    assert.deepStrictEqual(d.eventi[1], { apri: "/Volantini/A.indd", pagine: null, lette: null });
+}));
+
+test("I20-1234: una schermata chiusa dall'operatore non torna", () => conDueDocumenti(async (d) => {
+    //Nessuna schermata aperta al cambio di documento: chiusa con la X, non c'e' niente da ricordare.
+    d.vaiSu("/Volantini/B.indd");
+    assert.strictEqual(SchermataSegnalazioni.lasciaAlDocumento(), false);
+    d.vaiSu("/Volantini/A.indd");
+
+    assert.strictEqual(await SchermataSegnalazioni.riprendiDelDocumento(), false);
+    assert.deepStrictEqual(d.eventi, []);
+}));
+
+test("I20-1234: con la scheda in vista controllata la schermata non si tocca", () => conDueDocumenti(async (d) => {
+    d.aperta(null);
+    SchermataSegnalazioni._schedaAperta = { box: {} };
+
+    assert.strictEqual(SchermataSegnalazioni.lasciaAlDocumento(), false);
+    assert.deepStrictEqual(d.eventi, []);
+}));
+
+test("I20-1234: la schermata si segna il suo documento e il Plugin la lascia e la riprende al cambio di documento", () => {
+    assert.match(schermata, /elenco\.data\('documento', SchermataSegnalazioni\._identitaDocumento\(\)\);/);
+
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const cambio = indexNew.substring(indexNew.indexOf("indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, async function"), indexNew.indexOf("function riprendiSchermateDelDocumento()"));
+    //Si lascia prima di svuotare la scheda e di cambiare documento, si riprende dopo l'avvio, che chiude le finestre.
+    assert.ok(cambio.indexOf("SchermataSegnalazioni.lasciaAlDocumento();") < cambio.indexOf("docInLavorazione = args[0];"));
+    assert.ok(cambio.indexOf("await initDocumentInLavorazione();") < cambio.indexOf("riprendiSchermateDelDocumento();"));
+    const nessuno = indexNew.substring(indexNew.indexOf("indesignEvents.EVENT_NO_DOCUMENT_OPENED, async function"), indexNew.indexOf("indesignEvents.EVENT_NEW_PAGE_SELECTED"));
+    assert.match(nessuno, /SchermataSegnalazioni\.lasciaAlDocumento\(\);/);
+    //Prima il report, che come colonna ha la precedenza, poi le segnalazioni; solo con un kit.
+    const riprendi = indexNew.substring(indexNew.indexOf("function riprendiSchermateDelDocumento()"), indexNew.indexOf("indesignEvents.addEventListener(indesignEvents.EVENT_NEW_LIBRO_OPENED"));
+    assert.match(riprendi, /if \(docInLavorazione == null \|\| !\(idKitLavorazione > 0\)\) \{\s*return;/);
+    assert.ok(riprendi.indexOf("ReportIntegrita.riprendiDelDocumento();") < riprendi.indexOf("SchermataSegnalazioni.riprendiDelDocumento()"));
+});
+
+test("I20-1234: tornando sul documento la schermata usa la lettura dell'avvio, solo con le sue pagine", () => conDueDocumenti(async (d) => {
+    d.aperta(["10"]);
+    d.vaiSu("/Volantini/B.indd");
+    SchermataSegnalazioni.lasciaAlDocumento();
+    d.vaiSu("/Volantini/A.indd");
+    //La lettura di tutto il documento appena fatta dall'avvio di A.
+    SchermataSegnalazioni._ultimaLettura = { documento: "/Volantini/A.indd", quando: Date.now(), lette: [{ pagina: "10", voci: [] }, { pagina: "12", voci: [] }] };
+
+    await SchermataSegnalazioni.riprendiDelDocumento();
+
+    assert.deepStrictEqual(d.eventi[1], { apri: "/Volantini/A.indd", pagine: ["10"], lette: [{ pagina: "10", voci: [] }] });
+}));
+
+test("I20-1234: l'ultima lettura si riusa solo se e' del documento attivo e recente", () => conDueDocumenti(async (d) => {
+    const ora = 1000000;
+    const lette = [{ pagina: "3", voci: [] }, { pagina: "5", voci: [] }];
+    SchermataSegnalazioni._ultimaLettura = { documento: "/Volantini/A.indd", quando: ora - 2000, lette: lette };
+
+    assert.deepStrictEqual(SchermataSegnalazioni.letturaRecente(null, ora), lette);
+    assert.notStrictEqual(SchermataSegnalazioni.letturaRecente(null, ora), lette, "una copia: la schermata non deve cambiare quella tenuta");
+    assert.deepStrictEqual(SchermataSegnalazioni.letturaRecente(["5"], ora), [lette[1]]);
+    //Troppo vecchia, o di un altro documento: si rilegge.
+    assert.strictEqual(SchermataSegnalazioni.letturaRecente(null, ora + SchermataSegnalazioni.RIUSO_LETTURA_MS), null);
+    d.vaiSu("/Volantini/B.indd");
+    assert.strictEqual(SchermataSegnalazioni.letturaRecente(null, ora), null);
+}));
+
+test("I20-1234: solo la lettura di tutto il documento si tiene per il riuso", () => {
+    const corpo = schermata.substring(schermata.indexOf("    letturaControllata(pagine) {"), schermata.indexOf("    ricontrollaElementiDaPosizionare(lette) {"));
+    assert.match(corpo, /SchermataSegnalazioni\._ultimaLettura = Array\.isArray\(pagine\) \? SchermataSegnalazioni\._ultimaLettura\s*: \{ documento: SchermataSegnalazioni\._identitaDocumento\(\), lette: lette\.slice\(\), quando: Date\.now\(\) \};/);
+});

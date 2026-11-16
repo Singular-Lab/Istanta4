@@ -526,6 +526,9 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, asyn
 
     console.log("EVENT_NEW_DOCUMENT_SELECTED");
     console.log(args);
+    //I20-1234: la schermata delle segnalazioni aperta e' del documento di prima: si chiude e si
+    //ricorda per quello, e torna quando l'operatore ci torna.
+    SchermataSegnalazioni.lasciaAlDocumento();
     schedaRef.svuotaRef();
     app.selection = null;
     
@@ -550,7 +553,30 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, asyn
     if (docInLavorazione==null)
         await initLibroInLavorazione();
 
+    //I20-1234: tornando su un documento si ritrova quello che ci si era lasciato aperto. Dopo
+    //l'avvio, che chiude le finestre e torna alla Home; prima il report, che come colonna ha la
+    //precedenza, poi le segnalazioni.
+    riprendiSchermateDelDocumento();
+
 });
+
+/// I20-1234: il Report Integrita' e la schermata delle segnalazioni lasciati aperti su questo
+/// documento quando l'operatore ne ha portato davanti un altro. Solo per un documento in
+/// lavorazione: senza kit non ci sono ne' report ne' bollini da rileggere.
+function riprendiSchermateDelDocumento() {
+    if (docInLavorazione == null || !(idKitLavorazione > 0)) {
+        return;
+    }
+    try {
+        ReportIntegrita.riprendiDelDocumento();
+    }
+    catch (e) {
+        console.error("Code IDX-203 Report integrita' non riaperto tornando sul documento:", e);
+    }
+    SchermataSegnalazioni.riprendiDelDocumento().catch(e => {
+        console.error("Code IDX-204 Segnalazioni non riaperte tornando sul documento:", e);
+    });
+}
 
 indesignEvents.addEventListener(indesignEvents.EVENT_NEW_LIBRO_OPENED, async function(args){
 
@@ -575,6 +601,9 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NO_DOCUMENT_OPENED, async f
         //Annullo qualsiasi operazione in corso per potermi focalizzarfe sulla nuova selezione di documento
         if (xhrInProcess!=null)
             xhrInProcess.abort("Nessun documento aperto");
+
+        //I20-1234: la schermata delle segnalazioni si ricorda per il suo documento, se lo si riapre.
+        SchermataSegnalazioni.lasciaAlDocumento();
 
         docInLavorazione = null;
 
