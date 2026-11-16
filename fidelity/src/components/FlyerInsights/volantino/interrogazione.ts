@@ -124,7 +124,7 @@ const DEFINIZIONI: readonly DefinizioneScelta[] = [
   { id: "tema", etichetta: "Tema", valori: temiDelBox },
   { id: "ruolo", etichetta: "Ruolo", valori: ruoliDelBox },
   { id: "marca", etichetta: "Marca", valori: voce => valoriTesto([voce.marca, ...(voce.dettaglioProdotti ?? []).map(prodotto => prodotto.marca)]) },
-  { id: "linea", etichetta: "Linea del distributore", valori: voce => (voce.linea ? [{ chiave: voce.linea.sigla, etichetta: voce.linea.nome || voce.linea.sigla }] : []) },
+  { id: "linea", etichetta: "Private Labels", valori: voce => (voce.linea ? [{ chiave: voce.linea.sigla, etichetta: voce.linea.nome || voce.linea.sigla }] : []) },
   { id: "bolli", etichetta: "Bolli", valori: voce => (voce.bolli ?? []).map(sigla => ({ chiave: sigla, etichetta: sigla })) },
   {
     id: "meccanica",
