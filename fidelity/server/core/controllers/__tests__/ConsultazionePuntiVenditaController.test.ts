@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TIPO_UTENTI } from '../../../../lib/enums';
 import type {
   IConsultazionePuntiVenditaRepository,
+  RigaCombinazioneVolantini,
   RigaPuntoVenditaConsultazione,
   RigaStoriaInElenco,
 } from '../../repositories/ConsultazionePuntiVenditaRepository';
@@ -16,6 +17,8 @@ import { PuntoVenditaController } from '../PuntoVenditaController';
 const permessi = vi.hoisted(() => ({ concessi: new Set<string>() }));
 /** I volantini dei PV per l'elenco: ogni test sceglie le righe. */
 let storie: RigaStoriaInElenco[] = [];
+/** Le combinazioni canale/area con volantini: ogni test sceglie le righe. */
+let combinazioni: RigaCombinazioneVolantini[] = [];
 
 vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: (_req: Request, _res: Response, next: NextFunction) => next(),
@@ -83,6 +86,7 @@ function creaApp(tipo_utente: TIPO_UTENTI = TIPO_UTENTI.GDO) {
       return resto;
     }),
     storiaInElenco: vi.fn(async (_idGdo: string) => storie),
+    combinazioniDeiVolantini: vi.fn(async (_idGdo: string) => combinazioni),
   };
   const puntoVenditaService = {
     getVolantiniAttivi: vi.fn(async (idPv: string) => [{ id_kit: `kit-${idPv}`, promo: { id: 'p1', nome: 'Promo' }, files: [] }]),
@@ -102,6 +106,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   permessi.concessi = new Set(['gdo.visualizza']);
   storie = [];
+  combinazioni = [{ id_canale: 'c1', id_area: 'a1' }];
 });
 
 describe('GET /api/punti-vendita', () => {
@@ -141,7 +146,29 @@ describe('GET /api/punti-vendita', () => {
       area: { id: 'a1', nome: 'Toscana', codice: 'TO' },
       meta: { id_anacan: '004512', id_muro: 'M12' },
       coordinate: { lat: 43.84, lon: 10.5 },
+      combinazioneConVolantini: true,
     });
+  });
+
+  it('dice se la combinazione canale/area del punto vendita ha volantini, letti nella GDO della sessione', async () => {
+    combinazioni = [{ id_canale: 'c1', id_area: 'a2' }, { id_canale: 'c2', id_area: 'a1' }];
+    const { app, repository } = creaApp();
+
+    const res = await request(app).get('/api/punti-vendita');
+
+    expect(repository.combinazioniDeiVolantini).toHaveBeenCalledWith('gdo-sessione');
+    // Canale e area hanno volantini, ma non insieme: la combinazione c1/a1 no
+    expect(res.body[0].combinazioneConVolantini).toBe(false);
+  });
+
+  it('se le combinazioni dei volantini non si leggono, l\'elenco esce senza l\'indicazione', async () => {
+    const { app, repository } = creaApp();
+    vi.mocked(repository.combinazioniDeiVolantini).mockRejectedValueOnce(new Error('tabella non raggiungibile'));
+
+    const res = await request(app).get('/api/punti-vendita');
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body[0])).not.toContain('combinazioneConVolantini');
   });
 
   it('il punto vendita con dei volantini porta la loro storia: quanti, l\'insegna anno per anno e se e\' cambiata', async () => {

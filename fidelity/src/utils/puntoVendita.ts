@@ -21,17 +21,35 @@ const normalizza = (valore: unknown) =>
 
 type PuntoVenditaFiltrabile = Pick<PuntoVenditaResponseDTO, "nome" | "citta" | "indirizzo" | "cap" | "meta" | "id_canale" | "id_area">;
 
-/** Ricerca per nome, citta, indirizzo, CAP e codici GDO (senza maiuscole ne accenti) e filtri per canale e area. */
+/** Un codice confrontato per intero: senza maiuscole, accenti e zeri iniziali ("004512" = "4512"). */
+const normalizzaCodice = (valore: unknown) => normalizza(String(valore ?? "").trim()).replace(/^0+(?=.)/, "");
+
+/** I valori di un campo dei meta: uno solo, o ciascuno quando il campo ne ha più (es. id ANACAN alternativi). */
+const valoriDelCampo = (meta: Record<string, unknown> | undefined, campo: string): unknown[] => {
+  const valore = meta?.[campo];
+  if (valore === null || valore === undefined) return [];
+  return Array.isArray(valore) ? valore : [valore];
+};
+
+/**
+ * Ricerca per nome, citta, indirizzo, CAP e codici GDO (senza maiuscole ne accenti, anche per una
+ * parte del testo) e filtri per canale e area. Con `campo` (un campo dei meta, es. "id_anacan") la
+ * ricerca guarda solo quel codice e lo vuole uguale, senza contare gli zeri iniziali.
+ */
 export const filtraPuntiVendita = <T extends PuntoVenditaFiltrabile>(
   puntiVendita: T[],
-  { testo = "", idCanale, idArea }: { testo?: string; idCanale?: string; idArea?: string },
+  { testo = "", campo, idCanale, idArea }: { testo?: string; campo?: string; idCanale?: string; idArea?: string },
 ) => {
   const cercato = normalizza(testo.trim());
+  const codiceCercato = normalizzaCodice(testo);
+  const trovato = (pv: T) =>
+    campo
+      ? valoriDelCampo(pv.meta, campo).some(v => normalizzaCodice(v) === codiceCercato)
+      : [pv.nome, pv.citta, pv.indirizzo, pv.cap, ...codiciGdo(pv.meta).map(c => c.valore)].some(v => normalizza(v).includes(cercato));
   return puntiVendita.filter(pv =>
     (!idCanale || pv.id_canale === idCanale) &&
     (!idArea || pv.id_area === idArea) &&
-    (!cercato ||
-      [pv.nome, pv.citta, pv.indirizzo, pv.cap, ...codiciGdo(pv.meta).map(c => c.valore)].some(v => normalizza(v).includes(cercato))));
+    (!cercato || trovato(pv)));
 };
 
 /** Quanti punti vendita per canale o per area, in ordine di nome. */

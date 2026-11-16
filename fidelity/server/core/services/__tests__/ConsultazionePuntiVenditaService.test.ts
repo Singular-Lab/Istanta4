@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '../../../../lib/errors';
-import type { RigaPuntoVenditaConsultazione, RigaStoriaInElenco } from '../../repositories/ConsultazionePuntiVenditaRepository';
+import type {
+  RigaCombinazioneVolantini,
+  RigaPuntoVenditaConsultazione,
+  RigaStoriaInElenco,
+} from '../../repositories/ConsultazionePuntiVenditaRepository';
 import { ConsultazionePuntiVenditaService, inConsultazione, storiaInElenco } from '../ConsultazionePuntiVenditaService';
 
 vi.mock('../../logger', () => ({
@@ -65,6 +69,7 @@ describe('ConsultazionePuntiVenditaService', () => {
       elencaDellaGdo: vi.fn(async () => [riga()]),
       trovaDellaGdo: vi.fn(async () => trovato),
       storiaInElenco: vi.fn(async (): Promise<RigaStoriaInElenco[]> => []),
+      combinazioniDeiVolantini: vi.fn(async (): Promise<RigaCombinazioneVolantini[]> => []),
     };
     const puntoVenditaService = { getVolantiniAttivi: vi.fn(async () => []) };
     return { servizio: new ConsultazionePuntiVenditaService(repository, puntoVenditaService), repository, puntoVenditaService };
@@ -84,6 +89,28 @@ describe('ConsultazionePuntiVenditaService', () => {
     await expect(servizio.dettaglio('g1', PV)).rejects.toThrow(NotFoundError);
     await expect(servizio.volantiniAttivi('g1', PV)).rejects.toThrow(NotFoundError);
     expect(puntoVenditaService.getVolantiniAttivi).not.toHaveBeenCalled();
+  });
+
+  it('nell\'elenco segna i punti vendita la cui combinazione canale/area ha volantini', async () => {
+    const { servizio, repository } = crea(riga());
+    const PV_SENZA = '22222222-2222-4222-8222-222222222222';
+    const PV_NESSUNA = '33333333-3333-4333-8333-333333333333';
+    repository.elencaDellaGdo.mockResolvedValueOnce([
+      riga(),
+      riga({ id: PV_SENZA, id_area: 'a2', nome_area: 'Liguria' }),
+      riga({ id: PV_NESSUNA, id_canale: null, id_area: null }),
+    ]);
+    // Gli id arrivano dal kit: maiuscole o minuscole non contano
+    repository.combinazioniDeiVolantini.mockResolvedValueOnce([{ id_canale: 'C1', id_area: 'A1' }, { id_canale: 'c2', id_area: 'a2' }]);
+
+    const elenco = await servizio.elenca('g1');
+
+    expect(repository.combinazioniDeiVolantini).toHaveBeenCalledWith('g1');
+    expect(elenco.map(pv => [pv.id, pv.combinazioneConVolantini])).toEqual([
+      [PV, true],
+      [PV_SENZA, false],
+      [PV_NESSUNA, false],
+    ]);
   });
 
   it('i volantini attivi sono quelli della gestione, dopo il controllo della GDO', async () => {

@@ -59,9 +59,10 @@ export interface FiltriPuntiVenditaProps<T extends PuntoVenditaInElenco> {
 
 /**
  * Ricerca, area e insegna sopra i risultati, comuni alla consultazione e alla gestione: sulla
- * prima riga ricerca e area, con la scelta della vista allineata a destra e della stessa altezza;
- * sotto le insegne, chip con il colore della mappa e delle infografiche. Su mobile tutto in
- * colonna. Ogni voce conta i punti vendita rispettando gli altri filtri.
+ * prima riga ricerca (con "Cerca in" quando la GDO ha codici, es. ID ANACAN) e area, con le
+ * azioni della pagina allineate a destra e della stessa altezza; sotto le insegne, chip con il
+ * colore della mappa. Su mobile tutto in colonna. Ogni voce conta i punti vendita rispettando gli
+ * altri filtri.
  */
 export function FiltriPuntiVendita<T extends PuntoVenditaInElenco>({
   elenco,
@@ -69,6 +70,7 @@ export function FiltriPuntiVendita<T extends PuntoVenditaInElenco>({
   placeholder = "Nome, città, indirizzo o codice",
   destra,
 }: FiltriPuntiVenditaProps<T>) {
+  const campoScelto = elenco.campiRicerca.find(c => c.campo === elenco.campoRicerca);
   return (
     // Gli stessi spazi e bordi della BarraFiltri "sezione", su due righe
     <div className="flex flex-col gap-3 border-b border-dashed border-slate-200 p-5 dark:border-darkmode-400 [.sezione-intestazione+&]:pt-0">
@@ -83,9 +85,25 @@ export function FiltriPuntiVendita<T extends PuntoVenditaInElenco>({
           ) : undefined
         }
       >
+        {elenco.campiRicerca.length > 0 && (
+          // Su un codice la ricerca vuole il valore intero: il segnaposto lo dice
+          <FormSelect
+            aria-label="Cerca in"
+            className="sm:w-48"
+            value={elenco.campoRicerca}
+            onChange={evento => elenco.setCampoRicerca(evento.target.value)}
+          >
+            <option value="">Tutti i campi</option>
+            {elenco.campiRicerca.map(c => (
+              <option key={c.campo} value={c.campo}>
+                {c.etichetta}
+              </option>
+            ))}
+          </FormSelect>
+        )}
         <CampoRicerca
           etichetta="Cerca punto vendita"
-          placeholder={placeholder}
+          placeholder={campoScelto ? `${campoScelto.etichetta} esatto` : placeholder}
           value={elenco.ricerca}
           onChange={elenco.setRicerca}
         />

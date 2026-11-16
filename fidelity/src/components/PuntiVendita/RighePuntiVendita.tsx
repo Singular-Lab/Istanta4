@@ -4,11 +4,9 @@ import Skeleton from "@/components/Base/Skeleton";
 import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import { formatNumero } from "@/utils/format";
-import { twMerge } from "@/utils/twMerge";
 import { Link } from "react-router-dom";
 import { indirizzoCompleto } from "../../utils/puntoVendita";
 import { codiciIdentificativi, DIMENSIONI_PAGINA_PUNTI_VENDITA, volantiniDi, type ConStoria, type ElencoPuntiVendita, type PuntoVenditaInElenco } from "./elenco";
-import { periodiInsegna, StrisciaInsegne, testoPeriodiInsegna } from "./StrisciaInsegne";
 
 export interface RighePuntiVenditaProps<T extends PuntoVenditaInElenco & ConStoria> {
   elenco: ElencoPuntiVendita<T>;
@@ -17,8 +15,8 @@ export interface RighePuntiVenditaProps<T extends PuntoVenditaInElenco & ConStor
   errore: string | null;
   onRiprova: () => void;
   percorsoScheda: (pv: T) => string;
-  /** Anni della striscia delle insegne; vuoto se il server non manda la storia con l'elenco. */
-  anni: number[];
+  /** Vero se il server manda la storia nei volantini con l'elenco: solo allora la riga dice quanti volantini. */
+  conStoria: boolean;
   /** Stato vuoto senza ricerca né filtri. */
   vuoto: { titolo: string; descrizione: string };
 }
@@ -27,8 +25,9 @@ const testoVolantini = (numero: number) => (numero === 1 ? "1 volantino" : `${fo
 
 /**
  * Le righe dell'elenco della consultazione: nome, indirizzo e, sotto, insegna, area e codici GDO;
- * l'insegna nei volantini anno per anno, quanti volantini e se ha cambiato insegna. Senza la
- * storia nell'elenco la riga ha solo la prima colonna. Tutta la riga apre la scheda del punto vendita.
+ * a destra quanti volantini e se ha cambiato insegna. Niente insegna anno per anno (spec
+ * anagrafica-punti-vendita, "Rete dei punti vendita e qualità dei dati"). Senza la storia
+ * nell'elenco la riga ha solo la prima colonna. Tutta la riga apre la scheda del punto vendita.
  */
 export function RighePuntiVendita<T extends PuntoVenditaInElenco & ConStoria>({
   elenco,
@@ -36,23 +35,21 @@ export function RighePuntiVendita<T extends PuntoVenditaInElenco & ConStoria>({
   errore,
   onRiprova,
   percorsoScheda,
-  anni,
+  conStoria,
   vuoto,
 }: RighePuntiVenditaProps<T>) {
-  const conStoria = anni.length > 0;
 
   if (caricamento) {
     return (
       <ul aria-busy="true" aria-label="Caricamento dei punti vendita" className="divide-y divide-slate-200 dark:divide-darkmode-400">
         {Array.from({ length: 6 }, (_, indice) => (
-          <li key={indice} className="grid grid-cols-1 gap-3 px-5 py-3 md:grid-cols-[minmax(0,1fr)_minmax(13rem,18rem)_10rem] md:items-center">
+          <li key={indice} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-5 py-3">
             <div>
               <Skeleton className="h-4 w-1/2" />
               <Skeleton className="mt-1.5 h-3 w-2/3" />
               <Skeleton className="mt-1.5 h-3 w-1/3" />
             </div>
-            <Skeleton className="h-3" />
-            <Skeleton className="h-4 w-20 md:justify-self-end" />
+            <Skeleton className="h-4 w-20" />
           </li>
         ))}
       </ul>
@@ -90,15 +87,12 @@ export function RighePuntiVendita<T extends PuntoVenditaInElenco & ConStoria>({
           const indirizzo = indirizzoCompleto(pv);
           const volantini = volantiniDi(pv);
           const cambio = Boolean(pv.storia?.cambioInsegna);
-          const periodi = periodiInsegna(pv.storia?.insegnePerAnno ?? []);
-          // Il nome del link per intero: la striscia è solo visiva, i suoi anni li dice il testo
+          // Il nome del link per intero, con quello che la riga mostra
           const etichetta = [
             pv.nome,
             indirizzo,
             pv.nome_canale,
-            ...(conStoria
-              ? [testoVolantini(volantini), periodi.length > 0 ? `nei volantini: ${testoPeriodiInsegna(periodi)}` : "mai nei volantini"]
-              : []),
+            ...(conStoria ? [volantini > 0 ? testoVolantini(volantini) : "mai nei volantini"] : []),
             ...(cambio ? ["ha cambiato insegna"] : []),
           ]
             .filter(Boolean)
@@ -109,13 +103,9 @@ export function RighePuntiVendita<T extends PuntoVenditaInElenco & ConStoria>({
               <Link
                 to={percorsoScheda(pv)}
                 aria-label={etichetta}
-                className={twMerge(
-                  // Su mobile la striscia e i volantini stanno affiancati sotto nome e indirizzo
-                  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-5 gap-y-2 px-5 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-theme-1/40 md:items-center dark:hover:bg-darkmode-400/40",
-                  conStoria ? "md:grid-cols-[minmax(0,1fr)_minmax(13rem,18rem)_10rem]" : "md:grid-cols-[minmax(0,1fr)_auto]"
-                )}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-5 gap-y-2 px-5 py-3 transition-colors hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-theme-1/40 dark:hover:bg-darkmode-400/40"
               >
-                <div className="col-span-2 min-w-0 md:col-span-1">
+                <div className="min-w-0">
                   <div className="truncate font-medium text-slate-800 dark:text-slate-200">{pv.nome}</div>
                   <div className="truncate text-xs text-slate-500">{indirizzo || "Indirizzo non impostato"}</div>
                   {/* Insegna e area accanto al nome, non in fondo alla riga: con i codici che la GDO usa */}
@@ -131,7 +121,6 @@ export function RighePuntiVendita<T extends PuntoVenditaInElenco & ConStoria>({
                     ))}
                   </div>
                 </div>
-                {conStoria && <StrisciaInsegne anni={anni} storia={pv.storia} coloreDelCanale={elenco.coloreDelCanale} />}
                 {(conStoria || cambio) && (
                   <div className="flex flex-col items-end gap-1 text-xs text-slate-500">
                     {conStoria && (

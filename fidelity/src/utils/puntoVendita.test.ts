@@ -63,6 +63,45 @@ describe("filtraPuntiVendita", () => {
   });
 });
 
+describe("filtraPuntiVendita su un codice della GDO", () => {
+  const conCodici = [
+    pv("Conad 359", "Lucca", "cc", "to", { meta: { id_anacan: "359", id_muro: "12" } }),
+    pv("Conad 3590", "Pisa", "cc", "to", { meta: { id_anacan: "3590" } }),
+    pv("Conad 1359", "Massa", "cc", "to", { meta: { id_anacan: "1359" } }),
+    pv("Conad zeri", "Sarzana", "cc", "li", { meta: { id_anacan: "004512", id_anacan_alternativi: ["50491", "50893"] } }),
+    pv("Conad 35900", "Siena", "cc", "to"),
+  ];
+  const nomi = (filtri: Parameters<typeof filtraPuntiVendita>[1]) => filtraPuntiVendita(conCodici, filtri).map(p => p.nome);
+
+  it("vuole il codice intero: \"359\" non trova 3590, 1359 né il nome o il CAP che lo contengono", () => {
+    expect(nomi({ testo: "359", campo: "id_anacan" })).toEqual(["Conad 359"]);
+  });
+
+  it("su tutti i campi la ricerca resta per parte del testo", () => {
+    expect(nomi({ testo: "359" })).toEqual(["Conad 359", "Conad 3590", "Conad 1359", "Conad 35900"]);
+  });
+
+  it("non conta gli zeri iniziali né gli spazi intorno", () => {
+    expect(nomi({ testo: " 4512 ", campo: "id_anacan" })).toEqual(["Conad zeri"]);
+    expect(nomi({ testo: "004512", campo: "id_anacan" })).toEqual(["Conad zeri"]);
+  });
+
+  it("un campo con più valori si trova da ciascuno", () => {
+    expect(nomi({ testo: "50893", campo: "id_anacan_alternativi" })).toEqual(["Conad zeri"]);
+    expect(nomi({ testo: "5089", campo: "id_anacan_alternativi" })).toEqual([]);
+  });
+
+  it("guarda solo il campo scelto, insieme ai filtri", () => {
+    expect(nomi({ testo: "12", campo: "id_anacan" })).toEqual([]);
+    expect(nomi({ testo: "12", campo: "id_muro" })).toEqual(["Conad 359"]);
+    expect(nomi({ testo: "4512", campo: "id_anacan", idArea: "to" })).toEqual([]);
+  });
+
+  it("senza testo il campo scelto non filtra", () => {
+    expect(nomi({ testo: "", campo: "id_anacan" })).toHaveLength(5);
+  });
+});
+
 describe("contaPer", () => {
   it("conta le aree dentro il canale scelto", () => {
     expect(contaPer(filtraPuntiVendita(elenco, { idCanale: "cc" }), "area")).toEqual([
