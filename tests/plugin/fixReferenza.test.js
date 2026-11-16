@@ -59,10 +59,11 @@ function scena(selezione, risposta) {
             getDnaOfBox: () => ({ codice_gruppo: "6322946", idRec: "10" }),
             parseLabel: (l) => l
         },
-        schedaRef: {
+        //La ricerca della primaria del box e' quella vera di schedaRef.
+        schedaRef: Object.assign(Object.create(require('../../plugin/schedaRef.js')), {
             schedeRefDati: [{ recordInTracciato: { "Scatto.CodiceGruppo": "6322946", StatoSelezione: 1, idRec: 10 } }],
             refSelected: { boxOriginalBounds: [0, 0, 100, 100] }
-        },
+        }),
         getIdRecFromItemRef: (r) => r.idRec,
         Modali: { confirm: async () => { registro.push("domanda"); return risposta; } },
         indesignEvents: { setBusy: () => { } },

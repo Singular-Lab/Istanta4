@@ -1488,6 +1488,46 @@ const schedaRef = {
 
     //I20-1121: ignoraInvalidazione serve al ricontrollo del report affiancato, che rilegge la scheda
     //quando l'operatore ha gia' lasciato il box (e la scheda del pannello e' stata invalidata).
+    /// La referenza di un box per i fix (foto, CssFramework), dalle schede in memoria: la primaria
+    /// attuale del gruppo. L'idRec del DNA e' quello della primaria all'impaginazione e identifica il
+    /// box, non la sua primaria: dopo un cambio da Foto P/S la primaria ha un altro idRec. Le schede
+    /// sono quelle del box se fra le referenze del gruppo c'e' quella dell'idRec, in qualunque stato;
+    /// cosi' due impaginazioni dello stesso gruppo (main e soci) restano distinte. Senza idRec vale la
+    /// primaria del gruppo. Null se le schede non sono di questo box. Pura.
+    primariaDelBox(schede, codiceGruppo, idRecBox) {
+        if (!Array.isArray(schede) || codiceGruppo == null || String(codiceGruppo) === "") {
+            return null;
+        }
+        const delGruppo = schede.filter(s => s != null && s.recordInTracciato != null
+            && s.recordInTracciato["Scatto.CodiceGruppo"] != null
+            && s.recordInTracciato["Scatto.CodiceGruppo"].toString() == String(codiceGruppo));
+        const idRec = idRecBox != null && idRecBox !== "" && !isNaN(parseInt(idRecBox)) ? parseInt(idRecBox) : null;
+        if (idRec != null && !delGruppo.some(s => (this.idRecDelRecord(s.recordInTracciato) ?? this.idRecDelRecord(s)) === idRec)) {
+            return null;
+        }
+        const primaria = delGruppo.find(s => s.recordInTracciato.StatoSelezione == 1);
+        return primaria != null ? primaria.recordInTracciato : null;
+    },
+
+    /// La primaria dalla risposta di getSchedaRef ({ records: [...] }): il suo recordInTracciato, con
+    /// le etichette. Null se la risposta non ha record o non ha una primaria. Pura.
+    primariaDellaRisposta(risposta) {
+        if (risposta == null || !Array.isArray(risposta.records)) {
+            return null;
+        }
+        const primaria = risposta.records.find(r => r != null && r.recordInTracciato != null && r.recordInTracciato.StatoSelezione == 1);
+        return primaria != null ? primaria.recordInTracciato : null;
+    },
+
+    /// L'idRec di un record della scheda, come getIdRecFromItemRef (indexNew).
+    idRecDelRecord(record) {
+        if (record == null) {
+            return null;
+        }
+        const valore = record.idRec != null ? record.idRec : record.IdRec;
+        return valore != null && !isNaN(parseInt(valore)) ? parseInt(valore) : null;
+    },
+
     getSchedaRef(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false) {
         let me = this;
 
