@@ -36,6 +36,32 @@ namespace Istanta.Utility
             return foto.Tipo.HasValue && foto.Tipo != (byte)TipoFoto.Foto && !string.IsNullOrEmpty(foto.GuidId);
         }
 
+        /// Il JSON di una foto extra che la sezione delle foto mette nella pagina (archivio.js lo legge
+        /// per Elimina). Si serializza una copia senza l'articolo: la foto letta con l'articolo e le sue
+        /// foto rimanda all'articolo, che rimanda alle foto, e System.Text.Json si fermava sul ciclo.
+        /// Il risultato e' quello di sempre, con IdArticoloNavigation null; la foto letta non si tocca.
+        public static string JsonPerLaPagina(ArticoliFoto foto)
+        {
+            return System.Text.Json.JsonSerializer.Serialize(new ArticoliFoto
+            {
+                Id = foto.Id,
+                IdArticolo = foto.IdArticolo,
+                Area = foto.Area,
+                Canale = foto.Canale,
+                PathFoto = foto.PathFoto,
+                NomeReale = foto.NomeReale,
+                GuidId = foto.GuidId,
+                Puntatore = foto.Puntatore,
+                DataInserimento = foto.DataInserimento,
+                StatoSelezione = foto.StatoSelezione,
+                Attiva = foto.Attiva,
+                Hash = foto.Hash,
+                DataModifica = foto.DataModifica,
+                Tipo = foto.Tipo,
+                IdArticoloNavigation = null!,
+            });
+        }
+
         /// Le foto extra di un articolo, una per nome: dello stesso file possono esistere piu'
         /// versioni, e in elenco ne va una. E' la regola che la Scheda articolo usava gia'.
         public static List<ArticoliFoto> DiUnArticolo(IEnumerable<ArticoliFoto>? foto)
