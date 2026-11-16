@@ -10,7 +10,8 @@ import { codiciGdo, contaPer, filtraPuntiVendita } from "../../utils/puntoVendit
 /**
  * Elenco dei punti vendita in sola lettura, comune alla consultazione (/punti-vendita) e alla
  * gestione interna: ricerca, filtri per canale e area con i conteggi, colori per canale e pagine.
- * Spec anagrafica-punti-vendita: "Vista dei punti vendita per canale e area", "Elenco e ricerca".
+ * Spec anagrafica-punti-vendita: "Vista dei punti vendita per canale e area", "Elenco e ricerca",
+ * "Ricerca per codice del sistema della GDO" (il menu "Cerca in" sui codici dei meta).
  */
 
 /** I campi dell'anagrafica che servono all'elenco e alla mappa. */
@@ -69,6 +70,28 @@ export const codiciIdentificativi = (meta?: Record<string, unknown>) =>
     .filter(([campo]) => !CAMPI_DESCRITTIVI.has(campo.toLowerCase()))
     .flatMap(([campo, valore]) => codiciGdo({ [campo]: valore }));
 
+/** Un campo dei meta in cui cercare, con il nome dell'elenco (es. "ID ANACAN"). */
+export interface CampoRicerca {
+  campo: string;
+  etichetta: string;
+}
+
+/**
+ * I codici della GDO in cui si può cercare: i campi dei meta che identificano i punti vendita
+ * (non l'insegna) e che almeno un punto vendita ha valorizzati, per nome. Vuoto per le GDO senza codici.
+ */
+export const campiRicercaCodici = (puntiVendita: ReadonlyArray<Pick<PuntoVenditaInElenco, "meta">>): CampoRicerca[] => {
+  const campi = new Map<string, string>();
+  for (const pv of puntiVendita) {
+    for (const [campo, valore] of Object.entries(pv.meta ?? {})) {
+      if (campi.has(campo) || CAMPI_DESCRITTIVI.has(campo.toLowerCase())) continue;
+      const [codice] = codiciGdo({ [campo]: valore });
+      if (codice) campi.set(campo, codice.etichetta);
+    }
+  }
+  return [...campi.entries()].map(([campo, etichetta]) => ({ campo, etichetta })).sort((a, b) => a.etichetta.localeCompare(b.etichetta));
+};
+
 export const haCoordinate = (pv: Pick<PuntoVenditaInElenco, "has_coordinate" | "coordinate">) =>
   Boolean(pv.has_coordinate && pv.coordinate && Number.isFinite(pv.coordinate.lat) && Number.isFinite(pv.coordinate.lon));
 
@@ -86,9 +109,9 @@ export const volantiniDi = (pv: object) => storiaDi(pv)?.volantini ?? 0;
 
 // Il colore di un canale (insegna) è quello di tutte le pagine dei punti vendita: tinteCanali di
 // PuntiVenditaConsultazione/analisi, per nome sulle insegne della rete. Stabile anche filtrando,
-// lo stesso nella mappa (Leaflet lo riceve come opzione di disegno), nei filtri, nelle infografiche
-// e nelle righe. Il grigio neutro è per i punti vendita senza canale, per gli anni senza volantini
-// e per i canali oltre il numero di colori distinguibili.
+// lo stesso nella mappa (Leaflet lo riceve come opzione di disegno), nei filtri, nelle righe e
+// nella scheda del punto vendita. Il grigio neutro è per i punti vendita senza canale, per gli anni
+// senza volantini e per i canali oltre il numero di colori distinguibili.
 export const coloreSenzaCanale = () => coloreSemantico("neutro");
 
 /** Il colore CSS di una tinta dei grafici, per pallini e celle HTML; grigio neutro se non ne ha uno. */
@@ -120,6 +143,11 @@ export interface ElencoPuntiVendita<T extends PuntoVenditaInElenco> {
   setRicerca: (testo: string) => void;
   /** Il testo cercato, applicato dopo una pausa nella digitazione. */
   ricercaApplicata: string;
+  /** I codici della GDO in cui si può cercare per intero; vuoto se la GDO non ne ha. */
+  campiRicerca: CampoRicerca[];
+  /** Il campo dei meta in cui si cerca il codice esatto; "" per tutti i campi. */
+  campoRicerca: string;
+  setCampoRicerca: (campo: string) => void;
   filtroCanale: string;
   setFiltroCanale: (id: string) => void;
   filtroArea: string;
@@ -157,6 +185,7 @@ export function useElencoPuntiVendita<T extends PuntoVenditaInElenco>(
   const [dimensionePagina, setDimensionePagina] = useState(DIMENSIONI_PAGINA_PUNTI_VENDITA[0]);
   const [ricerca, setRicerca] = useState("");
   const [ricercaApplicata, setRicercaApplicata] = useState("");
+  const [campoScelto, setCampoRicerca] = useState("");
   const [filtroCanale, setFiltroCanale] = useState("");
   const [filtroArea, setFiltroArea] = useState("");
   const chiaveFiltro = filtro?.chiave ?? "";
@@ -166,9 +195,14 @@ export function useElencoPuntiVendita<T extends PuntoVenditaInElenco>(
     return () => clearTimeout(attesa);
   }, [ricerca]);
 
+  // Un campo che i punti vendita non hanno più vale come "tutti i campi"
+  const campiRicerca = useMemo(() => campiRicercaCodici(tutti), [tutti]);
+  const campoRicerca = campiRicerca.some(c => c.campo === campoScelto) ? campoScelto : "";
+  const campo = campoRicerca || undefined;
+
   useEffect(() => {
     setPagina(1);
-  }, [ricercaApplicata, dimensionePagina, filtroCanale, filtroArea, chiaveFiltro]);
+  }, [ricercaApplicata, campoRicerca, dimensionePagina, filtroCanale, filtroArea, chiaveFiltro]);
 
   // Il filtro della pagina vale prima degli altri: anche i conteggi per canale e area lo rispettano
   const testFiltro = filtro?.test;
@@ -177,17 +211,17 @@ export function useElencoPuntiVendita<T extends PuntoVenditaInElenco>(
   // ponytail: ricerca, filtri e pagine nel browser sull'elenco completo, già scaricato per la mappa;
   // regge qualche migliaio di PV, oltre si passa ai filtri lato server
   const filtrati = useMemo(
-    () => filtraPuntiVendita(base, { testo: ricercaApplicata, idCanale: filtroCanale, idArea: filtroArea }),
-    [base, ricercaApplicata, filtroCanale, filtroArea]
+    () => filtraPuntiVendita(base, { testo: ricercaApplicata, campo, idCanale: filtroCanale, idArea: filtroArea }),
+    [base, ricercaApplicata, campo, filtroCanale, filtroArea]
   );
   // Ogni dimensione conta i PV rispettando gli altri filtri, non il proprio
   const perCanale = useMemo(
-    () => contaPer(filtraPuntiVendita(base, { testo: ricercaApplicata, idArea: filtroArea }), "canale"),
-    [base, ricercaApplicata, filtroArea]
+    () => contaPer(filtraPuntiVendita(base, { testo: ricercaApplicata, campo, idArea: filtroArea }), "canale"),
+    [base, ricercaApplicata, campo, filtroArea]
   );
   const perArea = useMemo(
-    () => contaPer(filtraPuntiVendita(base, { testo: ricercaApplicata, idCanale: filtroCanale }), "area"),
-    [base, ricercaApplicata, filtroCanale]
+    () => contaPer(filtraPuntiVendita(base, { testo: ricercaApplicata, campo, idCanale: filtroCanale }), "area"),
+    [base, ricercaApplicata, campo, filtroCanale]
   );
   // I colori di tutte le pagine dei punti vendita: per nome sulle insegne della rete, più quelle
   // dell'anagrafica che mancassero. Calcolati al render: i colori del tema cambiano con lo schema scelto
@@ -207,6 +241,7 @@ export function useElencoPuntiVendita<T extends PuntoVenditaInElenco>(
   const azzeraFiltroAggiuntivo = filtro?.azzera;
   const azzeraFiltri = useCallback(() => {
     setRicerca("");
+    setCampoRicerca("");
     setFiltroCanale("");
     setFiltroArea("");
     azzeraFiltroAggiuntivo?.();
@@ -216,6 +251,9 @@ export function useElencoPuntiVendita<T extends PuntoVenditaInElenco>(
     ricerca,
     setRicerca,
     ricercaApplicata,
+    campiRicerca,
+    campoRicerca,
+    setCampoRicerca,
     filtroCanale,
     setFiltroCanale,
     filtroArea,

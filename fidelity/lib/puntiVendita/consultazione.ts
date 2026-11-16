@@ -42,4 +42,11 @@ export interface PuntoVenditaConsultazione {
    * volantino: quanti volantini e con quale insegna, anno per anno (contratto in ./analisi.ts).
    */
   storia?: StoriaInElenco;
+  /**
+   * Solo nell'elenco: vero se la combinazione canale/area del punto vendita ha almeno un volantino
+   * della GDO, nello storico o in produzione (kit di formato volantino non eliminato di una promo
+   * non eliminata, in qualunque altro stato). La consultazione mostra solo questi punti vendita;
+   * la gestione interna li mostra tutti. Assente se le combinazioni dei volantini non si leggono.
+   */
+  combinazioneConVolantini?: boolean;
 }

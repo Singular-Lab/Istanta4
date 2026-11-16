@@ -4,15 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReteInsegne } from "../../../lib/puntiVendita/analisi";
 
 // Elenco dei punti vendita comune a consultazione e gestione: colori delle insegne uguali a quelli
-// delle altre pagine dei punti vendita, filtro aggiuntivo della pagina, striscia delle insegne
+// delle altre pagine dei punti vendita, filtro aggiuntivo della pagina, ricerca su un codice della GDO
 
 const finti = vi.hoisted(() => ({ rete: {} as Record<string, unknown> }));
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => finti.rete }));
 
 import { tintaCategoria, TINTA_NEUTRA } from "@/components/Grafici/colori";
 import { tinteCanali } from "@/pages/PuntiVenditaConsultazione/analisi";
-import { codiciIdentificativi, coloreDaTinta, useElencoPuntiVendita, type PuntoVenditaInElenco } from "./elenco";
-import { periodiInsegna, testoPeriodiInsegna } from "./StrisciaInsegne";
+import { campiRicercaCodici, codiciIdentificativi, coloreDaTinta, useElencoPuntiVendita, type PuntoVenditaInElenco } from "./elenco";
 
 const pv = (id: string, canale: { id: string; nome: string } | null, dati: Partial<PuntoVenditaInElenco> = {}): PuntoVenditaInElenco => ({
   id,
@@ -113,19 +112,60 @@ describe("filtro aggiuntivo della pagina", () => {
   });
 });
 
-describe("insegna nei volantini anno per anno", () => {
-  it("unisce gli anni consecutivi con la stessa insegna; un anno senza volantini interrompe il tratto", () => {
-    const periodi = periodiInsegna([
-      { anno: 2026, canale: SUPERSTORE },
-      { anno: 2021, canale: CITY },
-      { anno: 2022, canale: CITY },
-      { anno: 2023, canale: null },
-      { anno: 2024, canale: CITY },
-      { anno: 2025, canale: SUPERSTORE },
+describe("ricerca su un codice della GDO", () => {
+  beforeEach(() => {
+    finti.rete = { data: undefined };
+  });
+
+  it("i campi in cui cercare sono i codici dei meta valorizzati, per nome, senza l'insegna", () => {
+    const campi = campiRicercaCodici([
+      pv("1", null, { meta: { id_muro: "317", insegna: "Spazio Conad", id_anacan: "3418" } }),
+      pv("2", null, { meta: { id_anacan_alternativi: ["50491"], vuoto: " ", lista_vuota: [] } }),
+      pv("3", null, { meta: undefined }),
     ]);
 
-    expect(testoPeriodiInsegna(periodi)).toBe("Conad City 2021–2022 · Conad City 2024 · Conad Superstore 2025–2026");
-    expect(testoPeriodiInsegna(periodiInsegna([]))).toBe("mai nei volantini");
+    expect(campi).toEqual([
+      { campo: "id_anacan", etichetta: "ID ANACAN" },
+      { campo: "id_anacan_alternativi", etichetta: "ID ANACAN ALTERNATIVI" },
+      { campo: "id_muro", etichetta: "ID MURO" },
+    ]);
+    expect(campiRicercaCodici([pv("1", null, { meta: { insegna: "Conad City" } })])).toEqual([]);
+  });
+
+  it("sul campo scelto cerca il codice intero, anche nei conteggi; Azzera filtri torna a tutti i campi", async () => {
+    vi.useFakeTimers();
+    try {
+      const tutti = [
+        pv("1", CITY, { meta: { id_anacan: "359" } }),
+        pv("2", CITY, { meta: { id_anacan: "3590" } }),
+        pv("3", SUPERSTORE, { meta: { id_anacan: "1359" } }),
+      ];
+      const { result } = renderHook(() => useElencoPuntiVendita(tutti));
+
+      act(() => {
+        result.current.setCampoRicerca("id_anacan");
+        result.current.setRicerca("359");
+      });
+      act(() => vi.advanceTimersByTime(400));
+
+      expect(result.current.campoRicerca).toBe("id_anacan");
+      expect(result.current.filtrati.map(p => p.id)).toEqual(["1"]);
+      expect(result.current.perCanale.map(c => [c.nome, c.totale])).toEqual([["Conad City", 1]]);
+
+      act(() => result.current.azzeraFiltri());
+      expect(result.current.campoRicerca).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("un campo che i punti vendita non hanno vale come tutti i campi", () => {
+    const { result } = renderHook(() => useElencoPuntiVendita([pv("1", CITY)]));
+
+    act(() => result.current.setCampoRicerca("id_anacan"));
+
+    expect(result.current.campiRicerca).toEqual([]);
+    expect(result.current.campoRicerca).toBe("");
   });
 });
 

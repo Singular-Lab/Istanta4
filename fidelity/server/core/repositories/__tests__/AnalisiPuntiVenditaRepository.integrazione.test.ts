@@ -314,6 +314,27 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
     ]);
   });
 
+  it('combinazioni dei volantini: storico e produzione, una volta sola; non POP, kit o promo eliminati, altre GDO', async () => {
+    const storico = await creaKitRuntime({ statoPromo: 'ARCHIVIATA' });
+    const idGdo = storico.idGdo;
+    // Stessa combinazione, altra promo: la combinazione esce una volta sola
+    await creaKitRuntime({ stessaCombinazioneDi: storico, idGdo, statoPromo: 'VALIDA' });
+    const inProduzione = await creaKitRuntime({ idGdo, statoPromo: 'PIANIFICATA', statoLavorazione: 'IN_LAVORAZIONE' });
+    // Ognuno con una combinazione sua, che non deve uscire
+    await creaKitRuntime({ idGdo, statoPromo: 'VALIDA', tipoLavorazione: 2, nomeFormato: 'Locandina' });
+    await creaKitRuntime({ idGdo, statoPromo: 'VALIDA', statoLavorazione: 'ELIMINATO' });
+    await creaKitRuntime({ idGdo, statoPromo: 'ELIMINATA' });
+    await creaKitRuntime({ statoPromo: 'VALIDA' });
+
+    const combinazioni = await new ConsultazionePuntiVenditaRepository().combinazioniDeiVolantini(idGdo);
+
+    const chiave = (c: { id_canale: string; id_area: string }) => `${c.id_canale}|${c.id_area}`;
+    expect(combinazioni.map(chiave).sort()).toEqual([
+      chiave({ id_canale: storico.idCanale, id_area: storico.idArea }),
+      chiave({ id_canale: inProduzione.idCanale, id_area: inProduzione.idArea }),
+    ].sort());
+  });
+
   it('qualita\': coordinate, codice nei meta, PV con una storia, dispositivi offline, ultimo import Excel della GDO', async () => {
     const kit = await creaKitRuntime();
     const combinazione = await creaCombinazione(kit);

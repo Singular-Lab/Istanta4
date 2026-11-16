@@ -11,6 +11,7 @@ import type {
   RigaPuntoVenditaConsultazione,
   RigaStoriaInElenco,
 } from '../repositories/ConsultazionePuntiVenditaRepository';
+import { chiaveCombinazione } from '../utils/confrontoPuntiVendita';
 
 const testo = (valore: string | null | undefined): string | null => valore?.trim() || null;
 
@@ -83,12 +84,35 @@ export class ConsultazionePuntiVenditaService implements IConsultazionePuntiVend
   ) { }
 
   async elenca(idGdo: string): Promise<PuntoVenditaConsultazione[]> {
-    const [righe, storie] = await Promise.all([this.repository.elencaDellaGdo(idGdo), this.storie(idGdo)]);
+    const [righe, storie, combinazioni] = await Promise.all([
+      this.repository.elencaDellaGdo(idGdo),
+      this.storie(idGdo),
+      this.combinazioniDeiVolantini(idGdo),
+    ]);
     return righe.map((riga) => {
-      const puntoVendita = inConsultazione(riga);
+      const puntoVendita: PuntoVenditaConsultazione = inConsultazione(riga);
       const storia = storie.get(riga.id);
-      return storia ? { ...puntoVendita, storia } : puntoVendita;
+      if (storia) puntoVendita.storia = storia;
+      if (combinazioni) {
+        const chiave = chiaveCombinazione(riga.id_canale, riga.id_area);
+        puntoVendita.combinazioneConVolantini = chiave !== null && combinazioni.has(chiave);
+      }
+      return puntoVendita;
     });
+  }
+
+  /**
+   * Le chiavi delle combinazioni canale/area con volantini. Se non si leggono l'elenco esce senza
+   * l'indicazione e la consultazione mostra tutti i punti vendita, invece di nessuno.
+   */
+  private async combinazioniDeiVolantini(idGdo: string): Promise<Set<string> | null> {
+    try {
+      const righe = await this.repository.combinazioniDeiVolantini(idGdo);
+      return new Set(righe.map(r => chiaveCombinazione(r.id_canale, r.id_area)).filter((chiave): chiave is string => chiave !== null));
+    } catch (errore) {
+      log.warn('Consultazione PV: combinazioni dei volantini non lette per l\'elenco', { idGdo, errore: errore instanceof Error ? errore.message : String(errore) });
+      return null;
+    }
   }
 
   /** La storia nell'elenco e' un di piu': se non si legge, l'elenco esce senza. */
