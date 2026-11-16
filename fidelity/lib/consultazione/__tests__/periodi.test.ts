@@ -7,6 +7,7 @@ import {
   isPeriodoConsultazione,
   PERIODI_CONSULTAZIONE,
   percorsoPop,
+  percorsoPromozioneVolantini,
   percorsoVolantini,
   periodoConsultazioneDellaPromo,
   STATI_PROMO_CONSULTABILI,
@@ -65,6 +66,37 @@ describe('percorsi delle viste', () => {
   it('senza promo, o con un id vuoto, non aggiunge la query', () => {
     expect(percorsoVolantini('storico', '')).toBe('/volantini/storico');
     expect(percorsoPop('prossimi', undefined)).toBe('/pop/prossimi');
+  });
+
+  it('il dettaglio della promozione senza filtri non ha query', () => {
+    expect(percorsoPromozioneVolantini('p1')).toBe('/volantini/promozioni/p1');
+    expect(percorsoPromozioneVolantini('p1', {})).toBe('/volantini/promozioni/p1');
+    expect(percorsoPromozioneVolantini('p1', { idCanale: '', idArea: undefined })).toBe('/volantini/promozioni/p1');
+  });
+
+  it('il dettaglio della promozione si apre con i filtri insegna (canale) e area, come li legge la pagina', () => {
+    expect(percorsoPromozioneVolantini('p1', { idCanale: 'c1', idArea: 'a1' })).toBe(
+      '/volantini/promozioni/p1?canale=c1&area=a1'
+    );
+    expect(percorsoPromozioneVolantini('p1', { idArea: 'a1' })).toBe('/volantini/promozioni/p1?area=a1');
+    expect(percorsoPromozioneVolantini('p1', { idCanale: 'c1' })).toBe('/volantini/promozioni/p1?canale=c1');
+  });
+
+  it('nel dettaglio della promozione id e filtri sono codificati', () => {
+    const percorso = percorsoPromozioneVolantini('a b/c', { idCanale: 'x&y=z', idArea: 'n o' });
+    expect(percorso.split('?')[0]).toBe('/volantini/promozioni/a%20b%2Fc');
+    const query = new URLSearchParams(percorso.split('?')[1]);
+    expect(query.get('canale')).toBe('x&y=z');
+    expect(query.get('area')).toBe('n o');
+  });
+
+  it('il dettaglio della promozione, anche filtrato, chiede il permesso dei materiali', () => {
+    for (const percorso of [
+      percorsoPromozioneVolantini('p1'),
+      percorsoPromozioneVolantini('p1', { idCanale: 'c1', idArea: 'a1' }),
+    ]) {
+      expect(paginaPer(percorso)?.permesso, percorso).toBe(PERMESSI.MATERIALI.VISUALIZZA);
+    }
   });
 
   it('ogni vista ha la sua voce nel catalogo delle pagine, con il permesso dei materiali', () => {

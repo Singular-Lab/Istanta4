@@ -337,6 +337,36 @@ describe("Schede delle promozioni", () => {
     expect(scheda()).toHaveAccessibleName(/, 2 di 5 volantini,/);
   });
 
+  it.each(["attivi", "prossimi", "storico"])(
+    "in %s con area e canale scelti la scheda apre il dettaglio con gli stessi filtri",
+    async (periodo) => {
+      await apri(`/volantini/${periodo}?area=a1&canale=c1`);
+
+      // Il dettaglio chiama insegna il canale: ?canale=&area=, come li legge la sua pagina
+      expect(scheda()).toHaveAttribute("href", "/volantini/promozioni/p1?canale=c1&area=a1");
+    }
+  );
+
+  it("con la sola area, o il solo canale, la scheda porta al dettaglio soltanto quel filtro", async () => {
+    await apri("/volantini/attivi?area=a1");
+    expect(scheda()).toHaveAttribute("href", "/volantini/promozioni/p1?area=a1");
+    cleanup();
+
+    await apri("/volantini/prossimi?canale=c1");
+    expect(scheda()).toHaveAttribute("href", "/volantini/promozioni/p1?canale=c1");
+  });
+
+  it("ricerca, anno e promozione non passano al dettaglio: là ?cerca= cerca i prodotti", async () => {
+    await apri("/volantini/storico?cerca=colazione&anno=2026&promo=p1&area=a1");
+
+    expect(finti.filtri.at(-1)).toMatchObject({ cerca: "colazione", anno: 2026, idPromo: "p1", idArea: "a1" });
+    expect(scheda()).toHaveAttribute("href", "/volantini/promozioni/p1?area=a1");
+    cleanup();
+
+    await apri("/volantini/storico?cerca=colazione&anno=2026&promo=p1");
+    expect(scheda()).toHaveAttribute("href", "/volantini/promozioni/p1");
+  });
+
   it("negli Attivi la scadenza vicina è in evidenza, l'ultimo giorno dice Scade oggi", async () => {
     oggiE("2026-10-20T10:00:00+02:00");
     await apri("/volantini/attivi");
