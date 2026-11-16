@@ -127,3 +127,46 @@ test('il pulsante apre la finestra delle foto, anche sull\'intestazione costruit
     assert.ok(js.includes('pagina.on("click", "[data-azione=\'apriGestioneFoto\']"'));
     assert.ok(js.includes('"SchedaArticolo/GestioneFoto?codice=" + encodeURIComponent(codice || "")'));
 });
+
+/* ---- le foto extra presenti solo su alcune referenze del gruppo ---- */
+
+test('Estendi manda il GUID della foto extra e il codice del gruppo', () => {
+    assert.deepStrictEqual(Archivio.datiEstendiFotoExtra('G1', '123,456,789'), { guidId: 'G1', codice: '123,456,789' });
+});
+
+test('il gruppo elenca a parte le foto extra parziali, con il conteggio, Elimina ed Estendi', () => {
+    const parziale = sorgente('Istanta/Views/Shared/_GestioneFoto.cshtml');
+
+    const inizio = parziale.indexOf('@if (Model.Gruppo && Model.ExtraParziali.Count > 0)');
+    assert.ok(inizio > 0, 'solo per un gruppo che ne ha');
+    const sezione = parziale.slice(inizio);
+    assert.ok(sezione.includes('<div class="fotoExtraParziali mb-4">'));
+    assert.ok(sezione.includes('@parziale.Presenti/@parziale.Totale'), 'su quante referenze c\'e\'');
+    assert.ok(sezione.includes('manca su @string.Join(", ", parziale.CodiciSenza)'));
+    assert.ok(sezione.includes('data-azione="eliminaFotoExtra"'), 'Elimina come le altre: da tutte le referenze che la hanno');
+    assert.ok(sezione.includes('data-azione="estendiFotoExtra" data-guidid="@fotoParziale.GuidId"'));
+    assert.ok(parziale.includes('Quelle presenti solo su alcune referenze non escono sul gruppo'));
+});
+
+test('un collegamento a un logo non piu\' a sistema si segna, senza miniatura, e resta eliminabile', () => {
+    const parziale = sorgente('Istanta/Views/Shared/_GestioneFoto.cshtml');
+
+    assert.ok(parziale.includes('bool nonASistema = Model.NonASistema.Contains(foto.GuidId ?? "");'));
+    assert.ok(parziale.includes('bool parzialeNonASistema = Model.NonASistema.Contains(fotoParziale.GuidId ?? "");'));
+    assert.strictEqual(parziale.split('class="badge bg-secondary nonASistema"').length - 1, 2, 'fra le foto extra e fra le parziali');
+    assert.match(parziale, /@if \(!nonASistema\)\s*\{\s*<img src="@thumbnail"/);
+    assert.match(parziale, /@if \(!parzialeNonASistema\)\s*\{\s*<img src="@thumbnail"/);
+    //Elimina non dipende dal badge: c'e' per ogni foto extra.
+    const riga = parziale.slice(parziale.indexOf('bool nonASistema ='), parziale.indexOf('data-azione="attivaFotoExtra"'));
+    assert.ok(riga.includes('data-azione="eliminaFotoExtra"'));
+});
+
+test('Estendi chiama il server sul codice della sezione e poi ricarica come le altre azioni', () => {
+    const archivio = sorgente('Istanta/wwwroot/js/archivio.js');
+
+    assert.ok(archivio.includes('pagina.on("click", "[data-azione=\'estendiFotoExtra\']", function () {'));
+    const estendi = archivio.slice(archivio.indexOf('    EstendiFotoExtra(guidId) {'), archivio.indexOf('    static datiEstendiFotoExtra('));
+    assert.ok(estendi.includes('Archivio.datiEstendiFotoExtra(guidId, Archivio.codiceDellaSezioneFoto())'));
+    assert.ok(estendi.includes('Call.do("SyncFoto", "EstendiFotoExtra/0", "PUT", dati'));
+    assert.ok(estendi.includes('ME.DopoModificaFoto();'));
+});

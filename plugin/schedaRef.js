@@ -13,6 +13,8 @@ const variantiDescrizione = require('./variantiDescrizione');
 const TestoTag = require('./testoTag');
 //I20-1056, lotto 4: la gravita' delle segnalazioni del bollino, per il segnalino della scheda.
 const etichettaDelBollino = require('./segnalazioni/etichetta');
+//Le foto extra di un gruppo: quelle comuni a tutte le referenze sono quelle del box.
+const FotoExtraGruppo = require('./reperimentoFoto/fotoExtraGruppo');
 //I20-1123: i campi di testo a riposo, sopra cui passano popup e finestre.
 const CampiARiposo = require('./campiARiposo');
 //Il gruppo che un'azione sul box manda fuori volantino passa nella sua sezione della lista del kit.
@@ -648,6 +650,11 @@ const schedaRef = {
                 me.selectSchedaRef(1);
                 jsIndexControls.changeSubMenu($("#refImage").attr("subTab"));
                 jsIndexControls.changeImage($("#refImage"));
+                //"Vai a Foto extra" dalla schermata delle segnalazioni: la scheda si apre su Foto extra.
+                if (me.apriSuFotoExtra === true) {
+                    me.apriSuFotoExtra = false;
+                    me.vaiAFotoExtra();
+                }
             }, me.refSelected.idRec);
             // }
             // else {
@@ -6522,6 +6529,16 @@ const schedaRef = {
     /// I20-1199: chiude la finestra delle differenze con la sua X (che legge le caselle del
     /// silenziamento e rifa' il segnalino) e porta la scheda su Foto P/S, come il clic sulla voce del
     /// sottomenu.
+    /// Dalla segnalazione FEX-01 (una foto extra solo su alcune referenze del gruppo) alla schermata
+    /// Foto extra del box, dove si estende o si elimina.
+    async vaiAFotoExtra() {
+        this.chiudiFinestraDifferenze();
+        const voceFotoExtra = $(".subTab5").find('img[tab="Tab7"]');
+        jsIndexControls.openTab(null, "Tab7");
+        jsIndexControls.changeImage(voceFotoExtra);
+        await this.selectSchedaRef(3);
+    },
+
     async vaiAFotoPS() {
         this.chiudiFinestraDifferenze();
         const voceFotoPS = $(".subTab5").find('img[tab="Tab6"]');
@@ -6574,6 +6591,10 @@ const schedaRef = {
             }
             var automatiche = Array.isArray(rec["Foto.ExtraAuto"]) ? rec["Foto.ExtraAuto"] : null;
             var manuali = Array.isArray(rec["Foto.Extra"]) ? rec["Foto.Extra"] : null;
+            //Anche sulle foto extra del gruppo, quelle del box: come fa Istanta.
+            if (Array.isArray(rec["Foto.ExtraGruppo"])) {
+                manuali = (manuali || []).concat(rec["Foto.ExtraGruppo"]);
+            }
 
             if (voce.azione === azioni.sovrascrivi && voce.nome) {
                 (automatiche || []).filter(l => l.sigla == voce.sigla).forEach(l => { l.nome = voce.nome; });
@@ -7626,7 +7647,7 @@ const schedaRef = {
                 rec.compiledFields,
                 rec.deletedFields,
                 listaFoto,
-                rec["Foto.Extra"],
+                FotoExtraGruppo.fotoExtraDelBox(primario.sottogruppo || rec),
                 rec["Foto.ExtraAuto"],
                 true,
                 NoRenderElementi.elencoPerSegnalazioni(rec.noRenderElementi, rec.membriGruppoFoto),
@@ -8857,7 +8878,7 @@ const schedaRef = {
         //Gli extra del box stanno in due collezioni: quella dell'operatore e quella
         //piazzata dall'automatismo. Cercarne una sola lascia gli extra automatici senza
         //nome, senza sigla e senza guid, quindi senza miniatura.
-        var fotoExtra = primario.recordInTracciato["Foto.Extra"] || [];
+        var fotoExtra = FotoExtraGruppo.fotoExtraDelBox(primario.sottogruppo || primario.recordInTracciato) || [];
         var fotoExtraAuto = primario.recordInTracciato["Foto.ExtraAuto"] || [];
         var membriGruppoFoto = primario.recordInTracciato.membriGruppoFoto || [];
         var vivi = [];

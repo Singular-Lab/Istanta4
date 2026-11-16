@@ -1825,14 +1825,54 @@ namespace Istanta.Controllers
             }
 
             string k_foto_extra = Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtra;
+            var soloPerLaLavorazione = new List<FileOlympoSync>();
             foreach (var record in records)
             {
                 if (record?.recordInTracciato != null && record.recordInTracciato.TryGetValue(k_foto_extra, out var fotoExtra))
                 {
                     richieste.AddRange(FotoExtraDaScaricare(LeggiFotoExtra(fotoExtra)));
                 }
+                if (record?.recordInTracciato != null && record.recordInTracciato.TryGetValue(GLOBAL_VARIABLES.keyExtraLavorazione, out var decisioni))
+                {
+                    soloPerLaLavorazione.AddRange(FileAggiuntiSoloPerLaLavorazione(decisioni));
+                }
             }
+            //La stessa decisione sta su ogni record del box: il suo file si chiede una volta.
+            richieste.AddRange(soloPerLaLavorazione.GroupBy(r => (r.Id, r.FileName)).Select(g => g.First()));
             return richieste;
+        }
+
+        /// I file aggiunti dal Plugin solo per una lavorazione (decisione Aggiungi con il GUID di
+        /// Olimpo): vanno nella cartella Loghi di chiunque apra la lavorazione, non solo di chi li ha
+        /// aggiunti. Le decisioni senza GUID (un logo dell'archivio, o registrate prima) non ne hanno.
+        public static List<FileOlympoSync> FileAggiuntiSoloPerLaLavorazione(object? decisioni)
+        {
+            List<RevisioneExtraLavorazioneFromIndd>? voci = null;
+            try
+            {
+                voci = decisioni switch
+                {
+                    List<RevisioneExtraLavorazioneFromIndd> lista => lista,
+                    JArray array => array.ToObject<List<RevisioneExtraLavorazioneFromIndd>>(),
+                    string testo when testo != "" => JsonConvert.DeserializeObject<List<RevisioneExtraLavorazioneFromIndd>>(testo),
+                    null => null,
+                    _ => JsonConvert.DeserializeObject<List<RevisioneExtraLavorazioneFromIndd>>(JsonConvert.SerializeObject(decisioni)),
+                };
+            }
+            catch (JsonException)
+            {
+                voci = null;
+            }
+
+            return (voci ?? new List<RevisioneExtraLavorazioneFromIndd>())
+                .Where(v => v != null && v.azione == AzioneExtraLavorazione.Aggiungi && !string.IsNullOrEmpty(v.guidId) && !string.IsNullOrEmpty(v.nome))
+                .Select(v => new FileOlympoSync
+                {
+                    Id = v.guidId,
+                    FileName = v.nome,
+                    IdRef = "0",
+                    Tipo = v.tipoFoto > 0 ? (TipoFoto)v.tipoFoto : (v.tipo == TipoElementoBox.Logo ? TipoFoto.Logo : TipoFoto.Bollino)
+                }).ToList();
         }
 
         /// Olimpo risponde con hash e dimensione ma il tipo non lo conosce: lo rimettiamo dalle
@@ -1891,6 +1931,7 @@ namespace Istanta.Controllers
                     foto.Attiva = attiva;
                 }
                 this.ctx.SaveChanges();
+                InvalidaKitDeiCodici(daCambiare.Select(f => f.IdArticoloNavigation?.Codice ?? ""));
                 result.Esito = true;
             }
             catch (Exception ex)
@@ -2104,15 +2145,7 @@ namespace Istanta.Controllers
 
                                 if (nascita.spegniLeAltre && _file.tracciatoArea != null && _file.tracciatoCanale != null)
                                 {
-                                    var targetRank = GetSpecificity(_file.area, _file.canale);
-
-                                    var artFotoSDaDisattivare = articolo.ArticoliFotos
-                                        .Where(f => f.Attiva == true)
-                                        .Where(f => IsCompatibleWithCurrentBranch(f, _file.tracciatoArea, _file.tracciatoCanale))
-                                        .Where(f => GetSpecificity(f.Area, f.Canale) > targetRank)
-                                        .ToList();
-
-                                    foreach (var item in artFotoSDaDisattivare)
+                                    foreach (var item in FotoDaSpegnereAlCaricamento(articolo.ArticoliFotos, _file.tipo, _file.area, _file.canale, _file.tracciatoArea, _file.tracciatoCanale))
                                     {
                                         item.Attiva = false;
                                     }
@@ -2201,7 +2234,8 @@ namespace Istanta.Controllers
                                 {
                                     if (artFoto != null)
                                     {
-                                        if (articolo.ArticoliFotos.Where(f=>f.Attiva == true).OrderByDescending(ord => ord.DataModifica).FirstOrDefault()!.Id == artFoto.Id)
+                                        //Senza nessuna foto attiva il confronto non c'e': prima andava in errore e il caricamento non salvava niente.
+                                        if (articolo.ArticoliFotos.Where(f=>f.Attiva == true).OrderByDescending(ord => ord.DataModifica).FirstOrDefault()?.Id == artFoto.Id)
                                         {
                                             //Il caso è singolare.
                                             //Questo denota un fuori sync tra indesign e Istanta.
@@ -2319,6 +2353,7 @@ namespace Istanta.Controllers
                     }
                     
                     this.ctx.SaveChanges();
+                    InvalidaKitDeiCodici(codiciList);
 
                     Console.WriteLine($"5. updateFotoFromIndd {stopwatch.ElapsedMilliseconds}");
 
@@ -2346,7 +2381,27 @@ namespace Istanta.Controllers
             return Ok(result);
         }
 
-        int GetSpecificity(string area, string canale)
+        /// Le foto da spegnere quando se ne carica una per tutte le lavorazioni: le foto del prodotto
+        /// attive piu' specifiche, per l'area e il canale della lavorazione, di quella caricata. Solo
+        /// se si carica una foto del prodotto: una foto extra non compete con nessuna, e spegnere in
+        /// base a lei toglieva all'articolo le foto del prodotto regionali o di canale.
+        public static List<ArticoliFoto> FotoDaSpegnereAlCaricamento(IEnumerable<ArticoliFoto> foto, TipoFoto tipoCaricato, string? area, string? canale, string tracciatoArea, string tracciatoCanale)
+        {
+            if (tipoCaricato != TipoFoto.Foto)
+            {
+                return new List<ArticoliFoto>();
+            }
+
+            var targetRank = GetSpecificity(area!, canale!);
+            return foto
+                .Where(f => !f.Tipo.HasValue || f.Tipo == (Byte)TipoFoto.Foto)
+                .Where(f => f.Attiva == true)
+                .Where(f => IsCompatibleWithCurrentBranch(f, tracciatoArea, tracciatoCanale))
+                .Where(f => GetSpecificity(f.Area, f.Canale) > targetRank)
+                .ToList();
+        }
+
+        static int GetSpecificity(string area, string canale)
         {
             bool hasArea = !string.IsNullOrWhiteSpace(area);
             bool hasCanale = !string.IsNullOrWhiteSpace(canale);
@@ -2357,7 +2412,7 @@ namespace Istanta.Controllers
             return 0;
         }
 
-        bool IsCompatibleWithCurrentBranch(ArticoliFoto f, string tracciatoArea, string tracciatoCanale)
+        static bool IsCompatibleWithCurrentBranch(ArticoliFoto f, string tracciatoArea, string tracciatoCanale)
         {
             bool sameArea = string.IsNullOrWhiteSpace(f.Area) || f.Area == tracciatoArea;
             bool sameCanale = string.IsNullOrWhiteSpace(f.Canale) || f.Canale == tracciatoCanale;
@@ -2513,6 +2568,124 @@ namespace Istanta.Controllers
 
         // TASK-56428659: la foto si registra sull'articolo solo se non c'e' gia' lo stesso guid nello
         // stesso ambito; altrimenti si aggiorna la riga che c'e'. Vedi RegistroFotoArticolo.
+        /// Le liste del kit in cache dei tracciati che contengono queste referenze non valgono piu': una
+        /// foto extra cambiata cambia le foto extra del gruppo e del box. Chi riscarica la lista la vede
+        /// subito. Un errore qui non deve far fallire l'operazione, che e' gia' salvata.
+        void InvalidaKitDeiCodici(IEnumerable<string> codici)
+        {
+            try
+            {
+                var lista = codici.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).Distinct().ToList();
+                if (lista.Count == 0)
+                    return;
+                var tracciati = this.ctx2.PromoTracciatiRecords.Where(r => lista.Contains(r.Codice!)).Select(r => r.IdTracciato).Distinct().ToList();
+                GenerazioniCacheKit.Invalida(tracciati);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Cache della lista del kit non invalidata per " + string.Join(",", codici) + ": " + ex.Message);
+            }
+        }
+
+        /// "Aggiungi solo per questa lavorazione" dal Plugin: il file va su Olimpo, cosi' la sync loghi
+        /// della lavorazione lo porta anche agli altri operatori, e nell'archivio dell'articolo non si
+        /// scrive niente. Risponde con il GUID, che il Plugin mette nella decisione della lavorazione.
+        [HttpPost]
+        [Route("SyncFoto/CaricaExtraSoloLavorazione")]
+        public async Task<IActionResult> CaricaExtraSoloLavorazione([FromForm] IFormFile? file, [FromForm] string? nomeFile)
+        {
+            var result = new EsitoCaricaExtraSoloLavorazione();
+            try
+            {
+                if (file == null || file.Length == 0 || string.IsNullOrWhiteSpace(nomeFile))
+                {
+                    result.error = "file o nome del file mancante";
+                    return Ok(result);
+                }
+
+                byte[] arrBytes = new byte[file.Length];
+                file.OpenReadStream().ReadExactly(arrBytes, 0, (int)file.Length);
+                string md5 = Crypto.GetMD5HashFromFile(arrBytes);
+
+                using var form = new MultipartFormDataContent();
+                var fileContent = new ByteArrayContent(arrBytes);
+                fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data");
+                form.Add(fileContent, "file", nomeFile);
+                var olympoJson = new FileOlympoSync { Id = "0", FileHash = md5, FileName = nomeFile, IdRef = "0", Size = 0 };
+                form.Add(new StringContent(JsonConvert.SerializeObject(olympoJson), Encoding.UTF8, "application/json"), "json_meta_foto");
+
+                var response = await httpClient.PostAsync(olympusServerUrl + "/foto/uploadFoto", form);
+                if (!response.IsSuccessStatusCode)
+                {
+                    result.error = "Olimpo ha risposto " + (int)response.StatusCode;
+                    return Ok(result);
+                }
+
+                var dataOlympo = JsonConvert.DeserializeObject<FileOlympoOperazioneSingola>(await response.Content.ReadAsStringAsync());
+                result.guidId = dataOlympo?.record?.Id ?? "";
+                result.nomeFile = nomeFile;
+                result.Esito = result.guidId != "";
+                if (!result.Esito)
+                {
+                    result.error = "Olimpo non ha restituito il GUID del file";
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Errore in CaricaExtraSoloLavorazione (" + nomeFile + "): " + ex);
+                result.Esito = false;
+                result.error = DescrizioneErrori.Breve("CaricaExtraSoloLavorazione", ex);
+            }
+            return Ok(result);
+        }
+
+        /// Estendi: una foto extra presente solo su alcune referenze di un gruppo si copia, con lo stesso
+        /// GUID, su quelle a cui manca. La riga copiata e' quella di una referenza che la ha: file proprio o
+        /// collegamento all'archivio Loghi/Bolli, attiva com'e'. Le referenze che la hanno gia' restano come
+        /// sono. Risponde con i codici a cui e' stata aggiunta.
+        [HttpPut]
+        [Route("SyncFoto/EstendiFotoExtra/{id_operazione}")]
+        public async Task<IActionResult> EstendiFotoExtra([FromForm] string guidId, [FromForm] string codice, int id_operazione = 0)
+        {
+            EsitoEstendiFotoExtra result = new EsitoEstendiFotoExtra();
+            try
+            {
+                var codici = FotoExtraDiPiuArticoli.Codici(codice);
+                var articoli = this.ctx.Articolis.Include(a => a.ArticoliFotos).Where(a => codici.Contains(a.Codice!)).ToList();
+                var sorgente = FotoExtraDiPiuArticoli.RigaDaEstendere(articoli.SelectMany(a => a.ArticoliFotos!), guidId);
+                if (sorgente == null)
+                {
+                    throw new Exception("Foto extra " + guidId + " non trovata sulle referenze " + codice);
+                }
+
+                foreach (var articolo in articoli)
+                {
+                    if (RegistroFotoArticolo.GiaRegistrata(articolo.ArticoliFotos!, guidId, sorgente.Area, sorgente.Canale) != null)
+                        continue;
+                    RegistraFoto(articolo, FotoExtraDiPiuArticoli.CopiaPerEstendere(sorgente, articolo.Id, DateTime.Now));
+                    result.estese.Add(articolo.Codice!);
+                }
+
+                this.ctx.SaveChanges();
+                InvalidaKitDeiCodici(codici);
+
+                if (result.estese.Count > 0)
+                {
+                    registraAttivitaDiSyncFoto(id_operazione, string.Join(",", result.estese), "EstendiFotoExtra", tipoOperazione.updateFoto,
+                        new RevisioneFotoFromIndd() { codRef = string.Join(",", result.estese), nomeFoto = sorgente.NomeReale, guidId = guidId, tipo = (TipoFoto)(sorgente.Tipo ?? 0) });
+                }
+
+                result.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                result.Esito = false;
+                result.error = ex.Message;
+            }
+
+            return Ok(result);
+        }
+
         ArticoliFoto RegistraFoto(Articoli articolo, ArticoliFoto nuova)
         {
             var esistente = RegistroFotoArticolo.GiaRegistrata(articolo.ArticoliFotos!, nuova.GuidId, nuova.Area, nuova.Canale);
@@ -2647,6 +2820,7 @@ namespace Istanta.Controllers
                 }
 
                 this.ctx.SaveChanges();
+                InvalidaKitDeiCodici(codici);
                 result = primaCollegata;
             }
             catch (Exception ex)
@@ -2768,6 +2942,7 @@ namespace Istanta.Controllers
 
 
                 this.ctx.SaveChanges();
+                InvalidaKitDeiCodici(cods);
 
                 registraAttivitaDiSyncFoto(id_operazione, dato.codice /*foto.IdArticoloNavigation.Codice*/ , "RimuoviFoto", tipoOperazione.eliminaFotoExtra, new RevisioneFotoFromIndd() { codRef = dato.codice/* foto.IdArticoloNavigation.Codice*/, nomeFoto = dato.nomeFile/* foto.NomeReale*/, guidId= dato.guidId!/*foto.GuidId*/, tipo = (TipoFoto)dato.tipo/* foto.Tipo*/ }, promoLavorazioneRecId);
 
@@ -2787,6 +2962,9 @@ namespace Istanta.Controllers
         {
             BoolResult result = new BoolResult();
             var codici = codiceGruppo.Split(",");
+            //Una referenza del gruppo che non e' in archivio si salta: prima mandava in errore tutto il
+            //gruppo e la scelta non si salvava su nessuna.
+            var saltate = new List<string>();
             if (escludi)
             {
                 try
@@ -2794,7 +2972,12 @@ namespace Istanta.Controllers
                     foreach (var codice in codici)
                     {
                         var articolo = this.ctx.Articolis.Include(f => f.FotoEscluses).Where(f => f.Codice == codice).FirstOrDefault();
-                        if (articolo!.FotoEscluses != null)
+                        if (articolo == null)
+                        {
+                            saltate.Add(codice);
+                            continue;
+                        }
+                        if (articolo.FotoEscluses != null)
                         {
                             var fotoEsclusa = articolo.FotoEscluses.Where(f => f.NomeReale == nomeFoto).FirstOrDefault();
                             if (fotoEsclusa == null)
@@ -2808,6 +2991,7 @@ namespace Istanta.Controllers
                         }
                     }
                     this.ctx.SaveChanges();
+                    InvalidaKitDeiCodici(FotoExtraDiPiuArticoli.Codici(codiceGruppo));
                 }
                 catch(Exception ex)
                 {
@@ -2823,7 +3007,12 @@ namespace Istanta.Controllers
                     foreach (var codice in codici)
                     {
                         var articolo = this.ctx.Articolis.Include(f => f.FotoEscluses).Where(f => f.Codice == codice).FirstOrDefault();
-                        if (articolo!.FotoEscluses != null)
+                        if (articolo == null)
+                        {
+                            saltate.Add(codice);
+                            continue;
+                        }
+                        if (articolo.FotoEscluses != null)
                         {
                             var fotoEsclusa = articolo.FotoEscluses.Where(f => f.NomeReale == nomeFoto).FirstOrDefault();
                             if (fotoEsclusa != null)
@@ -2834,6 +3023,7 @@ namespace Istanta.Controllers
                         }
                     }
                     this.ctx.SaveChanges();
+                    InvalidaKitDeiCodici(FotoExtraDiPiuArticoli.Codici(codiceGruppo));
                 }
                 catch (Exception ex)
                 {
@@ -2843,7 +3033,14 @@ namespace Istanta.Controllers
                 }
             }
             result.Esito = true;
+            result.error = ReferenzeSaltate(saltate);
             return Ok(result);
+        }
+
+        /// Cosa dire al Plugin delle referenze saltate perche' non in archivio: niente se non ce ne sono.
+        public static string? ReferenzeSaltate(IReadOnlyCollection<string> saltate)
+        {
+            return saltate.Count == 0 ? null : "referenze non in archivio, saltate: " + string.Join(", ", saltate);
         }
 
         [HttpGet]

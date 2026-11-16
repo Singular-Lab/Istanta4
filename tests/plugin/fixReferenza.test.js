@@ -51,6 +51,8 @@ function scena(selezione, risposta) {
     prezzo.parent = box;
 
     const ambiente = {
+        //Il fix rimette le segnalazioni delle foto extra parziali del gruppo (FEX-01).
+        FotoExtraGruppo: require('../../plugin/reperimentoFoto/fotoExtraGruppo'),
         app: { selection: selezione === "box" ? [box] : selezione === "interno" ? [testo] : [] },
         Utility: {
             getBoxFromElementOfBox: (el) => { let b = el; while (b.parent.constructor.name != "Spread") b = b.parent; return b; },

@@ -17,6 +17,7 @@
 const XMLHttpRequestClient = require('../XMLHttpRequestClient');
 const DataCaricamentoFoto = require('./dataCaricamento');
 const NoRenderElementi = require('../noRenderElementi');
+const FotoExtraGruppo = require('./fotoExtraGruppo');
 
 const schedaFoto = {
     /// Le foto che la schermata Cambia foto propone, dopo le regole del cliente
@@ -2151,14 +2152,33 @@ const schedaFoto = {
 
     /// La richiesta per tenere un file solo per questa lavorazione (Link o Carica): la stessa
     /// decisione di "tieniLavorazione". La chiave e' il nome del file, come nella label del box.
-    richiestaAggiungiSoloQui(nomeFile, tipoFoto) {
+    /// guidId e' il file caricato su Olimpo (Carica), che la sync loghi porta agli altri operatori;
+    /// un logo dell'archivio (Link) non ne ha bisogno, arriva con l'archivio.
+    richiestaAggiungiSoloQui(nomeFile, tipoFoto, guidId = null) {
         if (nomeFile == null || String(nomeFile) === "") {
             return null;
         }
         return {
             rimuovi: false,
-            voce: { tipo: this.tipoElementoDellaFoto(tipoFoto), sigla: String(nomeFile), azione: this.AZIONE_EXTRA.aggiungi, nome: String(nomeFile), nomeServer: null, tipoFoto: parseInt(tipoFoto) || 0 }
+            voce: { tipo: this.tipoElementoDellaFoto(tipoFoto), sigla: String(nomeFile), azione: this.AZIONE_EXTRA.aggiungi, nome: String(nomeFile), nomeServer: null, tipoFoto: parseInt(tipoFoto) || 0, guidId: guidId || null }
         };
+    },
+
+    /// Carica su Olimpo il file aggiunto solo per questa lavorazione, perche' la sync loghi lo porti
+    /// anche agli altri operatori. Restituisce il suo GUID; null se non e' riuscito, e allora la
+    /// decisione non si registra: gli altri riceverebbero una decisione senza il file.
+    async caricaFileSoloPerLavorazione(fd) {
+        const formData = new FormData();
+        formData.append("nomeFile", fd.nomeFile);
+        formData.append("file", fd.file);
+        try {
+            const esito = await this.richiestaFotoExtra("SyncFoto/CaricaExtraSoloLavorazione", formData, "POST", true, true);
+            return esito.guidId || null;
+        }
+        catch (e) {
+            messaggioUtente("Code SRF-166 " + fd.nomeFile + " non caricato su Istanta, la decisione non è stata registrata: " + e.message, "error", false, 8);
+            return null;
+        }
     },
 
     AMBITO_AZIONE_EXTRA: { tutte: "tutte", lavorazione: "lavorazione" },
@@ -2232,8 +2252,8 @@ const schedaFoto = {
         return pulsante;
     },
 
-    /// "Aggiungi" solo per questa lavorazione: il file scelto va nella cartella Loghi e nel box, e si
-    /// registra come decisione della lavorazione. All'anagrafica e a Olimpo non arriva niente.
+    /// "Aggiungi" solo per questa lavorazione: il file scelto va su Olimpo, nella cartella Loghi e nel
+    /// box, e si registra come decisione della lavorazione con il suo GUID. All'anagrafica non arriva niente.
     async caricaExtraSoloPerLavorazione(tipo, box) {
         var me = this;
         var tipoFoto = parseInt(tipo);
@@ -2247,6 +2267,10 @@ const schedaFoto = {
                 return false;
             }
         }
+        var guidId = await this.caricaFileSoloPerLavorazione(fd);
+        if (guidId == null) {
+            return false;
+        }
         try {
             await ReperimentoFoto.scriviFileInCartella(fd.file, percorsoLoghi, fd.nomeFile);
         }
@@ -2255,7 +2279,7 @@ const schedaFoto = {
             return false;
         }
         var primario = (this.schedeRefDati || []).find(f => f.recordInTracciato.StatoSelezione == 1);
-        return await this.registraDecisioneExtraDallaScheda(this.richiestaAggiungiSoloQui(fd.nomeFile, tipoFoto), box, function () {
+        return await this.registraDecisioneExtraDallaScheda(this.richiestaAggiungiSoloQui(fd.nomeFile, tipoFoto, guidId), box, function () {
             return me.impaginaFotoExtra(fd.nomeFile, tipoFoto, box, pathLavorazione, primario != null ? primario.recordInTracciato : null, fd.nomeFile);
         });
     },
@@ -2273,7 +2297,15 @@ const schedaFoto = {
         }
         //I20-1072: le foto extra decise per questa lavorazione (I20-1070), dal record.
         var decisioni = Array.isArray(primario.recordInTracciato.extraLavorazione) ? primario.recordInTracciato.extraLavorazione : [];
-        var extra = primario.recordInTracciato["Foto.Extra"];
+        //Il box di un gruppo mostra le foto extra comuni a tutte le referenze, ricalcolate dai record in
+        //memoria (le operazioni di questa schermata li aggiornano); le altre stanno nella sezione delle
+        //parziali, da estendere o eliminare. Una referenza impaginata da sola mostra le sue.
+        var datoDelBox = primario.sottogruppo || primario.recordInTracciato;
+        var extraDelGruppo = FotoExtraGruppo.eDiGruppo(datoDelBox) ? FotoExtraGruppo.comuniEParziali(schedaRef) : null;
+        if (extraDelGruppo != null) {
+            FotoExtraGruppo.scriviInMemoria(schedaRef, extraDelGruppo);
+        }
+        var extra = extraDelGruppo != null ? extraDelGruppo.comuni : primario.recordInTracciato["Foto.Extra"];
         if (extra != null) {
             for (var $i = 0; $i < this.tipiFotoExtra.length; $i++) {
                 var elemento = this.tipiFotoExtra[$i];
@@ -2412,6 +2444,16 @@ const schedaFoto = {
                     panel.append('<hr>');
                 }
             }
+        }
+
+        if (extraDelGruppo != null && extraDelGruppo.parziali.length > 0) {
+            $("#FotoExtra").append(me.pannelloExtraParziali(extraDelGruppo.parziali, box));
+        }
+
+        //I collegamenti a un logo che non e' piu' nell'archivio Loghi/Bolli: non sono nel box, si eliminano.
+        var nonASistema = FotoExtraGruppo.nonASistemaDelBox(schedaRef);
+        if (nonASistema.length > 0) {
+            $("#FotoExtra").append(me.pannelloNonASistema(nonASistema, box));
         }
 
         //si crea un nuovo divisorio e un nuovo panel per gli elementi extra auto
@@ -3052,7 +3094,9 @@ const schedaFoto = {
                     formData.append("guidId", logoData.id); //quello va letto dall'elemento della lista che abbiamo scaricato prima
                     formData.append("nomeReale", logoData.fileName) //quello va letto dall'elemento della lista che abbiamo scaricato prima
                     formData.append("fileHash", logoData.fileHash) //quello va letto dall'elemento della lista che abbiamo scaricato prima
-                    formData.append("codiceReferenza", primario.recordInTracciato["Referenza.Codice"]); //quello va letto dalla referenza del primario
+                    //Su tutte le referenze del gruppo: un logo che sta solo sulla primaria non esce sul gruppo, e
+                    //cambiando la primaria spariva dal box.
+                    formData.append("codiceReferenza", primario.recordInTracciato["Scatto.CodiceGruppo"]);
 
                     xhr.send("SyncFoto/linkLogoBollo/", formData, "PUT");
 
@@ -3066,6 +3110,176 @@ const schedaFoto = {
                 }
             });
         });
+    },
+
+    /* ---- le foto extra presenti solo su alcune referenze del gruppo ---- */
+
+    /// La sezione delle foto extra presenti solo su alcune referenze del gruppo: non escono sul box, e
+    /// ognuna dice su quante referenze sta, con Elimina (da tutte quelle che la hanno) ed Estendi (a
+    /// quelle a cui manca).
+    pannelloExtraParziali(parziali, box) {
+        const me = this;
+        const panel = $('<div class="panel fotoExtraPanel fotoExtraParziali"></div>');
+        panel.append($('<h3>Presenti solo su alcune referenze</h3>').css({ "color": "white" }));
+        panel.append($('<div></div>').text("Non escono sul gruppo finche' non sono su tutte le referenze.")
+            .css({ "font-size": "11px", "color": "#ccc", "margin-bottom": "6px" }));
+
+        parziali.forEach(function (parziale) {
+            const riga = $('<div class="row rigaExtraParziale"></div>')
+                .attr("idFoto", parziale.guidId)
+                .css({ "display": "flex", "align-items": "center", "gap": "6px", "margin-bottom": "10px" });
+            riga.append($('<span></span>').text(parziale.nome).css({ "font-size": "12px", "color": "white" }));
+            riga.append($('<span class="conteggioParziale"></span>').text(parziale.presenti + "/" + parziale.totale)
+                .css({ "font-size": "11px", "color": "#ffcc66", "font-weight": "bold" }));
+
+            const elimina = $('<button type="button" class="eliminaExtraParziale">Elimina</button>').css({ "color": "red" });
+            Tooltip.impostaTooltip(elimina[0], "La toglie da tutte le referenze del gruppo che la hanno");
+            elimina.on('click', function () { me.eliminaFotoExtraParziale(parziale, box); });
+            riga.append(elimina);
+
+            const estendi = $('<button type="button" class="estendiExtraParziale">Estendi</button>').css({ "color": "lightgreen" });
+            Tooltip.impostaTooltip(estendi[0], "La aggiunge alle referenze del gruppo a cui manca: " + (parziale.codiciSenza || []).join(", "));
+            estendi.on('click', function () { me.estendiFotoExtra(parziale, box); });
+            riga.append(estendi);
+
+            panel.append(riga);
+        });
+        return panel;
+    },
+
+    /// Estendi: la foto extra si aggiunge alle referenze del gruppo a cui manca, va nel box e, se
+    /// l'operatore vuole, si rifa' il fix della referenza. La segnalazione FEX-01 si toglie.
+    async estendiFotoExtra(parziale, box) {
+        const me = this;
+        const primario = (me.schedeRefDati || []).find(f => f.recordInTracciato.StatoSelezione == 1);
+        if (primario == null) {
+            messaggioUtente("Code SRF-160 Estendi: nessun elemento primario trovato", "error");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("guidId", parziale.guidId);
+        formData.append("codice", primario.recordInTracciato["Scatto.CodiceGruppo"]);
+        try {
+            showLoading("Estendo " + parziale.nome);
+            await me.richiestaFotoExtra("SyncFoto/EstendiFotoExtra/0", formData, "PUT", false, true);
+        }
+        catch (e) {
+            hideLoading();
+            messaggioUtente("Code SRF-161 Estendi: " + parziale.nome + " non estesa: " + e.message, "error");
+            return;
+        }
+        hideLoading();
+
+        FotoExtraGruppo.estendiInMemoria(me.schedeRefDati, parziale);
+        box = FotoExtraGruppo.togliSegnalazioneParziale(box, parziale.guidId);
+        me.refSelected.item = box;
+        messaggioUtente(parziale.nome + " estesa a tutte le referenze del gruppo", "success", false, 5);
+
+        if (parziale.attiva === false) {
+            //Disattivata resta fuori dal box anche sul gruppo: niente da impaginare ne' da sistemare.
+            me.FotoExtraPanel(box);
+            return;
+        }
+
+        const sigla = parziale.sigla != null && parziale.sigla !== "" ? parziale.sigla : null;
+        const boxConExtra = me.impaginaFotoExtra(parziale.nome, parseInt(parziale.tipo), box, pathLavorazione, primario.recordInTracciato, sigla);
+        if (boxConExtra != null) {
+            box = boxConExtra;
+        }
+
+        if (await Modali.confirm(parziale.nome + " e' nel box. Eseguire il fix della referenza?")) {
+            await fixRefImpaginata(true);
+        }
+        me.FotoExtraPanel(me.refSelected.item);
+    },
+
+    /// I collegamenti a un logo che l'archivio Loghi/Bolli non ha piu': senza immagine, con Elimina.
+    pannelloNonASistema(nonASistema, box) {
+        const me = this;
+        const panel = $('<div class="panel fotoExtraPanel fotoExtraNonASistema"></div>');
+        panel.append($('<h3>Non più a sistema</h3>').css({ "color": "white" }));
+        panel.append($('<div></div>').text("Collegati a un logo che non è più nell'archivio Loghi/Bolli: non escono nel box.")
+            .css({ "font-size": "11px", "color": "#ccc", "margin-bottom": "6px" }));
+
+        nonASistema.forEach(function (voce) {
+            const riga = $('<div class="row rigaNonASistema"></div>')
+                .attr("idFoto", voce.guidId)
+                .css({ "display": "flex", "align-items": "center", "gap": "6px", "margin-bottom": "10px" });
+            riga.append($('<span></span>').text(voce.nome || voce.guidId).css({ "font-size": "12px", "color": "#aaa" }));
+            riga.append($('<span></span>').text("non più a sistema").css({ "font-size": "11px", "color": "#ff9966" }));
+
+            const elimina = $('<button type="button" class="eliminaNonASistema">Elimina</button>').css({ "color": "red" });
+            Tooltip.impostaTooltip(elimina[0], "Toglie il collegamento dalle referenze che lo hanno: " + (voce.codici || []).join(", "));
+            elimina.on('click', function () { me.eliminaNonASistema(voce, box); });
+            riga.append(elimina);
+
+            panel.append(riga);
+        });
+        return panel;
+    },
+
+    /// Elimina di un collegamento non piu' a sistema: si toglie dalle referenze del box che lo hanno.
+    async eliminaNonASistema(voce, box) {
+        const me = this;
+        const primario = (me.schedeRefDati || []).find(f => f.recordInTracciato.StatoSelezione == 1);
+        if (primario == null) {
+            messaggioUtente("Code SRF-164 Elimina: nessun elemento primario trovato", "error");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("nomeFile", voce.nome || "");
+        formData.append("codice", primario.recordInTracciato["Scatto.CodiceGruppo"]);
+        formData.append("tipo", voce.tipo);
+        formData.append("idLavorazione", idKitLavorazione);
+        formData.append("guidId", voce.guidId);
+        formData.append("idRec", me.idRecDelBoxAperto());
+        try {
+            await me.richiestaFotoExtra("SyncFoto/RimuoviFoto/0", formData, "PUT", false, true);
+        }
+        catch (e) {
+            messaggioUtente("Code SRF-165 Elimina: collegamento " + (voce.nome || voce.guidId) + " non eliminato: " + e.message, "error");
+            return;
+        }
+
+        FotoExtraGruppo.togliNonASistemaInMemoria(me.schedeRefDati, voce.guidId);
+        messaggioUtente("Collegamento " + (voce.nome || voce.guidId) + " eliminato", "success", false, 5);
+        me.FotoExtraPanel(box);
+    },
+
+    /// Elimina di una foto extra parziale: si toglie da tutte le referenze del gruppo che la hanno.
+    async eliminaFotoExtraParziale(parziale, box) {
+        const me = this;
+        const primario = (me.schedeRefDati || []).find(f => f.recordInTracciato.StatoSelezione == 1);
+        if (primario == null) {
+            messaggioUtente("Code SRF-162 Elimina: nessun elemento primario trovato", "error");
+            return;
+        }
+        if (!(await Modali.confirm("Eliminare " + parziale.nome + " dalle referenze del gruppo che la hanno (" + parziale.presenti + "/" + parziale.totale + ")?"))) {
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("nomeFile", parziale.nome);
+        formData.append("codice", primario.recordInTracciato["Scatto.CodiceGruppo"]);
+        formData.append("tipo", parziale.tipo);
+        formData.append("idLavorazione", idKitLavorazione);
+        formData.append("guidId", parziale.guidId);
+        formData.append("idRec", me.idRecDelBoxAperto());
+        try {
+            await me.richiestaFotoExtra("SyncFoto/RimuoviFoto/0", formData, "PUT", false, true);
+        }
+        catch (e) {
+            messaggioUtente("Code SRF-163 Elimina: " + parziale.nome + " non eliminata: " + e.message, "error");
+            return;
+        }
+
+        FotoExtraGruppo.togliInMemoria(me.schedeRefDati, parziale.guidId);
+        box = FotoExtraGruppo.togliSegnalazioneParziale(box, parziale.guidId);
+        me.refSelected.item = box;
+        messaggioUtente(parziale.nome + " eliminata dal gruppo", "success", false, 5);
+        me.FotoExtraPanel(box);
     },
 
     impaginaFotoExtra(fotoExtraNome, FotoExtraTipo, box, pathLavorazione, objItem, sigla = null) {
@@ -3226,6 +3440,11 @@ const schedaFoto = {
 
     },
 
+    /// Cosa dire quando Escludi o Includi di un'extra automatica e' fatto nel box ma Istanta non l'ha salvato.
+    testoSceltaNonSalvata(escludi, motivo) {
+        return (escludi ? "Esclusa" : "Inclusa") + " solo nel box: su Istanta non è salvata, alla prossima impaginazione torna com'era (" + motivo + ")";
+    },
+
     escludiIncludiFotoExtraAuto(nomeFoto, attualmenteEscluso, box, row, tipo, sigla) {
         var schedaRef = this.schedeRefDati;
         let me = this;
@@ -3251,6 +3470,19 @@ const schedaFoto = {
                 }
             }
         }
+        //Il box e' gia' cambiato: la schermata lo segue anche se il server non salva, e l'operatore sa
+        //che la scelta vale solo nel box.
+        var allineaAlBox = function () {
+            var fotoExtra = (primario.recordInTracciato["Foto.ExtraAuto"] || []).find(f => f.sigla == sigla && f.tipo == tipo);
+            if (fotoExtra != null) {
+                fotoExtra.escluso = !attualmenteEscluso;
+            }
+            me.FotoExtraPanel(box);
+        };
+        var nonSalvata = function (motivo) {
+            allineaAlBox();
+            messaggioUtente(me.testoSceltaNonSalvata(!attualmenteEscluso, motivo), "warning", false, 8);
+        };
         var xhr = new XMLHttpRequestClient();
         xhr.onload = (objResult, parsed) => {
             try {
@@ -3259,14 +3491,14 @@ const schedaFoto = {
                         objResult = JSON.parse(objResult);
                     }
                     catch (e) {
-                        messaggioUtente("Code SRF-54 Errore durante il parsing della risposta: " + e, "error");
+                        nonSalvata("Code SRF-54 risposta non leggibile: " + e);
                         return;
                     }
                 }
                 console.log(objResult);
                 //mi dovrebbe tornare un oggetto con due parametri, esito, error
                 if (!objResult.esito) {
-                    messaggioUtente("Code SRF-55 Errore durante il salvataggio delle modifiche: " + objResult.error, "error");
+                    nonSalvata("Code SRF-55 " + objResult.error);
                     return;
                 }
 
@@ -3285,17 +3517,12 @@ const schedaFoto = {
                 // console.log(row.attr("escluso"));
 
                 //cerchiamo nel primario la foto extra auto con nome uguale a nomeFoto e tipo uguale a tipo e aggiorniamo il suo stato di esclusione
-                var fotoExtra = primario.recordInTracciato["Foto.ExtraAuto"].find(f => f.sigla == sigla && f.tipo == tipo);
-                if (fotoExtra != null) {
-                    fotoExtra.escluso = !attualmenteEscluso;
-                }
-
-                me.FotoExtraPanel(box);
+                allineaAlBox();
 
 
             }
             catch (e) {
-                messaggioUtente("Code SRF-57 Errore generico: " + e, "error");
+                nonSalvata("Code SRF-57 " + e);
             }
         };
 
@@ -3309,7 +3536,7 @@ const schedaFoto = {
         };
 
         xhr.onerror = function () {
-            messaggioUtente("Code SRF-59 Errore di rete", "error");
+            nonSalvata("Code SRF-59 errore di rete");
         }
         //recuperiamo il codice gruppo dell'elemento
         var CodiceGruppo = schedaRef.find(f => f.recordInTracciato.StatoSelezione == 1).recordInTracciato["Scatto.CodiceGruppo"];

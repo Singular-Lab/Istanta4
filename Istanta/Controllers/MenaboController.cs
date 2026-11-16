@@ -6509,6 +6509,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                 gruppo = ficoController.etichettaRecords(gruppo, this);
 
+                //Le foto extra del gruppo, comuni e parziali, come nella lista del kit (impacchettaTracciato).
+                FotoExtraDiPiuArticoli.AssegnaExtraDelGruppo(gruppo.Where(g => !g.isObsoleto).Select(g => (IDictionary<string, object>)g.recordInTracciato).ToList());
+
                 //logAss.WriteLine("GET SCHEDA REF >> step9");
 
                 var prepLista = new PreparazioneListaResult()
@@ -6690,6 +6693,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                         //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                         FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
+                        //Le foto extra del gruppo valgono dove il record e' il gruppo: nel PoP il cartello di gruppo.
+                        if (agenziaFunc == "esportaPoP")
+                            FotoExtraDiPiuArticoli.SoloSulCartelloDiGruppo(resultGlobale.records.Select(r => (IDictionary<string, object>?)r.recordInTracciato));
                         //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
                         //I20-1088: con il loro stato. Quelli che il server compone ormai da se' qui non si
                         //restituiscono e basta: si tolgono scaricando la lista.

@@ -354,6 +354,9 @@ namespace AgenziaLib
         /// tolti (descrizione, prezzi, sconti, mastro...), il box e i loghi. Resta del singolo solo l'identita'
         /// (codice referenza, gruppo, nome del file) e la sua anagrafica grezza.
         /// </summary>
+        /// Le foto extra comuni a tutte le referenze di un gruppo (Istanta, FotoExtraDiPiuArticoli.ChiaveExtraGruppo).
+        public const string chiaveFotoExtraGruppo = "Foto.ExtraGruppo";
+
         public static readonly string[] chiaviDelCartelloDiGruppo = { "compiledFields", "deletedFields", "codiceBox", GLOBAL_VARIABLES.keyFotoExtraAuto, "Foto.Extra",
             GLOBAL_VARIABLES_FICO.keyFotoNome, GLOBAL_VARIABLES_FICO.keyMembriGruppoFoto };
 
@@ -388,12 +391,18 @@ namespace AgenziaLib
         /// Il cartello singolo diventa per intero il cartello di gruppo (singoliComeIlGruppo). Una chiave che il
         /// cartello di gruppo non ha si toglie anche dal singolo, cosi' non restano dati misti. I valori si
         /// copiano, il singolo non condivide liste col gruppo.
+        ///
+        /// Le foto extra del singolo sono quelle del gruppo, cioe' presenti su tutte le referenze
+        /// (Foto.ExtraGruppo, che Istanta scrive sui record di un gruppo): prima si copiavano le Foto.Extra
+        /// del cartello di gruppo, che sono quelle della sola primaria. Un singolo che non ripete il
+        /// gruppo tiene le sue, comprese quelle che il gruppo non ha.
         /// </summary>
         public static void ripetiIlCartelloDiGruppo(Dictionary<string, object> singolo, Dictionary<string, object> cartelloDiGruppo)
         {
             foreach (string chiave in chiaviDelCartelloDiGruppo)
             {
-                if (!cartelloDiGruppo.TryGetValue(chiave, out object valore))
+                string sorgente = chiave == "Foto.Extra" && cartelloDiGruppo.ContainsKey(chiaveFotoExtraGruppo) ? chiaveFotoExtraGruppo : chiave;
+                if (!cartelloDiGruppo.TryGetValue(sorgente, out object valore))
                 {
                     singolo.Remove(chiave);
                     continue;

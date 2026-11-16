@@ -1893,6 +1893,11 @@ const SchermataSegnalazioni = {
             testo.append($('<span></span>').text(" (bollino vecchio)").css({ color: '#777', fontStyle: 'italic' }));
         }
         riga.append(testo);
+        //Una foto extra solo su alcune referenze del gruppo (FEX-01) si risolve in Foto extra.
+        if (voce.v != null && voce.v.fotoExtraParziale) {
+            riga.append($('<button type="button"></button>').text("Vai a Foto extra").css({ flexShrink: '0' })
+                .on('click', () => SchermataSegnalazioni.vaiAFotoExtra(box, contesto)));
+        }
         riga.append($('<button type="button"></button>').text("Risolvi").css({ flexShrink: '0' }).on('click', () => {
             //I20-1138: la selezione si guarda prima, perche' risolvere puo' rifare il gruppo del box.
             const eraSelezionato = SchermataSegnalazioni.eSelezionato(box);
@@ -1901,6 +1906,19 @@ const SchermataSegnalazioni = {
             alCambio(dopo);
         }));
         return riga;
+    },
+
+    /// Dalla segnalazione FEX-01 alla schermata Foto extra del box. Nella scheda ref ci si va subito;
+    /// dalla schermata si seleziona il box, e la scheda che si apre va su Foto extra.
+    vaiAFotoExtra(box, contesto) {
+        if (typeof schedaRef === "undefined" || schedaRef == null) {
+            return SchermataSegnalazioni._selezionaBox(box);
+        }
+        if (contesto != null && contesto.inScheda === true) {
+            return schedaRef.vaiAFotoExtra();
+        }
+        schedaRef.apriSuFotoExtra = true;
+        return SchermataSegnalazioni.vaiAlBox(box);
     },
 
     /// I20-1138: se il box e' la selezione corrente di InDesign (da solo).
@@ -1945,6 +1963,8 @@ const SchermataSegnalazioni = {
     elencoVociDelBox(box, voci, alCambio) {
         //I20-1211: anche nella scheda ref le segnalazioni dei filtri del cliente sono viola.
         const contesto = { traduzioni: SchermataSegnalazioni._traduzioni(), filtri: SchermataSegnalazioni.filtriDelCliente() };
+        //"Vai a Foto extra" (FEX-01): nella scheda ref si va subito alla schermata.
+        contesto.inScheda = true;
         const elenco = $('<div></div>');
         const azioni = $('<div></div>').css({ display: 'flex', justifyContent: 'flex-end' });
         azioni.append(SchermataSegnalazioni._azioniTutte(box, alCambio));

@@ -1558,6 +1558,9 @@ namespace Istanta.Models
         public string? nomeServer { get; set; }
         /// <summary>Il tipo_N della label del box (Aggiungi): e' il TipoFoto della voce che si crea.</summary>
         public int tipoFoto { get; set; }
+        /// <summary>Il GUID su Olimpo del file caricato con Aggiungi: la sync loghi della lavorazione lo
+        /// scarica anche agli altri operatori. Vuoto per un logo dell'archivio e per le decisioni di prima.</summary>
+        public string? guidId { get; set; }
         /// <summary>I20-1082: per chi vale la decisione presa in un volantino: anche per i POP della stessa
         /// promo, area e canale (Tutto, anche per le decisioni registrate prima) o solo per il volantino.</summary>
         public AmbitoDecisioneLavorazione ambito { get; set; } = AmbitoDecisioneLavorazione.Tutto;
