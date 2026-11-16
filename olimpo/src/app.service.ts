@@ -1,6 +1,6 @@
 import { ABSOLUTE_PATH_TYPE } from '@enums/enums';
 import { Colorize } from '@lib/colorize';
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/sequelize';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -12,11 +12,22 @@ import { Video } from './models/video.model';
 // di al compilatore di ignorare l'errore di importazione
 // @ts-ignore
 
+/** Le cartelle di absolute_paths senza le quali Olimpo non puo' accettare richieste. */
+export const CARTELLE_OBBLIGATORIE: readonly string[] = [
+  ABSOLUTE_PATH_TYPE.WEB,
+  ABSOLUTE_PATH_TYPE.ARCHIVIO,
+  ABSOLUTE_PATH_TYPE.VIDEO,
+  ABSOLUTE_PATH_TYPE.MATERIALI,
+];
+
 @Injectable()
-export class OlimpoService {
+export class OlimpoService implements OnModuleInit {
   private PATH_WEB_ASSOLUTO: string;
   private PATH_ARCHIVIO_ASSOLUTO: string;
   private PATH_VIDEO_ASSOLUTO: string;
+  /** Le cartelle attive di absolute_paths lette all'avvio, per tipo e per id (spec olimpo/processi-in-produzione). */
+  private cartellePerTipo = new Map<string, AbsolutePaths>();
+  private cartellePerId = new Map<string, AbsolutePaths>();
 
   constructor(
     @InjectModel(Foto) private readonly fotoModel: typeof Foto,
@@ -24,15 +35,37 @@ export class OlimpoService {
     @InjectModel(AbsolutePaths)
     private readonly absolutePathsModel: typeof AbsolutePaths,
     // @InjectModel(Formati) private readonly formatiModel: typeof Formati,
-  ) {
-    this.initialize();
+  ) { }
+
+  /**
+   * Prima che il processo accetti richieste: le cartelle si leggevano nel costruttore senza await, e un
+   * processo poteva rispondere con le cartelle ancora undefined (o morire per la promise non gestita).
+   */
+  async onModuleInit(): Promise<void> {
+    await this.caricaCartelle();
   }
 
-  private async initialize(): Promise<void> {
-    this.PATH_WEB_ASSOLUTO = (await this.getAbsolutePathFromType(ABSOLUTE_PATH_TYPE.WEB)).path;
-    this.PATH_ARCHIVIO_ASSOLUTO = (await this.getAbsolutePathFromType(ABSOLUTE_PATH_TYPE.ARCHIVIO)).path;
-    this.PATH_VIDEO_ASSOLUTO = (await this.getAbsolutePathFromType(ABSOLUTE_PATH_TYPE.VIDEO)).path;
-
+  /**
+   * Legge una volta le cartelle attive di absolute_paths e le tiene per tutta la vita del processo.
+   * Se manca una delle CARTELLE_OBBLIGATORIE lancia un errore che ferma l'avvio, con l'elenco.
+   */
+  async caricaCartelle(): Promise<void> {
+    const righe = await this.absolutePathsModel.findAll({ where: { active: true } });
+    const perTipo = new Map<string, AbsolutePaths>();
+    const perId = new Map<string, AbsolutePaths>();
+    for (const riga of righe) {
+      if (!perTipo.has(riga.tipo)) perTipo.set(riga.tipo, riga);
+      perId.set(riga.id, riga);
+    }
+    const mancanti = CARTELLE_OBBLIGATORIE.filter((tipo) => !perTipo.get(tipo)?.path);
+    if (mancanti.length > 0) {
+      throw new Error(`absolute_paths: mancano le cartelle attive ${mancanti.join(', ')}: Olimpo non puo' accettare richieste`);
+    }
+    this.cartellePerTipo = perTipo;
+    this.cartellePerId = perId;
+    this.PATH_WEB_ASSOLUTO = perTipo.get(ABSOLUTE_PATH_TYPE.WEB).path;
+    this.PATH_ARCHIVIO_ASSOLUTO = perTipo.get(ABSOLUTE_PATH_TYPE.ARCHIVIO).path;
+    this.PATH_VIDEO_ASSOLUTO = perTipo.get(ABSOLUTE_PATH_TYPE.VIDEO).path;
   }
 
 
@@ -64,8 +97,10 @@ export class OlimpoService {
 
 
   async getAbsoluteFilePathFromId(id: string): Promise<string> {
+    const inMemoria = this.cartellePerId.get(id);
+    if (inMemoria) return inMemoria.path;
     try {
-      await this.absolutePathsModel.sync({ force: false });
+      // Niente sync() qui: la tabella la crea synchronize all'avvio, e una DDL a ogni richiesta pesa
       const absolutePath = await this.absolutePathsModel.findOne({
         where: { id: id },
       });
@@ -80,9 +115,11 @@ export class OlimpoService {
       console.error(error);
     }
   }
+  /** La cartella attiva del tipo: quella letta all'avvio, altrimenti dal database. */
   async getAbsolutePathFromType(type: string): Promise<AbsolutePaths> {
+    const inMemoria = this.cartellePerTipo.get(type);
+    if (inMemoria) return inMemoria;
     try {
-      await this.absolutePathsModel.sync({ force: false });
       const absolutePath = await this.absolutePathsModel.findOne({
         where: { tipo: type, active: true },
       });

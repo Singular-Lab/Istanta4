@@ -11,6 +11,7 @@ import {
   Header,
   HttpException,
   HttpStatus,
+  OnModuleInit,
   Post,
   Put,
   Query,
@@ -39,7 +40,7 @@ const sizeOf = promisify(imageSize);
 const execPromise = promisify(exec)
 
 @Controller('foto')
-export class OlimpoController {
+export class OlimpoController implements OnModuleInit {
   /**
    *
    */
@@ -47,8 +48,11 @@ export class OlimpoController {
   private PATH_ARCHIVIO_ASSOLUTO: AbsolutePaths;
   private PATH_VIDEO_ASSOLUTO: AbsolutePaths;
 
-  constructor(private readonly olimpoService: OlimpoService) {
-    this.init();
+  constructor(private readonly olimpoService: OlimpoService) { }
+
+  /** Le cartelle si leggono prima che il processo accetti richieste (prima: nel costruttore, senza await). */
+  async onModuleInit(): Promise<void> {
+    await this.init();
   }
 
   async init() {
