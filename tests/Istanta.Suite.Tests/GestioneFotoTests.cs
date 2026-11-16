@@ -185,4 +185,36 @@ public class GestioneFotoTests
         Assert.Contains("sezione.CodiciSenzaArticolo = codici.Where((c, i) => inOrdine[i] == null).ToList();", controller);
         Assert.Contains("sezione.Extra = FotoExtraDiPiuArticoli.DiUnArticolo(articolo.ArticoliFotos);", controller);
     }
+    /* ---- il JSON delle foto extra nella pagina ---- */
+
+    [Fact]
+    public void Una_foto_extra_letta_con_il_suo_articolo_si_mette_nella_pagina_senza_ciclo()
+    {
+        //Come la legge EF con Include(ArticoliFotos): la foto rimanda all'articolo, che ha la foto.
+        var articolo = new Articoli { Id = 7, Codice = "6628666" };
+        var logo = Extra(7, "LOGO");
+        logo.IdArticoloNavigation = articolo;
+        articolo.ArticoliFotos = new List<ArticoliFoto> { logo };
+
+        var json = FotoExtraDiPiuArticoli.JsonPerLaPagina(logo);
+
+        using var documento = System.Text.Json.JsonDocument.Parse(json);
+        var radice = documento.RootElement;
+        Assert.Equal("LOGO.ai", radice.GetProperty("NomeReale").GetString());
+        Assert.Equal("LOGO", radice.GetProperty("GuidId").GetString());
+        Assert.Equal((byte)TipoFoto.Logo, radice.GetProperty("Tipo").GetByte());
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, radice.GetProperty("IdArticoloNavigation").ValueKind);
+        //La foto letta resta com'era.
+        Assert.Same(articolo, logo.IdArticoloNavigation);
+    }
+
+    [Fact]
+    public void La_sezione_delle_foto_non_serializza_le_foto_lette_dal_database()
+    {
+        var vista = Sorgente("Istanta/Views/Shared/_GestioneFoto.cshtml");
+
+        Assert.DoesNotContain("JsonSerializer.Serialize(foto", vista);
+        Assert.Contains("FotoExtraDiPiuArticoli.JsonPerLaPagina(foto)", vista);
+        Assert.Contains("FotoExtraDiPiuArticoli.JsonPerLaPagina(fotoParziale)", vista);
+    }
 }

@@ -301,7 +301,7 @@
                                         }
                                     </div>
                                     <div class="col">
-                                        <input type="hidden" class="fotoExtraDati" data='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(foto))'/>
+                                        <input type="hidden" class="fotoExtraDati" data='@Html.Raw(Istanta.Utility.FotoExtraDiPiuArticoli.JsonPerLaPagina(foto))'/>
                                         <input type="button" class="btn btn-sm btn-danger" value="Elimina" data-azione="eliminaFotoExtra">
                                         <div class="form-check mt-2">
                                             <input class="form-check-input" type="checkbox" id="fotoExtraAttiva-@foto.Id" guidid="@foto.GuidId" @(foto.Attiva == true ? "checked" : string.Empty) data-azione="attivaFotoExtra">
@@ -344,7 +344,7 @@
                                         }
                                     </div>
                                     <div class="col">
-                                        <input type="hidden" class="fotoExtraDati" data='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(fotoParziale))'/>
+                                        <input type="hidden" class="fotoExtraDati" data='@Html.Raw(Istanta.Utility.FotoExtraDiPiuArticoli.JsonPerLaPagina(fotoParziale))'/>
                                         <input type="button" class="btn btn-sm btn-danger" value="Elimina" data-azione="eliminaFotoExtra" title="La toglie da tutte le referenze che la hanno">
                                         <input type="button" class="btn btn-sm btn-warning mt-2" value="Estendi" data-azione="estendiFotoExtra" data-guidid="@fotoParziale.GuidId" title="La aggiunge alle referenze a cui manca">
                                     </div>
