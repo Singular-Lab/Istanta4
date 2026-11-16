@@ -187,3 +187,79 @@ describe("TracciatoCard: solo il Superadmin elimina, e solo un tracciato non imp
     expect(await screen.findByRole("button", { name: "Elimina tracciato" })).toBeInTheDocument();
   });
 });
+
+// TASK-f4e1fc7c: arrivato in Istanta ma non importato, anche su una promo dello storico
+describe("TracciatoCard: tracciato in Istanta in attesa di conferma o esaminato", () => {
+  it.each([
+    ["InAttesaDiConfermaUtente", "In attesa di conferma"],
+    ["Esaminata", "Esaminata"],
+  ])("con l'importazione %s il Superadmin la elimina, anche dallo storico", async (stato, etichetta) => {
+    vi.mocked(ServerCall.get).mockResolvedValue({ stato, error: "", esito: true });
+    apri({ promoStorico: true, azioniBloccate: false }, { ...tracciato, id: `t-${stato}`, stato: null } as unknown as TracciatiResponseDTO);
+
+    expect(await screen.findByText(etichetta)).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole("button", { name: "Elimina tracciato" }));
+    expect(await screen.findByText(/Istanta scarterà la sua importazione/)).toBeInTheDocument();
+  });
+
+  it("con l'importazione in coda non compare il comando", async () => {
+    vi.mocked(ServerCall.get).mockResolvedValue({ stato: "InCoda", error: "", esito: true });
+    apri({ promoStorico: false, azioniBloccate: false }, { ...tracciato, id: "t-coda", stato: null } as unknown as TracciatiResponseDTO);
+
+    expect(await screen.findByText("In coda")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Elimina tracciato" })).not.toBeInTheDocument();
+  });
+
+  it(
+    "chi non e' Superadmin non lo elimina",
+    async () => {
+      permessi.negati.add("sistema.elimina_tracciati");
+      try {
+        vi.mocked(ServerCall.get).mockResolvedValue({ stato: "InAttesaDiConfermaUtente", error: "", esito: true });
+        apri({ promoStorico: false, azioniBloccate: false }, { ...tracciato, id: "t-agenzia", stato: null } as unknown as TracciatiResponseDTO);
+
+        expect(await screen.findByText("In attesa di conferma")).toBeInTheDocument();
+        expect(screen.queryByRole("button", { name: "Elimina tracciato" })).not.toBeInTheDocument();
+      } finally {
+        permessi.negati.clear();
+      }
+    }
+  );
+
+  it("per uno scartato la conferma non parla di Istanta", async () => {
+    vi.mocked(ServerCall.get).mockResolvedValue({ stato: "Scartata", error: "", esito: false });
+    apri({ promoStorico: false, azioniBloccate: false });
+
+    await userEvent.click(screen.getByRole("button", { name: "Elimina tracciato" }));
+    expect(await screen.findByText(/Questa azione non può essere annullata/)).toBeInTheDocument();
+    expect(screen.queryByText(/Istanta scarterà/)).not.toBeInTheDocument();
+  });
+});
+
+// TASK-f4e1fc7c (spec "Autore e date del tracciato"): chi l'ha caricato, caricamento e ultimo aggiornamento
+describe("TracciatoCard: autore e date", () => {
+  it("mostra chi l'ha caricato e l'aggiornamento quando e' diverso dal caricamento", () => {
+    apri({ promoStorico: false, azioniBloccate: false }, {
+      ...tracciato,
+      caricatoDa: { id: "u1", nome: "Mario Rossi" },
+      createdat: "2026-11-16T13:03:00Z",
+      updatedat: "2026-11-16T14:10:00Z",
+    } as unknown as TracciatiResponseDTO);
+
+    expect(screen.getByTestId("caricamento-tracciato")).toHaveTextContent("Caricato da Mario Rossi");
+    expect(screen.getByTestId("aggiornamento-tracciato")).toHaveTextContent("Aggiornato il");
+  });
+
+  it("senza aggiornamenti e senza autore registrato", () => {
+    apri({ promoStorico: false, azioniBloccate: false }, {
+      ...tracciato,
+      caricatoDa: null,
+      createdat: "2026-11-16T13:03:00Z",
+      updatedat: "2026-11-16T13:03:00Z",
+    } as unknown as TracciatiResponseDTO);
+
+    expect(screen.getByTestId("caricamento-tracciato")).toHaveTextContent("Autore non registrato");
+    expect(screen.queryByTestId("aggiornamento-tracciato")).not.toBeInTheDocument();
+  });
+});
+

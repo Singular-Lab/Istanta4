@@ -12,6 +12,7 @@ import { CreateTracciatiDTO, FogliTracciatoDTO, TracciatiResponseDTO, UpdateTrac
 import { ITracciatoService } from '../interfaces/ITracciatoService';
 import { log } from '../logger';
 import { statoIstantaTracciati } from './AllineamentoIstanta';
+import { nomiAutori } from './autoriTracciati';
 import { Area, Canale } from '../models';
 import { Promo } from '../models/promo';
 import type { ITracciatiMomentoRepository } from '../repositories/TracciatiMomentoRepository';
@@ -538,7 +539,8 @@ export class TracciatoService implements ITracciatoService {
       ...(getBlob && { blobfile: blob }),
       filesize: blob ? Buffer.from(blob).length : undefined,
       createdat: tracciato.createdat as Date,
-      updatedat: tracciato.updatedat as Date
+      updatedat: tracciato.updatedat as Date,
+      caricatoDa: tracciato.caricato_da ? { id: tracciato.caricato_da, nome: null } : null
     };
   };
 
@@ -630,11 +632,15 @@ export class TracciatoService implements ITracciatoService {
   async getTracciatiByPromoId(promoId: string, includeBlob = false, includeJson = false): Promise<TracciatiResponseDTO[]> {
     try {
       const tracciati = await this.tracciatiRepository.findByPromoId(promoId);
-      // Quelli salvati in FP e non ancora in Istanta (archivio storico, upload rifiutati)
-      const istanta = await statoIstantaTracciati(tracciati.map((t: TracciatiAttributes) => t.id_tracciati as string));
+      // Quelli salvati in FP e non ancora in Istanta (archivio storico, upload rifiutati), e il nome di chi li ha caricati
+      const [istanta, autori] = await Promise.all([
+        statoIstantaTracciati(tracciati.map((t: TracciatiAttributes) => t.id_tracciati as string)),
+        nomiAutori(tracciati.map((t: TracciatiAttributes) => t.caricato_da)),
+      ]);
       return tracciati.map((tracciato: TracciatiAttributes) => ({
         ...this.mapToDTO(tracciato, includeBlob),
         ...(includeJson && this.fileJsonAlPostoDellXlsx(tracciato)),
+        caricatoDa: tracciato.caricato_da ? { id: tracciato.caricato_da, nome: autori.get(tracciato.caricato_da) ?? null } : null,
         istanta: istanta.get(tracciato.id_tracciati as string),
       }));
     } catch (error) {

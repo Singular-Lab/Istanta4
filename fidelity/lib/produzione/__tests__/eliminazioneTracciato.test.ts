@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { motivoTracciatoNonEliminabile, tracciatoNonImportato } from '../eliminazioneTracciato';
+import { daScartareInIstanta, motivoTracciatoNonEliminabile, tracciatoNonImportato } from '../eliminazioneTracciato';
 
 // Spec ciclo-promozione-importazione, "Eliminazione di un tracciato non importato"
 describe('tracciatoNonImportato', () => {
@@ -12,22 +12,44 @@ describe('tracciatoNonImportato', () => {
     expect(tracciatoNonImportato({ inAttesaIstanta: false, statoTracciato: null, statoImportazione: 'Scartata' })).toBe(true);
   });
 
-  it("importato o con l'importazione ancora aperta", () => {
+  // TASK-f4e1fc7c: arrivato in Istanta ma non importato
+  it('in Istanta in attesa di conferma o soltanto esaminato', () => {
+    expect(tracciatoNonImportato({ inAttesaIstanta: false, statoImportazione: 'InAttesaDiConfermaUtente' })).toBe(true);
+    expect(tracciatoNonImportato({ inAttesaIstanta: false, statoImportazione: 'Esaminata' })).toBe(true);
+  });
+
+  it("importato o con l'importazione avviata", () => {
     expect(tracciatoNonImportato({ inAttesaIstanta: false, statoTracciato: 'Terminata', statoImportazione: 'Terminata' })).toBe(false);
     expect(tracciatoNonImportato({ inAttesaIstanta: false, statoImportazione: 'TerminataConErrori' })).toBe(false);
-    expect(tracciatoNonImportato({ inAttesaIstanta: false, statoImportazione: 'InCoda' })).toBe(false);
+    for (const stato of ['InAttesaDiAssegnazione', 'InCoda', 'ElaborazioneDati', 'AttesaIO', 'IO', 'Cancellata']) {
+      expect(tracciatoNonImportato({ inAttesaIstanta: false, statoImportazione: stato }), stato).toBe(false);
+    }
     expect(tracciatoNonImportato({ inAttesaIstanta: false })).toBe(false);
+  });
+});
+
+describe('daScartareInIstanta', () => {
+  it("solo un'importazione in attesa di conferma o esaminata", () => {
+    expect(daScartareInIstanta('InAttesaDiConfermaUtente')).toBe(true);
+    expect(daScartareInIstanta('Esaminata')).toBe(true);
+  });
+
+  it('non in attesa di Istanta, scartata, avviata o importata', () => {
+    for (const stato of [null, undefined, 'Scartata', 'InCoda', 'ElaborazioneDati', 'Terminata', 'TerminataConErrori']) {
+      expect(daScartareInIstanta(stato), String(stato)).toBe(false);
+    }
   });
 });
 
 describe('motivoTracciatoNonEliminabile', () => {
   it('importato', () => {
     expect(motivoTracciatoNonEliminabile('Terminata')).toBe('Il tracciato è già importato in Istanta: non si può eliminare.');
-    expect(motivoTracciatoNonEliminabile('Esaminata')).toMatch(/già importato/);
+    expect(motivoTracciatoNonEliminabile('TerminataConErrori')).toMatch(/già importato/);
   });
 
-  it('ancora in corso o senza stato', () => {
-    expect(motivoTracciatoNonEliminabile('ElaborazioneDati')).toMatch(/non è conclusa/);
+  it('avviata e non conclusa, o senza stato', () => {
+    expect(motivoTracciatoNonEliminabile('ElaborazioneDati')).toBe("L'importazione del tracciato in Istanta è già avviata e non è conclusa: non si può eliminare.");
+    expect(motivoTracciatoNonEliminabile('InCoda')).toMatch(/già avviata/);
     expect(motivoTracciatoNonEliminabile(null)).toMatch(/non è conclusa/);
   });
 });

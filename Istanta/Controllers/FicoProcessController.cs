@@ -1393,6 +1393,60 @@ namespace Istanta.Controllers
             return Ok(bRes);
         }
 
+        /// Fidelity scarta l'importazione di un tracciato prima di eliminarlo (spec
+        /// ciclo-promozione-importazione, "Eliminazione di un tracciato non importato"). Si scarta solo
+        /// un'importazione in attesa di conferma o soltanto esaminata (ScartoImportazioneFico): altrimenti
+        /// scartata=false con lo stato attuale, e Fidelity non elimina il tracciato.
+        [HttpPost]
+        [Route("FicoProcess/scartaImportazione/{guidID}")]
+        public async Task<IActionResult> scartaImportazione(string guidID)
+        {
+            FicoScartoImportazioneResult bRes = new FicoScartoImportazioneResult();
+
+            FICOAccessLevel acLevel = await getAccesslevel();
+            if (acLevel == FICOAccessLevel.noSession)
+            {
+                bRes.error = "no_login";
+                bRes.esito = false;
+                return Unauthorized(bRes);
+            }
+
+            try
+            {
+                PromoImportazioni? impItem = await this.ctx2.PromoImportazionis.Where(p => p.guidID == guidID).FirstOrDefaultAsync();
+                if (impItem == null)
+                {
+                    throw new Exception("Importazione non trovata Guid: " + guidID);
+                }
+                if (!impItem.IdAttivita.HasValue)
+                {
+                    throw new Exception("Nessuna attività si è innescata con l'importazione Guid: " + guidID);
+                }
+
+                long idAttivita = impItem.IdAttivita.Value;
+                byte[] scartabili = ScartoImportazioneFico.StatiScartabili;
+                byte statoScartata = (byte)OperationStauts.Scartata;
+                // Un solo UPDATE condizionato sullo stato: se nello stesso momento l'operatore conferma
+                // l'importazione, una sola delle due richieste cambia l'attivita'
+                await this.ctx.Attivita
+                    .Where(a => a.Id == idAttivita && scartabili.Contains(a.Stato))
+                    .ExecuteUpdateAsync(s => s.SetProperty(a => a.Stato, statoScartata));
+
+                byte stato = await this.ctx.Attivita.Where(a => a.Id == idAttivita).Select(a => a.Stato).FirstAsync();
+                bRes.stato = (OperationStauts)stato;
+                bRes.scartata = ScartoImportazioneFico.Scartata(stato);
+                bRes.esito = true;
+            }
+            catch (Exception ex)
+            {
+                bRes.error = ex.Message;
+                bRes.esito = false;
+                return BadRequest(bRes);
+            }
+
+            return Ok(bRes);
+        }
+
 
         #endregion
 

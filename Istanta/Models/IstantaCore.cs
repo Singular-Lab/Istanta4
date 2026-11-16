@@ -485,6 +485,16 @@ namespace Istanta.Models
         public bool? esito { get; set; }
     }
 
+    /// Risposta di FicoProcess/scartaImportazione: esito dice se la richiesta e' stata elaborata,
+    /// scartata se l'importazione risulta scartata, stato lo stato dell'attivita' dopo il tentativo.
+    public class FicoScartoImportazioneResult
+    {
+        public bool esito { get; set; }
+        public bool scartata { get; set; }
+        public OperationStauts? stato { get; set; }
+        public string? error { get; set; }
+    }
+
     public class FicoExportLavorazione
     {
         public string? guidKitRuntime { get; set; }

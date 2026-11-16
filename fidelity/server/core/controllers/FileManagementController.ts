@@ -296,6 +296,8 @@ export class FileManagementController extends BaseController {
           filename_tracciati: file.originalname,
           blobfile_tracciati: fileBuffer,
           context_tracciati: contextDaRicevere,
+          // Chi l'ha caricato: lo mostra la scheda del tracciato (spec "Autore e date del tracciato")
+          caricato_da: req.session.id_utente ? String(req.session.id_utente) : null,
           createdat: new Date(),
           updatedat: new Date()
         }, { transaction });

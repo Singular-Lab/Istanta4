@@ -50,8 +50,15 @@ export interface TracciatiResponseDTO {
   blobfile?: Uint8Array | null;
   /** Dimensione in byte del file: con includeJson quella del file JSON */
   filesize?: number;
+  /** Data e ora del caricamento. */
   createdat?: Date;
+  /** Ultima modifica del tracciato in FP: nome, contesto o esito dell'importazione registrato. */
   updatedat: Date;
+  /**
+   * Chi ha caricato il tracciato: id dell'utente FP e, nei tracciati della promo, il suo nome (null se
+   * l'utente non c'e' piu'). null: tracciato caricato prima che FP registrasse l'autore.
+   */
+  caricatoDa?: { id: string; nome: string | null } | null;
   /** Se Istanta ha il tracciato: in coda (in attesa o dopo un errore, col motivo) finche' non lo accetta. */
   istanta?: { stato: 'inviato' | 'in_attesa' | 'errore'; errore: string | null; tentativi: number };
 }

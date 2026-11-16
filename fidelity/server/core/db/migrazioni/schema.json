@@ -9102,6 +9102,15 @@
           "tipo": "bytea",
           "unico": false
         },
+        "caricato_da": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": true,
+          "riferimento": null,
+          "tipo": "character varying(255)",
+          "unico": false
+        },
         "context_tracciati": {
           "autoIncremento": false,
           "chiavePrimaria": false,
