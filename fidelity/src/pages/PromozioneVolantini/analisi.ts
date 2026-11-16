@@ -293,9 +293,12 @@ export const descriviPresenze = (prodotto: Pick<ProdottoConfronto, "caselle" | "
   return { testo: `In ${formatNumero(prodotto.numeroKit)} volantini su ${formatNumero(griglia.numeroKit)}`, eccezione: true };
 };
 
+/** Il luogo del prezzo più diffuso di un prodotto, dopo i prezzi delle aree o insegne che fanno eccezione. */
+export const LUOGO_PREZZO_PIU_DIFFUSO = "tutti gli altri";
+
 export interface PrezzoPerLuogo {
   prezzo: number;
-  /** Dove vale: aree o insegne intere del prodotto, o i volantini; "altrove" per il prezzo più diffuso. */
+  /** Dove vale: aree o insegne intere del prodotto, o i volantini; "tutti gli altri" per il prezzo più diffuso. */
   luogo: string;
   /** Più alto del prezzo più basso del prodotto. */
   piuAlto: boolean;
@@ -305,7 +308,7 @@ export interface PrezzoPerLuogo {
 
 /**
  * I prezzi del prodotto raggruppati per luogo, dal più basso: "6,79 € Toscana · 7,19 € Emilia · 7,99 €
- * altrove". Un elemento solo quando il prezzo è uguale ovunque; nessuno senza prezzi.
+ * tutti gli altri". Un elemento solo quando il prezzo è uguale ovunque; nessuno senza prezzi.
  */
 export const prezziPerLuogo = (prodotto: ProdottoConfronto, griglia: GrigliaVolantini): PrezzoPerLuogo[] => {
   const perPrezzo = new Map<number, Set<number>>();
@@ -326,7 +329,7 @@ export const prezziPerLuogo = (prodotto: ProdottoConfronto, griglia: GrigliaVola
   const tutte = new Set(prodotto.caselle);
   return voci.map(([prezzo, caselle]) => ({
     prezzo,
-    luogo: prezzo === piuDiffuso ? "altrove" : luogoDelleCaselle(caselle, tutte, griglia),
+    luogo: prezzo === piuDiffuso ? LUOGO_PREZZO_PIU_DIFFUSO : luogoDelleCaselle(caselle, tutte, griglia),
     piuAlto: prezzo > minimo,
     allEtto: allEtto.has(prezzo),
   }));
@@ -354,11 +357,6 @@ export interface SintesiConfronto {
   perLinea: Array<{ linea: string; prodotti: number }>;
   /** Con la meccanica Prezzo Fidelity in almeno uno dei kit mostrati. */
   fidelity: number;
-  /** Prodotti di una sola insegna, nell'ordine della griglia. */
-  perInsegna: Array<{ insegna: Riferimento; prodotti: number }>;
-  perArea: Array<{ area: Riferimento; prodotti: number }>;
-  /** Prodotti di una sola casella. */
-  perCasella: ReadonlyMap<number, number>;
 }
 
 /** La parte sul totale in percentuale intera; 0 senza totale. */
@@ -396,11 +394,7 @@ const aMarchio = (p: ProdottoConfronto): boolean => Boolean(p.referenza.linea);
 const conFidelity = (p: ProdottoConfronto): boolean => (p.referenza.meccaniche ?? []).includes("fidelity");
 
 export const sintesiConfronto = (prodotti: readonly ProdottoConfronto[], griglia: GrigliaVolantini): SintesiConfronto => {
-  const perInsegna = new Map(griglia.insegne.map((_, i) => [i, 0]));
-  const perArea = new Map(griglia.aree.map((_, i) => [i, 0]));
-  const perCasella = new Map<number, number>();
   const perLinea = new Map<string, number>();
-  const n = Math.max(1, griglia.aree.length);
   let base = 0;
   let marchio = 0;
   let fidelity = 0;
@@ -412,11 +406,6 @@ export const sintesiConfronto = (prodotti: readonly ProdottoConfronto[], griglia
       perLinea.set(linea, (perLinea.get(linea) ?? 0) + 1);
     }
     if (conFidelity(p)) fidelity++;
-    const insegne = new Set(p.caselle.map(c => Math.floor(c / n)));
-    const aree = new Set(p.caselle.map(c => c % n));
-    if (insegne.size === 1) perInsegna.set([...insegne][0] ?? 0, (perInsegna.get([...insegne][0] ?? 0) ?? 0) + 1);
-    if (aree.size === 1) perArea.set([...aree][0] ?? 0, (perArea.get([...aree][0] ?? 0) ?? 0) + 1);
-    if (p.caselle.length === 1) perCasella.set(p.caselle[0] ?? 0, (perCasella.get(p.caselle[0] ?? 0) ?? 0) + 1);
   }
   return {
     totale: prodotti.length,
@@ -426,9 +415,6 @@ export const sintesiConfronto = (prodotti: readonly ProdottoConfronto[], griglia
       .map(([linea, numero]) => ({ linea, prodotti: numero }))
       .sort((a, b) => b.prodotti - a.prodotti || a.linea.localeCompare(b.linea, "it")),
     fidelity,
-    perInsegna: griglia.insegne.map((insegna, i) => ({ insegna, prodotti: perInsegna.get(i) ?? 0 })),
-    perArea: griglia.aree.map((area, i) => ({ area, prodotti: perArea.get(i) ?? 0 })),
-    perCasella,
   };
 };
 
@@ -436,46 +422,20 @@ export const sintesiConfronto = (prodotti: readonly ProdottoConfronto[], griglia
  * Cosa mostra l'elenco: uno dei numeri del confronto (base comune, a marchio, Fidelity), i prodotti di
  * una sola insegna o di una sola area (i margini della mappa), una casella della mappa.
  */
-export type VistaConfronto =
-  | { tipo: "base" }
-  | { tipo: "marchio" }
-  | { tipo: "fidelity" }
-  | { tipo: "insegna"; id: string }
-  | { tipo: "area"; id: string }
-  | { tipo: "casella"; casella: number };
+/** I tre numeri del confronto che filtrano l'elenco (spec volantini-pop). */
+export type VistaConfronto = { tipo: "base" } | { tipo: "marchio" } | { tipo: "fidelity" };
 
-/** Nell'indirizzo (?vista=): "base", "marchio", "fidelity", "insegna:<id>", "area:<id>", "casella:<insegna>:<area>". */
-export const vistaInIndirizzo = (vista: VistaConfronto, griglia: GrigliaVolantini): string => {
-  switch (vista.tipo) {
-    case "insegna":
-    case "area":
-      return `${vista.tipo}:${vista.id}`;
-    case "casella":
-      return `casella:${insegnaDellaCasella(griglia, vista.casella)?.id ?? ""}:${areaDellaCasella(griglia, vista.casella)?.id ?? ""}`;
-    default:
-      return vista.tipo;
-  }
-};
+/** Nell'indirizzo (?vista=): "base", "marchio" o "fidelity". */
+export const vistaInIndirizzo = (vista: VistaConfronto): string => vista.tipo;
 
-/** Dall'indirizzo: un valore storpiato, o di un'insegna o un'area che non ci sono più, non è una vista. */
-export const vistaDaIndirizzo = (valore: string | null, griglia: GrigliaVolantini): VistaConfronto | null => {
-  if (!valore) return null;
-  // Le viste dei numeri tolti (prezzi diversi, una sola insegna, una sola area) non lo sono più: tutti i prodotti
-  if (valore === "base" || valore === "marchio" || valore === "fidelity") return { tipo: valore };
-  const [tipo, primo = "", secondo = ""] = valore.split(":");
-  const insegna = griglia.insegne.findIndex(i => chiaveId(i.id) === chiaveId(primo));
-  if (tipo === "insegna" && insegna >= 0) return { tipo, id: griglia.insegne[insegna]?.id ?? primo };
-  const area = griglia.aree.findIndex(a => chiaveId(a.id) === chiaveId(tipo === "area" ? primo : secondo));
-  if (tipo === "area" && area >= 0) return { tipo, id: griglia.aree[area]?.id ?? primo };
-  if (tipo === "casella" && insegna >= 0 && area >= 0) {
-    const casella = insegna * griglia.aree.length + area;
-    return griglia.esistenti.has(casella) ? { tipo, casella } : null;
-  }
-  return null;
-};
+/**
+ * Dall'indirizzo: un valore storpiato non è una vista. Le viste dei numeri e della mappa tolti (prezzi
+ * diversi, una sola insegna, una sola area, un solo volantino) non lo sono più: tutti i prodotti.
+ */
+export const vistaDaIndirizzo = (valore: string | null): VistaConfronto | null =>
+  valore === "base" || valore === "marchio" || valore === "fidelity" ? { tipo: valore } : null;
 
-export const stessaVista = (a: VistaConfronto | null, b: VistaConfronto | null): boolean =>
-  !!a && !!b && a.tipo === b.tipo && ("id" in a ? chiaveId(a.id) === chiaveId((b as { id: string }).id) : true) && ("casella" in a ? a.casella === (b as { casella: number }).casella : true);
+export const stessaVista = (a: VistaConfronto | null, b: VistaConfronto | null): boolean => !!a && !!b && a.tipo === b.tipo;
 
 /** Il prodotto senza reparto, nel filtro per reparto. */
 export const SENZA_REPARTO = "senza-reparto";
@@ -543,12 +503,6 @@ const nellaVista = (p: ProdottoConfronto, vista: VistaConfronto, griglia: Grigli
       return aMarchio(p);
     case "fidelity":
       return conFidelity(p);
-    case "insegna":
-      return p.caselle.length > 0 && p.caselle.every(c => chiaveId(insegnaDellaCasella(griglia, c)?.id ?? "") === chiaveId(vista.id));
-    case "area":
-      return p.caselle.length > 0 && p.caselle.every(c => chiaveId(areaDellaCasella(griglia, c)?.id ?? "") === chiaveId(vista.id));
-    case "casella":
-      return p.caselle.length === 1 && p.caselle[0] === vista.casella;
   }
 };
 

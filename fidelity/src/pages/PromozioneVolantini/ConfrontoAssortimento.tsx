@@ -28,7 +28,6 @@ import {
   grigliaVolantini,
   type GrigliaVolantini,
   lineeInVista,
-  nomeCasella,
   ordinaElenco,
   ordinamentoElencoDaIndirizzo,
   ordinamentoElencoInIndirizzo,
@@ -50,7 +49,6 @@ import {
   vistaInIndirizzo,
 } from "./analisi";
 import { ID_TUTTI_I_PRODOTTI } from "./IndicePromozione";
-import { LogoInsegna } from "./LogoInsegna";
 import { SOTTO_LA_BARRA } from "./PannelliAnalisi";
 import { Foto, PrezziEPagine, presenzePerCasella, VUOTO } from "./PrezziEPagine";
 import { ProdottiInComune } from "./ProdottiInComune";
@@ -73,12 +71,6 @@ const titoloVista = (vista: VistaConfronto | null, griglia: GrigliaVolantini): s
       return "A marchio del distributore";
     case "fidelity":
       return "Con Prezzo Fidelity";
-    case "insegna":
-      return `Solo ${griglia.insegne.find(i => i.id === vista.id)?.nome ?? "l'insegna"}`;
-    case "area":
-      return `Solo ${griglia.aree.find(a => a.id === vista.id)?.nome ?? "l'area"}`;
-    case "casella":
-      return `Solo ${nomeCasella(griglia, vista.casella)}`;
   }
 };
 
@@ -86,8 +78,7 @@ const titoloVista = (vista: VistaConfronto | null, griglia: GrigliaVolantini): s
  * "Assortimento a confronto" (spec volantini-pop): i prodotti dei volantini mostrati per insegna e area.
  * In alto tre numeri da leggere senza scegliere nulla (base comune, percentuale a marchio del
  * distributore, percentuale con Prezzo Fidelity), poi in primo piano le schede dei prodotti in comune
- * a tutti i volantini, con i loro filtri, poi la mappa dei prodotti di un solo volantino con ai margini
- * quelli di una sola insegna e di una sola area, infine l'elenco di tutti i prodotti, il dettaglio, in
+ * a tutti i volantini, con i loro filtri, infine l'elenco di tutti i prodotti, il dettaglio, in
  * un riquadro di altezza fissa che scorre da sé: ruolo, dove c'è a parole e a pallini, prezzi per
  * luogo, differenza, e per ogni prodotto prezzi e pagine per insegna e area, prima i prezzi diversi.
  * Scegliere un numero porta all'elenco. Vista, punto di vista, ricerca, reparto, ruoli e ordine
@@ -100,15 +91,15 @@ export function ConfrontoAssortimento({ referenze, kit, tinta, nomePromo }: Conf
   const prodotti = useMemo(() => prodottiConfronto(referenze, griglia), [referenze, griglia]);
   const sintesi = useMemo(() => sintesiConfronto(prodotti, griglia), [prodotti, griglia]);
 
-  const vista = vistaDaIndirizzo(parametri.get("vista"), griglia);
+  const vista = vistaDaIndirizzo(parametri.get("vista"));
   const puntoLetto = parametri.get("punto");
   const punto = griglia.insegne.find(i => i.id.toLowerCase() === puntoLetto?.toLowerCase()) ?? null;
   const idElenco = ID_TUTTI_I_PRODOTTI;
   const ancora = useAncoraggio();
-  // Fra i numeri e l'elenco ci sono i prodotti in comune e la mappa: scegliendo un numero la pagina porta
+  // Fra i numeri e l'elenco ci sono i prodotti in comune: scegliendo un numero la pagina porta
   // all'elenco; togliendo la scelta il comando scelto resta dov'era, anche se l'elenco cambia
   const scegli = (scelta: VistaConfronto, comando?: Element | null) => {
-    const nuova = stessaVista(scelta, vista) ? null : vistaInIndirizzo(scelta, griglia);
+    const nuova = stessaVista(scelta, vista) ? null : vistaInIndirizzo(scelta);
     if (!nuova) ancora(comando ?? null, document.getElementById(idElenco));
     aggiorna({ vista: nuova });
     if (nuova) document.getElementById(idElenco)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
@@ -163,7 +154,6 @@ export function ConfrontoAssortimento({ referenze, kit, tinta, nomePromo }: Conf
       <div className="flex flex-col gap-6">
         <NumeriChiave sintesi={sintesi} griglia={griglia} vista={vista} onScegli={scegli} idElenco={idElenco} />
         <ProdottiInComune prodotti={prodotti} griglia={griglia} tinta={tinta} />
-        {griglia.esistenti.size > 1 && <MappaEsclusive sintesi={sintesi} griglia={griglia} punto={punto} vista={vista} tinta={tinta} onScegli={scegli} />}
         <Elenco
           id={idElenco}
           prodotti={prodotti}
@@ -399,173 +389,6 @@ function NumeriChiave({ sintesi, griglia, vista, onScegli, idElenco }: NumeriChi
   );
 }
 
-/* ---------- Mappa dei prodotti di un solo volantino ---------- */
-
-const CLASSI_NUMERO_MAPPA =
-  "flex w-full flex-col items-center rounded-control px-2 py-1.5 text-base font-bold text-slate-800 hover:bg-theme-1/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 dark:text-slate-100 dark:hover:bg-indigo-300/15";
-
-/** Un numero della mappa che apre i suoi prodotti nell'elenco; i margini sono su un fondo diverso dalle caselle. */
-function NumeroMappa({
-  numero,
-  sotto,
-  etichetta,
-  attivo,
-  margine = false,
-  onScegli,
-}: {
-  numero: number;
-  sotto: string;
-  etichetta: string;
-  attivo: boolean;
-  margine?: boolean;
-  onScegli: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={numero === 0}
-      aria-pressed={attivo}
-      aria-label={etichetta}
-      onClick={onScegli}
-      className={twMerge(
-        CLASSI_NUMERO_MAPPA,
-        numero === 0
-          ? "bg-transparent font-medium text-slate-400 hover:bg-transparent dark:text-slate-500"
-          : margine
-            ? "bg-theme-1/5 dark:bg-indigo-300/10"
-            : "bg-slate-50 dark:bg-darkmode-700",
-        attivo && "bg-theme-1 text-white hover:bg-theme-1 dark:bg-indigo-300 dark:text-slate-900"
-      )}
-    >
-      {formatNumero(numero)}
-      <span className={twMerge("text-2xs font-medium", attivo ? "text-white/80 dark:text-slate-900/70" : "text-slate-500 dark:text-slate-400")}>{sotto}</span>
-    </button>
-  );
-}
-
-/**
- * La mappa insegne × aree dei prodotti di un solo volantino, con ai margini i prodotti di una sola
- * insegna (a destra di ogni riga) e di una sola area (in fondo a ogni colonna). Dal punto di vista di
- * un'insegna resta la sua riga: il margine è il numero delle sue esclusive.
- */
-function MappaEsclusive({
-  sintesi,
-  griglia,
-  punto,
-  vista,
-  tinta,
-  onScegli,
-}: {
-  sintesi: SintesiConfronto;
-  griglia: GrigliaVolantini;
-  punto: Riferimento | null;
-  vista: VistaConfronto | null;
-  tinta: (idCanale: string) => Tinta;
-  onScegli: (vista: VistaConfronto) => void;
-}) {
-  const n = griglia.aree.length;
-  const perInsegna = new Map(sintesi.perInsegna.map(voce => [voce.insegna.id, voce.prodotti]));
-  const perArea = new Map(sintesi.perArea.map(voce => [voce.area.id, voce.prodotti]));
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <h3 className="title-card dark:text-slate-200">Prodotti di un solo volantino</h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          In ogni casella i prodotti che escono solo in quel volantino; ai margini quelli di una sola insegna e di una sola area. Scegline uno per vederli.
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="border-separate border-spacing-1 tabular-nums" aria-label="Prodotti di un solo volantino, per insegna e area">
-          <thead>
-            <tr>
-              <td />
-              {griglia.aree.map(area => (
-                <th key={area.id} scope="col" className="whitespace-nowrap px-2 pb-1 text-center text-xs font-medium text-slate-600 dark:text-slate-300">
-                  {area.nome}
-                </th>
-              ))}
-              <th scope="col" className="whitespace-nowrap px-2 pb-1 text-center text-xs font-semibold text-theme-1 dark:text-indigo-200">
-                Solo l&apos;insegna
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {griglia.insegne.map((insegna, a) => {
-              if (punto && punto.id !== insegna.id) return null;
-              const esclusive = perInsegna.get(insegna.id) ?? 0;
-              return (
-                <tr key={insegna.id}>
-                  <th scope="row" className="whitespace-nowrap pr-3 text-left text-sm font-semibold text-slate-700 dark:text-slate-200">
-                    <span className="inline-flex items-center gap-1.5">
-                      <LogoInsegna idCanale={insegna.id} nome={insegna.nome} tinta={tinta(insegna.id)} />
-                      {insegna.nome}
-                    </span>
-                  </th>
-                  {griglia.aree.map((area, b) => {
-                    const casella = a * n + b;
-                    if (!griglia.esistenti.has(casella)) {
-                      return (
-                        <td key={area.id} className="min-w-[4.5rem] text-center text-sm text-slate-300 dark:text-slate-600" title={`${insegna.nome} non ha un volantino in ${area.nome}`}>
-                          {VUOTO}
-                        </td>
-                      );
-                    }
-                    const numero = sintesi.perCasella.get(casella) ?? 0;
-                    return (
-                      <td key={area.id} className="min-w-[4.5rem]">
-                        <NumeroMappa
-                          numero={numero}
-                          sotto="solo qui"
-                          etichetta={`${plurale(numero, "prodotto", "prodotti")} solo in ${insegna.nome} · ${area.nome}`}
-                          attivo={vista?.tipo === "casella" && vista.casella === casella}
-                          onScegli={() => onScegli({ tipo: "casella", casella })}
-                        />
-                      </td>
-                    );
-                  })}
-                  <td className="min-w-[5.5rem] border-l border-dashed border-slate-200 pl-1 dark:border-darkmode-400">
-                    <NumeroMappa
-                      numero={esclusive}
-                      sotto={`solo ${insegna.nome}`}
-                      etichetta={`${plurale(esclusive, "prodotto", "prodotti")} solo ${insegna.nome}`}
-                      attivo={vista?.tipo === "insegna" && vista.id === insegna.id}
-                      margine
-                      onScegli={() => onScegli({ tipo: "insegna", id: insegna.id })}
-                    />
-                  </td>
-                </tr>
-              );
-            })}
-            {!punto && (
-              <tr>
-                <th scope="row" className="whitespace-nowrap pr-3 pt-1 text-left text-xs font-semibold text-theme-1 dark:text-indigo-200">
-                  Solo l&apos;area
-                </th>
-                {griglia.aree.map(area => {
-                  const esclusive = perArea.get(area.id) ?? 0;
-                  return (
-                    <td key={area.id} className="min-w-[4.5rem] border-t border-dashed border-slate-200 pt-1 dark:border-darkmode-400">
-                      <NumeroMappa
-                        numero={esclusive}
-                        sotto={`solo ${area.nome}`}
-                        etichetta={`${plurale(esclusive, "prodotto", "prodotti")} solo ${area.nome}`}
-                        attivo={vista?.tipo === "area" && vista.id === area.id}
-                        margine
-                        onScegli={() => onScegli({ tipo: "area", id: area.id })}
-                      />
-                    </td>
-                  );
-                })}
-                <td />
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
 /* ---------- Elenco ---------- */
 
 interface ElencoProps {
@@ -618,7 +441,7 @@ function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostr
   const titolo = titoloVista(vista, griglia);
   const conFiltri = Boolean(cerca || reparto || ruoli.length > 0);
   // Un'altra scelta o un altro filtro: il riquadro riparte dal primo prodotto
-  const scelta = [vista ? vistaInIndirizzo(vista, griglia) : "", punto?.id ?? "", cerca, reparto ?? "", ruoli.join(","), parametri.get("ordina") ?? ""].join("|");
+  const scelta = [vista ? vistaInIndirizzo(vista) : "", punto?.id ?? "", cerca, reparto ?? "", ruoli.join(","), parametri.get("ordina") ?? ""].join("|");
   useEffect(() => {
     if (riquadro.current) riquadro.current.scrollTop = 0;
   }, [scelta]);

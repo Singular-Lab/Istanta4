@@ -8,7 +8,7 @@ import type { Tinta } from "@/components/Grafici";
 import { ruoliDaIndirizzo, ruoliInIndirizzo, SceltaRuoli } from "@/components/SceltaRuoli";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
 import { useRicercaDifferita } from "@/hooks/useRicercaDifferita";
-import { formatEuro, formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
+import { formatEuro } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useId, useMemo, useRef, useState } from "react";
@@ -43,16 +43,6 @@ export interface ProdottiInComuneProps {
 }
 
 const CLASSI_CHIP = "inline-flex items-center rounded-full px-2 py-0.5 text-2xs font-medium whitespace-nowrap";
-
-/** La differenza fra il prezzo più alto e il più basso, in euro e in %. */
-function Differenza({ prodotto }: { prodotto: ProdottoConfronto }) {
-  if (prodotto.differenza <= 0) return null;
-  return (
-    <span className="inline-flex self-start whitespace-nowrap rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800 dark:bg-amber-400/15 dark:text-amber-300">
-      +{formatEuro(prodotto.differenza)} · +{formatPercentuale(prodotto.percentuale)}
-    </span>
-  );
-}
 
 /** Il prezzo, uguale ovunque, oppure i prezzi raggruppati per luogo dal più basso, con l'unità quando è all'etto. */
 function Prezzi({ prodotto, griglia, numeroKit, compatti = false }: { prodotto: ProdottoConfronto; griglia: GrigliaVolantini; numeroKit: number; compatti?: boolean }) {
@@ -117,7 +107,7 @@ function EtichetteRuolo({ ruoli }: { ruoli: readonly RuoloDelProdotto[] }) {
   );
 }
 
-/** Una scheda: foto con il ruolo, nome con la marca in evidenza, formato, reparto, prezzi e differenza; apre prezzi e pagine. */
+/** Una scheda: foto con il ruolo, nome con la marca in evidenza, formato, reparto e prezzi, senza la differenza; apre prezzi e pagine. */
 function Scheda({ prodotto, griglia, onApri }: { prodotto: ProdottoConfronto; griglia: GrigliaVolantini; onApri: () => void }) {
   const r = prodotto.referenza;
   const reparto = r.reparto ? r.reparto.descrizione || r.reparto.codice : "Senza reparto";
@@ -151,7 +141,6 @@ function Scheda({ prodotto, griglia, onApri }: { prodotto: ProdottoConfronto; gr
       </span>
       <span className="mt-auto flex flex-col gap-1.5 pt-1">
         <Prezzi prodotto={prodotto} griglia={griglia} numeroKit={griglia.numeroKit} />
-        <Differenza prodotto={prodotto} />
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-theme-1 dark:text-indigo-200">
           Prezzi e pagine
           <Lucide icon="ArrowRight" aria-hidden="true" className="h-3.5 w-3.5" />
@@ -161,7 +150,7 @@ function Scheda({ prodotto, griglia, onApri }: { prodotto: ProdottoConfronto; gr
   );
 }
 
-/** Una riga dell'elenco compatto: foto piccola, nome con la marca, ruoli, reparto, prezzi e differenza; apre prezzi e pagine. */
+/** Una riga dell'elenco compatto: foto piccola, nome con la marca, ruoli, reparto e prezzi, senza la differenza; apre prezzi e pagine. */
 function RigaCompatta({ prodotto, griglia, onApri }: { prodotto: ProdottoConfronto; griglia: GrigliaVolantini; onApri: () => void }) {
   const r = prodotto.referenza;
   const ruoli = ruoliDelProdotto(r);
@@ -171,7 +160,7 @@ function RigaCompatta({ prodotto, griglia, onApri }: { prodotto: ProdottoConfron
       type="button"
       aria-haspopup="dialog"
       onClick={onApri}
-      className="grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 rounded-control px-2 py-2 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 sm:grid-cols-[2.5rem_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_auto] dark:hover:bg-darkmode-500"
+      className="grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 rounded-control px-2 py-2 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 sm:grid-cols-[2.5rem_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,1.3fr)] dark:hover:bg-darkmode-500"
     >
       <Foto key={r.foto ?? ""} url={r.foto} className="h-10 w-10" />
       <span className="min-w-0">
@@ -197,9 +186,6 @@ function RigaCompatta({ prodotto, griglia, onApri }: { prodotto: ProdottoConfron
       </span>
       <span className="col-start-2 min-w-0 sm:col-start-auto">
         <Prezzi prodotto={prodotto} griglia={griglia} numeroKit={griglia.numeroKit} compatti />
-      </span>
-      <span className="col-start-2 sm:col-start-auto">
-        <Differenza prodotto={prodotto} />
       </span>
     </button>
   );
@@ -412,7 +398,6 @@ export function ProdottiInComune({ prodotti, griglia, tinta }: ProdottiInComuneP
                     <p className="text-sm text-slate-600 dark:text-slate-300">Ruolo: {descrizioneRuoli(ruoliDelProdotto(aperto.referenza))}</p>
                   )}
                   <Prezzi prodotto={aperto} griglia={griglia} numeroKit={griglia.numeroKit} />
-                  <Differenza prodotto={aperto} />
                 </div>
                 <div className="flex flex-col gap-2">
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Prezzi e pagine per insegna e area</h4>
