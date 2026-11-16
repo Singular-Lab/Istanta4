@@ -5123,23 +5123,11 @@ async function fixRefImpaginata(domandaGiaFatta = false) {
             //base c'è, ora controlliamo se i bounds correnti e originali sono diversi di dimensione (non posizione)
 
             var bounds = box.geometricBounds;
-            var schedaRefData = null;
             var originalBounds = null;
-            if (schedaRef.schedeRefDati != null) {
-                schedaRefData = schedaRef.schedeRefDati.find(function (s) {
-                    if (s.recordInTracciato["Scatto.CodiceGruppo"].toString() != codiceGruppo || s.recordInTracciato.StatoSelezione != 1) {
-                        return false;
-                    }
-
-                    if (idRec == null) {
-                        return true;
-                    }
-
-                    return getIdRecFromItemRef(s.recordInTracciato) === idRec;
-                });
-                if (schedaRefData != null) {
-                    originalBounds = schedaRef.refSelected.boxOriginalBounds;
-                }
+            //Le misure originali sono quelle della scheda aperta, se e' di questo box: anche dopo un
+            //cambio di primaria da Foto P/S, che lascia nel DNA l'idRec della primaria di prima.
+            if (schedaRef.primariaDelBox(schedaRef.schedeRefDati, codiceGruppo, idRec) != null) {
+                originalBounds = schedaRef.refSelected.boxOriginalBounds;
             }
 
             //I20-1109: la domanda prima di qualunque modifica: con Annulla il documento resta com'e'.
@@ -5297,27 +5285,15 @@ async function fixRefImpaginata(domandaGiaFatta = false) {
             var datiRef = null;
 
             try {
-                var schedaRefData = null;
-
-                if (schedaRef.schedeRefDati != null) {
-                    schedaRefData = schedaRef.schedeRefDati.find(function (s) {
-                        if (s.recordInTracciato["Scatto.CodiceGruppo"].toString() != codiceGruppo
-                            || s.recordInTracciato.StatoSelezione != 1) {
-                            return false;
-                        }
-
-                        if (idRec == null) {
-                            return true;
-                        }
-
-                        return getIdRecFromItemRef(s.recordInTracciato) === idRec;
-                    });
+                //La primaria attuale del box: dalle schede aperte, altrimenti da Istanta. Prima la
+                //riserva passava l'intera risposta di getSchedaRef, e dopo un cambio di primaria le
+                //regole sulla referenza lavoravano su quella.
+                datiRef = schedaRef.primariaDelBox(schedaRef.schedeRefDati, codiceGruppo, idRec);
+                if (datiRef == null) {
+                    datiRef = schedaRef.primariaDellaRisposta(await getSchedaRefAsync(schedaRef, codiceGruppo, idRec));
                 }
-
-                if (schedaRefData == null) {
-                    datiRef = await getSchedaRefAsync(schedaRef, codiceGruppo, idRec);
-                } else {
-                    datiRef = schedaRefData.recordInTracciato;
+                if (datiRef == null) {
+                    throw new Error("la referenza primaria del box non si trova");
                 }
 
                 //I20-1029: il box si rifa' da capo, e le sue segnalazioni con lui: il bollino di
@@ -5394,20 +5370,13 @@ async function referenzaDelBox(box) {
         var codiceGruppo = dna.codice_gruppo;
         var idRec = dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : null;
 
-        if (schedaRef.schedeRefDati != null) {
-            var scheda = schedaRef.schedeRefDati.find(function (s) {
-                if (s.recordInTracciato == null || s.recordInTracciato["Scatto.CodiceGruppo"] == null
-                    || s.recordInTracciato["Scatto.CodiceGruppo"].toString() != codiceGruppo
-                    || s.recordInTracciato.StatoSelezione != 1) {
-                    return false;
-                }
-                return idRec == null || getIdRecFromItemRef(s.recordInTracciato) === idRec;
-            });
-            if (scheda != null) {
-                return scheda.recordInTracciato;
-            }
+        //La primaria attuale del box, anche dopo un cambio da Foto P/S: dalle schede aperte se sono
+        //di questo box, altrimenti dalla risposta di Istanta (prima si restituiva la risposta intera).
+        var primaria = schedaRef.primariaDelBox(schedaRef.schedeRefDati, codiceGruppo, idRec);
+        if (primaria != null) {
+            return primaria;
         }
-        return await getSchedaRefAsync(schedaRef, codiceGruppo, idRec != null ? idRec : 0);
+        return schedaRef.primariaDellaRisposta(await getSchedaRefAsync(schedaRef, codiceGruppo, idRec != null ? idRec : 0));
     }
     catch (e) {
         console.error("Code IDX-202: referenza del box non trovata per il fix foto: " + e);

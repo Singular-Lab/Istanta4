@@ -271,7 +271,7 @@ test("la referenza del box viene dal suo DNA, dalle schede gia' scaricate o da I
     assert.ok(inizio > 0);
     const corpo = indexNew.substring(inizio, indexNew.indexOf("\nfunction getSchedaRefAsync", inizio));
     assert.match(corpo, /var dna = Utility\.getDnaOfBox\(box\);/);
-    assert.match(corpo, /schedaRef\.schedeRefDati\.find\(/);
-    assert.match(corpo, /return await getSchedaRefAsync\(schedaRef, codiceGruppo, idRec != null \? idRec : 0\);/);
+    assert.match(corpo, /var primaria = schedaRef\.primariaDelBox\(schedaRef\.schedeRefDati, codiceGruppo, idRec\);/);
+    assert.match(corpo, /return schedaRef\.primariaDellaRisposta\(await getSchedaRefAsync\(schedaRef, codiceGruppo, idRec != null \? idRec : 0\)\);/);
     assert.match(corpo, /catch \(e\) \{\s*console\.error\("Code IDX-202:/);
 });
