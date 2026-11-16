@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
@@ -473,7 +473,7 @@ describe("Consultazione di una promozione", () => {
     }
   });
 
-  it("con un solo volantino l'assortimento a confronto è una frase, senza numeri, mappa né elenco", async () => {
+  it("con un solo volantino l'assortimento a confronto è una frase, senza numeri né elenco", async () => {
     finti.risultato = caricato(dettaglio({ kit: [KIT[0] as KitPromozioneConsultazione], numeroKitTotale: 1 }));
     await apri();
 
@@ -490,9 +490,8 @@ describe("Consultazione di una promozione", () => {
     const righe = (nome: string) => within(elenco(nome)).getAllByRole("row").slice(1).filter(riga => within(riga).queryAllByRole("cell").length > 1);
     const nomiDi = (nome: string) => righe(nome).map(riga => riga.querySelector("p")?.firstChild?.textContent);
     const riga = (nome: string, prodotto: string) => righe(nome).find(r => r.querySelector("p")?.firstChild?.textContent === prodotto) as HTMLElement;
-    const mappa = () => screen.getByRole("table", { name: "Prodotti di un solo volantino, per insegna e area" });
 
-    it("senza scegliere nulla: i tre numeri, la mappa dei prodotti di un solo volantino con i margini e l'elenco di tutti i prodotti", async () => {
+    it("senza scegliere nulla: i tre numeri e l'elenco di tutti i prodotti, senza la mappa dei prodotti di un solo volantino", async () => {
       await apri();
 
       expect(riquadro("1 in tutti i 3 volantini")).toHaveTextContent("20% dei 5 prodotti dei volantini mostrati");
@@ -517,15 +516,10 @@ describe("Consultazione di una promozione", () => {
       expect(screen.queryByText("Esclusivi di un'area")).not.toBeInTheDocument();
       expect(screen.queryByText(/Il più distante:/)).not.toBeInTheDocument();
 
-      // Ai margini della mappa i prodotti di una sola insegna e di una sola area
-      expect(within(mappa()).getByRole("button", { name: "2 prodotti solo City" })).toBeInTheDocument();
-      expect(within(mappa()).getByRole("button", { name: "2 prodotti solo Superstore" })).toBeInTheDocument();
-      expect(within(mappa()).getByRole("button", { name: "3 prodotti solo Toscana" })).toBeInTheDocument();
-      expect(within(mappa()).getByRole("button", { name: "0 prodotti solo Lazio" })).toBeDisabled();
-      expect(within(mappa()).getByRole("button", { name: "1 prodotto solo in City · Toscana" })).toBeInTheDocument();
-      expect(within(mappa()).getByRole("button", { name: "2 prodotti solo in Superstore · Toscana" })).toBeInTheDocument();
-      // Superstore non ha un volantino nel Lazio: la casella non si sceglie
-      expect(within(mappa()).queryByRole("button", { name: /Superstore · Lazio/ })).not.toBeInTheDocument();
+      // La mappa dei prodotti di un solo volantino è tolta, con i suoi numeri per insegna e per area
+      expect(screen.queryByRole("table", { name: /Prodotti di un solo volantino/ })).not.toBeInTheDocument();
+      expect(screen.queryByText("Prodotti di un solo volantino")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /prodott[oi] solo / })).not.toBeInTheDocument();
 
       expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
     });
@@ -558,7 +552,7 @@ describe("Consultazione di una promozione", () => {
       const nomiSchede = () => schede().map(scheda => scheda.querySelector("button > span:nth-child(2)")?.firstChild?.textContent);
       const tuttiIKit = (prezzo: (idKit: string) => number) => KIT.map(k => presenza(k.id, { prezzo: prezzo(k.id) }));
 
-      it("in primo piano dopo i numeri, prima della mappa e dell'elenco: una scheda per prodotto in tutti i volantini, prima i prezzi diversi", async () => {
+      it("in primo piano dopo i numeri, prima dell'elenco: una scheda per prodotto in tutti i volantini, prima i prezzi diversi, senza la differenza", async () => {
         finti.risultato = caricato(
           dettaglio({
             assortimento: {
@@ -577,23 +571,22 @@ describe("Consultazione di una promozione", () => {
         expect(sezione).toHaveTextContent("3 prodotti in tutti i 3 volantini · 2 con prezzo diverso, qui per primi");
         // Caffè +25%, Pasta +11%, poi l'acqua allo stesso prezzo ovunque
         expect(nomiSchede()).toEqual(["Caffè macinato", "Pasta di semola", "Acqua naturale"]);
-        // Dopo i numeri, prima della mappa e dell'elenco
+        // Dopo i numeri, prima dell'elenco
         const numeri = riquadro("3 in tutti i 3 volantini");
         expect(numeri.compareDocumentPosition(sezione) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-        expect(sezione.compareDocumentPosition(mappa()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         expect(sezione.compareDocumentPosition(elenco("Tutti i prodotti")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
         const [, pasta, acqua] = schede() as [HTMLElement, HTMLElement, HTMLElement];
         expect(within(pasta).getByText("Barilla").tagName).toBe("STRONG");
         expect(within(pasta).getByText("500 g")).toBeInTheDocument();
         expect(within(pasta).getByText("Drogheria")).toBeInTheDocument();
-        expect(within(pasta).getByText("€ 0,89").parentElement).toHaveTextContent("€ 0,89 altrove");
+        expect(within(pasta).getByText("€ 0,89").parentElement).toHaveTextContent("€ 0,89 tutti gli altri");
         expect(within(pasta).getByText("€ 0,99").parentElement).toHaveTextContent("€ 0,99 Superstore");
-        expect(within(pasta).getByText("+€ 0,10 · +11%")).toBeInTheDocument();
+        // Niente differenza di prezzo nelle schede dei prodotti in comune
+        for (const scheda of schede()) expect(within(scheda).queryByText(/^\+€/)).not.toBeInTheDocument();
         expect(acqua.querySelector("img")).toHaveAttribute("src", "/foto/acqua.jpg");
         expect(within(acqua).getByText("€ 0,25")).toBeInTheDocument();
         expect(within(acqua).getByText("uguale in tutti i 3 volantini")).toBeInTheDocument();
-        expect(within(acqua).queryByText(/^\+€/)).not.toBeInTheDocument();
       });
 
       it("il ruolo sopra la foto della scheda: una etichetta per ruolo, con il conteggio in vista e la frase nel suggerimento", async () => {
@@ -613,7 +606,7 @@ describe("Consultazione di una promozione", () => {
         expect(etichette.parentElement?.querySelector("img, svg")).not.toBeNull();
       });
 
-      it("come elenco compatto: una riga per prodotto con ruolo, reparto, prezzi e differenza, che apre prezzi e pagine", async () => {
+      it("come elenco compatto: una riga per prodotto con ruolo, reparto e prezzi, senza differenza, che apre prezzi e pagine", async () => {
         const router = await apri();
 
         fireEvent.click(within(screen.getByRole("radiogroup", { name: "Vedi i prodotti in comune come" })).getByRole("radio", { name: "Elenco" }));
@@ -621,11 +614,14 @@ describe("Consultazione di una promozione", () => {
         const righeComuni = within(comuni()).getAllByRole("listitem");
         expect(righeComuni).toHaveLength(1);
         const pasta = righeComuni[0] as HTMLElement;
-        for (const testo of ["Pasta di semola", "Barilla", "Drogheria", "+€ 0,10 · +11%"]) expect(pasta).toHaveTextContent(testo);
+        for (const testo of ["Pasta di semola", "Barilla", "Drogheria", "€ 0,89 tutti gli altri"]) expect(pasta).toHaveTextContent(testo);
+        expect(pasta).not.toHaveTextContent("+€ 0,10");
         expect(pasta).toHaveTextContent("Ruolo: Base in 2 dei 3 volantini in cui compare");
 
         fireEvent.click(within(pasta).getByRole("button"));
-        expect(await screen.findByRole("dialog", { name: /Pasta di semola Barilla/ })).toBeInTheDocument();
+        const pannello = await screen.findByRole("dialog", { name: /Pasta di semola Barilla/ });
+        // Nemmeno nel pannello dei prezzi e delle pagine
+        expect(pannello).not.toHaveTextContent("+€ 0,10");
       });
 
       it("un prodotto in comune senza ruolo non ha etichette sopra la foto", async () => {
@@ -845,14 +841,15 @@ describe("Consultazione di una promozione", () => {
       try {
         await apri();
 
-        fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo City" }));
+        const marchio = () => riquadro("40% dei 5 prodotti è a marchio del distributore");
+        fireEvent.click(within(marchio()).getByRole("button", { name: /Vedi i prodotti/ }));
         expect(scorri).toHaveBeenCalledTimes(1);
-        expect(scorri.mock.contexts[0]).toContainElement(elenco("Solo City"));
+        expect(scorri.mock.contexts[0]).toContainElement(elenco("A marchio del distributore"));
 
-        fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo City" }));
+        fireEvent.click(within(marchio()).getByRole("button", { name: /Mostra tutti i prodotti/ }));
         expect(scorri).toHaveBeenCalledTimes(1);
 
-        fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo in Superstore · Toscana" }));
+        fireEvent.click(within(riquadro("1 in tutti i 3 volantini")).getByRole("button", { name: /Vedi i prodotti/ }));
         expect(scorri).toHaveBeenCalledTimes(2);
       } finally {
         Element.prototype.scrollIntoView = originale;
@@ -869,20 +866,20 @@ describe("Consultazione di una promozione", () => {
       fireEvent.click(within(riquadro("1 in tutti i 3 volantini")).getByRole("button", { name: /Mostra tutti i prodotti/ }));
       expect(router.state.location.search).toBe("");
 
-      fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo City" }));
-      expect(router.state.location.search).toBe(`?vista=insegna%3A${CITY.id}`);
-      expect(nomiDi("Solo City").sort()).toEqual(["Latte intero", "Olio extravergine"]);
+      const marchio = () => riquadro("40% dei 5 prodotti è a marchio del distributore");
+      fireEvent.click(within(marchio()).getByRole("button", { name: /Vedi i prodotti/ }));
+      expect(router.state.location.search).toBe("?vista=marchio");
+      expect(nomiDi("A marchio del distributore").sort()).toEqual(["Latte intero", "Olio extravergine"]);
       fireEvent.click(screen.getAllByRole("button", { name: /Mostra tutti i prodotti/ })[0] as HTMLElement);
       expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
     });
 
-    it("la mappa: una casella mostra i prodotti che escono solo in quel volantino", async () => {
-      const router = await apri();
-
-      fireEvent.click(within(mappa()).getByRole("button", { name: "2 prodotti solo in Superstore · Toscana" }));
-
-      expect(router.state.location.search).toBe(`?vista=casella%3A${SUPERSTORE.id}%3A${TOSCANA.id}`);
-      expect(nomiDi("Solo Superstore · Toscana").sort()).toEqual(["Biscotti frollini", "Yogurt bianco"]);
+    it("un indirizzo salvato con una vista della mappa tolta (una casella, un'insegna, un'area) mostra tutti i prodotti", async () => {
+      for (const vista of [`casella:${SUPERSTORE.id}:${TOSCANA.id}`, `insegna:${CITY.id}`, `area:${TOSCANA.id}`]) {
+        await apri(`/volantini/promozioni/p1?vista=${encodeURIComponent(vista)}`);
+        expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
+        cleanup();
+      }
     });
 
     it("ogni prodotto: dove c'è a parole, prezzi per luogo, differenza; e prezzi, sconti, barrati e pagine per insegna e area", async () => {
@@ -890,7 +887,7 @@ describe("Consultazione di una promozione", () => {
 
       const pasta = riga("Tutti i prodotti", "Pasta di semola");
       expect(within(pasta).getByText("In tutti i 3 volantini")).toBeInTheDocument();
-      expect(within(pasta).getByText("€ 0,89").parentElement).toHaveTextContent("€ 0,89 altrove");
+      expect(within(pasta).getByText("€ 0,89").parentElement).toHaveTextContent("€ 0,89 tutti gli altri");
       expect(within(pasta).getByText("€ 0,99").parentElement).toHaveTextContent("€ 0,99 Superstore");
       expect(within(pasta).getByText("+€ 0,10 · +11%")).toBeInTheDocument();
       expect(within(riga("Tutti i prodotti", "Olio extravergine")).getByText("Solo City")).toBeInTheDocument();
@@ -940,16 +937,13 @@ describe("Consultazione di una promozione", () => {
       }
     });
 
-    it("dal punto di vista di un'insegna: il suo numero di esclusivi, la sua riga nella mappa e i soli prodotti che stampa", async () => {
+    it("dal punto di vista di un'insegna: i soli prodotti che stampa, senza la mappa", async () => {
       const router = await apri();
 
       fireEvent.change(screen.getByRole("combobox", { name: "Punto di vista" }), { target: { value: SUPERSTORE.id } });
 
       expect(router.state.location.search).toBe(`?punto=${SUPERSTORE.id}`);
-      expect(within(mappa()).getByRole("button", { name: "2 prodotti solo Superstore" })).toBeInTheDocument();
-      expect(within(mappa()).queryByRole("rowheader", { name: /City/ })).not.toBeInTheDocument();
-      // Dal punto di vista di un'insegna non c'è la riga delle aree
-      expect(within(mappa()).queryByRole("button", { name: /solo Toscana$/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("table", { name: /Prodotti di un solo volantino/ })).not.toBeInTheDocument();
       expect(screen.getByText("3 prodotti stampati da Superstore")).toBeInTheDocument();
       expect(nomiDi("Tutti i prodotti").sort()).toEqual(["Biscotti frollini", "Pasta di semola", "Yogurt bianco"]);
     });

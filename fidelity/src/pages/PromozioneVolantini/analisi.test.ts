@@ -244,13 +244,13 @@ describe("assortimento a confronto", () => {
     expect(descriviPresenze(prodotto("x", ["ct", "cl", "ot", "ol", "st"]), griglia).eccezione).toBe(false);
   });
 
-  it("prezzi per luogo: dal più basso, con il prezzo più diffuso detto altrove; uno solo quando è uguale ovunque", () => {
+  it("prezzi per luogo: dal più basso, con il prezzo più diffuso detto tutti gli altri; uno solo quando è uguale ovunque", () => {
     const vari = prodottiConfronto(
       [referenza("Napisan", [presenza("ct", 6.79), presenza("ot", 6.79), presenza("st", 6.79), presenza("cl", 7.99), presenza("ol", 7.99)])],
       griglia
     )[0] as ProdottoConfronto;
     expect(prezziPerLuogo(vari, griglia)).toEqual([
-      { prezzo: 6.79, luogo: "altrove", piuAlto: false, allEtto: false },
+      { prezzo: 6.79, luogo: "tutti gli altri", piuAlto: false, allEtto: false },
       { prezzo: 7.99, luogo: "Lazio", piuAlto: true, allEtto: false },
     ]);
     expect(vari).toMatchObject({ min: 6.79, max: 7.99, differenza: 1.2, percentuale: 18 });
@@ -282,9 +282,8 @@ describe("assortimento a confronto", () => {
     expect(sintesi.perLinea).toEqual([{ linea: "Conad", prodotti: 2 }, { linea: "Sapori & Dintorni", prodotti: 1 }]);
     expect(percentualeDi(sintesi.aMarchio, sintesi.totale)).toBe(75);
     expect(percentualeDi(sintesi.fidelity, sintesi.totale)).toBe(50);
-    expect(sintesi.perInsegna.map(v => [v.insegna.nome, v.prodotti])).toEqual([["City", 1], ["Conad", 0], ["Superstore", 1]]);
-    expect(sintesi.perArea.map(v => [v.area.nome, v.prodotti])).toEqual([["Lazio", 0], ["Toscana", 2]]);
-    expect([...sintesi.perCasella]).toEqual([[5, 1]]);
+    // Niente conteggi di una sola insegna, area o volantino: la mappa che li mostrava è tolta
+    expect(Object.keys(sintesi).sort()).toEqual(["aMarchio", "base", "fidelity", "perLinea", "totale"]);
   });
 
   it("senza prodotti le percentuali sono zero", () => {
@@ -313,21 +312,16 @@ describe("assortimento a confronto", () => {
     expect(lineeInVista([])).toEqual({ linee: [], altre: null });
   });
 
-  it("la vista nell'indirizzo, avanti e indietro; un valore storpiato, dei numeri tolti o di una casella senza volantino non è una vista", () => {
-    const viste: VistaConfronto[] = [
-      { tipo: "base" },
-      { tipo: "marchio" },
-      { tipo: "fidelity" },
-      { tipo: "insegna", id: CITY.id },
-      { tipo: "area", id: TOSCANA.id },
-      { tipo: "casella", casella: 1 },
-    ];
-    for (const vista of viste) expect(vistaDaIndirizzo(vistaInIndirizzo(vista, griglia), griglia)).toEqual(vista);
-    expect(vistaDaIndirizzo("tutto", griglia)).toBeNull();
-    for (const tolta of ["prezzi", "insegne", "aree"]) expect(vistaDaIndirizzo(tolta, griglia)).toBeNull();
-    expect(vistaDaIndirizzo(`casella:${SUPERSTORE.id}:${LAZIO.id}`, griglia)).toBeNull();
-    expect(stessaVista({ tipo: "insegna", id: CITY.id }, { tipo: "insegna", id: CITY.id.toUpperCase() })).toBe(true);
-    expect(stessaVista({ tipo: "casella", casella: 1 }, { tipo: "casella", casella: 2 })).toBe(false);
+  it("la vista nell'indirizzo, avanti e indietro; un valore storpiato, dei numeri o della mappa tolti non è una vista", () => {
+    const viste: VistaConfronto[] = [{ tipo: "base" }, { tipo: "marchio" }, { tipo: "fidelity" }];
+    for (const vista of viste) expect(vistaDaIndirizzo(vistaInIndirizzo(vista))).toEqual(vista);
+    expect(vistaDaIndirizzo("tutto")).toBeNull();
+    for (const tolta of ["prezzi", "insegne", "aree"]) expect(vistaDaIndirizzo(tolta)).toBeNull();
+    // Le viste della mappa dei prodotti di un solo volantino, tolta: tutti i prodotti
+    for (const tolta of [`insegna:${CITY.id}`, `area:${TOSCANA.id}`, `casella:${SUPERSTORE.id}:${TOSCANA.id}`]) expect(vistaDaIndirizzo(tolta)).toBeNull();
+    expect(stessaVista({ tipo: "marchio" }, { tipo: "marchio" })).toBe(true);
+    expect(stessaVista({ tipo: "marchio" }, { tipo: "fidelity" })).toBe(false);
+    expect(stessaVista(null, { tipo: "base" })).toBe(false);
   });
 
   it("filtra per vista, punto di vista, ruolo, reparto e ricerca in nome, marca, codice ed EAN", () => {
@@ -343,13 +337,9 @@ describe("assortimento a confronto", () => {
       griglia
     );
     const nomi = (filtro: Partial<Parameters<typeof filtraConfronto>[2]>) => filtraConfronto(prodotti, griglia, { ...SENZA_FILTRI, ...filtro }).map(p => p.referenza.nome);
-    expect(nomi({ vista: { tipo: "insegna", id: CITY.id } })).toEqual(["Latte"]);
-    // Lo yogurt c'è solo nel kit Superstore Toscana: è dell'area Toscana soltanto
-    expect(nomi({ vista: { tipo: "area", id: TOSCANA.id } })).toEqual(["Yogurt"]);
     expect(nomi({ vista: { tipo: "base" } })).toEqual(["Pasta"]);
     expect(nomi({ vista: { tipo: "marchio" } })).toEqual(["Latte"]);
     expect(nomi({ vista: { tipo: "fidelity" } })).toEqual(["Pasta"]);
-    expect(nomi({ vista: { tipo: "casella", casella: 5 } })).toEqual(["Yogurt"]);
     expect(nomi({ punto: SUPERSTORE.id })).toEqual(["Pasta", "Yogurt"]);
     expect(nomi({ ruoli: ["Star"] })).toEqual(["Latte"]);
     expect(nomi({ ruoli: ["Base"] })).toEqual(["Latte", "Pasta"]);

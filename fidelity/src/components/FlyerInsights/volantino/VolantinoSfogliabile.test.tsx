@@ -1457,7 +1457,24 @@ describe("VolantinoSfogliabile: interrogazione dei box", () => {
 
     const condizioni = screen.getByRole("region", { name: "Condizioni" });
     expect(within(condizioni).queryByRole("group", { name: "Settore" })).not.toBeInTheDocument();
-    expect(within(condizioni).queryByRole("group", { name: "Linea del distributore" })).not.toBeInTheDocument();
+    expect(within(condizioni).queryByRole("group", { name: "Private Labels" })).not.toBeInTheDocument();
     expect(screen.getByTestId("interroga-volantino")).not.toHaveTextContent(/vendit|prevision|calore|visibilit/i);
+  });
+
+  // TASK-fa969fac: la condizione sulle linee del distributore si chiama Private Labels
+  it("la condizione sulle linee del distributore si chiama Private Labels", () => {
+    // La condizione compare solo se distingue i box: due linee diverse e un box senza linea
+    const [bistecca, pollo, ...altri] = BOX;
+    disegna({
+      box: [{ ...bistecca, linea: { sigla: "SD", nome: "Sapori & Dintorni" } }, { ...pollo, linea: { sigla: "CO", nome: "Conad" } }, ...altri],
+      totalePagine: 4,
+    });
+    apriInterroga();
+
+    const condizioni = screen.getByRole("region", { name: "Condizioni" });
+    const privateLabels = within(condizioni).getByRole("group", { name: "Private Labels" });
+    expect(within(privateLabels).getByRole("checkbox", { name: /Sapori & Dintorni/ })).toBeInTheDocument();
+    expect(within(privateLabels).getByRole("checkbox", { name: /Conad/ })).toBeInTheDocument();
+    expect(within(condizioni).queryByRole("group", { name: "Linea del distributore" })).not.toBeInTheDocument();
   });
 });
