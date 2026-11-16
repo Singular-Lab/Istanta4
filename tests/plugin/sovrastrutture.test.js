@@ -502,7 +502,7 @@ test("callAllOperationFixBox non applica piu' la regola disattiva in apertura, e
     const inizio = indexNew.indexOf("async function callAllOperationFixBox(");
     const corpo = indexNew.substring(inizio, indexNew.indexOf("\n}\n", inizio));
     assert.doesNotMatch(corpo, /applicaDisattivazioni/);
-    assert.match(corpo, /^    CssFramework\.fixOverflowFromBox\(boxImpaginato\.geometricBounds, boxImpaginato\);/m);
+    assert.match(corpo, /^    CssFramework\.fixOverflowFromBox\(boxImpaginato\.geometricBounds, boxImpaginato, null, null, true, false\);/m);
     assert.match(corpo, /boxImpaginato = res\.box;/);
 });
 

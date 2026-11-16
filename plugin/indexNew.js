@@ -5565,7 +5565,9 @@ function stampaSegnalazioni(reportImpaginazioneObj = { segnalazioni: [] }) {
 /// E' il punto in cui l'impaginazione smette di collocare contenuti e comincia a farli
 /// stare dentro lo spazio che hanno.
 async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey = null, modalitaOperazioniRidimensionamento = 0) {
-    CssFramework.fixOverflowFromBox(boxImpaginato.geometricBounds, boxImpaginato);
+    //I20-1235: prima del ridimensionamento alla cella si riporta dentro chi sporge, ma non si annota
+    //niente: gli spostamenti si segnalano solo dal ridimensionamento in poi.
+    CssFramework.fixOverflowFromBox(boxImpaginato.geometricBounds, boxImpaginato, null, null, true, false);
     var mappaBoxOriginale = null;
     var tipoLavorazione = ficoProcess.getTipoLavorazioneCorrente();
     var res = {
