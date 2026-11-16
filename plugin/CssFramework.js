@@ -2325,6 +2325,8 @@ const CssFramework =
             }
 
             var boxLabel = box.label != "" ? box.label : "senza etichetta";
+            var descrizioneSegnalata = false;
+            var sovrapposizioniDescrizione = null;
             for (var s = 0; s < pendente.spostamenti.length; s++) {
                 var spostamento = pendente.spostamenti[s];
                 var item = spostamento.item;
@@ -2335,6 +2337,23 @@ const CssFramework =
                 if (!this.stessiBounds(item.geometricBounds, spostamento.bounds, 0.05)) {
                     console.log("CSF-008 scartato: " + spostamento.label + " spostato " + spostamento.direzione + " e poi ricollocato.");
                     continue;
+                }
+
+                //I20-1235: la descrizione rimasta nella posizione forzata si segnala solo se il suo testo
+                //finisce sopra un altro elemento del box: spostata e basta, il Plugin l'ha gia' sistemata.
+                //Allora ha anche il suo avviso di sempre, una volta per box, con la chiave che lo tiene unico.
+                if (String(spostamento.label).toLowerCase() == "descrizione") {
+                    if (sovrapposizioniDescrizione == null) {
+                        sovrapposizioniDescrizione = this.sovrapposizioniDellaDescrizione(box, item);
+                    }
+                    if (sovrapposizioniDescrizione.length == 0) {
+                        console.log("CSF-008 scartato: descrizione spostata " + spostamento.direzione + " senza coprire altri elementi.");
+                        continue;
+                    }
+                    if (!descrizioneSegnalata) {
+                        descrizioneSegnalata = true;
+                        addSegnalazione("Descrizione spostata poichè uscita dai limiti del box", "warning", 2, true, ["Descrizione spostata poichè uscita dai limiti del box", "orange"], "descrizione_spostata");
+                    }
                 }
 
                 var msg = "Code CSF-008: Elemento " + spostamento.label + " nel box " + boxLabel + " spostato " + spostamento.direzione + " per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.";
@@ -2426,8 +2445,9 @@ const CssFramework =
     /// griglia (elementiDaSpostareConIlResponsabile). Lo spostamento aggiorna la mappa del box,
     /// sullo stesso asse, perche' le regole che seguono la leggono. Con stringiCaselle false si
     /// passa subito allo spostamento, senza toccare le caselle. Torna true se l'elemento e'
-    /// stato spostato di piu' di 1 mm: e' la soglia sotto la quale non si segnala.
-    riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, lato, mappaBoxOriginale, gruppiAllineamento = null, stringiCaselle = true) {
+    /// stato spostato di piu' di 1 mm: e' la soglia sotto la quale non si segnala. I20-1235: con annota
+    /// false lo spostamento si fa ma non si annota, e non arriva mai al controllo di fine box.
+    riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, lato, mappaBoxOriginale, gruppiAllineamento = null, stringiCaselle = true, annota = true) {
         var limite = boxInGrigliaBounds[lato.indice];
         if (!this.fuoriDalLato(pageItem, limite, lato)) {
             return false;
@@ -2441,6 +2461,20 @@ const CssFramework =
             if (this.stringiTestoAlLimite(pageItem, limite, lato)) {
                 return false;
             }
+            //I20-1235: per la descrizione, dopo la riduzione, decide il testo e non la casella. Nel CY
+            //Lazio la casella usciva di 20 mm dall'alto con il testo dentro: la si spostava tutta e
+            //nasceva la coppia "Descrizione spostata" + CSF-008 su un box che a vista era a posto.
+            if (this.eDescrizione(pageItem)) {
+                var bordoTesto = this.bordoDelTestoSulLato(pageItem, lato);
+                if (bordoTesto != null) {
+                    if (!this.oltreIlLimite(bordoTesto, limite, lato)) {
+                        //il testo sta nella griglia: sporge solo la parte vuota della casella
+                        return false;
+                    }
+                    //si sposta di quanto esce il testo, non la casella
+                    return this.spostaNellaGriglia(box, pageItem, boxInGrigliaBounds, lato, limite - bordoTesto, mappaBoxOriginale, gruppiAllineamento, annota);
+                }
+            }
         }
         //Un gruppo, per esempio il prezzo con l'info pack: le caselle che si sono strette restano
         //strette anche se non basta, perche' accorciano lo spostamento senza overflow.
@@ -2448,10 +2482,15 @@ const CssFramework =
             return false;
         }
 
+        return this.spostaNellaGriglia(box, pageItem, boxInGrigliaBounds, lato, limite - pageItem.geometricBounds[lato.indice], mappaBoxOriginale, gruppiAllineamento, annota);
+    },
+
+    /// Lo spostamento di riportaLatoInGriglia, della misura data, con chi si sposta insieme
+    /// all'elemento. Lo annota se supera 1 mm (e annota e' vero). Torna true oltre 1 mm.
+    spostaNellaGriglia(box, pageItem, boxInGrigliaBounds, lato, movimento, mappaBoxOriginale, gruppiAllineamento, annota) {
         var etichetta = pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta";
         console.warn("Elemento " + etichetta + " spostato " + lato.direzione + " per rientrare nei limiti della griglia.");
 
-        var movimento = limite - pageItem.geometricBounds[lato.indice];
         var oltreSoglia = Math.abs(movimento) > 1;
         var daSpostare = this.elementiDaSpostareConIlResponsabile(box, pageItem, boxInGrigliaBounds, lato, movimento, gruppiAllineamento);
         for (var s = 0; s < daSpostare.length; s++) {
@@ -2460,7 +2499,7 @@ const CssFramework =
         }
 
         //I20-1042: non si segnala qui, si annota: lo decide il controllo di fine box.
-        if (oltreSoglia) {
+        if (oltreSoglia && annota) {
             this.annotaSpostamentoGriglia(box, pageItem, lato.direzione);
         }
         return oltreSoglia;
@@ -2667,6 +2706,8 @@ const CssFramework =
         if (lato.verticale) {
             return null;
         }
+        //I20-1235: dall'elenco degli elementi del box arriva un elemento generico, senza le righe.
+        casella = this.casellaVera(casella);
         try {
             var righe = casella.lines.everyItem().getElements();
             if (!righe || righe.length == 0) {
@@ -2683,6 +2724,155 @@ const CssFramework =
         } catch (e) {
             return null;
         }
+    },
+
+    /// I20-1235: l'elemento come InDesign lo conosce davvero. box.pageItems.item(i) da' un elemento
+    /// generico: ha bounds ed etichetta, ma non le righe ne' le preferenze della casella di testo,
+    /// che si leggono solo dall'elemento risolto con getElements(). Se non si risolve, quello dato.
+    casellaVera(item) {
+        try {
+            if (item != null && typeof item.getElements === "function") {
+                var elementi = item.getElements();
+                if (elementi && elementi.length > 0 && elementi[0] != null) {
+                    return elementi[0];
+                }
+            }
+        } catch (e) {
+            //resta quello dato
+        }
+        return item;
+    },
+
+    /// I20-1235: se l'elemento e' la descrizione del box.
+    eDescrizione(pageItem) {
+        try {
+            return Utility.parseLabel(pageItem.label).toLowerCase() == "descrizione";
+        } catch (e) {
+            return false;
+        }
+    },
+
+    /// I20-1235: dove arriva il testo di una casella su un lato, dalle sue righe: in alto la cima della
+    /// prima riga, in basso il fondo dell'ultima (linea di base piu' o meno ascendente e discendente),
+    /// ai lati come bordoDelTesto. null se le righe non si leggono.
+    bordoDelTestoSulLato(casella, lato) {
+        if (!lato.verticale) {
+            return this.bordoDelTesto(casella, lato);
+        }
+        casella = this.casellaVera(casella);
+        try {
+            var righe = casella.lines.everyItem().getElements();
+            if (!righe || righe.length == 0) {
+                return null;
+            }
+            if (lato.minimo) {
+                return Math.min(...righe.map(r => Number(r.baseline) - Number(r.ascent)));
+            }
+            return Math.max(...righe.map(r => Number(r.baseline) + Number(r.descent)));
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /// I20-1235: se un bordo sta oltre il limite del lato, con la stessa tolleranza di fuoriDalLato.
+    oltreIlLimite(bordo, limite, lato) {
+        return lato.minimo ? bordo < limite - 0.05 : bordo > limite + 0.05;
+    },
+
+    /// I20-1235: i bounds con cui si controlla se un elemento e' fuori dalla griglia: per la descrizione
+    /// quelli del suo testo, lato per lato, dove si leggono; per tutti gli altri quelli dell'elemento.
+    boundsPerLaGriglia(pageItem) {
+        if (!this.eDescrizione(pageItem) || !this.isTextFrame(pageItem)) {
+            return pageItem.geometricBounds.slice();
+        }
+        return this.boundsDelTesto(pageItem);
+    },
+
+    /// I20-1235: dove sta il testo di una casella, lato per lato, dalle sue righe. Mai oltre la casella:
+    /// il testo ci sta dentro, e bordoDelTesto aggiunge mezzo millimetro di respiro che su una casella
+    /// appoggiata al bordo della cella faceva nascere una CSF-009 falsa. Dove le righe non si leggono,
+    /// il bordo della casella.
+    boundsDelTesto(casella) {
+        var bounds = casella.geometricBounds.slice();
+        for (var l = 0; l < this.latiGriglia.length; l++) {
+            var lato = this.latiGriglia[l];
+            var bordo = this.bordoDelTestoSulLato(casella, lato);
+            if (bordo == null || isNaN(bordo)) {
+                continue;
+            }
+            bounds[lato.indice] = lato.minimo ? Math.max(bounds[lato.indice], bordo) : Math.min(bounds[lato.indice], bordo);
+        }
+        return bounds;
+    },
+
+    /// I20-1235: quanto si vede di un elemento del box: il testo per una casella di testo, l'ingombro
+    /// degli elementi visibili per un gruppo, i bordi per il resto. null se non si vede.
+    ingombroVisibile(item) {
+        try {
+            if (item == null || item.visible === false || Utility.eUnClone(item.label)) {
+                return null;
+            }
+            if (this.isTextFrame(item)) {
+                return this.boundsDelTesto(item);
+            }
+            var vero = this.casellaVera(item);
+            if (vero != null && vero.constructorName == "Group" && vero.pageItems != null) {
+                var unione = null;
+                for (var i = 0; i < vero.pageItems.length; i++) {
+                    var parte = this.ingombroVisibile(vero.pageItems.item(i));
+                    if (parte == null) {
+                        continue;
+                    }
+                    unione = unione == null ? parte.slice()
+                        : [Math.min(unione[0], parte[0]), Math.min(unione[1], parte[1]), Math.max(unione[2], parte[2]), Math.max(unione[3], parte[3])];
+                }
+                return unione;
+            }
+            return item.geometricBounds.slice();
+        } catch (e) {
+            return null;
+        }
+    },
+
+    /// I20-1235: gli elementi visibili del box su cui finisce il testo della descrizione, con quanto si
+    /// sovrappongono: { label, x, y }. Non contano quelli che contengono tutto il testo (gli sfondi) ne'
+    /// un contatto fino a 0,1 mm.
+    sovrapposizioniDellaDescrizione(box, descrizione) {
+        var trovate = [];
+        var testo = this.boundsDelTesto(descrizione);
+        var idDescrizione = null;
+        try {
+            idDescrizione = descrizione.id;
+        } catch (e) {
+            idDescrizione = null;
+        }
+        for (var i = 0; i < box.pageItems.length; i++) {
+            var item = box.pageItems.item(i);
+            try {
+                if (item === descrizione || (idDescrizione != null && item.id == idDescrizione) || this.eDescrizione(item)) {
+                    continue;
+                }
+                if (!this.elementoVisibilePerSegnalazioniConflitti(item)) {
+                    continue;
+                }
+            } catch (e) {
+                continue;
+            }
+            var b = this.ingombroVisibile(item);
+            if (b == null) {
+                continue;
+            }
+            var contieneTutto = b[0] <= testo[0] + 0.05 && b[1] <= testo[1] + 0.05 && b[2] >= testo[2] - 0.05 && b[3] >= testo[3] - 0.05;
+            if (contieneTutto) {
+                continue;
+            }
+            var x = Math.min(testo[3], b[3]) - Math.max(testo[1], b[1]);
+            var y = Math.min(testo[2], b[2]) - Math.max(testo[0], b[0]);
+            if (x > 0.1 && y > 0.1) {
+                trovate.push({ label: item.label != "" ? Utility.parseLabel(item.label) : "senza etichetta", x: x, y: y });
+            }
+        }
+        return trovate;
     },
 
     /// Le caselle di testo visibili di un gruppo, anche in gruppi annidati, che escono dal lato si
@@ -2716,10 +2906,11 @@ const CssFramework =
     /// nessuna casella: e' il rientro dopo il ridimensionamento, che viene prima degli allineamenti
     /// e non sa ancora quanto spazio avra' ogni campo. Al collaudo una descrizione veniva ridotta
     /// benche', composta la colonna, ci sarebbe stata.
-    fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale = null, gruppiAllineamento = null, stringiCaselle = true){
+    /// I20-1235: con annota false (il controllo prima del ridimensionamento, callAllOperationFixBox) gli
+    /// spostamenti si fanno ma non si annotano: si segnala solo quello che succede dal ridimensionamento in poi.
+    fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale = null, gruppiAllineamento = null, stringiCaselle = true, annota = true){
         //controlliamo per ogni pageItem di box se esce dai bounds di boxInGrigliaBounds
         //se esce lo riportiamo dentro
-        var segnalazioneDescrizione = false;
         for (var i = 0; i < box.pageItems.length; i++) {
             var pageItem = box.pageItems.item(i);
             //I20-1026: un elemento nascosto, per esempio dal noRender dell'operatore,
@@ -2728,24 +2919,13 @@ const CssFramework =
             if (pageItem.visible === false) {
                 continue;
             }
-            var moved = false;
             //I20-1042: i quattro lati facevano la stessa cosa in quattro copie, e due copie su
             //quattro aggiornavano la mappa sull'asse sbagliato. Ora e' un lato alla volta.
+            //I20-1235: "Descrizione spostata" non si scrive piu' qui, a ogni passaggio: la scrive
+            //controllaSpostamentiGrigliaPendenti a fine box, con la regola degli altri spostamenti in griglia.
             for (var l = 0; l < this.latiGriglia.length; l++) {
-                if (this.riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, this.latiGriglia[l], mappaBoxOriginale, gruppiAllineamento, stringiCaselle)) {
-                    moved = true;
-                }
+                this.riportaLatoInGriglia(box, pageItem, boxInGrigliaBounds, this.latiGriglia[l], mappaBoxOriginale, gruppiAllineamento, stringiCaselle, annota);
             }
-
-            if (Utility.parseLabel(pageItem.label).toLowerCase() == "descrizione" && moved) {
-                segnalazioneDescrizione = true;
-            }
-        }
-
-        if (segnalazioneDescrizione) {
-            //I20-1029: il bollino lo disegna finalizzaSegnalazioni, uno per box con tutte le
-            //segnalazioni. Qui ne nasceva un secondo, solo per questa.
-            addSegnalazione("Descrizione spostata poichè uscita dai limiti del box", "warning", 2, true, ["Descrizione spostata poichè uscita dai limiti del box", "orange"], "descrizione_spostata");
         }
 
         //controlliamo che post spostamento non abbia causato overflow, se è uscito vuol dire che l'elemento è troppo grande e dobbiamo mandare un messaggioUtente
@@ -2760,10 +2940,12 @@ const CssFramework =
             if (pageItem.visible === false) {
                 continue;
             }
-            if (pageItem.geometricBounds[0] < boxInGrigliaBounds[0] - 0.05 ||
-                pageItem.geometricBounds[1] < boxInGrigliaBounds[1] - 0.05 ||
-                pageItem.geometricBounds[2] > boxInGrigliaBounds[2] + 0.05 ||
-                pageItem.geometricBounds[3] > boxInGrigliaBounds[3] + 0.05) {
+            //I20-1235: per la descrizione conta il testo: la parte vuota della casella puo' sporgere.
+            var boundsControllo = this.boundsPerLaGriglia(pageItem);
+            if (boundsControllo[0] < boxInGrigliaBounds[0] - 0.05 ||
+                boundsControllo[1] < boxInGrigliaBounds[1] - 0.05 ||
+                boundsControllo[2] > boxInGrigliaBounds[2] + 0.05 ||
+                boundsControllo[3] > boxInGrigliaBounds[3] + 0.05) {
                 if (!this.etichetteSegnalate.includes(Utility.parseLabel(pageItem.label))) {
                     messaggioUtente("Code CSF-009: L'elemento con etichetta " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + ", post ridimensionamento eccede i limiti della griglia assegnata. L'elemento è stato rimpicciolito per permettere la corretta impaginazione.", "error");
                     addSegnalazione("Code CSF-009: L'elemento con etichetta " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + ", post ridimensionamento eccede i limiti della griglia assegnata. L'elemento è stato rimpicciolito per permettere la corretta impaginazione.", "error", 1, true, ["CSF-009", "red"]);

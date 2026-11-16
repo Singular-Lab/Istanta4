@@ -206,7 +206,9 @@ test("una casella di testo che si puo' stringere senza overflow non si sposta e 
 test("una casella di testo che stretta andrebbe in overflow si sposta e si segnala", () => {
     azzera();
     const descrizione = elemento("descrizione", [10, 50, 30, 110], { overflows: true });
-    const b = box("BOX1", [descrizione]);
+    //I20-1235: la descrizione si segnala solo se finisce sopra un altro elemento: qui il prezzo.
+    const prezzo = elemento("prezzo", [25, 45, 40, 60]);
+    const b = box("BOX1", [descrizione, prezzo]);
 
     CssFramework.fixOverflowFromBox(GRIGLIA, b);
     CssFramework.controllaSpostamentiGrigliaPendenti(b);
@@ -696,4 +698,280 @@ test("allineamenti toglie le annotazioni dopo le ancore e prima del rientro dell
     const slot = sorgente.substring(inizioSlot, sorgente.indexOf("\n    },\n", inizioSlot));
     assert.match(slot, /this\.scartaSpostamentiRicollocati\(gruppoElementi, \{ x: true, y: true \}, allineamento\.nomeGruppo\);\s*return true;\s*$/);
     assert.ok(corpo.indexOf("this.allineaASlot(") < corpo.indexOf("box = this.fixOverflowFromBox(boundsBoxImpaginato, box, mappaBoxOriginale, [allineamentoSingolo]);"));
+});
+
+/* ---- I20-1235: "Descrizione spostata" segue la regola di CSF-008 ---- */
+
+const DESCRIZIONE_SPOSTATA = "Descrizione spostata poichè uscita dai limiti del box";
+
+test("I20-1235: una descrizione ricollocata in verticale da una regola non lascia nessuna segnalazione", () => {
+    azzera();
+    //Nel CY Lazio la descrizione sporgeva dal bordo alto e il rientro la tirava giu'.
+    const descrizione = elemento("descrizione", [-5, 50, 20, 100]);
+    const b = box("BOX1", [descrizione]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    assert.deepStrictEqual(descrizione.geometricBounds, [0, 50, 25, 100]);
+    assert.deepStrictEqual(segnalazioni, [], "niente durante i passaggi: prima \"Descrizione spostata\" si scriveva qui");
+
+    //la regola di allineamento la posiziona in verticale, dentro il box
+    CssFramework.scartaSpostamentiRicollocati([descrizione], { x: false, y: true }, "Descrizione_All");
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(segnalazioni, []);
+    assert.deepStrictEqual(messaggi, []);
+});
+
+test("I20-1235: una descrizione rimasta forzata dopo piu' rientri ha \"Descrizione spostata\" e CSF-008, una volta ciascuna", () => {
+    azzera();
+    const chiavi = [];
+    const originale = global.addSegnalazione;
+    global.addSegnalazione = (testo, stile, priorita, bollino, impostazioni, key) => { chiavi.push(key || null); originale(testo, stile, priorita, bollino, impostazioni); };
+    try {
+        const descrizione = elemento("descrizione", [-5, 50, 20, 100]);
+        //il logo su cui finisce la descrizione riportata dentro
+        const logo = elemento("logo", [20, 60, 35, 70]);
+        const b = box("BOX1", [descrizione, logo]);
+
+        CssFramework.fixOverflowFromBox(GRIGLIA, b);
+        //l'ultima regola la rimette oltre il bordo alto, e il rientro la riporta giu'
+        descrizione.move(undefined, [0, -4]);
+        CssFramework.scartaSpostamentiRicollocati([descrizione], { x: false, y: true }, "Descrizione_All");
+        CssFramework.fixOverflowFromBox(GRIGLIA, b);
+        assert.deepStrictEqual(segnalazioni, []);
+
+        CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+        assert.deepStrictEqual(segnalazioni.map(s => s.testo.startsWith("Code CSF-008") ? "CSF-008" : s.testo), [DESCRIZIONE_SPOSTATA, "CSF-008"]);
+        assert.deepStrictEqual(segnalazioni[0].impostazioni, [DESCRIZIONE_SPOSTATA, "orange"]);
+        assert.match(segnalazioni[1].testo, /Elemento descrizione nel box BOX1 spostato verso il basso/);
+        //la stessa chiave di prima, che la tiene unica nel bollino
+        assert.strictEqual(chiavi[0], "descrizione_spostata");
+    }
+    finally {
+        global.addSegnalazione = originale;
+    }
+});
+
+test("I20-1235: due spostamenti della descrizione rimasti a fine box danno un solo \"Descrizione spostata\"", () => {
+    azzera();
+    //Due annotazioni della descrizione nella sua posizione finale, verso il basso e verso sinistra, e il
+    //logo sotto il testo. (Spostata su due lati nello stesso passaggio, la prima annotazione si scarta:
+    //il secondo spostamento cambia la posizione.)
+    const descrizione = elemento("descrizione", [0, 45, 25, 100]);
+    const logo = elemento("logo", [20, 60, 35, 70]);
+    const b = box("BOX1", [descrizione, logo]);
+    const annotazione = (direzione) => ({ itemKey: String(descrizione.id), item: descrizione, label: "descrizione", direzione, bounds: descrizione.geometricBounds });
+    CssFramework.spostamentiGrigliaPendenti = { boxKey: String(b.id), boxLabel: "BOX1", spostamenti: [annotazione("verso il basso"), annotazione("verso sinistra")] };
+
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.strictEqual(segnalazioni.filter(s => s.testo === DESCRIZIONE_SPOSTATA).length, 1);
+    assert.strictEqual(segnalazioni.filter(s => /^Code CSF-008/.test(s.testo)).length, 2);
+});
+
+test("I20-1235: un altro elemento spostato non porta \"Descrizione spostata\"", () => {
+    azzera();
+    const prezzo = elemento("prezzo", [-5, 10, 10, 20]);
+    const b = box("BOX1", [prezzo]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(segnalazioni.map(s => /^Code CSF-008/.test(s.testo)), [true]);
+});
+
+test("I20-1235: prima del ridimensionamento chi sporge rientra ma non si segnala", () => {
+    azzera();
+    const descrizione = elemento("descrizione", [-5, 50, 20, 100]);
+    const b = box("BOX1", [descrizione]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b, null, null, true, false);
+    assert.deepStrictEqual(descrizione.geometricBounds, [0, 50, 25, 100]);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(segnalazioni, []);
+    assert.deepStrictEqual(messaggi, []);
+});
+
+test("I20-1235: il primo controllo di callAllOperationFixBox, prima del ridimensionamento, non annota", () => {
+    const indexNew = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const corpo = indexNew.substring(indexNew.indexOf("async function callAllOperationFixBox("), indexNew.indexOf("CssFramework.applicaRidimensionamentoCss("));
+    assert.match(corpo, /CssFramework\.fixOverflowFromBox\(boxImpaginato\.geometricBounds, boxImpaginato, null, null, true, false\);/);
+    const css = leggiFileDelPlugin("CssFramework.js").replace(/\r/g, "");
+    const fix = css.substring(css.indexOf("    fixOverflowFromBox("), css.indexOf("    isTextFrame(item) {"));
+    assert.doesNotMatch(fix, /addSegnalazione\("Descrizione spostata/, "si scrive solo a fine box");
+});
+
+/* ---- I20-1235: per la descrizione decide il testo, non la casella ---- */
+
+//Una casella con il testo appoggiato in basso, alto altezzaTesto, letto dalle righe come in InDesign
+//(linea di base, ascendente, discendente). Come nel BOX1 del CY Lazio, InDesign la da' in overset
+//appena la si accorcia: la riduzione non toglie niente.
+function casellaConTestoInBasso(label, bounds, altezzaTesto) {
+    const c = elemento(label, bounds, { overflows: false });
+    const altezzaIniziale = bounds[2] - bounds[0];
+    Object.defineProperty(c, "properties", {
+        get() {
+            const b = c.geometricBounds;
+            return { parentStory: {}, textFramePreferences: {}, contents: "testo", overflows: b[2] - b[0] < altezzaIniziale - 1e-9 };
+        }
+    });
+    c.textFramePreferences = { insetSpacing: [0, 0, 0, 0] };
+    c.lines = {
+        everyItem: () => ({
+            getElements: () => {
+                const b = c.geometricBounds;
+                return [{ baseline: b[2] - 1, ascent: altezzaTesto - 1, descent: 1, horizontalOffset: b[1] + 1, endHorizontalOffset: b[3] - 1 }];
+            }
+        })
+    };
+    return c;
+}
+
+test("I20-1235: la casella della descrizione esce di 19 mm ma il testo e' dentro: non si sposta e non si segnala", () => {
+    azzera();
+    //42 mm di casella su una cella di 100, con 23 mm di testo in basso: il testo comincia a 0.
+    const descrizione = casellaConTestoInBasso("descrizione", [-19, 50, 23, 80], 23);
+    const b = box("BOX1", [descrizione]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(descrizione.geometricBounds, [-19, 50, 23, 80]);
+    //niente CSF-009 per la parte vuota: e la casella non e' stata rimpicciolita (non ha resize)
+    assert.deepStrictEqual(messaggi, []);
+    assert.deepStrictEqual(segnalazioni, []);
+});
+
+test("I20-1235: il testo della descrizione esce di 3 mm e finisce sul logo: si sposta di 3 e si segnala una volta", () => {
+    azzera();
+    const descrizione = casellaConTestoInBasso("descrizione", [-19, 50, 23, 80], 26);
+    //come il CONAD del Golosi: il testo riportato dentro ci finisce sopra
+    const logo = elemento("logo", [24, 60, 35, 70]);
+    const b = box("BOX1", [descrizione, logo]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(descrizione.geometricBounds, [-16, 50, 26, 80]);
+    assert.deepStrictEqual(segnalazioni.map(s => s.testo.startsWith("Code CSF-008") ? "CSF-008" : s.testo), [DESCRIZIONE_SPOSTATA, "CSF-008"]);
+});
+
+test("I20-1235: il testo della descrizione esce di mezzo millimetro: rientra ma non si segnala", () => {
+    azzera();
+    const descrizione = casellaConTestoInBasso("descrizione", [-19, 50, 23, 80], 23.5);
+    const b = box("BOX1", [descrizione]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(descrizione.geometricBounds, [-18.5, 50, 23.5, 80]);
+    assert.deepStrictEqual(segnalazioni, []);
+});
+
+test("I20-1235: un'altra casella di testo si sposta ancora tutta, come prima", () => {
+    azzera();
+    const nome = casellaConTestoInBasso("nome_prodotto", [-19, 50, 23, 80], 23);
+    const b = box("BOX1", [nome]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(nome.geometricBounds, [0, 50, 42, 80]);
+    assert.deepStrictEqual(segnalazioni.map(s => /^Code CSF-008: Elemento nome_prodotto/.test(s.testo)), [true]);
+});
+
+test("I20-1235: senza righe leggibili la descrizione si comporta come prima", () => {
+    azzera();
+    const descrizione = elemento("descrizione", [-5, 50, 20, 100]);
+    const b = box("BOX1", [descrizione]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+
+    assert.deepStrictEqual(descrizione.geometricBounds, [0, 50, 25, 100]);
+});
+
+test("I20-1235: le righe si leggono anche dall'elemento generico che InDesign da' nell'elenco del box", () => {
+    azzera();
+    //box.pageItems.item(i) da' un elemento senza righe: le ha solo quello risolto con getElements().
+    const vera = casellaConTestoInBasso("descrizione", [-19, 50, 23, 80], 23);
+    const generico = elemento("descrizione", [-19, 50, 23, 80], { overflows: false });
+    Object.defineProperty(generico, "geometricBounds", { get: () => vera.geometricBounds, set: (b) => { vera.geometricBounds = b; } });
+    Object.defineProperty(generico, "properties", { get: () => vera.properties });
+    generico.move = (...a) => vera.move(...a);
+    generico.getElements = () => [vera];
+    const b = box("BOX1", [generico]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    //il testo e' dentro: niente spostamento e niente segnalazioni, come per la casella vera
+    assert.deepStrictEqual(vera.geometricBounds, [-19, 50, 23, 80]);
+    assert.deepStrictEqual(segnalazioni, []);
+});
+
+/* ---- I20-1235: la descrizione spostata si segnala solo se copre un altro elemento ---- */
+
+test("I20-1235: descrizione spostata che non copre niente, come il CIF: nessuna segnalazione", () => {
+    azzera();
+    const descrizione = casellaConTestoInBasso("descrizione", [-19, 50, 23, 80], 26);
+    //"Solo titolari" sotto il testo riportato dentro, che arriva a 26: un contatto di 0,05 mm non conta
+    const titolari = elemento("LBL_Titolari", [25.95, 50, 32, 80]);
+    const b = box("BOX1", [descrizione, titolari]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(descrizione.geometricBounds, [-16, 50, 26, 80], "lo spostamento c'e' comunque");
+    assert.deepStrictEqual(segnalazioni, []);
+    assert.deepStrictEqual(messaggi, []);
+});
+
+test("I20-1235: uno sfondo che contiene tutto il testo della descrizione non conta", () => {
+    azzera();
+    const descrizione = casellaConTestoInBasso("descrizione", [-19, 50, 23, 80], 26);
+    const sfondo = elemento("sfondo", [0, 0, 100, 100]);
+    const b = box("BOX1", [sfondo, descrizione]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(segnalazioni, []);
+});
+
+test("I20-1235: un elemento nascosto sotto la descrizione non conta", () => {
+    azzera();
+    const descrizione = casellaConTestoInBasso("descrizione", [-19, 50, 23, 80], 26);
+    const logo = elemento("logo", [24, 60, 35, 70]);
+    logo.visible = false;
+    const b = box("BOX1", [descrizione, logo]);
+
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+    CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+    assert.deepStrictEqual(segnalazioni, []);
+});
+
+test("I20-1235: una descrizione con il testo appoggiato al bordo destro della cella non ha CSF-009", () => {
+    azzera();
+    //come il CIF: casella sul bordo destro della cella, testo allineato a destra fino al bordo della casella
+    const descrizione = casellaConTestoInBasso("descrizione", [30, 50, 60, 100], 20);
+    descrizione.lines = {
+        everyItem: () => ({
+            getElements: () => {
+                const b = descrizione.geometricBounds;
+                return [{ baseline: b[2] - 1, ascent: 19, descent: 1, horizontalOffset: b[1] + 5, endHorizontalOffset: b[3] }];
+            }
+        })
+    };
+    const b = box("BOX1", [descrizione]);
+
+    //senza il limite della casella il mezzo millimetro di respiro portava il testo a 100,5: CSF-009, e
+    //qui il rimpicciolimento chiamerebbe resize, che l'elemento finto non ha
+    CssFramework.fixOverflowFromBox(GRIGLIA, b);
+
+    assert.deepStrictEqual(messaggi, []);
+    assert.deepStrictEqual(segnalazioni, []);
+    assert.deepStrictEqual(CssFramework.boundsDelTesto(descrizione)[3], 100);
 });
