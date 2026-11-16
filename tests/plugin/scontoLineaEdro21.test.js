@@ -3,10 +3,13 @@
  * prezzo offerta ne' prezzo barrato), nella parte che decide il framework CSS
  * (Istanta/wwwroot/external_source/Edro21/SourceFrameworkCss.json).
  *
- * Campi_DX impila a destra, dal basso, sconto, SOLO TITOLARI e in cima la descrizione: senza prezzi
- * la colonna si accorcia e la descrizione restava in alto a destra. Per lo sconto linea due gruppi in
- * piu', dopo Campi_DX: la colonna senza la descrizione, e la descrizione in basso a sinistra della
- * colonna, come descr_All di BOX41. Campi_DX resta com'era per tutti gli altri box.
+ * Campi_DX impila a destra, dal basso, sconto, SOLO TITOLARI e in cima la descrizione. Per lo sconto
+ * linea, dopo Campi_DX, c'e' la colonna senza la descrizione (Campi_DX_sconto_linea). Campi_DX resta
+ * com'era per tutti gli altri box.
+ *
+ * I20-1237: I20-1195 aggiungeva anche descr_sconto_linea, che portava la descrizione in basso a
+ * sinistra della colonna, come descr_All di BOX41. Il riferimento del cliente ora la vuole sopra lo
+ * sconto, a destra sotto il logo: e' dove la lascia Campi_DX, quindi quella regola non c'e' piu'.
  *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
@@ -64,14 +67,14 @@ test("nei due kit volantino Campi_DX resta com'era, con la descrizione in cima e
     }
 });
 
-test("subito dopo Campi_DX la colonna dello sconto linea, senza descrizione, e poi la descrizione", () => {
+test("subito dopo Campi_DX la colonna dello sconto linea, senza descrizione", () => {
     for (const k of kitVolantino) {
         const nomi = allineamentiDiDefault(k).map(a => a.nomeGruppo);
         const i = nomi.indexOf("Campi_DX");
-        assert.deepStrictEqual(nomi.slice(i, i + 3), ["Campi_DX", "Campi_DX_sconto_linea", "descr_sconto_linea"]);
+        assert.deepStrictEqual(nomi.slice(i, i + 2), ["Campi_DX", "Campi_DX_sconto_linea"]);
 
         const al = allineamentiDiDefault(k);
-        const campi = al[i], colonna = al[i + 1], descr = al[i + 2];
+        const campi = al[i], colonna = al[i + 1];
         assert.ok(!colonna.gruppoEtichette.includes("descrizione"));
         assert.ok(!colonna.ordinamentoLivelli.some(l => l.elementi.includes("descrizione")));
         //la stessa colonna di Campi_DX, meno la descrizione: stesse ancore, stessa lettura
@@ -81,39 +84,27 @@ test("subito dopo Campi_DX la colonna dello sconto linea, senza descrizione, e p
         assert.strictEqual(colonna.letturaLivelli, campi.letturaLivelli);
         //tutte con lo stesso ordine: il motore le tiene nell'ordine scritto
         assert.strictEqual(colonna.ordine, campi.ordine);
-        assert.strictEqual(descr.ordine, campi.ordine);
-
-        assert.deepStrictEqual(descr.gruppoEtichette, ["descrizione"]);
     }
 });
 
-test("la descrizione va in basso, col lato destro sul lato sinistro della colonna, come in BOX41", () => {
+test("I20-1237: nello sconto linea nessuna regola sposta la descrizione, che resta in cima alla colonna di Campi_DX", () => {
     for (const k of kitVolantino) {
-        const descr = allineamentiDiDefault(k).find(a => a.nomeGruppo === "descr_sconto_linea");
-        assert.strictEqual(descr.staticAnchor.length, 1);
-        assert.strictEqual(descr.staticAnchor[0].xAnchor, null);
-        assert.deepStrictEqual(descr.staticAnchor[0].yAnchor,
-            { distance: "0%", applyToSingleLevels: false, allineaAlLato: 1, allineaLato: 1 });
+        const al = allineamentiDiDefault(k);
+        assert.ok(!al.some(a => a.nomeGruppo === "descr_sconto_linea"), "la regola di I20-1195 non c'e' piu'");
 
-        assert.strictEqual(descr.followAnchor.length, 1);
-        const segue = descr.followAnchor[0];
-        assert.deepStrictEqual(segue.nomiGruppiSeguiti, ["Campi_DX_sconto_linea"]);
-        assert.strictEqual(segue.xAnchor.allineaAlLato, 0);
-        assert.strictEqual(segue.xAnchor.allineaLato, 1);
-        assert.strictEqual(segue.yAnchor, null);
-
-        //lo schema da cui viene: descr_All di BOX41, quello agganciato a Campi_DX
-        const box41 = k.operazioniPerBox.find(op => (op.nomiBox || []).includes("BOX41"));
-        const modello = box41.allineamenti.find(a => a.nomeGruppo === "descr_All" &&
-            (a.followAnchor || []).some(f => f.nomiGruppiSeguiti.includes("Campi_DX")));
-        assert.deepStrictEqual(descr.staticAnchor, modello.staticAnchor);
-        assert.deepStrictEqual({ ...segue, nomiGruppiSeguiti: [] }, { ...modello.followAnchor[0], nomiGruppiSeguiti: [] });
+        //dopo Campi_DX, nella voce di default, nessun gruppo che vale per lo sconto linea muove la descrizione
+        const i = al.findIndex(a => a.nomeGruppo === "Campi_DX");
+        const dopo = al.slice(i + 1).filter(a => (a.listSetCondizioni || []).some(set =>
+            set.setCondizioni.some(c => (c.refCondition || []).some(r => /PERCENTO_(MM|FID)_ALL/.test(r.contiene || "")))));
+        for (const a of dopo) {
+            assert.ok(!a.gruppoEtichette.includes("descrizione"), a.nomeGruppo);
+        }
     }
 });
 
-test("le due regole valgono solo per lo sconto linea: meccanica ALL, niente prezzi, BOX1", () => {
+test("la colonna dello sconto linea vale solo per lo sconto linea: meccanica ALL, niente prezzi, BOX1", () => {
     for (const k of kitVolantino) {
-        for (const nome of ["Campi_DX_sconto_linea", "descr_sconto_linea"]) {
+        for (const nome of ["Campi_DX_sconto_linea"]) {
             const condizioni = allineamentiDiDefault(k).find(a => a.nomeGruppo === nome).listSetCondizioni;
             const vale = (elementi, box, meccanica) =>
                 condizioniVere(condizioni, elementi, box, { meccanica_tradotta: meccanica });
@@ -164,11 +155,11 @@ function scelto(gruppo, preferenza) {
     return SPAZI.indexOf(esito.candidato.derivatoDa || esito.candidato);
 }
 
-test("la sovrastruttura Sconto linea c'e' nei due kit volantino, con le condizioni delle regole della descrizione", () => {
+test("la sovrastruttura Sconto linea c'e' nei due kit volantino, con le condizioni della colonna dello sconto linea", () => {
     for (const k of kitVolantino) {
         const s = sovrastrutturaScontoLinea(k);
-        const descr = allineamentiDiDefault(k).find(a => a.nomeGruppo === "descr_sconto_linea");
-        assert.deepStrictEqual(s.listSetCondizioni, descr.listSetCondizioni);
+        const colonna = allineamentiDiDefault(k).find(a => a.nomeGruppo === "Campi_DX_sconto_linea");
+        assert.deepStrictEqual(s.listSetCondizioni, colonna.listSetCondizioni);
         //cambia solo la scelta dello spazio delle foto
         assert.deepStrictEqual(s.operazioni.sceltaSpazioFoto, { modo: "centrato", tolleranzaArea: 0.7, asseCentratura: "x" });
         for (const chiave of ["ridimensionamenti", "postRidimensionamenti", "allineamenti", "segnalazioniConflitti",

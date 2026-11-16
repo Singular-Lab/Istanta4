@@ -404,6 +404,12 @@ namespace AgenziaLib
         public const int RepartoCuraPersona = 9;
         public const string SiglaRepartoExtra = "EX";
 
+        /// I20-1237: i campi compilati che il box senza prezzi (SenzaPrezzi) non porta: prezzo offerta,
+        /// prezzo barrato e il prezzo al kg o al litro ("al l da € 10,83 a € 7,57"), che sono ancora i due
+        /// prezzi. Resta solo lo sconto in percentuale. Nel CssFramework di Edro21 il prezzo al kg o al litro
+        /// e' il livello piu' basso di Campi_DX_sconto_linea: lasciato li', teneva lo sconto lontano dal fondo.
+        public static readonly IReadOnlyList<string> CampiSenzaPrezzi = new[] { "prezzo_offerta_gruppo", "campo_offerta", "campo_offerta_KgL_sconto" };
+
         /// Se il record porta la forzatura: true come booleano o come testo, in qualunque maiuscola.
         public static bool Forzato(IDictionary<string, object>? record)
         {
@@ -4449,8 +4455,11 @@ namespace AgenziaLib
                                 //dell'azione "Forza a sconto linea" (ScontoLineaEdro21): solo lo sconto, senza prezzi.
                                 if (ScontoLineaEdro21.SenzaPrezzi(meccanica_tradotta, recItem["numero_reparto"].ToString(), recItem["prezzo_offerta"].ToString(), ScontoLineaEdro21.Forzato(recItem)))
                                 {
-                                    interprete.removeCompiledField("prezzo_offerta_gruppo");
-                                    interprete.removeCompiledField("campo_offerta");
+                                    //I20-1237: anche il prezzo al kg o al litro, che sono ancora i due prezzi.
+                                    foreach (var campo in ScontoLineaEdro21.CampiSenzaPrezzi)
+                                    {
+                                        interprete.removeCompiledField(campo);
+                                    }
                                     Console.WriteLine("Rimuovo campo_offerta (7) per meccanica: " + meccanica_tradotta);
 
                                 }
