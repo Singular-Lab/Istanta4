@@ -116,6 +116,28 @@ public class ScontoLineaEdro21Tests
         Assert.Equal(new[] { (1, "sconto_linea_forzato", IstantaLib.OperatoreCondizione.Equals, "true") }, Regole(azione));
     }
 
+    /// I20-1237: la ref forzata usciva senza barrato e senza prezzo offerta ma con "al l da € 10,83 a
+    /// € 7,57", il prezzo al litro, che porta ancora i due prezzi. Il box senza prezzi toglie anche quello.
+    [Fact]
+    public void Il_box_senza_prezzi_toglie_anche_il_prezzo_al_kg_o_al_litro()
+    {
+        Assert.Equal(new[] { "prezzo_offerta_gruppo", "campo_offerta", "campo_offerta_KgL_sconto" }, ScontoLineaEdro21.CampiSenzaPrezzi);
+    }
+
+    [Fact]
+    public void L_export_del_volantino_toglie_tutti_i_campi_del_box_senza_prezzi()
+    {
+        var sorgente = File.ReadAllText(DllAgenziaLibTests.TrovaFile("AgenziaLib/Edro21.cs")).Replace("\r", "");
+        var condizione = sorgente.IndexOf("if (ScontoLineaEdro21.SenzaPrezzi(meccanica_tradotta, recItem[\"numero_reparto\"].ToString(), recItem[\"prezzo_offerta\"].ToString(), ScontoLineaEdro21.Forzato(recItem)))");
+        Assert.True(condizione > 0, "il ramo del box senza prezzi c'e'");
+
+        var ramo = sorgente.Substring(condizione, sorgente.IndexOf("Rimuovo campo_offerta (7)", condizione) - condizione);
+        Assert.Contains("foreach (var campo in ScontoLineaEdro21.CampiSenzaPrezzi)", ramo);
+        Assert.Contains("interprete.removeCompiledField(campo);", ramo);
+        //non due rimozioni scritte a mano accanto all'elenco: l'elenco e' l'unica fonte
+        Assert.DoesNotContain("removeCompiledField(\"", ramo);
+    }
+
     [Theory]
     [InlineData("Forza a sconto linea")]
     [InlineData("Rimuovi forzatura sconto linea")]

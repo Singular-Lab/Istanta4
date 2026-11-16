@@ -365,7 +365,8 @@ test('Rimuovi forzatura sconto piccolo di Coopfi resta in tutte le aree', async 
         cambiStrutturali.cambiStrutturaliDB = null;
     }
     const rimuovi = forzata.find(a => a.titolo === 'Rimuovi forzatura sconto piccolo');
-    assert.strictEqual(rimuovi.aree, undefined);
+    //I20-1237: il file di Coopfi ora scrive "Aree": []; per il Plugin vale come assente (vedi il test seguente)
+    assert.ok(rimuovi.aree === undefined || (Array.isArray(rimuovi.aree) && rimuovi.aree.length === 0));
 });
 
 test('un\'azione senza aree, o con la lista vuota, vale in ogni area', () => {
