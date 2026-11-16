@@ -11,10 +11,16 @@ import { ServerUtils } from '../utils/ServerUtils';
 import { AuditLogService } from '../services/AuditLogService';
 import { Promo } from '../models/promo';
 import { TracciatiInvioIstanta } from '../models/tracciati_invio_istanta';
-import { aggiornaContestoInAttesa, inviaPrenotata, prenotaTracciato } from '../services/AllineamentoIstanta';
+import { aggiornaContestoInAttesa, inviaPrenotata, prenotaTracciato, statoIstantaTracciati } from '../services/AllineamentoIstanta';
+import type { IIstantaService } from '../interfaces/IIstantaService';
+import { motivoTracciatoNonEliminabile, tracciatoNonImportato } from '../../../lib/produzione/eliminazioneTracciato';
+
+/** Perche' un tracciato non si elimina: si elimina solo se Istanta non l'ha importato. */
+type RifiutoEliminazione = { status: HttpStatusCode; motivo: string };
 
 export class TracciatoController extends BaseController {
-    constructor(private tracciatoService: ITracciatoService) {
+    /** istantaService: per leggere lo stato dell'importazione prima di eliminare un tracciato. */
+    constructor(private tracciatoService: ITracciatoService, private istantaService?: Pick<IIstantaService, 'getStatusImportazione'>) {
         super('/api');
     }
     protected setupRoutes(): void {
@@ -59,7 +65,8 @@ export class TracciatoController extends BaseController {
         this.router.post('/tracciati/:idTracciato/rimanda-istanta', authMiddleware, permissionGuard('file.upload_tracciato'), this.rimandaAIstanta.bind(this));
         this.router.put('/tracciati/:idTracciato/contesto', authMiddleware, permissionGuard('file.upload_tracciato'), this.modificaContestoInAttesa.bind(this));
         this.router.get('/tracciati/:idTracciato', ...promo, this.getTracciatoById.bind(this));
-        this.router.delete('/tracciati/:idTracciato', authMiddleware, permissionGuard('file.upload_tracciato'), this.deleteTracciato.bind(this));
+        // Solo il Superadmin elimina, e solo un tracciato non importato (spec ciclo-promozione-importazione)
+        this.router.delete('/tracciati/:idTracciato', authMiddleware, permissionGuard('sistema.elimina_tracciati'), this.deleteTracciato.bind(this));
     }
 
     private async getAllTracciati(req: Request, res: Response): Promise<void> {
@@ -264,14 +271,33 @@ export class TracciatoController extends BaseController {
                 return;
             }
 
-            // Per il Registro Audit nome, file e promo si leggono prima: il tracciato si cancella
-            // per davvero e dopo non ne resta niente. Se la lettura non riesce si elimina lo stesso.
-            const tracciato = await this.tracciatoService.getTracciatoById(idTracciato).catch(() => null);
-            const nomePromo = tracciato?.id_promo
+            // Il tracciato si legge prima: serve il suo stato per sapere se si puo' eliminare, e per
+            // il Registro Audit nome, file e promo, perche' dopo la cancellazione non ne resta niente.
+            // Se la lettura non riesce non si elimina niente (errore 500 qui sotto).
+            const tracciato = await this.tracciatoService.getTracciatoById(idTracciato);
+            if (!tracciato) {
+                res.status(HttpStatusCode.NOT_FOUND).json({
+                    success: false,
+                    message: "Tracciato non trovato"
+                });
+                return;
+            }
+
+            const rifiuto = await this.rifiutoEliminazione(idTracciato, tracciato.stato, req);
+            if (rifiuto) {
+                res.status(rifiuto.status).json({ success: false, message: rifiuto.motivo });
+                return;
+            }
+
+            const nomePromo = tracciato.id_promo
                 ? await Promo.findByPk(tracciato.id_promo, { attributes: ['nome_promo'] }).then((p) => p?.nome_promo ?? null).catch(() => null)
                 : null;
 
             const deleted = await this.tracciatoService.deleteTracciato(idTracciato);
+            // Niente piu' da inviare a Istanta. La chiave esterna di solito lo fa da sola, ma su
+            // un'installazione vecchia senza chiave primaria in tracciati non c'e'.
+            await TracciatiInvioIstanta.destroy({ where: { id_tracciato: idTracciato } }).catch((error) =>
+                log.warn(`Tracciato ${idTracciato} eliminato, coda verso Istanta non ripulita`, error));
 
             if (!deleted) {
                 res.status(HttpStatusCode.NOT_FOUND).json({
@@ -301,6 +327,35 @@ export class TracciatoController extends BaseController {
                 error: error.message
             });
         }
+    }
+
+    /**
+     * Un tracciato si elimina solo se Istanta non l'ha importato (lib/produzione/eliminazioneTracciato).
+     * In attesa di Istanta e "Scartato" si sanno da FP; altrimenti decide lo stato dell'importazione
+     * letto da Istanta, e se Istanta non risponde non si elimina niente.
+     */
+    private async rifiutoEliminazione(idTracciato: string, statoTracciato: string | null | undefined, req: Request): Promise<RifiutoEliminazione | null> {
+        const coda = (await statoIstantaTracciati([idTracciato])).get(idTracciato);
+        if (tracciatoNonImportato({ inAttesaIstanta: !!coda && coda.stato !== 'inviato', statoTracciato })) {
+            return null;
+        }
+        let statoImportazione: string | null = null;
+        try {
+            if (!this.istantaService) throw new Error('Servizio Istanta non configurato');
+            statoImportazione = (await this.istantaService.getStatusImportazione(idTracciato, req))?.stato ?? null;
+        } catch (error) {
+            log.warn(`Stato dell'importazione del tracciato ${idTracciato} non verificabile: non si elimina`, {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return {
+                status: HttpStatusCode.SERVICE_UNAVAILABLE,
+                motivo: "Non è stato possibile verificare in Istanta lo stato dell'importazione del tracciato: riprova più tardi.",
+            };
+        }
+        if (tracciatoNonImportato({ inAttesaIstanta: false, statoTracciato, statoImportazione })) {
+            return null;
+        }
+        return { status: HttpStatusCode.CONFLICT, motivo: motivoTracciatoNonEliminabile(statoImportazione) };
     }
 
     private async getReportsConfronto(req: Request, res: Response): Promise<void> {

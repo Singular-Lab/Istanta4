@@ -13,6 +13,7 @@ import ConfirmDialog from "../../../components/ConfirmDialog";
 import type { TonoStato } from "../../../constants/stati";
 import { usePermissionContext } from "../../../context/PermissionContext";
 import { PERMISSIONS } from "../../../constants/permissions";
+import { tracciatoNonImportato } from "../../../../lib/produzione/eliminazioneTracciato";
 
 /** Un campo del contesto salvato col tracciato: nome, opzioni e valore scelto al caricamento. */
 type ContestoTracciato = {
@@ -178,8 +179,10 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
         statusData?.stato === "IO";
 
     const isExpanded = expandedErrorTracciatoId === tracciato.id;
+    // Solo il Superadmin (permesso di sistema) e solo un tracciato che Istanta non ha importato
     const canDeleteTracciato =
-        tracciato.stato === "Scartato" || statusData?.stato === "Scartata" || inAttesaIstanta;
+        hasPermission(PERMISSIONS.SISTEMA.ELIMINA_TRACCIATI) &&
+        tracciatoNonImportato({ inAttesaIstanta, statoTracciato: tracciato.stato, statoImportazione: statusData?.stato });
 
     // Comandi del tracciato: icone con nome accessibile, come le azioni di riga
     const comando = "h-8 w-8 p-0";

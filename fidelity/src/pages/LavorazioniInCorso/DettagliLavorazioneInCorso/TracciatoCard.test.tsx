@@ -9,7 +9,11 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../../../../lib/server_call", () => ({
   ServerCall: { get: vi.fn().mockResolvedValue({ stato: "Terminata", error: "", esito: true }), put: vi.fn(), post: vi.fn() },
 }));
-vi.mock("../../../context/PermissionContext", () => ({ usePermissionContext: () => ({ hasPermission: () => true }) }));
+// Di norma tutti i permessi (Superadmin); un test toglie quelli in "negati"
+const permessi = vi.hoisted(() => ({ negati: new Set<string>() }));
+vi.mock("../../../context/PermissionContext", () => ({
+  usePermissionContext: () => ({ hasPermission: (codice: string) => !permessi.negati.has(codice) }),
+}));
 
 import { ServerCall } from "../../../../lib/server_call";
 import type { TracciatiResponseDTO } from "../../../../server/core/dto";
@@ -134,5 +138,52 @@ describe("TracciatoCard: tracciato non ancora in Istanta", () => {
     expect(screen.getByText("Non accettato da Istanta")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rimanda a Istanta" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Modifica contesto" })).not.toBeInTheDocument();
+  });
+});
+
+// TASK-b2ec7da6 (spec ciclo-promozione-importazione, "Eliminazione di un tracciato non importato")
+describe("TracciatoCard: solo il Superadmin elimina, e solo un tracciato non importato", () => {
+  const conPermessiNegati = (codici: string[], prova: () => Promise<void> | void) => async () => {
+    codici.forEach((codice) => permessi.negati.add(codice));
+    try {
+      await prova();
+    } finally {
+      permessi.negati.clear();
+    }
+  };
+
+  it(
+    "chi carica i tracciati ma non e' Superadmin non elimina uno scartato",
+    conPermessiNegati(["sistema.elimina_tracciati"], () => {
+      apri({ promoStorico: false, azioniBloccate: false });
+
+      expect(screen.getByRole("button", { name: "Rinomina tracciato" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Elimina tracciato" })).not.toBeInTheDocument();
+    })
+  );
+
+  it(
+    "ne' un tracciato in attesa di Istanta, che puo' pero' rimandare",
+    conPermessiNegati(["sistema.elimina_tracciati"], () => {
+      apri({ promoStorico: false, azioniBloccate: false }, inAttesa);
+
+      expect(screen.getByRole("button", { name: "Rimanda a Istanta" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Elimina tracciato" })).not.toBeInTheDocument();
+    })
+  );
+
+  it("il Superadmin non elimina un tracciato che Istanta ha importato", async () => {
+    vi.mocked(ServerCall.get).mockResolvedValue({ stato: "Terminata", error: "", esito: true });
+    apri({ promoStorico: false, azioniBloccate: false }, { ...tracciato, id: "t3", stato: null } as unknown as TracciatiResponseDTO);
+
+    expect(await screen.findByText("Completata")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Elimina tracciato" })).not.toBeInTheDocument();
+  });
+
+  it("il Superadmin elimina un tracciato con l'importazione scartata da Istanta", async () => {
+    vi.mocked(ServerCall.get).mockResolvedValue({ stato: "Scartata", error: "", esito: false });
+    apri({ promoStorico: false, azioniBloccate: false }, { ...tracciato, id: "t4", stato: null } as unknown as TracciatiResponseDTO);
+
+    expect(await screen.findByRole("button", { name: "Elimina tracciato" })).toBeInTheDocument();
   });
 });

@@ -40,6 +40,11 @@ describe('catalogo dei permessi', () => {
     expect(AREE.filter(a => a.sistema).map(a => a.id)).toEqual(['sistema']);
   });
 
+  it('eliminare un tracciato non importato è solo del Superadmin, caricarlo no', () => {
+    expect(ePermessoDiSistema(PERMESSI.SISTEMA.ELIMINA_TRACCIATI)).toBe(true);
+    expect(ePermessoDiSistema(PERMESSI.FILE.UPLOAD_TRACCIATO)).toBe(false);
+  });
+
   it('i vecchi permessi di pagina e permessi.gestisci non esistono più', () => {
     expect(esistePermesso('pagina.dashboard')).toBe(false);
     expect(esistePermesso('permessi.gestisci')).toBe(false);

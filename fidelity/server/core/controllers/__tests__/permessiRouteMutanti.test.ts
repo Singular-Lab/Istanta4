@@ -53,7 +53,8 @@ function createApp() {
 
 describe('permessi sulle route che modificano dati', () => {
   const casi: Array<[string, 'post' | 'put' | 'delete', string, string]> = [
-    ['cancellazione di un tracciato', 'delete', '/api/tracciati/t1', 'file.upload_tracciato'],
+    // Solo il Superadmin: caricare i tracciati non basta per eliminarli
+    ['cancellazione di un tracciato', 'delete', '/api/tracciati/t1', 'sistema.elimina_tracciati'],
     ['salvataggio del layout del menabo', 'put', '/api/promo/p1/menabo-layout', 'promo.modifica'],
     ['export xlsx del menabo', 'post', '/api/promo/p1/export/xlsx', 'promo.visualizza'],
     ['avvio di una lavorazione (getKitByPromo)', 'put', '/api/getKitByPromo', 'kit_runtime.crea'],

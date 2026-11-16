@@ -148,6 +148,7 @@ export const PERMESSI = {
     AUDIT: 'sistema.audit',
     MANUTENZIONE: 'sistema.manutenzione',
     CONFIGURAZIONE: 'sistema.configurazione',
+    ELIMINA_TRACCIATI: 'sistema.elimina_tracciati',
   },
 } as const;
 
@@ -250,7 +251,7 @@ export const AREE: DefinizioneArea[] = [
     icona: 'FileUp',
     azioni: [
       { codice: P.FILE.DOWNLOAD, nome: 'Scaricare file', descrizione: 'Scaricare materiali, tracciati e file dei kit nelle pagine di produzione.' },
-      { codice: P.FILE.UPLOAD_TRACCIATO, nome: 'Caricare tracciati', descrizione: 'Caricare e cancellare i tracciati di una promozione.' },
+      { codice: P.FILE.UPLOAD_TRACCIATO, nome: 'Caricare tracciati', descrizione: 'Caricare i tracciati di una promozione. Eliminare un tracciato non importato è riservato al Superadmin.' },
       { codice: P.FILE.UPLOAD_MATERIALE, nome: 'Caricare materiali', descrizione: 'Caricare materiali nei kit.' },
       { codice: P.FILE.UPLOAD_KIT_MANUALI, nome: 'Caricare kit manuali', descrizione: 'Caricare kit preparati a mano.' },
       { codice: P.FILE.UPLOAD_OLYMPUS, nome: 'Caricare su Olimpo', descrizione: 'Inviare file all\'archivio Olimpo.' },
@@ -449,6 +450,7 @@ export const AREE: DefinizioneArea[] = [
       { codice: P.SISTEMA.AUDIT, nome: 'Registro di audit', descrizione: 'Consultare il registro degli accessi e delle modifiche.' },
       { codice: P.SISTEMA.MANUTENZIONE, nome: 'Avvisi di manutenzione', descrizione: 'Pubblicare e togliere l\'avviso di manutenzione.' },
       { codice: P.SISTEMA.CONFIGURAZIONE, nome: 'Configurazione dell\'installazione', descrizione: 'Configurazione della dashboard e dell\'installazione.' },
+      { codice: P.SISTEMA.ELIMINA_TRACCIATI, nome: 'Eliminare tracciati non importati', descrizione: 'Cancellare un tracciato in attesa di Istanta, non accettato da Istanta o con l\'importazione scartata.', pericolosa: true },
     ],
   },
 ];

@@ -217,7 +217,7 @@ export async function createControllers(): Promise<IController[]> {
     new GPTController(gptService, referenzeService),
     new WhatsAppController(whatsAppService),
     new TraduzioneController(traduzioneService),
-    new TracciatoController(traccatoService),
+    new TracciatoController(traccatoService, istantaService),
     new ScoreboardController(scoreboardService, userService, agenziaLib),
     new PuntoVenditaController(puntoVenditaService, gdoService, agenziaLib),
     new PromoController(promoService, impostazioniService, gdoService),
