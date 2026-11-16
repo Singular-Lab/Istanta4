@@ -228,6 +228,7 @@ export async function salvaListeArchivio(liste: ListaArchivio[], idUtente: strin
         filename_tracciati: l.nomeFile,
         blobfile_tracciati: l.contenuto,
         context_tracciati: l.context,
+        caricato_da: idUtente,
         createdat: adesso,
         updatedat: adesso,
       })), { transaction });

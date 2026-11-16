@@ -465,6 +465,8 @@ export type TracciatiAttributes = {
   filename_tracciati: string;
   nome_tracciati?: string | null;
   blobfile_tracciati: Uint8Array;
+  /** Id dell'utente FP che ha caricato il tracciato; null per i tracciati caricati prima che si registrasse. */
+  caricato_da?: string | null;
   createdat?: Date;
   updatedat?: Date;
 };

@@ -13,7 +13,9 @@ import ConfirmDialog from "../../../components/ConfirmDialog";
 import type { TonoStato } from "../../../constants/stati";
 import { usePermissionContext } from "../../../context/PermissionContext";
 import { PERMISSIONS } from "../../../constants/permissions";
-import { tracciatoNonImportato } from "../../../../lib/produzione/eliminazioneTracciato";
+import { daScartareInIstanta, tracciatoNonImportato } from "../../../../lib/produzione/eliminazioneTracciato";
+import { intervalloAggiornamentoStato } from "../../../../lib/produzione/statoImportazione";
+import { aggiornatoDopoIlCaricamento, descriviAutore } from "./autoreTracciato";
 
 /** Un campo del contesto salvato col tracciato: nome, opzioni e valore scelto al caricamento. */
 type ContestoTracciato = {
@@ -144,6 +146,9 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                 esito: boolean;
             }>(`/getStatusImportazione?idTracciato=${tracciato.id}`);
         },
+        // Ogni 5 secondi mentre Istanta importa, ogni minuto mentre aspetta un operatore, mai piu'
+        // dopo un esito finale (spec "Stato dell'importazione senza richieste superflue"). In una
+        // scheda del browser nascosta non si chiede niente (refetchIntervalInBackground false).
         refetchInterval: (query) => {
             // In errore non si ripete il polling: il messaggio resta visibile nella card
             if (query.state.status === "error") return false;
@@ -151,16 +156,7 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                 | { stato: string; error: string; esito: boolean }
                 | null
                 | undefined;
-
-            if (
-                data?.stato === "Terminata" ||
-                data?.stato === "TerminataConErrori" ||
-                data?.stato === "Scartata" ||
-                data?.stato === "Esaminata"
-            ) {
-                return false;
-            }
-            return 3000;
+            return intervalloAggiornamentoStato(data?.stato);
         },
         enabled: !!tracciato.id && !inAttesaIstanta,
     });
@@ -179,6 +175,9 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
         statusData?.stato === "IO";
 
     const isExpanded = expandedErrorTracciatoId === tracciato.id;
+    // Chi l'ha caricato e, se diverso dal caricamento, l'ultimo aggiornamento (spec "Autore e date del tracciato")
+    const autore = descriviAutore(tracciato.caricatoDa);
+    const aggiornato = aggiornatoDopoIlCaricamento(tracciato.createdat, tracciato.updatedat);
     // Solo il Superadmin (permesso di sistema) e solo un tracciato che Istanta non ha importato
     const canDeleteTracciato =
         hasPermission(PERMISSIONS.SISTEMA.ELIMINA_TRACCIATI) &&
@@ -206,10 +205,20 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                                 )}
 
                                 <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
-                                    <span className="flex items-center gap-1">
+                                    <span className="flex items-center gap-1" data-testid="caricamento-tracciato">
+                                        <Lucide icon="User" aria-hidden="true" className="h-3 w-3 text-slate-400" />
+                                        {autore}
+                                    </span>
+                                    <span className="flex items-center gap-1" title="Caricato il">
                                         <Lucide icon="Calendar" aria-hidden="true" className="h-3 w-3 text-slate-400" />
                                         {formatDate(tracciato.createdat)}
                                     </span>
+                                    {aggiornato && (
+                                        <span className="flex items-center gap-1" data-testid="aggiornamento-tracciato">
+                                            <Lucide icon="History" aria-hidden="true" className="h-3 w-3 text-slate-400" />
+                                            Aggiornato il {formatDate(tracciato.updatedat)}
+                                        </span>
+                                    )}
                                     <span className="flex items-center gap-1 tabular-nums">
                                         <Lucide icon="HardDrive" aria-hidden="true" className="h-3 w-3 text-slate-400" />
                                         {getFileSize(tracciato.filesize)} MB
@@ -458,7 +467,9 @@ const TracciatoCard: React.FC<TracciatoCardProps> = ({
                 description={
                     <p>
                         Stai per eliminare definitivamente il tracciato{" "}
-                        <span className="font-semibold text-slate-800">{tracciato.nome}</span>. Questa azione non può essere annullata.
+                        <span className="font-semibold text-slate-800">{tracciato.nome}</span>.
+                        {daScartareInIstanta(statusData?.stato) && " Istanta scarterà la sua importazione, che non si potrà più confermare."}
+                        {" "}Questa azione non può essere annullata.
                     </p>
                 }
             />

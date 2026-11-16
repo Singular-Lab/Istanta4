@@ -5,6 +5,7 @@ import { IIstantaService } from "../interfaces/IIstantaService";
 import { authMiddleware } from "../middleware/authMiddleware";
 import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from "../middleware/permissionGuard";
+import { statoImportazioniCondiviso } from "../services/StatoImportazioniCondiviso";
 export class IstantaController extends BaseController {
 
     /**
@@ -50,8 +51,14 @@ export class IstantaController extends BaseController {
 
     private async getStatusImportazione(req: Request, res: Response) {
         try {
-            const guidId = req.query.idTracciato as string;
-            const status = await this.istantaService.getStatusImportazione(guidId, req);
+            const guidId = req.query.idTracciato;
+            if (typeof guidId !== 'string' || !guidId) {
+                res.status(HttpStatusCode.BAD_REQUEST).json({ message: "ID Tracciato non specificato" });
+                return;
+            }
+            // Condiviso fra gli utenti: Istanta riceve al piu' una richiesta per tracciato nel periodo
+            // della sua fase, e nessuna per un tracciato gia' importato o scartato
+            const status = await statoImportazioniCondiviso.leggi(guidId, () => this.istantaService.getStatusImportazione(guidId, req));
             res.status(HttpStatusCode.OK).json(status);
         } catch (error) {
             this.handleError(res, error);

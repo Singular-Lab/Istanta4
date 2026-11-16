@@ -13,6 +13,7 @@ class TracciatiClass extends Model<TracciatiAttributes, TracciatiCreationAttribu
   declare filename_tracciati: string;
   declare nome_tracciati?: string | null;
   declare blobfile_tracciati: Uint8Array;
+  declare caricato_da?: string | null;
   declare createdat?: Date;
   declare updatedat: Date;
 
@@ -49,6 +50,11 @@ const Tracciati = sequelize.define<TracciatiClass>("tracciati", {
     allowNull: false
   },
   stato_tracciati: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  // Chi ha caricato il tracciato (id dell'utente FP); null se caricato prima che si registrasse (0021)
+  caricato_da: {
     type: DataTypes.STRING,
     allowNull: true
   },

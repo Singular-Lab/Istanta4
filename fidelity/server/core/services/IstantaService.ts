@@ -1,5 +1,5 @@
 import { Request } from "express";
-import { Op } from 'sequelize';
+import { Op, col, where as condizione } from 'sequelize';
 import { OperationStatus, operationStatusReverseMapping } from "../../../lib/enums";
 import { BadRequestError, DatabaseError, ExternalApiError, NotFoundError } from "../../../lib/errors";
 import { FileItemKit } from "../../../lib/types";
@@ -22,29 +22,39 @@ export class IstantaService implements IIstantaService {
       'ISTANTA',
       '/FicoProcess/getStatoImportazione'
     );
-    if (data.stato === OperationStatus.Scartata) {
-      const updateTracciato = await Tracciati.findOne({
-        where: { id_tracciati: guidId }
-      })
-      if (updateTracciato) {
-        updateTracciato.stato_tracciati = 'Scartato';
-        await updateTracciato.save();
-      }
-    }
-    if (data.stato === OperationStatus.Terminata) {
-      const updateTracciato = await Tracciati.findOne({
-        where: { id_tracciati: guidId }
-      })
-      if (updateTracciato) {
-        updateTracciato.stato_tracciati = 'Terminata';
-        await updateTracciato.save();
-      }
+    // FP registra l'esito finale dell'importazione: e' un aggiornamento del tracciato solo quando lo
+    // stato cambia, non a ogni lettura (spec "Autore e date del tracciato")
+    const statoDaRegistrare = data.stato === OperationStatus.Scartata ? 'Scartato' : data.stato === OperationStatus.Terminata ? 'Terminata' : null;
+    if (statoDaRegistrare) {
+      await Tracciati.update(
+        { stato_tracciati: statoDaRegistrare, updatedat: new Date() },
+        { where: { id_tracciati: guidId, [Op.or]: [condizione(col('stato_tracciati'), Op.is, null), { stato_tracciati: { [Op.ne]: statoDaRegistrare } }] } }
+      );
     }
     const datoDaRitornareCorretto = {
       ...data,
       stato: operationStatusReverseMapping[data.stato],
     }
     return datoDaRitornareCorretto;
+  }
+
+  /**
+   * Scarta in Istanta l'importazione di un tracciato prima di eliminarlo (spec
+   * ciclo-promozione-importazione, "Eliminazione di un tracciato non importato"). Istanta la scarta
+   * solo se e' in attesa di conferma o esaminata; una gia' scartata risponde scartata, quindi la
+   * richiesta si puo' ripetere.
+   */
+  async scartaImportazione(guidId: string, req: Request): Promise<{ scartata: boolean; stato: string | null }> {
+    type EsitoScarto = { esito: boolean; scartata: boolean; stato: OperationStatus | null; error: string | null };
+    const data = verificaRisposta<EsitoScarto>(
+      await ServerUtils.sendToFICOApi<EsitoScarto>(req, `${config.ISTANTA_IP_ADDRESS}/FicoProcess/scartaImportazione/${encodeURIComponent(guidId)}`, "POST", {}, undefined, undefined, { categoria: 'scrittura', idempotente: true }),
+      'ISTANTA',
+      '/FicoProcess/scartaImportazione'
+    );
+    return {
+      scartata: data.scartata === true,
+      stato: data.stato === null || data.stato === undefined ? null : operationStatusReverseMapping[data.stato] ?? null,
+    };
   }
 
   async getCombinazioniDaIstanta(promoId: string, req: Request): Promise<{

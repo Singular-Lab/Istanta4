@@ -94,7 +94,8 @@ describeConDatabase('allineamento con Istanta su PostgreSQL', () => {
     ]);
     const caricata = esiti[1] as { id: string };
     const salvata = await Tracciati.findByPk(caricata.id, { raw: true });
-    expect(salvata).toMatchObject({ id_promo_tracciati: promo, filename_tracciati: '01_CY.xlsx' });
+    // Chi l'ha caricata (TASK-f4e1fc7c, spec "Autore e date del tracciato")
+    expect(salvata).toMatchObject({ id_promo_tracciati: promo, filename_tracciati: '01_CY.xlsx', caricato_da: 'u-caricatore' });
     expect(Buffer.from(salvata!.blobfile_tracciati).equals(xlsx('01_CY.xlsx'))).toBe(true);
     const coda = await TracciatiInvioIstanta.findAll({ raw: true });
     expect(coda).toEqual([expect.objectContaining({ id_tracciato: caricata.id, id_utente: 'u-caricatore', tentativi: 0, ultimo_errore: null })]);

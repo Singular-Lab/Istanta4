@@ -101,6 +101,17 @@ describe('POST /api/uploadTracciato: Istanta non accetta', () => {
     expect(attivita).toHaveBeenCalledTimes(1);
   });
 
+  // TASK-f4e1fc7c (spec "Autore e date del tracciato"): il tracciato registra chi l'ha caricato
+  it("salva chi ha caricato il tracciato e le date di caricamento", async () => {
+    const prima = Date.now();
+    await carica();
+
+    const [valori] = creaTracciato.mock.calls[0] as unknown as [{ caricato_da?: string; createdat?: Date; updatedat?: Date }];
+    expect(valori.caricato_da).toBe('u-operatore');
+    expect(valori.createdat!.getTime()).toBeGreaterThanOrEqual(prima);
+    expect(valori.updatedat!.getTime()).toBeGreaterThanOrEqual(prima);
+  });
+
   it.each([
     ['rifiuta (esito false)', { data: { esito: false, error: 'label non valida' }, status: 200, statusText: 'OK' }],
     ['non risponde', { data: null, status: 0, statusText: 'timeout' }],

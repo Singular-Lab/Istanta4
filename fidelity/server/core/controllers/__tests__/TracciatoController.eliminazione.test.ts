@@ -47,6 +47,7 @@ import { TracciatiInvioIstanta } from '../../models/tracciati_invio_istanta';
 function createApp(
   righe: Record<string, Record<string, unknown>>,
   statoImportazione: () => Promise<{ stato: string } | null> = async () => ({ stato: 'Terminata' }),
+  scarto: () => Promise<{ scartata: boolean; stato: string | null }> = async () => ({ scartata: true, stato: 'Scartata' }),
 ) {
   // Repository in memoria: controller e service sono quelli reali
   const repository = {
@@ -59,7 +60,7 @@ function createApp(
   };
   const audit = { entityChanged: vi.fn(), configurationChanged: vi.fn() };
   vi.spyOn(AuditLogService, 'getInstance').mockReturnValue(audit as unknown as AuditLogService);
-  const istanta = { getStatusImportazione: vi.fn(statoImportazione) };
+  const istanta = { getStatusImportazione: vi.fn(statoImportazione), scartaImportazione: vi.fn(scarto) };
 
   const app = express();
   app.use(express.json());
@@ -145,21 +146,24 @@ describe('DELETE /api/tracciati/:idTracciato - solo un tracciato non importato',
   });
 
   it("si elimina quando Istanta dice che l'importazione e' scartata", async () => {
-    const { app, repository } = createApp({ t1: tracciato({ stato_tracciati: null }) }, async () => ({ stato: 'Scartata' }));
+    const { app, repository, istanta } = createApp({ t1: tracciato({ stato_tracciati: null }) }, async () => ({ stato: 'Scartata' }));
 
     const res = await request(app).delete('/api/tracciati/t1');
 
     expect(res.status).toBe(200);
     expect(repository.delete).toHaveBeenCalledWith('t1');
+    // Gia' scartata: niente da chiedere a Istanta
+    expect(istanta.scartaImportazione).not.toHaveBeenCalled();
   });
 
   it('un tracciato importato resta, con il motivo', async () => {
-    const { app, repository, audit } = createApp({ t1: tracciato({ stato_tracciati: 'Terminata' }) }, async () => ({ stato: 'Terminata' }));
+    const { app, repository, audit, istanta } = createApp({ t1: tracciato({ stato_tracciati: 'Terminata' }) }, async () => ({ stato: 'Terminata' }));
 
     const res = await request(app).delete('/api/tracciati/t1');
 
     expect(res.status).toBe(409);
     expect(res.body.message).toBe('Il tracciato è già importato in Istanta: non si può eliminare.');
+    expect(istanta.scartaImportazione).not.toHaveBeenCalled();
     expect(repository.delete).not.toHaveBeenCalled();
     expect(TracciatiInvioIstanta.destroy).not.toHaveBeenCalled();
     expect(audit.entityChanged).not.toHaveBeenCalled();
@@ -184,6 +188,79 @@ describe('DELETE /api/tracciati/:idTracciato - solo un tracciato non importato',
 
     expect(res.status).toBe(503);
     expect(res.body.message).toMatch(/Non è stato possibile verificare/);
+    expect(repository.delete).not.toHaveBeenCalled();
+  });
+});
+
+// TASK-f4e1fc7c: arrivato in Istanta ma non importato, si elimina dopo averne scartato l'importazione
+describe("DELETE /api/tracciati/:idTracciato - arrivato in Istanta e non importato", () => {
+  it.each(['InAttesaDiConfermaUtente', 'Esaminata'])("con l'importazione %s Istanta la scarta e il tracciato si elimina", async (stato) => {
+    const { app, repository, istanta, audit } = createApp({ t1: tracciato({ stato_tracciati: null }) }, async () => ({ stato }));
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(200);
+    expect(istanta.scartaImportazione).toHaveBeenCalledWith('t1', expect.anything());
+    expect(repository.delete).toHaveBeenCalledWith('t1');
+    expect(audit.entityChanged).toHaveBeenCalledTimes(1);
+    // Lo scarto viene prima della cancellazione
+    expect(istanta.scartaImportazione.mock.invocationCallOrder[0]).toBeLessThan(repository.delete.mock.invocationCallOrder[0]);
+  });
+
+  it("se nel frattempo l'importazione e' partita, Istanta non la scarta e il tracciato resta", async () => {
+    const { app, repository, audit } = createApp(
+      { t1: tracciato({ stato_tracciati: null }) },
+      async () => ({ stato: 'InAttesaDiConfermaUtente' }),
+      async () => ({ scartata: false, stato: 'InCoda' }),
+    );
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe("L'importazione del tracciato in Istanta è già avviata e non è conclusa: non si può eliminare.");
+    expect(repository.delete).not.toHaveBeenCalled();
+    expect(TracciatiInvioIstanta.destroy).not.toHaveBeenCalled();
+    expect(audit.entityChanged).not.toHaveBeenCalled();
+  });
+
+  it("se nel frattempo e' stata importata, il motivo dice che e' gia' importato", async () => {
+    const { app, repository } = createApp(
+      { t1: tracciato({ stato_tracciati: null }) },
+      async () => ({ stato: 'Esaminata' }),
+      async () => ({ scartata: false, stato: 'Terminata' }),
+    );
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toBe('Il tracciato è già importato in Istanta: non si può eliminare.');
+    expect(repository.delete).not.toHaveBeenCalled();
+  });
+
+  it("se Istanta non risponde allo scarto non si elimina niente", async () => {
+    const { app, repository, audit } = createApp(
+      { t1: tracciato({ stato_tracciati: null }) },
+      async () => ({ stato: 'InAttesaDiConfermaUtente' }),
+      async () => {
+        throw new Error('ECONNREFUSED');
+      },
+    );
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(503);
+    expect(res.body.message).toBe("Non è stato possibile scartare in Istanta l'importazione del tracciato: riprova più tardi.");
+    expect(repository.delete).not.toHaveBeenCalled();
+    expect(audit.entityChanged).not.toHaveBeenCalled();
+  });
+
+  it("con l'importazione in coda non si chiede lo scarto", async () => {
+    const { app, repository, istanta } = createApp({ t1: tracciato({ stato_tracciati: null }) }, async () => ({ stato: 'InCoda' }));
+
+    const res = await request(app).delete('/api/tracciati/t1');
+
+    expect(res.status).toBe(409);
+    expect(istanta.scartaImportazione).not.toHaveBeenCalled();
     expect(repository.delete).not.toHaveBeenCalled();
   });
 });

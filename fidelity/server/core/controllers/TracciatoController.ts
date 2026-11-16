@@ -13,14 +13,15 @@ import { Promo } from '../models/promo';
 import { TracciatiInvioIstanta } from '../models/tracciati_invio_istanta';
 import { aggiornaContestoInAttesa, inviaPrenotata, prenotaTracciato, statoIstantaTracciati } from '../services/AllineamentoIstanta';
 import type { IIstantaService } from '../interfaces/IIstantaService';
-import { motivoTracciatoNonEliminabile, tracciatoNonImportato } from '../../../lib/produzione/eliminazioneTracciato';
+import { daScartareInIstanta, motivoTracciatoNonEliminabile, tracciatoNonImportato } from '../../../lib/produzione/eliminazioneTracciato';
+import { statoImportazioniCondiviso } from '../services/StatoImportazioniCondiviso';
 
 /** Perche' un tracciato non si elimina: si elimina solo se Istanta non l'ha importato. */
 type RifiutoEliminazione = { status: HttpStatusCode; motivo: string };
 
 export class TracciatoController extends BaseController {
-    /** istantaService: per leggere lo stato dell'importazione prima di eliminare un tracciato. */
-    constructor(private tracciatoService: ITracciatoService, private istantaService?: Pick<IIstantaService, 'getStatusImportazione'>) {
+    /** istantaService: per leggere lo stato dell'importazione e scartarla prima di eliminare un tracciato. */
+    constructor(private tracciatoService: ITracciatoService, private istantaService?: Pick<IIstantaService, 'getStatusImportazione' | 'scartaImportazione'>) {
         super('/api');
     }
     protected setupRoutes(): void {
@@ -294,6 +295,8 @@ export class TracciatoController extends BaseController {
                 : null;
 
             const deleted = await this.tracciatoService.deleteTracciato(idTracciato);
+            // Lo stato letto prima dello scarto non vale piu'
+            statoImportazioniCondiviso.dimentica(idTracciato);
             // Niente piu' da inviare a Istanta. La chiave esterna di solito lo fa da sola, ma su
             // un'installazione vecchia senza chiave primaria in tracciati non c'e'.
             await TracciatiInvioIstanta.destroy({ where: { id_tracciato: idTracciato } }).catch((error) =>
@@ -332,7 +335,9 @@ export class TracciatoController extends BaseController {
     /**
      * Un tracciato si elimina solo se Istanta non l'ha importato (lib/produzione/eliminazioneTracciato).
      * In attesa di Istanta e "Scartato" si sanno da FP; altrimenti decide lo stato dell'importazione
-     * letto da Istanta, e se Istanta non risponde non si elimina niente.
+     * letto da Istanta, e se Istanta non risponde non si elimina niente. Un tracciato arrivato in
+     * Istanta, con l'importazione in attesa di conferma o esaminata, si elimina solo dopo che Istanta
+     * ne ha scartato l'importazione: se nel frattempo e' partita, resta.
      */
     private async rifiutoEliminazione(idTracciato: string, statoTracciato: string | null | undefined, req: Request): Promise<RifiutoEliminazione | null> {
         const coda = (await statoIstantaTracciati([idTracciato])).get(idTracciato);
@@ -352,10 +357,29 @@ export class TracciatoController extends BaseController {
                 motivo: "Non è stato possibile verificare in Istanta lo stato dell'importazione del tracciato: riprova più tardi.",
             };
         }
-        if (tracciatoNonImportato({ inAttesaIstanta: false, statoTracciato, statoImportazione })) {
+        if (!tracciatoNonImportato({ inAttesaIstanta: false, statoTracciato, statoImportazione })) {
+            return { status: HttpStatusCode.CONFLICT, motivo: motivoTracciatoNonEliminabile(statoImportazione) };
+        }
+        if (!daScartareInIstanta(statoImportazione)) {
             return null;
         }
-        return { status: HttpStatusCode.CONFLICT, motivo: motivoTracciatoNonEliminabile(statoImportazione) };
+        // Senza lo scarto, confermando le importazioni della promo Istanta lo importerebbe lo stesso.
+        // Se poi la cancellazione in FP non riesce, il tracciato resta con l'importazione scartata e si
+        // puo' eliminare di nuovo.
+        let scarto: { scartata: boolean; stato: string | null };
+        try {
+            if (!this.istantaService) throw new Error('Servizio Istanta non configurato');
+            scarto = await this.istantaService.scartaImportazione(idTracciato, req);
+        } catch (error) {
+            log.warn(`Importazione del tracciato ${idTracciato} non scartata in Istanta: non si elimina`, {
+                error: error instanceof Error ? error.message : String(error),
+            });
+            return {
+                status: HttpStatusCode.SERVICE_UNAVAILABLE,
+                motivo: "Non è stato possibile scartare in Istanta l'importazione del tracciato: riprova più tardi.",
+            };
+        }
+        return scarto.scartata ? null : { status: HttpStatusCode.CONFLICT, motivo: motivoTracciatoNonEliminabile(scarto.stato) };
     }
 
     private async getReportsConfronto(req: Request, res: Response): Promise<void> {
