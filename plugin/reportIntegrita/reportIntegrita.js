@@ -5529,15 +5529,77 @@ const ReportIntegrita = {
     /// passa a un altro file, o li chiude tutti, va chiuso senza chiedere niente.
     /// I20-1014: la decisione stava in events.js, che ora si limita a chiamare questa a
     /// intervalli col documento attivo; il "quando" e' deveChiudereReport di avvio.js.
+    /// I20-1234: il report si ricorda per il suo documento, e tornandoci si riapre (riprendiDelDocumento).
     chiudiSeNonValePiu(documentoAttuale) {
         if (!this.reportIntegritaAperto()) {
             return false;
         }
         if (reportIntegritaAvvio.deveChiudereReport(this.documentoDelReport(), documentoAttuale)) {
-            this.chiudiReportIntegrita("il documento non e' piu' quello del report");
+            const stato = this._confrontoReportState || {};
+            this._lasciatoAlDocumento = {
+                documento: this.documentoDelReport(),
+                idKit: typeof idKitLavorazione !== "undefined" ? idKitLavorazione : null,
+                activeList: stato.activeList || "report",
+                activeTab: stato.activeTab || 0
+            };
+            this.chiudiReportIntegrita("lo ritrovi tornando sul suo documento");
             return true;
         }
         return false;
+    },
+
+    /// I20-1234: il report chiuso dal cambio di documento: { documento, idKit, activeList, activeTab }.
+    /// Uno solo: un report alla volta. Quello chiuso dall'operatore non si ricorda.
+    _lasciatoAlDocumento: null,
+
+    /// I20-1234: l'operatore e' tornato sul documento del report chiuso dal cambio di documento: si
+    /// riapre il report salvato della lavorazione come "Apri" su un report esistente, con le
+    /// segnalazioni di adesso accanto ai record, nella forma che vale per il pannello. Niente domande
+    /// dell'avvio e niente confronto: e' lo stesso report che era aperto. Restituisce true se si e' riaperto.
+    riprendiDelDocumento() {
+        const lasciato = this._lasciatoAlDocumento;
+        if (lasciato == null || this.reportIntegritaAperto()) {
+            return false;
+        }
+        const attuale = typeof indesignEvents !== "undefined" && indesignEvents != null ? (indesignEvents.lastActiveDocument || "") : "";
+        if (String(attuale) === "" || String(attuale) !== String(lasciato.documento)) {
+            return false;
+        }
+        this._lasciatoAlDocumento = null;
+
+        const kit = typeof idKitLavorazione !== "undefined" ? idKitLavorazione : null;
+        if (kit == null || lasciato.idKit == null || String(kit) !== String(lasciato.idKit)) {
+            return false;
+        }
+        const reportLocale = this.leggiReportIntegritaLocale(kit);
+        if (reportLocale == null || reportLocale.report == null) {
+            return false;
+        }
+
+        //La lettura dei bollini fatta dall'avvio del documento, appena prima, se c'e': rileggere tutto il
+        //documento rallentava il ritorno.
+        let lette = null;
+        let riusata = false;
+        try {
+            if (typeof SchermataSegnalazioni !== "undefined" && SchermataSegnalazioni != null) {
+                lette = SchermataSegnalazioni.letturaRecente(null);
+                riusata = lette != null;
+                if (lette == null) {
+                    lette = SchermataSegnalazioni.letturaControllata(null);
+                }
+            }
+        }
+        catch (err) {
+            lette = null;
+        }
+        this.assegnaSegnalazioniAlReport(reportLocale.report, lette);
+        this.compilaReportConfronto(reportLocale.report, {
+            wrapper: reportLocale,
+            skipSave: true,
+            activeList: lasciato.activeList || "report",
+            activeTab: lasciato.activeTab || 0
+        });
+        return true;
     },
 };
 

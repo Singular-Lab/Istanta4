@@ -280,6 +280,9 @@ const SchermataSegnalazioni = {
             const elenco = $('<div></div>').attr('id', SchermataSegnalazioni.ID_ELENCO)
                 .css({ width: '100%', color: 'black', fontSize: '12px' });
             elenco.data('pagine', pagine);
+            //I20-1234: il documento di cui la schermata parla, per ricordarla se l'operatore ne porta
+            //davanti un altro.
+            elenco.data('documento', SchermataSegnalazioni._identitaDocumento());
             //I20-1056, lotto 2: il conteggio sta accanto al titolo, cosi' non scorre via.
             const conteggio = $('<span></span>').css({ fontSize: '12px', fontWeight: 'normal', color: '#555' });
             elenco.data('conteggio', conteggio);
@@ -310,6 +313,104 @@ const SchermataSegnalazioni = {
         }
         //I20-1116, lotto 2: o la colonna della vista affiancata.
         SchermataSegnalazioni.chiudiColonna(false);
+    },
+
+    /// I20-1234: le schermate lasciate aperte su un documento quando l'operatore ne ha portato davanti
+    /// un altro, per documento: { pagine }. Tornando su quel documento si riaprono.
+    _lasciatePerDocumento: {},
+
+    /// I20-1234: il documento attivo come lo riconosce il ciclo degli eventi (percorso, o nome per un
+    /// documento mai salvato: InddEvents.identitaDocumento), lo stesso con cui il Report Integrita'
+    /// sa di che documento e'. Sotto Node, o prima del primo giro, la chiave dell'id del documento.
+    _identitaDocumento() {
+        try {
+            if (typeof indesignEvents !== "undefined" && indesignEvents != null
+                && indesignEvents.lastActiveDocument != null && String(indesignEvents.lastActiveDocument) !== "") {
+                return String(indesignEvents.lastActiveDocument);
+            }
+        }
+        catch (e) {
+            //si ripiega sull'id
+        }
+        const chiave = Segnalazioni._chiaveDocumento(SchermataSegnalazioni._documento());
+        return typeof chiave === "string" ? chiave : null;
+    },
+
+    /// I20-1234: l'operatore porta davanti un altro documento, o li chiude tutti. La schermata aperta,
+    /// popup o colonna, parla del documento di prima: si chiude, senza ricolorare i badge del tracciato
+    /// (sono del documento che arriva), e si ricorda per il suo documento con le sue pagine. La scheda
+    /// in vista controllata non si tocca: con lei aperta gli eventi sono fermi e qui non si arriva.
+    /// Restituisce true se c'era una schermata da lasciare.
+    lasciaAlDocumento() {
+        if (SchermataSegnalazioni._schedaAperta != null) {
+            return false;
+        }
+        let elenco = null;
+        try {
+            elenco = $("#" + SchermataSegnalazioni.ID_ELENCO);
+        }
+        catch (e) {
+            return false;
+        }
+        if (elenco == null || !(elenco.length > 0)) {
+            return false;
+        }
+        const documento = elenco.data('documento');
+        const pagine = elenco.data('pagine');
+        SchermataSegnalazioni.chiudiAperta();
+        if (documento != null && String(documento) !== "") {
+            SchermataSegnalazioni._lasciatePerDocumento[String(documento)] = { pagine: Array.isArray(pagine) ? pagine.slice() : null };
+        }
+        return true;
+    },
+
+    /// I20-1234: il documento attivo e' pronto. Se ci si era lasciata aperta la schermata, si riapre
+    /// rileggendo i bollini, con le stesse pagine e nella forma che vale adesso per il pannello.
+    /// Una schermata chiusa dall'operatore non e' fra quelle lasciate, e non torna.
+    /// La lettura dei bollini fatta all'avvio del documento, appena prima, si usa invece di rileggere:
+    /// senza caricamento e senza attesa, come quando la apre il Report Integrita'.
+    riprendiDelDocumento() {
+        const documento = SchermataSegnalazioni._identitaDocumento();
+        if (documento == null) {
+            return Promise.resolve(false);
+        }
+        const lasciata = SchermataSegnalazioni._lasciatePerDocumento[documento];
+        if (lasciata == null) {
+            return Promise.resolve(false);
+        }
+        delete SchermataSegnalazioni._lasciatePerDocumento[documento];
+        const opzioni = Array.isArray(lasciata.pagine) ? { pagine: lasciata.pagine } : {};
+        const lette = SchermataSegnalazioni.letturaRecente(opzioni.pagine || null);
+        if (lette != null) {
+            opzioni.lette = lette;
+        }
+        return SchermataSegnalazioni.apri(opzioni);
+    },
+
+    /// I20-1234: l'ultima lettura di tutto il documento (letturaControllata): { documento, lette, quando }.
+    _ultimaLettura: null,
+
+    /// I20-1234: per quanto l'ultima lettura si puo' riusare. Copre l'avvio del documento e la riapertura
+    /// che lo segue; dopo, qualcosa nei bollini puo' essere cambiato.
+    RIUSO_LETTURA_MS: 10000,
+
+    /// I20-1234: l'ultima lettura di tutto il documento, se e' del documento attivo e di meno di
+    /// RIUSO_LETTURA_MS fa; con le pagine, solo le letture di quelle pagine. Null se non si puo' riusare.
+    letturaRecente(pagine = null, ora = Date.now()) {
+        const ultima = SchermataSegnalazioni._ultimaLettura;
+        const documento = SchermataSegnalazioni._identitaDocumento();
+        if (ultima == null || documento == null || ultima.documento !== documento || !Array.isArray(ultima.lette)) {
+            return null;
+        }
+        const eta = ora - ultima.quando;
+        if (!(eta >= 0 && eta < SchermataSegnalazioni.RIUSO_LETTURA_MS)) {
+            return null;
+        }
+        if (!Array.isArray(pagine)) {
+            return ultima.lette.slice();
+        }
+        const nomi = pagine.map(nome => String(nome));
+        return ultima.lette.filter(lettura => lettura != null && nomi.indexOf(String(lettura.pagina)) >= 0);
     },
 
     /// I20-1116, lotto 2: popup o colonna. I20-1121: la soglia e' quella di vistaAffiancata.js, e con
@@ -475,6 +576,9 @@ const SchermataSegnalazioni = {
             }
             SchermataSegnalazioni.registraControllo(Segnalazioni._chiaveDocumento(documento), lette, pagine);
             SchermataSegnalazioni.aggiornaIcona();
+            //I20-1234: la lettura di tutto il documento si tiene, per chi la chiede subito dopo (letturaRecente).
+            SchermataSegnalazioni._ultimaLettura = Array.isArray(pagine) ? SchermataSegnalazioni._ultimaLettura
+                : { documento: SchermataSegnalazioni._identitaDocumento(), lette: lette.slice(), quando: Date.now() };
             return lette;
         }
         catch (e) {

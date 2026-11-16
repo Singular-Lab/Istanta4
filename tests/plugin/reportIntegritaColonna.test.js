@@ -491,3 +491,91 @@ test("all'allargarsi del pannello si adatta prima il report, poi le segnalazioni
     const indexNew = sorgente("indexNew.js");
     assert.match(indexNew, /lastPannelloDimension = VistaAffiancata\.larghezzaPannello\(\);\s*\/\/I20-1121[^\n]*\n\s*ReportIntegrita\.adattaVista\(\);\s*SchermataSegnalazioni\.adattaVista\(\);/);
 });
+
+/* ---- I20-1234: il report si ritrova tornando sul suo documento ---- */
+
+/// Il report aperto sul documento A del kit 3232, con le globali di indexNew finte; registra cosa si
+/// chiude e cosa si riapre.
+async function conReportSulDocumento(prova, kitAlRitorno = 3232, letturaRecente = null) {
+    const registro = [];
+    const reportSalvato = { report: { recordCambiati: [] }, uiPrefs: {}, filePath: "report_3232.json" };
+    const globali = {
+        indesignEvents: { lastActiveDocument: "/Volantini/A.indd" },
+        idKitLavorazione: 3232,
+        SchermataSegnalazioni: {
+            letturaRecente: () => letturaRecente,
+            letturaControllata: () => { registro.push("letturaSegnalazioni"); return ["lette"]; }
+        }
+    };
+    const sostituti = Object.assign(statoReport("colonna"), {
+        _documentoDelReport: "/Volantini/A.indd",
+        _confrontoReportState: { activeList: "eliminati", activeTab: 2 },
+        _lasciatoAlDocumento: null,
+        chiudiReportIntegrita: function (motivo = null) {
+            registro.push({ chiudi: motivo });
+            this._reportIntegritaAperto = false;
+            this._documentoDelReport = "";
+            return true;
+        },
+        leggiReportIntegritaLocale: (kit) => { registro.push({ leggi: kit }); return reportSalvato; },
+        assegnaSegnalazioniAlReport: (report, lette) => registro.push({ segnalazioni: lette }),
+        compilaReportConfronto: (report, opzioni) => registro.push({ riapri: report === reportSalvato.report, opzioni: opzioni })
+    });
+    return conSostituti(globalThis, globali, () => conSostituti(ReportIntegrita, sostituti, () => prova({
+        registro,
+        reportSalvato,
+        vaiSu: (documento) => { globalThis.indesignEvents.lastActiveDocument = documento; },
+        cambiaKit: () => { globalThis.idKitLavorazione = kitAlRitorno; }
+    })));
+}
+
+test("I20-1234: il report chiuso dal cambio di documento si riapre tornandoci, senza domande e senza confronto", () => conReportSulDocumento(async (d) => {
+    d.vaiSu("/Volantini/B.indd");
+    assert.strictEqual(ReportIntegrita.chiudiSeNonValePiu("/Volantini/B.indd"), true);
+    assert.deepStrictEqual(d.registro, [{ chiudi: "lo ritrovi tornando sul suo documento" }]);
+    //Sull'altro documento il report non torna.
+    assert.strictEqual(ReportIntegrita.riprendiDelDocumento(), false);
+
+    d.vaiSu("/Volantini/A.indd");
+    assert.strictEqual(ReportIntegrita.riprendiDelDocumento(), true);
+    assert.deepStrictEqual(d.registro.slice(1), [
+        { leggi: 3232 },
+        "letturaSegnalazioni",
+        { segnalazioni: ["lette"] },
+        { riapri: true, opzioni: { wrapper: d.reportSalvato, skipSave: true, activeList: "eliminati", activeTab: 2 } }
+    ]);
+    //Una volta sola.
+    ReportIntegrita._reportIntegritaAperto = false;
+    assert.strictEqual(ReportIntegrita.riprendiDelDocumento(), false);
+}));
+
+test("I20-1234: il report chiuso dall'operatore non torna", () => conReportSulDocumento(async (d) => {
+    ReportIntegrita.chiudiReportIntegrita();
+    d.vaiSu("/Volantini/B.indd");
+    assert.strictEqual(ReportIntegrita.chiudiSeNonValePiu("/Volantini/B.indd"), false);
+    d.vaiSu("/Volantini/A.indd");
+
+    assert.strictEqual(ReportIntegrita.riprendiDelDocumento(), false);
+    assert.deepStrictEqual(d.registro, [{ chiudi: null }]);
+}));
+
+test("I20-1234: tornando sul documento con un altro kit il report non si riapre", () => conReportSulDocumento(async (d) => {
+    d.vaiSu("/Volantini/B.indd");
+    ReportIntegrita.chiudiSeNonValePiu("/Volantini/B.indd");
+    d.vaiSu("/Volantini/A.indd");
+    d.cambiaKit();
+
+    assert.strictEqual(ReportIntegrita.riprendiDelDocumento(), false);
+    assert.strictEqual(d.registro.filter(r => r.riapri != null).length, 0);
+}, 4040));
+
+test("I20-1234: il report ripreso usa la lettura dei bollini dell'avvio invece di rileggere il documento", () => conReportSulDocumento(async (d) => {
+    d.vaiSu("/Volantini/B.indd");
+    ReportIntegrita.chiudiSeNonValePiu("/Volantini/B.indd");
+    d.vaiSu("/Volantini/A.indd");
+
+    assert.strictEqual(ReportIntegrita.riprendiDelDocumento(), true);
+
+    assert.strictEqual(d.registro.indexOf("letturaSegnalazioni"), -1);
+    assert.deepStrictEqual(d.registro.find(r => r.segnalazioni != null), { segnalazioni: ["dall'avvio"] });
+}, 3232, ["dall'avvio"]));
