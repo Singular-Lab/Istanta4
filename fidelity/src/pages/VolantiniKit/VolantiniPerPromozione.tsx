@@ -15,7 +15,7 @@ import { usePromozioniVolantiniConsultazione } from "@/query/consultazione";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
 import { useEffect, useId, useMemo, useRef } from "react";
-import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
+import type { FiltriPromozioneVolantini, PeriodoConsultazione } from "../../../lib/consultazione/periodi";
 import type {
   PaginaPromozioniVolantiniConsultazione,
   PromozioneVolantiniConsultazione,
@@ -172,10 +172,13 @@ const perMeseDiInizio = (promozioni: readonly PromozioneVolantiniConsultazione[]
 function ElencoSchede({
   promozioni,
   periodo,
+  filtri,
   inAttesa,
 }: {
   promozioni: readonly PromozioneVolantiniConsultazione[];
   periodo: PeriodoConsultazione;
+  /** Area e canale della vista: ogni scheda apre il dettaglio con gli stessi filtri. */
+  filtri: FiltriPromozioneVolantini;
   /** Arrivano le promozioni di un altro filtro o pagina: restano quelle di prima, attenuate. */
   inAttesa: boolean;
 }) {
@@ -191,7 +194,7 @@ function ElencoSchede({
       >
         {promozioni.map((promozione) => (
           <li key={promozione.promo.id}>
-            <CardPromozioneVolantini promozione={promozione} periodo={periodo} />
+            <CardPromozioneVolantini promozione={promozione} periodo={periodo} filtri={filtri} />
           </li>
         ))}
       </ul>
@@ -214,7 +217,7 @@ function ElencoSchede({
             <ul aria-labelledby={idTitolo} className={CLASSI_GRIGLIA}>
               {gruppo.promozioni.map((promozione) => (
                 <li key={promozione.promo.id}>
-                  <CardPromozioneVolantini promozione={promozione} periodo={periodo} livelloTitolo={4} />
+                  <CardPromozioneVolantini promozione={promozione} periodo={periodo} filtri={filtri} livelloTitolo={4} />
                 </li>
               ))}
             </ul>
@@ -357,7 +360,16 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
         />
       );
     }
-    return <ElencoSchede promozioni={dati.promozioni} periodo={periodo} inAttesa={query.isPlaceholderData} />;
+    // Area e canale passano al dettaglio, che li chiama insegna e area; ricerca e anno no: là
+    // ?cerca= cerca i prodotti e la promozione è una sola
+    return (
+      <ElencoSchede
+        promozioni={dati.promozioni}
+        periodo={periodo}
+        filtri={{ idArea: idArea || undefined, idCanale: idCanale || undefined }}
+        inAttesa={query.isPlaceholderData}
+      />
+    );
   })();
 
   // Il riepilogo è del periodo senza filtri; con il periodo vuoto lo dice già lo stato vuoto.

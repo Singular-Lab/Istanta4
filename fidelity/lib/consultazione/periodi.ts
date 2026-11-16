@@ -61,12 +61,24 @@ export const PERCORSO_CONSULTAZIONE = '/consultazione';
 export const percorsoFileConsultazione = (idFile: string): string =>
   `${PERCORSO_CONSULTAZIONE}/file/${encodeURIComponent(idFile)}`;
 
+/** Filtri con cui si apre il dettaglio di consultazione di una promozione: insegna (il canale del kit) e area. */
+export interface FiltriPromozioneVolantini {
+  idCanale?: string;
+  idArea?: string;
+}
+
 /**
  * Pagina del dettaglio di consultazione di una promozione (spec volantini-pop): non dipende dal
- * periodo, che puo' cambiare con lo stato della promo, ne' dalla produzione.
+ * periodo, che puo' cambiare con lo stato della promo, ne' dalla produzione. Con i filtri la pagina
+ * si apre gia' filtrata (?canale=&area=), come li legge il dettaglio.
  */
-export const percorsoPromozioneVolantini = (idPromo: string): string =>
-  `/volantini/promozioni/${encodeURIComponent(idPromo)}`;
+export const percorsoPromozioneVolantini = (idPromo: string, filtri: FiltriPromozioneVolantini = {}): string => {
+  const parametri = new URLSearchParams();
+  if (filtri.idCanale) parametri.set('canale', filtri.idCanale);
+  if (filtri.idArea) parametri.set('area', filtri.idArea);
+  const query = parametri.toString();
+  return `/volantini/promozioni/${encodeURIComponent(idPromo)}${query ? `?${query}` : ''}`;
+};
 
 /** API del dettaglio di consultazione di una promozione, relativa all'indirizzo delle API. */
 export const percorsoPromozioneVolantiniConsultazione = (idPromo: string): string =>

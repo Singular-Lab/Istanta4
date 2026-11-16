@@ -3,7 +3,11 @@ import StatusBadge from "@/components/Base/StatusBadge";
 import type { TonoStato } from "@/constants/stati";
 import { twMerge } from "@/utils/twMerge";
 import { Link } from "react-router-dom";
-import { percorsoPromozioneVolantini, type PeriodoConsultazione } from "../../../lib/consultazione/periodi";
+import {
+  percorsoPromozioneVolantini,
+  type FiltriPromozioneVolantini,
+  type PeriodoConsultazione,
+} from "../../../lib/consultazione/periodi";
 import type { PromozioneVolantiniConsultazione } from "../../../lib/consultazione/tipi";
 import CollageCopertine from "./CollageCopertine";
 import { numeriDeiKit, periodoPromo, plurale, tempoDellaPromo, testoVolantini } from "./testi";
@@ -12,6 +16,8 @@ export interface CardPromozioneVolantiniProps {
   promozione: PromozioneVolantiniConsultazione;
   /** Decide cosa dice il badge: giorni alla scadenza, giorni all'inizio o la fine. */
   periodo: PeriodoConsultazione;
+  /** Area e canale scelti nella vista: il dettaglio si apre con gli stessi filtri, sugli stessi kit della scheda. */
+  filtri?: FiltriPromozioneVolantini;
   /** 4 sotto le intestazioni dei mesi dello Storico, altrimenti 3. */
   livelloTitolo?: 3 | 4;
   className?: string;
@@ -34,9 +40,16 @@ const minuscola = (testo: string) => testo.charAt(0).toLowerCase() + testo.slice
  * piccolo sopra il periodo di validità in grande, quanto manca e i numeri (volantini, punti vendita
  * stampati, insegne). Nello Storico niente fine né punti vendita: i volantini e due pillole con le
  * aree e i canali dei kit. Le varianti non si elencano: tutta la scheda apre il dettaglio di
- * consultazione della promozione, che non è quello della produzione.
+ * consultazione della promozione, che non è quello della produzione, filtrato su area e insegna
+ * quando la vista lo è.
  */
-function CardPromozioneVolantini({ promozione, periodo, livelloTitolo = 3, className }: CardPromozioneVolantiniProps) {
+function CardPromozioneVolantini({
+  promozione,
+  periodo,
+  filtri,
+  livelloTitolo = 3,
+  className,
+}: CardPromozioneVolantiniProps) {
   const { promo, kit, numeroKit } = promozione;
   const adesso = new Date();
   const numeri = numeriDeiKit(promozione);
@@ -69,7 +82,7 @@ function CardPromozioneVolantini({ promozione, periodo, livelloTitolo = 3, class
 
   return (
     <Link
-      to={percorsoPromozioneVolantini(promo.id)}
+      to={percorsoPromozioneVolantini(promo.id, filtri)}
       aria-label={etichetta}
       className={twMerge(
         "group/promo flex h-full flex-col overflow-hidden rounded-card border border-slate-200 bg-white shadow-card transition-[border-color,box-shadow,transform] duration-200 hover:border-theme-1/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 motion-safe:hover:-translate-y-0.5 dark:border-darkmode-400 dark:bg-darkmode-600 dark:hover:border-indigo-300/40 dark:focus-visible:ring-indigo-300/50",
