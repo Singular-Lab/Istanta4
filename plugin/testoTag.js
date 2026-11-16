@@ -18,6 +18,15 @@
 function indesign() { return require('indesign'); }
 
 const TestoTag = {
+    /// I20-1233: un pezzo di testo pronto da scrivere in un campo di InDesign. I caratteri speciali
+    /// letti dai box come parole (FORCED_LINE_BREAK, DOUBLE_LEFT_QUOTE, ...) tornano caratteri, con la
+    /// stessa tabella di Utility.replaceAllSpecialCharacters.
+    testoDaScrivere: function(testo)
+    {
+        if (testo == null) return "";
+        return Utility.replaceAllSpecialCharacters(String(testo));
+    },
+
     /// Scompone un testo con i tag, <StileA>ciao</StileA><StileB>mondo</StileB>, in
     /// [{ stile, content }]. Senza un tag in testa il testo e' un pezzo solo, senza stile. Un tag
     /// non chiuso ferma la lettura e lascia un pezzo che lo dice.
@@ -230,7 +239,10 @@ const TestoTag = {
     
                     if (tok.type === "text") {
                         //let txt = normalizeIndesignBreaks(tok.value);
-                        let txt = tok.value;
+                        //I20-1233: l'a capo forzato letto dal box arriva come la parola FORCED_LINE_BREAK
+                        //(componiStringTagFromInndTextFrame): qui si rimette a capo, come gli altri
+                        //caratteri speciali. Prima finiva nel box scritto per intero.
+                        let txt = TestoTag.testoDaScrivere(tok.value);
                         if (txt.length === 0) continue;
     
                         let activeStyle = styleStack.length > 0 ? styleStack[styleStack.length - 1] : null;

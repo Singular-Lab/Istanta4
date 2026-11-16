@@ -3340,16 +3340,23 @@ const pannelli = {
         if (ui.contenuto == null) {
             return;
         }
-        const voci = this._correggo.voci || [];
+        //I20-1233: gli scambi del menabo' avanzato gia' al loro posto nel documento non si mostrano: arrivano
+        //approvati e alla conferma contano come applicati (servono al FATTO), ma non c'e' niente da vedere.
+        const tutte = this._correggo.voci || [];
+        const voci = tutte.filter(v => v.giaAlSuoPosto !== true);
+        const giaAlPosto = tutte.length - voci.length;
         ui.contenuto.innerHTML = "";
         if (ui.tab != null) {
             ui.tab.textContent = this._etichettaLinguettaCorreggo();
         }
-        const approvate = voci.filter(v => v.scelta === sezioneCorreggo.SCELTA.approva).length;
+        const approvate = tutte.filter(v => v.scelta === sezioneCorreggo.SCELTA.approva).length;
         if (ui.stato != null) {
             ui.stato.textContent = !this._correggo.importate
                 ? "Correzioni non ancora importate"
-                : (this._correggo.volantino ? this._correggo.volantino + ": " : "") + voci.length + " correzioni, " + approvate + " approvate";
+                : (this._correggo.volantino ? this._correggo.volantino + ": " : "") + voci.length + " correzioni, "
+                    + voci.filter(v => v.scelta === sezioneCorreggo.SCELTA.approva).length + " approvate"
+                    + (voci.some(v => v.scelta === sezioneCorreggo.SCELTA.rifiuta) ? ", " + voci.filter(v => v.scelta === sezioneCorreggo.SCELTA.rifiuta).length + " rifiutate" : "")
+                    + (giaAlPosto > 0 ? ", " + giaAlPosto + " del menabò avanzato già al loro posto" : "");
         }
         if (ui.conferma != null) {
             ui.conferma.disabled = approvate === 0;
@@ -3360,26 +3367,48 @@ const pannelli = {
         }
         if (voci.length === 0) {
             const vuoto = document.createElement("div");
-            vuoto.textContent = "Nessuna correzione aperta in Correggo4 per questa lavorazione.";
+            vuoto.textContent = giaAlPosto > 0
+                ? "Il menabò avanzato è già tutto nel documento: conferma per registrare il FATTO."
+                : "Nessuna correzione aperta in Correggo4 per questa lavorazione.";
             vuoto.style.padding = "8px";
             ui.contenuto.appendChild(vuoto);
             return;
         }
 
-        let pagina = undefined;
-        let box = undefined;
-        voci.forEach(voce => {
-            if (voce.pagina !== pagina) {
-                pagina = voce.pagina;
-                box = undefined;
-                ui.contenuto.appendChild(this._crPageHeader(pagina != null ? pagina : "-", "correggo"));
-            }
-            if (voce.basecode !== box) {
-                box = voce.basecode;
-                ui.contenuto.appendChild(this._crTestataBoxCorreggo(voce));
-            }
-            ui.contenuto.appendChild(this._crRigaCorreggo(voce));
+        //I20-1233: diviso nelle sezioni di Correggo4, e dentro ogni sezione per pagina e box.
+        sezioneCorreggo.perSezione(voci).forEach(sezione => {
+            ui.contenuto.appendChild(this._crSezioneCorreggo(sezione.titolo, sezione.voci.length));
+            let pagina = undefined;
+            let box = undefined;
+            sezione.voci.forEach(voce => {
+                if (voce.pagina !== pagina) {
+                    pagina = voce.pagina;
+                    box = undefined;
+                    ui.contenuto.appendChild(this._crPageHeader(pagina != null ? pagina : "-", "correggo"));
+                }
+                if (voce.basecode !== box) {
+                    box = voce.basecode;
+                    ui.contenuto.appendChild(this._crTestataBoxCorreggo(voce));
+                }
+                ui.contenuto.appendChild(this._crRigaCorreggo(voce));
+            });
         });
+    },
+
+    /// I20-1233: l'intestazione di una sezione del Report Correggo, con quante correzioni ha.
+    _crSezioneCorreggo(titolo, quante) {
+        const el = document.createElement("div");
+        el.textContent = titolo + " (" + quante + ")";
+        el.dataset.sezioneCorreggo = titolo;
+        el.style.fontWeight = "700";
+        el.style.fontSize = "13px";
+        el.style.padding = "6px 8px";
+        el.style.marginTop = "14px";
+        el.style.backgroundColor = "#3b3b3b";
+        el.style.color = "#ffffff";
+        el.style.borderRadius = "4px";
+        el.style.flexShrink = "0";
+        return el;
     },
 
     /// Il box delle correzioni che seguono: cliccandolo si seleziona in pagina.
@@ -3389,6 +3418,9 @@ const pannelli = {
         testata.style.alignItems = "center";
         testata.style.gap = "8px";
         testata.style.padding = "4px 0 0 0";
+        //I20-1233: come le righe, non si stringe nella colonna: stretta, il codice finiva sopra la riga.
+        testata.style.flexShrink = "0";
+        testata.style.marginBottom = "4px";
         testata.appendChild(this._crCodiceGruppo(voce.basecode || "Senza box"));
         if (voce.basecode !== "") {
             const vai = document.createElement("button");
@@ -3397,7 +3429,7 @@ const pannelli = {
             vai.style.cursor = "pointer";
             vai.style.fontSize = "10px";
             vai.addEventListener("click", () => {
-                const trovato = this._resolveBoxByCodiceGruppo({ codiceGruppo: voce.basecode, numeroPagina: voce.pagina });
+                const trovato = this._boxDelloScambio(voce.basecode, voce.pagina);
                 if (trovato == null) {
                     messaggioUtente("Code RIC-06 Box " + voce.basecode + " non trovato nel documento", "warning", false, 5);
                     return;
@@ -3429,10 +3461,14 @@ const pannelli = {
         left.style.minWidth = "0";
 
         const testo = document.createElement("div");
-        testo.textContent = voce.testo;
+        //I20-1233: un codice gruppo lungo e' una parola sola e passava sotto Approva/Rifiuta: a schermo i
+        //codici (numeri di almeno 5 cifre, non i prezzi) vanno a capo dopo la virgola, e una parola troppo
+        //lunga va a capo comunque.
+        testo.textContent = String(voce.testo == null ? "" : voce.testo).replace(/(\d{5}),(?=\d{5})/g, "$1, ");
         testo.style.fontSize = "12px";
         testo.style.whiteSpace = "normal";
         testo.style.wordBreak = "break-word";
+        testo.style.overflowWrap = "anywhere";
         left.appendChild(testo);
 
         const info = document.createElement("div");
@@ -3440,41 +3476,63 @@ const pannelli = {
         info.style.opacity = "0.8";
         info.textContent = [
             voce.autore + (voce.tipoAutore ? " (" + voce.tipoAutore + ")" : ""),
-            voce.automatica ? "automatica" : "da decidere",
+            voce.giaAlSuoPosto ? "già applicato" : (voce.automatica ? "automatica" : "da decidere"),
+            //I20-1233: la descrizione e' per conoscenza.
+            voce.soloInformativa ? "non cambia l'impaginato" : "",
             voce.propagata ? "propagata" : ""
         ].filter(s => s !== "").join(" · ");
         left.appendChild(info);
 
         const scelte = document.createElement("div");
         scelte.style.display = "flex";
-        scelte.style.gap = "4px";
+        scelte.style.gap = "6px";
+        scelte.style.alignItems = "center";
         scelte.style.flexShrink = "0";
 
-        const pulsante = (testoPulsante, scelta, colore) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.textContent = testoPulsante;
-            btn.style.cursor = "pointer";
-            btn.style.fontSize = "11px";
+        //I20-1233: le scelte sono etichette e non button: il button di UXP ignora il colore di fondo, e
+        //la scelta attiva usciva con il testo bianco sul grigio, illeggibile. Scelta: colore pieno con
+        //il segno; non scelta: bordo colorato su fondo chiaro.
+        const pulsante = (testoPulsante, testoScelto, scelta, colore, fondoChiaro, abilitato = true) => {
+            const etichetta = document.createElement("div");
             const attiva = voce.scelta === scelta;
-            btn.style.fontWeight = attiva ? "700" : "400";
-            btn.style.backgroundColor = attiva ? colore : "";
-            btn.style.color = attiva ? "#fff" : "";
-            btn.addEventListener("click", () => {
-                //Un secondo clic sulla scelta attiva la toglie.
-                sezioneCorreggo.scegli(voce, attiva ? sezioneCorreggo.SCELTA.nessuna : scelta, this._superAdminPerCorreggo());
-                this._disegnaCorrezioniCorreggo();
-            });
-            return btn;
+            etichetta.textContent = attiva ? testoScelto : testoPulsante;
+            etichetta.style.padding = "3px 10px";
+            etichetta.style.fontSize = "11px";
+            etichetta.style.borderRadius = "10px";
+            etichetta.style.border = "1px solid " + (abilitato ? colore : "#999");
+            etichetta.style.whiteSpace = "nowrap";
+            etichetta.style.userSelect = "none";
+            etichetta.style.fontWeight = attiva ? "700" : "600";
+            etichetta.style.backgroundColor = attiva ? colore : (abilitato ? fondoChiaro : "#eeeeee");
+            etichetta.style.color = attiva ? "#ffffff" : (abilitato ? colore : "#999");
+            etichetta.style.cursor = abilitato ? "pointer" : "default";
+            etichetta.dataset.scelta = scelta;
+            etichetta.dataset.attiva = attiva ? "1" : "0";
+            if (abilitato) {
+                etichetta.addEventListener("click", () => {
+                    //Un secondo clic sulla scelta attiva la toglie.
+                    sezioneCorreggo.scegli(voce, attiva ? sezioneCorreggo.SCELTA.nessuna : scelta, this._superAdminPerCorreggo());
+                    //I20-1233: il rifiuto si ricorda per le importazioni successive.
+                    this.registraSceltaCorreggo(voce);
+                    this._disegnaCorrezioniCorreggo();
+                });
+            }
+            return etichetta;
         };
-        const approva = pulsante("Approva", sezioneCorreggo.SCELTA.approva, "#2d7d32");
-        if (!voce.approvabile) {
-            approva.disabled = true;
-            approva.style.opacity = "0.5";
-            Tooltip.impostaTooltip(approva, "Solo un superAdmin puo' approvare l'eliminazione della referenza");
+        //I20-1233: uno scambio gia' al suo posto non ha niente da decidere.
+        if (voce.giaAlSuoPosto === true) {
+            row.appendChild(left);
+            return row;
+        }
+        const approva = pulsante("Approva", "\u2713 Approvata", sezioneCorreggo.SCELTA.approva, "#2d7d32", "#eef7e3", voce.approvabile !== false);
+        if (voce.approvabile === false) {
+            //I20-1233: uno scambio del menabo' avanzato da sistemare a mano non si approva.
+            Tooltip.impostaTooltip(approva, voce.tipo === sezioneCorreggo.TIPO.scambio
+                ? "Da sistemare a mano: il Plugin non sa dove va il box"
+                : "Solo un superAdmin puo' approvare l'eliminazione della referenza");
         }
         scelte.appendChild(approva);
-        scelte.appendChild(pulsante("Rifiuta", sezioneCorreggo.SCELTA.rifiuta, "#b23b3b"));
+        scelte.appendChild(pulsante("Rifiuta", "\u2715 Rifiutata", sezioneCorreggo.SCELTA.rifiuta, "#b23b3b", "#fdecea"));
 
         row.appendChild(left);
         row.appendChild(scelte);

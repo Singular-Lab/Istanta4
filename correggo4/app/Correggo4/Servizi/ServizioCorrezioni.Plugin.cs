@@ -35,6 +35,28 @@ public sealed class CorrezionePlugin
     public List<FotoEditVista> Loghi { get; set; } = new();
     public bool Propagata { get; set; }
     public string DaVolantino { get; set; } = "";
+
+    /// <summary>I20-1233, tipo "timone": la referenza spostata, il box al cui posto va e, se il Plugin non
+    /// lo puo' applicare, perche' va sistemato a mano.</summary>
+    public string? Codice { get; set; }
+    public string? BasecodeDestinazione { get; set; }
+    public string? LabelBoxDestinazione { get; set; }
+    public string? DaSistemareAMano { get; set; }
+    /// <summary>I20-1233: dove va il box, [y1, x1, y2, x2] relativi alla pagina come li manda l'export
+    /// del Plugin: il rettangolo che la casella di destinazione aveva nell'impaginato fotografato.</summary>
+    public decimal[]? BoundsDestinazione { get; set; }
+    /// <summary>I20-1233: la casella del menabo' avanzato (in alto a sinistra) e quante ne occupa.</summary>
+    public short? Casella { get; set; }
+    public short? Colonne { get; set; }
+    public short? Righe { get; set; }
+    /// <summary>I20-1233: per un raggruppamento del menabo' avanzato, i box da unire a quello del
+    /// capogruppo (Basecode) e le referenze del gruppo. Null per uno scambio.</summary>
+    public List<BoxDaUnire>? Unisci { get; set; }
+    public List<string>? Codici { get; set; }
+    /// <summary>I20-1233: per lo sgruppa del Plugin, le referenze del box nell'export e quelle del menabo'
+    /// sulla pagina (ServizioTimone.ScambioTimone).</summary>
+    public List<string>? CodiciDelBox { get; set; }
+    public List<string>? CodiciTimone { get; set; }
 }
 
 public sealed class CorrezioniPerPlugin
@@ -44,6 +66,10 @@ public sealed class CorrezioniPerPlugin
     public string Promo { get; set; } = "";
     public short Versione { get; set; }
     public List<CorrezionePlugin> Correzioni { get; set; } = new();
+
+    /// <summary>I20-1233: le modifiche del menabo' avanzato che non sono scambi (gruppi, fuori volantino...):
+    /// con almeno una la conferma non registra il FATTO. Null se il menabo' avanzato non aspetta l'Agenzia.</summary>
+    public int? AltreModificheTimone { get; set; }
 }
 
 /// <summary>I20-1221: l'esito della chiusura di una correzione approvata dal Plugin.</summary>
@@ -61,6 +87,7 @@ public sealed partial class ServizioCorrezioni
     public const string CorrezioneNota = "nota";
     public const string CorrezioneTimbro = "timbro";
     public const string CorrezioneEdit = "edit";
+    public const string CorrezioneTimone = "timone";
 
     /// <summary>Le correzioni aperte dell'ultima versione del volantino agganciato alla lavorazione.</summary>
     public async Task<EsitoCorrezione> CorrezioniPerPluginAsync(Utente u, int idLavorazione)
@@ -82,8 +109,14 @@ public sealed partial class ServizioCorrezioni
         if (vol == null) return VolantinoNonTrovato(idLavorazione);
 
         var aperte = (await ApertePerPluginAsync(vol, u)).Correzioni.Select(c => c.Id).ToHashSet();
+        var richieste = (approvate ?? Enumerable.Empty<string>()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct().ToList();
         var esiti = new List<ChiusuraPlugin>();
-        foreach (string id in (approvate ?? Enumerable.Empty<string>()).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct())
+
+        //I20-1233: gli scambi del menabo' avanzato non si chiudono uno per uno, si chiude il piano con il FATTO.
+        var scambi = richieste.Where(id => id.StartsWith(CorrezioneTimone + ":", StringComparison.Ordinal)).ToList();
+        if (scambi.Count > 0) esiti.AddRange(await ChiudiTimoneAsync(u, vol.Id, scambi));
+
+        foreach (string id in richieste.Except(scambi))
         {
             if (!aperte.Contains(id))
             {
@@ -97,6 +130,42 @@ public sealed partial class ServizioCorrezioni
                 : new ChiusuraPlugin(id, false, errore.Codice, errore.Messaggio));
         }
         return EsitoCorrezione.Fatto(esiti);
+    }
+
+    /// <summary>
+    /// I20-1233: il FATTO del menabo' avanzato, se il Plugin ha applicato tutti gli scambi e il piano non ha
+    /// altro da riportare a mano. Altrimenti nessuno scambio risulta chiuso, ognuno con il motivo.
+    /// </summary>
+    private async Task<List<ChiusuraPlugin>> ChiudiTimoneAsync(Utente u, int idVolantino, List<string> scambi)
+    {
+        var timone = await new ServizioTimone(ctx).ScambiPerPluginAsync(idVolantino);
+        if (timone == null)
+            return scambi.Select(id => new ChiusuraPlugin(id, false, "non_aperta",
+                "Il menabò avanzato non ha più scambi che aspettano l'Agenzia.")).ToList();
+
+        var tutti = timone.Scambi.Select(s => $"{CorrezioneTimone}:{s.IdVoce}").ToHashSet();
+        var sconosciuti = scambi.Where(id => !tutti.Contains(id)).ToList();
+        var esiti = sconosciuti.Select(id => new ChiusuraPlugin(id, false, "non_aperta",
+            "Lo scambio non è più nel menabò avanzato di questo volantino.")).ToList();
+        var validi = scambi.Except(sconosciuti).ToList();
+        if (validi.Count == 0) return esiti;
+
+        int mancanti = tutti.Count(id => !validi.Contains(id));
+        string? motivo = null;
+        if (mancanti > 0)
+            motivo = $"Il menabò avanzato si chiude con il FATTO quando tutti i suoi scambi e raggruppamenti sono applicati: ne mancano {mancanti}.";
+        else if (timone.AltreModifiche > 0)
+            motivo = $"Il menabò avanzato ha altre {timone.AltreModifiche} modifiche da riportare a mano (referenze staccate, fuori volantino, caselle, pagine o correzioni dei gruppi): il FATTO va premuto nel menabò avanzato.";
+
+        if (motivo != null)
+        {
+            esiti.AddRange(validi.Select(id => new ChiusuraPlugin(id, false, "timone_non_fatto", motivo)));
+            return esiti;
+        }
+
+        await new ServizioTimone(ctx).SistematoDalPluginAsync(timone.IdPiano, u.Id);
+        esiti.AddRange(validi.Select(id => new ChiusuraPlugin(id, true, null, null)));
+        return esiti;
     }
 
     private async Task<EsitoCorrezione?> ChiudiUnaAsync(Utente u, string id)
@@ -201,6 +270,28 @@ public sealed partial class ServizioCorrezioni
             c.Foto = e.Foto.Where(f => f.Stato < 4).ToList();
             c.Loghi = e.Foto.Where(f => f.Stato >= 4).ToList();
             risultato.Correzioni.Add(c);
+        }
+
+        //I20-1233: gli scambi del menabo' avanzato che aspettano l'Agenzia.
+        var timone = await new ServizioTimone(ctx).ScambiPerPluginAsync(vol.Id);
+        if (timone != null)
+        {
+            risultato.AltreModificheTimone = timone.AltreModifiche;
+            foreach (var s in timone.Scambi)
+            {
+                risultato.Correzioni.Add(new CorrezionePlugin
+                {
+                    Id = $"{CorrezioneTimone}:{s.IdVoce}", Tipo = CorrezioneTimone, IdBox = s.IdBox,
+                    LabelBox = s.LabelBox, Basecode = s.Basecode, Pagina = s.Pagina,
+                    Autore = timone.Autore, TipoAutore = timone.TipoAutore, Data = timone.DataSalvataggio,
+                    Codice = s.Codice, BasecodeDestinazione = s.BasecodeDestinazione,
+                    LabelBoxDestinazione = s.LabelBoxDestinazione, DaSistemareAMano = s.DaSistemareAMano,
+                    BoundsDestinazione = s.BoundsDestinazione,
+                    Casella = s.Casella, Colonne = s.Colonne, Righe = s.Righe,
+                    Unisci = s.Unisci?.ToList(), Codici = s.Codici?.ToList(),
+                    CodiciDelBox = s.CodiciDelBox?.ToList(), CodiciTimone = s.CodiciTimone?.ToList()
+                });
+            }
         }
 
         risultato.Correzioni = risultato.Correzioni

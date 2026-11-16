@@ -16,6 +16,23 @@
  * solo se tutte le sue voci sono state approvate e applicate: una voce rifiutata, senza scelta o non
  * riuscita la lascia aperta in Correggo4, com'era (decisione dell'operatore del 12/11).
  *
+ * I20-1233: la descrizione arriva per conoscenza. Approvata non cambia ne' la referenza ne' il box, ma
+ * conta come applicata e si chiude in Correggo4 come accettata, come una nota.
+ *
+ * I20-1233: gli scambi del menabo' avanzato (tipo "timone"): una referenza che il Marketing ha messo nella
+ * casella di un altro box della stessa pagina va nel rettangolo che quella casella aveva nell'impaginato
+ * esportato a Correggo (boundsDestinazione); una rimessa nella sua casella torna al suo posto. Arrivano
+ * senza scelta; quelle che Correggo4 dice da sistemare a mano (griglia nuova, casella vuota) non si
+ * approvano. Si applicano dopo le altre correzioni dei box; in Correggo4 non si chiudono uno per uno, si
+ * registra il FATTO del menabo' avanzato quando ci sono tutti.
+ *
+ * I20-1233: un raggruppamento del menabo' avanzato e' lo scambio del capogruppo con unisci: i box delle
+ * altre referenze del gruppo, che si uniscono al suo in un box solo (il Raggruppa di Istanta) nel
+ * rettangolo della casella del gruppo.
+ *
+ * I20-1233: codici, codiciDelBox e codiciTimone servono a riconoscere una referenza staccata nel menabo'
+ * da un gruppo formato in Correggo e gia' unito nel documento: lo sgruppa si fa a mano.
+ *
  * Esecuzione dei test: node --test tests/plugin/reportCorreggo.test.js
  */
 
@@ -26,7 +43,8 @@ const TIPO = {
     azione: "azione",
     descrizione: "descrizione",
     foto: "foto",
-    loghi: "loghi"
+    loghi: "loghi",
+    scambio: "scambio"
 };
 
 const SCELTA = {
@@ -146,12 +164,64 @@ function vociDellaCorrezione(correzione, config) {
             }));
         });
     }
+    else if (correzione.tipo === "timone") {
+        const aMano = correzione.daSistemareAMano != null && String(correzione.daSistemareAMano) !== "" ? String(correzione.daSistemareAMano) : "";
+        const codice = String(correzione.codice || correzione.basecode || "");
+        const destinazione = String(correzione.basecodeDestinazione || "");
+        const bounds = Array.isArray(correzione.boundsDestinazione) && correzione.boundsDestinazione.length === 4
+            ? correzione.boundsDestinazione.map(Number) : null;
+        const colonne = Math.max(1, Number(correzione.colonne) || 1);
+        const righe = Math.max(1, Number(correzione.righe) || 1);
+        const stessoBox = destinazione === String(correzione.basecode || "");
+        const unisci = Array.isArray(correzione.unisci)
+            ? correzione.unisci.map(b => ({ basecode: String(b.basecode || ""), labelBox: String(b.labelBox || ""), pagina: b.pagina,
+                codici: Array.isArray(b.codici) ? b.codici.map(String) : [] }))
+            : null;
+        let dove;
+        if (unisci != null) {
+            const insieme = [String(correzione.basecode || codice)].concat(unisci.map(b => b.basecode)).join(" e ");
+            dove = aMano !== ""
+                ? "gruppo di " + insieme + ": " + aMano
+                : "unisce " + insieme + " in un box" + (correzione.casella != null ? ", nella casella " + correzione.casella : "");
+        }
+        else if (aMano !== "") {
+            dove = " spostata, " + aMano;
+        }
+        else if (colonne > 1 || righe > 1) {
+            dove = " allargata su " + colonne + "×" + righe + " caselle"
+                + (destinazione === "" ? (correzione.casella != null ? " dalla casella " + correzione.casella : "") : stessoBox ? "" : ", al posto di " + destinazione);
+        }
+        else if (destinazione === "") {
+            //I20-1233: pagina ridisegnata dal Marketing: va nella casella, non al posto di un box.
+            dove = " va nella casella " + (correzione.casella != null ? correzione.casella : "");
+        }
+        else {
+            dove = stessoBox ? " torna al suo posto" : " va al posto di " + destinazione;
+        }
+        voci.push(voce(TIPO.scambio, 0, {
+            automatica: false,
+            testo: "Menabò avanzato: " + (unisci != null ? "" : codice) + dove,
+            codiceReferenza: codice,
+            basecodeDestinazione: destinazione,
+            labelBoxDestinazione: String(correzione.labelBoxDestinazione || ""),
+            boundsDestinazione: bounds,
+            colonne: colonne,
+            righe: righe,
+            daSistemareAMano: aMano,
+            unisci: unisci,
+            codici: Array.isArray(correzione.codici) ? correzione.codici.map(String) : [],
+            codiciDelBox: Array.isArray(correzione.codiciDelBox) ? correzione.codiciDelBox.map(String) : [],
+            codiciTimone: Array.isArray(correzione.codiciTimone) ? correzione.codiciTimone.map(String) : []
+        }));
+    }
     else if (correzione.parte === "descrizione") {
         if (correzione.descrizione != null && String(correzione.descrizione) !== "") {
             voci.push(voce(TIPO.descrizione, 0, {
                 automatica: false,
                 testo: "Descrizione modificata in: " + descrizioneInChiaro(correzione.descrizione),
-                descrizione: String(correzione.descrizione)
+                descrizione: String(correzione.descrizione),
+                //I20-1233: per conoscenza, approvata non cambia l'impaginato.
+                soloInformativa: true
             }));
         }
         const foto = (correzione.foto || []).filter(f => f != null);
@@ -188,8 +258,12 @@ function nomeStatoFoto(stato) {
     }
 }
 
-/// Se l'operatore puo' approvare la voce: l'eliminazione della referenza solo un superAdmin.
+/// Se l'operatore puo' approvare la voce: l'eliminazione della referenza solo un superAdmin; uno scambio
+/// da sistemare a mano nessuno.
 function approvabile(voce, superAdmin) {
+    if (voce != null && voce.tipo === TIPO.scambio && (voce.daSistemareAMano !== "" || voce.boundsDestinazione == null)) {
+        return false;
+    }
     return !(voce != null && voce.eliminaRef === true && superAdmin !== true);
 }
 
@@ -212,12 +286,47 @@ function importa(correzioni, correzioniCorreggo, superAdmin) {
     return voci;
 }
 
+/// I20-1233: uno scambio il cui box nel documento sta gia' dove lo vuole il menabo' avanzato (un giro
+/// applicato prima, quando il FATTO non si e' potuto registrare). Non si decide: arriva approvato e alla
+/// conferma conta come applicato, senza rifare il box.
+function segnaGiaAlSuoPosto(voce) {
+    if (voce == null || voce.tipo !== TIPO.scambio || voce.approvabile === false) {
+        return false;
+    }
+    voce.giaAlSuoPosto = true;
+    voce.automatica = true;
+    voce.scelta = SCELTA.approva;
+    voce.testo = Array.isArray(voce.unisci)
+        ? "Menabò avanzato: il gruppo di " + [voce.basecode].concat(voce.unisci.map(b => b.basecode)).join(" e ") + " è già unito al suo posto"
+        : "Menabò avanzato: " + voce.codiceReferenza + " è già al suo posto";
+    return true;
+}
+
+/// I20-1233: uno scambio che all'importazione si scopre da sistemare a mano (una referenza staccata nel
+/// menabo' da un gruppo formato in Correggo: lo sgruppa si fa a mano, decisione dell'operatore del 13/11).
+/// Non si approva piu' e dice perche'.
+function segnaDaSistemareAMano(voce, motivo) {
+    if (voce == null || voce.tipo !== TIPO.scambio) {
+        return false;
+    }
+    voce.daSistemareAMano = String(motivo);
+    voce.approvabile = false;
+    voce.automatica = false;
+    voce.scelta = SCELTA.nessuna;
+    voce.testo = "Menabò avanzato: " + voce.codiceReferenza + ", " + voce.daSistemareAMano;
+    return true;
+}
+
 /// Cambia la scelta di una voce; una voce che l'operatore non puo' approvare resta com'e'.
 function scegli(voce, scelta, superAdmin) {
     if (voce == null) {
         return false;
     }
     if (scelta === SCELTA.approva && !approvabile(voce, superAdmin)) {
+        return false;
+    }
+    //I20-1233: uno scambio gia' al suo posto non si decide.
+    if (voce.giaAlSuoPosto === true) {
         return false;
     }
     voce.scelta = scelta === SCELTA.approva || scelta === SCELTA.rifiuta ? scelta : SCELTA.nessuna;
@@ -246,14 +355,21 @@ function domandaEliminazione(voci) {
 }
 
 /// Il lavoro della conferma, box per box. Per ogni box: se va eliminato (e allora le altre sue voci
-/// non si applicano), le azioni sul box da mandare insieme (prezzi, azioni, timbri con un'azione), la
-/// descrizione, le foto e i loghi. Le voci approvate senza box, o che non cambiano l'impaginato
-/// (le note, i timbri senza regola), si contano come applicate: le ha gestite l'operatore.
+/// non si applicano), le azioni sul box da mandare insieme (prezzi, azioni, timbri con un'azione), le
+/// foto e i loghi. Le voci approvate senza box, o che non cambiano l'impaginato (le note, le
+/// descrizioni, i timbri senza regola), si contano come applicate: le ha gestite l'operatore.
 function pianoDellaConferma(voci) {
     const perBox = new Map();
     const senzaLavoro = [];
+    const scambi = [];
     (voci || []).filter(v => v.scelta === SCELTA.approva).forEach(v => {
-        const cambiaIlBox = v.tipo !== TIPO.nota && !(v.tipo === TIPO.timbro && !v.eliminaRef && v.idAzione == null);
+        //I20-1233: gli scambi si fanno a parte, dopo i box.
+        if (v.tipo === TIPO.scambio) {
+            scambi.push(v);
+            return;
+        }
+        //I20-1233: la descrizione approvata non cambia ne' la referenza ne' il box.
+        const cambiaIlBox = v.tipo !== TIPO.nota && v.tipo !== TIPO.descrizione && !(v.tipo === TIPO.timbro && !v.eliminaRef && v.idAzione == null);
         if (!cambiaIlBox || v.basecode === "") {
             senzaLavoro.push(v);
             return;
@@ -262,7 +378,7 @@ function pianoDellaConferma(voci) {
         if (!perBox.has(k)) {
             perBox.set(k, {
                 basecode: v.basecode, pagina: v.pagina, labelBox: v.labelBox,
-                elimina: false, azioni: [], prezzi: {}, descrizione: null, foto: [], loghiAggiunti: [], loghiTolti: [], voci: []
+                elimina: false, azioni: [], prezzi: {}, foto: [], loghiAggiunti: [], loghiTolti: [], voci: []
             });
         }
         const p = perBox.get(k);
@@ -279,9 +395,6 @@ function pianoDellaConferma(voci) {
         else if (v.tipo === TIPO.prezzi) {
             Object.assign(p.prezzi, v.campi || {});
         }
-        else if (v.tipo === TIPO.descrizione) {
-            p.descrizione = v.descrizione;
-        }
         else if (v.tipo === TIPO.foto) {
             p.foto = p.foto.concat(v.foto || []);
         }
@@ -290,7 +403,20 @@ function pianoDellaConferma(voci) {
             p.loghiTolti = p.loghiTolti.concat(v.tolti || []);
         }
     });
-    return { box: Array.from(perBox.values()), senzaLavoro: senzaLavoro };
+    return { box: Array.from(perBox.values()), senzaLavoro: senzaLavoro, scambi: scambiPerPagina(scambi) };
+}
+
+/// I20-1233: gli scambi approvati per pagina, nell'ordine di Correggo4.
+function scambiPerPagina(scambi) {
+    const perPagina = new Map();
+    (scambi || []).forEach(v => {
+        const k = v.pagina != null ? v.pagina : "";
+        if (!perPagina.has(k)) {
+            perPagina.set(k, { pagina: v.pagina, voci: [] });
+        }
+        perPagina.get(k).voci.push(v);
+    });
+    return Array.from(perPagina.values());
 }
 
 /// Le istruzioni di setCambioStrutturale per i prezzi: un'azione con valori fissi, i nomi dei campi
@@ -379,6 +505,60 @@ function correzioniDaChiudere(voci, esiti) {
     return Array.from(perCorrezione.entries()).filter(e => e[1]).map(e => e[0]);
 }
 
+/// I20-1233: le sezioni del Report Correggo, come le divide Correggo4: le note, i timbri, l'Edit avanzato e
+/// il menabo' avanzato. La sezione si legge dal tipo della correzione nel suo id (nota:, timbro:, edit:,
+/// timone:), cosi' tutte le voci di una correzione stanno insieme.
+const SEZIONI = [
+    { chiave: "nota", titolo: "Note" },
+    { chiave: "timbro", titolo: "Timbri" },
+    { chiave: "edit", titolo: "Edit avanzato" },
+    { chiave: "timone", titolo: "Menabò avanzato" }
+];
+
+function sezioneDi(voce) {
+    const tipo = String(voce != null && voce.idCorrezione != null ? voce.idCorrezione : "").split(":")[0];
+    return SEZIONI.some(s => s.chiave === tipo) ? tipo : "edit";
+}
+
+/// Le voci divise per sezione, nell'ordine di Correggo4, ognuna con le sue voci nell'ordine in cui
+/// arrivano (pagina e box). Le rifiutate stanno tutte nella sezione Rifiutati, in fondo. Le sezioni
+/// senza voci non ci sono.
+function perSezione(voci) {
+    const rifiutata = (v) => v != null && v.scelta === SCELTA.rifiuta;
+    const sezioni = SEZIONI.map(s => ({ chiave: s.chiave, titolo: s.titolo, voci: (voci || []).filter(v => !rifiutata(v) && sezioneDi(v) === s.chiave) }));
+    sezioni.push({ chiave: "rifiutate", titolo: "Rifiutati", voci: (voci || []).filter(rifiutata) });
+    return sezioni.filter(s => s.voci.length > 0);
+}
+
+/// I20-1233: le rifiutate non vanno a Correggo4 e a ogni importazione tornerebbero da decidere. Il Plugin
+/// le ricorda per lavorazione con la loro firma: la voce e il testo con cui e' arrivata. Se in Correggo4
+/// la correzione cambia, cambia il testo e torna da decidere.
+function firmaRifiuto(voce) {
+    return String(voce.chiave) + "\n" + String(voce.testoImportato != null ? voce.testoImportato : voce.testo);
+}
+
+/// All'importazione: le voci rifiutate in un giro precedente tornano rifiutate.
+function applicaRifiuti(voci, rifiutate) {
+    const firme = new Set(rifiutate || []);
+    (voci || []).forEach(v => {
+        v.testoImportato = v.testo;
+        if (firme.has(firmaRifiuto(v)) && v.giaAlSuoPosto !== true) {
+            v.scelta = SCELTA.rifiuta;
+        }
+    });
+    return voci;
+}
+
+/// L'elenco delle rifiutate dopo una scelta sulla voce: c'e' se la voce e' rifiutata, altrimenti no.
+function aggiornaRifiuti(rifiutate, voce) {
+    const firma = firmaRifiuto(voce);
+    const resto = (rifiutate || []).filter(f => f !== firma);
+    if (voce.scelta === SCELTA.rifiuta) {
+        resto.push(firma);
+    }
+    return resto;
+}
+
 /// Il riepilogo della conferma per l'operatore.
 function riepilogo(voci, esiti, chiuse) {
     const approvate = (voci || []).filter(v => v.scelta === SCELTA.approva);
@@ -412,6 +592,14 @@ module.exports = {
     referenzeDaEliminare,
     domandaEliminazione,
     pianoDellaConferma,
+    scambiPerPagina,
+    segnaGiaAlSuoPosto,
+    segnaDaSistemareAMano,
+    SEZIONI,
+    perSezione,
+    firmaRifiuto,
+    applicaRifiuti,
+    aggiornaRifiuti,
     azioneDeiPrezzi,
     valoriPerIstruzioni,
     strutturaDellAzione,
