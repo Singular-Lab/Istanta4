@@ -2909,6 +2909,9 @@ namespace Istanta.Controllers
 
                             //I20-1070: le foto extra decise dall'operatore per questa lavorazione.
                             applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);
+                            //Le foto extra del gruppo valgono dove il record e' il gruppo: nel PoP il cartello di gruppo.
+                            if (resultGlobale.tipoLavorazione == TipoLavorazione.PoP)
+                                FotoExtraDiPiuArticoli.SoloSulCartelloDiGruppo(resultGlobale.records.Select(r => (IDictionary<string, object>?)r.recordInTracciato));
                             //I20-1077: i testi del box scelti dall'operatore, nei campi compilati.
                             //I20-1088: con il loro stato; quelli che il server compone ormai da se'
                             //si tolgono qui, scaricando la lista.
@@ -3524,6 +3527,14 @@ namespace Istanta.Controllers
 
                 //tracciatiSingoliDict = menaboController.ordinaRecordsTracciato(tRecordsJson.Select(s=>s.recordInTracciato).ToList());
 
+                //Le foto extra di ogni gruppo: comuni a tutte le referenze (le impagina il box del gruppo) e
+                //parziali. Prima dell'esportazione dell'agenzia, che copia le comuni sui cartelli singoli
+                //uguali al gruppo; Foto.Extra di ogni referenza resta la sua.
+                foreach (var gruppoDiFoto in tRecordsJson.Where(f => !f.isObsoleto)
+                    .GroupBy(f => (f.label ?? "") + "|" + (f.recordInTracciato.TryGetValue(GLOBAL_VARIABLES_FICO.keyCodiceGruppo, out var cg) ? cg?.ToString() : "")))
+                {
+                    FotoExtraDiPiuArticoli.AssegnaExtraDelGruppo(gruppoDiFoto.Select(f => (IDictionary<string, object>)f.recordInTracciato).ToList());
+                }
 
                 result = new PreparazioneListaResult()
                 {
@@ -3708,6 +3719,9 @@ namespace Istanta.Controllers
                 }
 
 
+                //I collegamenti a un logo che non e' piu' nell'archivio Loghi/Bolli non vanno nel box,
+                //ma il Plugin li mostra come "non piu' a sistema", da eliminare.
+                var nonASistema = new List<LogoBollo_ExtraNoAuto>();
                 fotoExtra.RemoveAll(foto =>
                 {
                     if (!foto.puntatore)
@@ -3716,7 +3730,10 @@ namespace Istanta.Controllers
                     var logoBolloResult = SyncFotoController.getLogoBolloByGuidId(foto.guidId);
 
                     if (logoBolloResult == null || !logoBolloResult.esito)
+                    {
+                        nonASistema.Add(foto);
                         return true; // rimuovi
+                    }
 
                     foto.sigla = logoBolloResult.item.sigla;
                     foto.nome = logoBolloResult.item.nome;
@@ -3725,6 +3742,7 @@ namespace Istanta.Controllers
                 });
 
                 rec.recordInTracciato[Enum.GetName(AddestramentoRuoli.Foto) + "." + GLOBAL_VARIABLES.keyFotoExtra] = fotoExtra;
+                rec.recordInTracciato[FotoExtraDiPiuArticoli.ChiaveExtraNonASistema] = nonASistema;
 
             }
             else
@@ -4662,6 +4680,10 @@ namespace Istanta.Controllers
 
                 var automatiche = listaTipizzata<LogoBollo>(record.recordInTracciato, keyExtraAuto);
                 var manuali = listaTipizzata<LogoBollo_ExtraNoAuto>(record.recordInTracciato, keyExtra);
+                //Le foto extra del gruppo sono quelle che il box del gruppo impagina: una decisione su
+                //un'extra vale anche li'. Solo i record di un gruppo le hanno.
+                if (record.recordInTracciato.ContainsKey(FotoExtraDiPiuArticoli.ChiaveExtraGruppo))
+                    manuali = manuali.Concat(listaTipizzata<LogoBollo_ExtraNoAuto>(record.recordInTracciato, FotoExtraDiPiuArticoli.ChiaveExtraGruppo)).ToList();
 
                 foreach (var voce in voci)
                 {
@@ -4686,7 +4708,7 @@ namespace Istanta.Controllers
                             {
                                 id = "",
                                 nome = voce.nome,
-                                guidId = "",
+                                guidId = voce.guidId ?? "",
                                 sigla = voce.sigla,
                                 dataModifica = "",
                                 tipo = voce.tipoFoto > 0 ? (TipoFoto)voce.tipoFoto : (voce.tipo == TipoElementoBox.Logo ? TipoFoto.Logo : TipoFoto.Foto),

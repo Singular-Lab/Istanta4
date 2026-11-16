@@ -14,6 +14,8 @@
 /// getLoghiBolliData, selectFile, ReperimentoFoto, fs2, uxp, scaricamentoFoto, Modali, $) si leggono
 /// al momento della chiamata, come in schedaFoto.js.
 
+const FotoExtraGruppo = require('./fotoExtraGruppo');
+
 const FotoExtraPiuBox = {
 
     /// Vero quando, riletta la selezione dopo un'operazione, la scheda deve riaprire Foto extra.
@@ -122,13 +124,18 @@ const FotoExtraPiuBox = {
 
     /* ---- i dati dei box ---- */
 
-    /// Le liste dei box per le righe: le extra del primario e le sue decisioni.
+    /// Le liste dei box per le righe: le extra del primario e le sue decisioni. Per il box di un gruppo
+    /// le foto extra sono quelle comuni a tutte le referenze, come nella scheda di un box.
     listeFotoExtraPiuBox(campo) {
         return (this.boxSelezioneMultipla || []).map(b => {
             const primario = this.primarioDeiRecords(b.records);
             const rec = primario != null ? primario.recordInTracciato : {};
+            const datoDelBox = primario != null ? (primario.sottogruppo || rec) : rec;
+            const elementi = campo === "Foto.Extra" && FotoExtraGruppo.eDiGruppo(datoDelBox)
+                ? FotoExtraGruppo.comuniEParziali(b.records).comuni
+                : rec[campo];
             return {
-                elementi: Array.isArray(rec[campo]) ? rec[campo] : [],
+                elementi: Array.isArray(elementi) ? elementi : [],
                 decisioni: Array.isArray(rec.extraLavorazione) ? rec.extraLavorazione : []
             };
         });
@@ -451,21 +458,27 @@ const FotoExtraPiuBox = {
         else if (!this.extraNelBox(b.dettaglio.item, sigla, elemento.tipo)) {
             this.impaginaExtraNelBox(b, elemento.nome, elemento.tipo, sigla);
         }
-        const formData = new FormData();
-        formData.append("codiceGruppo", this.destinazioneDelBox(b).codiceGruppo);
-        formData.append("nomeFoto", elemento.nome);
-        await this.richiestaFotoExtra("SyncFoto/escludiIncludiFotoExtraAuto/" + escludi, formData, "PUT", false, true);
+        //Il box e' gia' cambiato: i record lo seguono anche se il server non salva.
         const primario = this.primarioDeiRecords(b.records);
         const auto = primario != null ? (primario.recordInTracciato["Foto.ExtraAuto"] || []).find(e => e.sigla == sigla && e.tipo == elemento.tipo) : null;
         if (auto != null) {
             auto.escluso = escludi;
         }
+        const formData = new FormData();
+        formData.append("codiceGruppo", this.destinazioneDelBox(b).codiceGruppo);
+        formData.append("nomeFoto", elemento.nome);
+        try {
+            await this.richiestaFotoExtra("SyncFoto/escludiIncludiFotoExtraAuto/" + escludi, formData, "PUT", false, true);
+        }
+        catch (e) {
+            throw new Error(this.testoSceltaNonSalvata(escludi, e.message));
+        }
     },
 
     /// Una decisione "solo per questa lavorazione" per un box: il server la registra, poi l'extra
     /// va nel box e nei record, come registraDecisioneExtraDallaScheda.
-    async decisioneSoloQuiDelBox(b, nomeFile, tipo, ambito) {
-        const richiesta = this.richiestaAggiungiSoloQui(nomeFile, tipo);
+    async decisioneSoloQuiDelBox(b, nomeFile, tipo, ambito, guidId = null) {
+        const richiesta = this.richiestaAggiungiSoloQui(nomeFile, tipo, guidId);
         richiesta.voce.ambito = ambito;
         if (!(await this.salvaExtraLavorazione(richiesta, this.destinazioneDelBox(b)))) {
             throw new Error("il server non ha registrato la decisione");
@@ -565,7 +578,8 @@ const FotoExtraPiuBox = {
             formData.append("guidId", logoData.id);
             formData.append("nomeReale", logoData.fileName);
             formData.append("fileHash", logoData.fileHash);
-            formData.append("codiceReferenza", primario.recordInTracciato["Referenza.Codice"]);
+            //Su tutte le referenze del gruppo del box, come nella scheda di un box.
+            formData.append("codiceReferenza", primario.recordInTracciato["Scatto.CodiceGruppo"]);
             const risposta = await me.richiestaFotoExtra("SyncFoto/linkLogoBollo/", formData, "PUT");
             const rebindData = { nome: risposta.nomeReale, tipo: risposta.tipo, guidId: risposta.guidId, attiva: true, puntatore: false, sigla: risposta.pathFoto };
             b.records.forEach(r => r.recordInTracciato["Foto.Extra"].push(Object.assign({}, rebindData)));
@@ -597,7 +611,13 @@ const FotoExtraPiuBox = {
         });
 
         let ambito = null;
+        let guidId = null;
         if (soloQui) {
+            //Su Olimpo prima di tutto: senza, gli altri operatori riceverebbero la decisione ma non il file.
+            guidId = await me.caricaFileSoloPerLavorazione(fd);
+            if (guidId == null) {
+                return;
+            }
             try {
                 await ReperimentoFoto.scriviFileInCartella(fd.file, percorsoLoghi, fd.nomeFile);
             }
@@ -615,7 +635,7 @@ const FotoExtraPiuBox = {
         const area = ficoProcess.getAreaLavorazioneCorrente();
         await me.operazioneFotoExtraPiuBox("Immagine aggiunta", indici, async (b) => {
             if (soloQui) {
-                await me.decisioneSoloQuiDelBox(b, fd.nomeFile, tipo, ambito);
+                await me.decisioneSoloQuiDelBox(b, fd.nomeFile, tipo, ambito, guidId);
                 return;
             }
             const destinazione = me.destinazioneDelBox(b);

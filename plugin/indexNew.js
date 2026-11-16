@@ -122,6 +122,8 @@ const CampiARiposo = require('./campiARiposo');
 //I20-1035: i conti della barra orizzontale della lista dei tracciati, gli stessi del Report Integrita'.
 const barraScorrimento = require('./reportIntegrita/barraScorrimento');
 const ficoProcess = require('./ficoProcess');
+//Le foto extra di un gruppo: quelle comuni a tutte le referenze, e le parziali da segnalare.
+const FotoExtraGruppo = require('./reperimentoFoto/fotoExtraGruppo');
 const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
 //Fuori vol del tracciato: i fuori volantino della lista del kit e la rimessa in volantino.
@@ -5066,7 +5068,8 @@ function datiPrimarioPerConfronto(records) {
         tracciatoPrimario: tracciatoPrimario,
         compiledFields: tracciatoPrimario.compiledFields,
         deletedFields: tracciatoPrimario.deletedFields,
-        fotoExtra: tracciatoPrimario["Foto.Extra"],
+        //Il box di un gruppo ha le foto extra comuni a tutte le referenze, una referenza sola le sue.
+        fotoExtra: FotoExtraGruppo.fotoExtraDelBox(tracciatoPrimario),
         fotoExtraAuto: tracciatoPrimario["Foto.ExtraAuto"],
         listaFoto: listaFoto
     };
@@ -5075,7 +5078,9 @@ function datiPrimarioPerConfronto(records) {
 
 
 /// IMPAGINAZIONE. Sistema una referenza impaginata male, senza rifare tutto il box.
-async function fixRefImpaginata() {
+/// domandaGiaFatta: chi chiama ha gia' chiesto all'operatore se fare il fix (Estendi di Foto extra),
+/// e la domanda sul ridimensionamento non si ripete.
+async function fixRefImpaginata(domandaGiaFatta = false) {
     try{
         //controlliamo la ref
         var listItemDaFixare = [];
@@ -5140,7 +5145,7 @@ async function fixRefImpaginata() {
             //I20-1109: la domanda prima di qualunque modifica: con Annulla il documento resta com'e'.
             indesignEvents.setBusy(true);
 
-            var confirmRes = await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
+            var confirmRes = domandaGiaFatta === true || await Modali.confirm("Ridimensionare il box alle dimensioni desiderate");
             if (!confirmRes) {
                 indesignEvents.setBusy(false);
                 return;
@@ -5321,6 +5326,13 @@ async function fixRefImpaginata() {
                 boxImpaginato = Segnalazioni.togliDalBox(boxImpaginato);
 
                 boxImpaginato = await callAllOperationFixBox(boxImpaginato, bounds, datiRef);
+
+                //Le foto extra presenti solo su alcune referenze del gruppo restano da segnalare: il
+                //bollino si e' appena rifatto da capo.
+                FotoExtraGruppo.parzialiDelBox(datiRef).forEach(parziale => {
+                    const s = FotoExtraGruppo.segnalazione(parziale);
+                    addSegnalazione(s.msg, s.typeMessage, 2, true, null, s.key, s.verifica);
+                });
 
                 // aggiorniamo boxOriginalBounds
                 schedaRef.refSelected.item = boxImpaginato;
@@ -6186,9 +6198,16 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
                                     }
                                 }
     
-                                if (itemRef["Foto.Extra"] != null) {
-                                    for (var i2 = 0; i2 < itemRef["Foto.Extra"].length; i2++) {
-                                        let itemExtra = itemRef["Foto.Extra"][i2];
+                                //Il box di un gruppo impagina le foto extra comuni a tutte le referenze; quelle
+                                //presenti solo su alcune non escono e si segnalano (FEX-01), da risolvere in Foto extra.
+                                const fotoExtraDelBox = FotoExtraGruppo.fotoExtraDelBox(itemRef);
+                                FotoExtraGruppo.parzialiDelBox(itemRef).forEach(parziale => {
+                                    const s = FotoExtraGruppo.segnalazione(parziale);
+                                    addSegnalazione(s.msg, s.typeMessage, 2, true, null, s.key, s.verifica);
+                                });
+                                if (fotoExtraDelBox != null) {
+                                    for (var i2 = 0; i2 < fotoExtraDelBox.length; i2++) {
+                                        let itemExtra = fotoExtraDelBox[i2];
                                         if (itemExtra.attiva != null && !itemExtra.attiva)
                                         {
                                             continue;
@@ -6233,7 +6252,7 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
                                             rect.fit(FitOptions.PROPORTIONALLY);
                                         }
                                         //rect.fillColor = "None";
-                                        itemRef["Foto.Extra"][i2].referenceTo = rect;
+                                        fotoExtraDelBox[i2].referenceTo = rect;
     
                                     }
                                 }

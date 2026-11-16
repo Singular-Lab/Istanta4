@@ -56,6 +56,22 @@ spostata» ne disegnava uno suo in più.
 - `Utility.addBollinoCustom` ha un ultimo parametro facoltativo, `etichettaBollino`, che va
   sull'ovale. Senza, come prima.
 
+### FEX-01: foto extra solo su alcune referenze del gruppo
+
+Un gruppo ha una foto extra solo se tutte le sue referenze la hanno. Istanta scrive sul dato del
+box di un gruppo le foto extra comuni (`Foto.ExtraGruppo`), che il box impagina, e quelle presenti
+solo su alcune referenze (`Foto.ExtraParziali`, con quante e quali). Per ogni parziale
+`impaginaBoxNelContesto` aggiunge un avviso `FEX-01` ("Logo X presente solo su 4/6 referenze del
+gruppo: non impaginato. Si risolve in Foto extra"), con la chiave `FEX-01$<guid>` e la verifica
+`{ fotoExtraParziale: <guid> }`. `fixRefImpaginata` lo rimette dopo aver rifatto il bollino.
+
+La riga dell'avviso ha **"Vai a Foto extra"**: dalla scheda ref apre subito Foto extra, dalla
+schermata seleziona il box e la scheda si apre su Foto extra. In Foto extra le parziali hanno il
+conteggio, **Elimina** (da tutte le referenze che la hanno) ed **Estendi** (a quelle a cui manca,
+`SyncFoto/EstendiFotoExtra`); dopo Estendi la foto extra va nel box e si chiede il fix della
+referenza. Tutte e due tolgono l'avviso dal bollino. Le funzioni pure stanno in
+`reperimentoFoto/fotoExtraGruppo.js`.
+
 ## La schermata (lotto 2)
 
 Un **popup** che legge i bollini del documento con `Segnalazioni.leggiDocumento` e mostra **tutte**

@@ -81,6 +81,7 @@ namespace Istanta.Controllers
                 var sezione = NuovaGestioneFoto(articolo.Codice ?? "", false);
                 sezione.Foto = articolo.ArticoliFotos?.ToList() ?? new List<ArticoliFoto>();
                 sezione.Extra = FotoExtraDiPiuArticoli.DiUnArticolo(articolo.ArticoliFotos);
+                ConNonASistema(sezione);
                 ViewBag.GestioneFoto = sezione;
             }
 
@@ -123,6 +124,7 @@ namespace Istanta.Controllers
 
                 sezione.Foto = inOrdine[0]!.ArticoliFotos?.ToList() ?? new List<ArticoliFoto>();
                 sezione.Extra = FotoExtraDiPiuArticoli.DiUnArticolo(inOrdine[0]!.ArticoliFotos);
+                ConNonASistema(sezione);
                 return PartialView("_GestioneFoto", sezione);
             }
 
@@ -130,8 +132,20 @@ namespace Istanta.Controllers
             //La sezione lo dice, e caricando o collegando le si scrive solo dove l'articolo c'e'.
             sezione.Extra = FotoExtraDiPiuArticoli.ComuniAlGruppo(
                 inOrdine.Select(a => (IEnumerable<ArticoliFoto>?)a?.ArticoliFotos).ToList());
+            //Le altre, presenti solo su alcune referenze: si estendono a tutte o si eliminano.
+            sezione.ExtraParziali = FotoExtraDiPiuArticoli.ParzialiAlGruppo(
+                codici.Select((c, i) => (c, (IEnumerable<ArticoliFoto>?)inOrdine[i]?.ArticoliFotos)).ToList());
+            ConNonASistema(sezione);
 
             return PartialView("_GestioneFoto", sezione);
+        }
+
+        /// Segna i collegamenti a un logo che l'archivio Loghi/Bolli non ha piu', come fa il Plugin.
+        private static void ConNonASistema(GestioneFoto sezione)
+        {
+            sezione.NonASistema = CollegamentiNonASistema.Guid(
+                sezione.Extra.Concat(sezione.ExtraParziali.Select(p => p.Foto)),
+                guid => SyncFotoController.getLogoBolloByGuidId(guid)?.esito == true);
         }
 
         private GestioneFoto NuovaGestioneFoto(string codice, bool inFinestra)

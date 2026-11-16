@@ -28,6 +28,7 @@
                 <div class="alert alert-info py-2" style="font-size:13px">
                     Gruppo di @Model.Referenze referenze: le foto del prodotto si gestiscono su ogni referenza.
                     Qui ci sono le foto extra comuni a tutte, e quello che si carica, si collega, si attiva o si elimina vale per tutte.
+                    Quelle presenti solo su alcune referenze non escono sul gruppo: stanno in fondo, da estendere o eliminare.
                 </div>
                 @if (Model.CodiciSenzaArticolo.Count > 0)
                 {
@@ -287,12 +288,17 @@
                             string thumbnail = olimpoIp + "/foto/getThumbNailOnDemand?width=40&guidId=" + foto.GuidId;
                             string bigImage = olimpoIp + "/foto/getThumbNailOnDemand?width=800&guidId=" + foto.GuidId;
 
+                            bool nonASistema = Model.NonASistema.Contains(foto.GuidId ?? "");
+
                             <figure class="figure w-50 mb-3 p-2 border border-primary">
                                 <div class="row" style="align-items:center;">
                                     <div class="col">
-                                        <h6>@foto!.NomeReale</h6>
+                                        <h6>@foto!.NomeReale @if (nonASistema) {<span class="badge bg-secondary nonASistema" title="Il logo non e' piu' nell'archivio Loghi/Bolli: non esce nel box">non più a sistema</span>}</h6>
                                         <div class="small text-muted foto-articolo-date mb-1">@Istanta.Utility.DateFoto.Testo(foto.DataInserimento, foto.DataModifica)</div>
-                                        <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img img-fluid rounded img-preview-hover" alt="@foto!.NomeReale">
+                                        @if (!nonASistema)
+                                        {
+                                            <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img img-fluid rounded img-preview-hover" alt="@foto!.NomeReale">
+                                        }
                                     </div>
                                     <div class="col">
                                         <input type="hidden" class="fotoExtraDati" data='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(foto))'/>
@@ -310,6 +316,41 @@
                             <button type="button" class="btn btn-sm btn-success" data-azione="aggiungiFotoExtra" data-tipo="@tipoExtra.Val">Aggiungi @tipoExtra.Nome</button>
                             <button type="button" class="btn btn-sm btn-outline-success" data-azione="collegaFotoExtra" data-tipo="@tipoExtra.Val" data-nometipo="@tipoExtra.Nome">Collega a immagine a sistema</button>
                         </div>
+                    </div>
+                }
+
+                @*Le foto extra di un gruppo presenti solo su alcune referenze: non escono sul gruppo finche' non
+                  sono su tutte. Si estendono alle referenze a cui mancano o si eliminano da quelle che le hanno.*@
+                @if (Model.Gruppo && Model.ExtraParziali.Count > 0)
+                {
+                    <div class="fotoExtraParziali mb-4">
+                        <h6 class="border-bottom border-secondary pb-1">Presenti solo su alcune referenze</h6>
+                        @foreach (var parziale in Model.ExtraParziali)
+                        {
+                            var fotoParziale = parziale.Foto;
+                            string thumbnail = olimpoIp + "/foto/getThumbNailOnDemand?width=40&guidId=" + fotoParziale.GuidId;
+                            string bigImage = olimpoIp + "/foto/getThumbNailOnDemand?width=800&guidId=" + fotoParziale.GuidId;
+                            var nomeTipo = tipiFotoExtra.FirstOrDefault(t => t.Val == fotoParziale.Tipo)?.Nome ?? "";
+                            bool parzialeNonASistema = Model.NonASistema.Contains(fotoParziale.GuidId ?? "");
+
+                            <figure class="figure w-50 mb-3 p-2 border border-warning">
+                                <div class="row" style="align-items:center;">
+                                    <div class="col">
+                                        <h6>@fotoParziale.NomeReale <span class="badge bg-warning text-dark conteggioParziale">@parziale.Presenti/@parziale.Totale</span> @if (parzialeNonASistema) {<span class="badge bg-secondary nonASistema" title="Il logo non e' piu' nell'archivio Loghi/Bolli: non esce nel box">non più a sistema</span>}</h6>
+                                        <div class="small text-muted mb-1">@nomeTipo · manca su @string.Join(", ", parziale.CodiciSenza)</div>
+                                        @if (!parzialeNonASistema)
+                                        {
+                                            <img src="@thumbnail" data-bigimg="@bigImage" class="figure-img img-fluid rounded img-preview-hover" alt="@fotoParziale.NomeReale">
+                                        }
+                                    </div>
+                                    <div class="col">
+                                        <input type="hidden" class="fotoExtraDati" data='@Html.Raw(System.Text.Json.JsonSerializer.Serialize(fotoParziale))'/>
+                                        <input type="button" class="btn btn-sm btn-danger" value="Elimina" data-azione="eliminaFotoExtra" title="La toglie da tutte le referenze che la hanno">
+                                        <input type="button" class="btn btn-sm btn-warning mt-2" value="Estendi" data-azione="estendiFotoExtra" data-guidid="@fotoParziale.GuidId" title="La aggiunge alle referenze a cui manca">
+                                    </div>
+                                </div>
+                            </figure>
+                        }
                     </div>
                 }
 

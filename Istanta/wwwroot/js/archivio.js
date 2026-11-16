@@ -195,6 +195,10 @@ class Archivio {
             ME.ChiudiCollegaFotoExtra();
         });
 
+        pagina.on("click", "[data-azione='estendiFotoExtra']", function () {
+            ME.EstendiFotoExtra($(this).attr("data-guidid"));
+        });
+
         pagina.on("change", "[data-azione='fileFotoExtraScelto']", function () {
             ME.CaricaNuovaFotoExtra($(this));
         });
@@ -1022,6 +1026,29 @@ class Archivio {
                 casella.prop("checked", !attiva);
             }
         });
+    }
+
+    /// Una foto extra presente solo su alcune referenze del gruppo si aggiunge a quelle a cui manca.
+    EstendiFotoExtra(guidId) {
+        let ME = this;
+        var dati = Archivio.datiEstendiFotoExtra(guidId, Archivio.codiceDellaSezioneFoto());
+
+        showLoading();
+        Call.do("SyncFoto", "EstendiFotoExtra/0", "PUT", dati, this, function (result, sender) {
+            hideLoading();
+
+            if (result != null && result.esito === false) {
+                alert("Estensione non riuscita: " + (result.error || "errore sconosciuto"));
+                return;
+            }
+
+            ME.DopoModificaFoto();
+        });
+    }
+
+    /// Quello che si manda per estendere una foto extra: il suo GUID e il codice del gruppo.
+    static datiEstendiFotoExtra(guidId, codice) {
+        return { guidId: guidId, codice: codice };
     }
 
     EliminaFotoExtra(button) {

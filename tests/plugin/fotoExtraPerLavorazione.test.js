@@ -93,7 +93,9 @@ test("Escludi solo qui e' la stessa decisione dell'esclusione dalla finestra del
 
 test("Link e Carica solo qui sono la stessa decisione di tienila solo per questa lavorazione, con chiave il file", () => {
     assert.deepStrictEqual(schedaRef.richiestaAggiungiSoloQui("bollino.png", "2"),
-        { rimuovi: false, voce: { tipo: FOTO_EXTRA, sigla: "bollino.png", azione: 2, nome: "bollino.png", nomeServer: null, tipoFoto: 2 } });
+        { rimuovi: false, voce: { tipo: FOTO_EXTRA, sigla: "bollino.png", azione: 2, nome: "bollino.png", nomeServer: null, tipoFoto: 2, guidId: null } });
+    //Il file caricato su Olimpo porta il suo GUID nella decisione: la sync loghi lo da' agli altri operatori.
+    assert.strictEqual(schedaRef.richiestaAggiungiSoloQui("bollino.png", 2, "G1").voce.guidId, "G1");
     assert.strictEqual(schedaRef.richiestaAggiungiSoloQui("Logo_X.psd", 3).voce.tipo, LOGO);
     assert.strictEqual(schedaRef.richiestaAggiungiSoloQui("", 3), null);
     assert.strictEqual(schedaRef.richiestaAggiungiSoloQui(null, 3), null);
@@ -168,13 +170,15 @@ test("Carica solo qui: il file va nei Loghi, si registra come decisione e si met
         messaggioUtente: () => {}
     }, () => conMetodi({
         schedeRefDati: [{ recordInTracciato: { StatoSelezione: 1 } }],
+        caricaFileSoloPerLavorazione: async (fd) => { scritti.push(["olimpo", fd.nomeFile]); return "G1"; },
         impaginaFotoExtra: (...argomenti) => { impaginate.push(argomenti); return null; },
         registraDecisioneExtraDallaScheda: async (richiesta, box, sulBox) => { registrate.push(richiesta); sulBox(); return true; }
     }, async () => {
         assert.strictEqual(await schedaRef.caricaExtraSoloPerLavorazione("2", boxFinto()), true);
     }));
-    assert.deepStrictEqual(scritti, [["bytes", "/Loghi/", "bollino.png"]]);
-    assert.deepStrictEqual(registrate[0].voce, { tipo: FOTO_EXTRA, sigla: "bollino.png", azione: 2, nome: "bollino.png", nomeServer: null, tipoFoto: 2 });
+    //Prima su Olimpo, poi nei Loghi.
+    assert.deepStrictEqual(scritti, [["olimpo", "bollino.png"], ["bytes", "/Loghi/", "bollino.png"]]);
+    assert.deepStrictEqual(registrate[0].voce, { tipo: FOTO_EXTRA, sigla: "bollino.png", azione: 2, nome: "bollino.png", nomeServer: null, tipoFoto: 2, guidId: "G1" });
     //Nel box con la chiave della decisione, cosi' la label e il meta si riconoscono.
     assert.strictEqual(impaginate[0][0], "bollino.png");
     assert.strictEqual(impaginate[0][1], 2);
@@ -205,11 +209,51 @@ test("Carica solo qui: se il file non si scrive nei Loghi non si registra niente
         ReperimentoFoto: { scriviFileInCartella: async () => { throw new Error("disco pieno"); } },
         percorsoLoghi: "/Loghi/",
         messaggioUtente: (testo) => messaggi.push(testo)
-    }, () => conMetodi({ registraDecisioneExtraDallaScheda: async (richiesta) => { registrate.push(richiesta); return true; } }, async () => {
+    }, () => conMetodi({
+        caricaFileSoloPerLavorazione: async () => "G1",
+        registraDecisioneExtraDallaScheda: async (richiesta) => { registrate.push(richiesta); return true; }
+    }, async () => {
         assert.strictEqual(await schedaRef.caricaExtraSoloPerLavorazione(2, boxFinto()), false);
     }));
     assert.deepStrictEqual(registrate, []);
     assert.match(messaggi[0], /^Code SRF-113 /);
+});
+
+test("Carica solo qui: se il file non arriva su Istanta non si scrive nei Loghi e non si registra niente", async () => {
+    const scritti = [];
+    const registrate = [];
+    await conGlobali({
+        selectFile: async () => ({ nomeFile: "bollino.png", file: "bytes" }),
+        ReperimentoFoto: { scriviFileInCartella: async (file, cartella, nome) => { scritti.push(nome); } },
+        percorsoLoghi: "/Loghi/",
+        messaggioUtente: () => {}
+    }, () => conMetodi({
+        caricaFileSoloPerLavorazione: async () => null,
+        registraDecisioneExtraDallaScheda: async (richiesta) => { registrate.push(richiesta); return true; }
+    }, async () => {
+        assert.strictEqual(await schedaRef.caricaExtraSoloPerLavorazione(2, boxFinto()), false);
+    }));
+    assert.deepStrictEqual(scritti, []);
+    assert.deepStrictEqual(registrate, []);
+});
+
+test("il file solo per questa lavorazione va su Olimpo; se non ci arriva lo si dice e non c'e' GUID", async () => {
+    const richieste = [];
+    const messaggi = [];
+    await conGlobali({ messaggioUtente: (testo) => messaggi.push(testo) }, () => conMetodi({
+        richiestaFotoExtra: async (url, dati, metodo, conFile, esitoObbligatorio) => {
+            richieste.push([url, dati.get("nomeFile"), dati.get("file"), metodo, conFile, esitoObbligatorio]);
+            if (richieste.length > 1) {
+                throw new Error("Olimpo ha risposto 500");
+            }
+            return { esito: true, guidId: "G1" };
+        }
+    }, async () => {
+        assert.strictEqual(await schedaRef.caricaFileSoloPerLavorazione({ nomeFile: "bollino.png", file: "bytes" }), "G1");
+        assert.strictEqual(await schedaRef.caricaFileSoloPerLavorazione({ nomeFile: "bollino.png", file: "bytes" }), null);
+    }));
+    assert.deepStrictEqual(richieste[0], ["SyncFoto/CaricaExtraSoloLavorazione", "bollino.png", "bytes", "POST", true, true]);
+    assert.match(messaggi[0], /^Code SRF-166 bollino\.png non caricato su Istanta, la decisione non è stata registrata: Olimpo ha risposto 500$/);
 });
 
 /* ---- la scheda Foto Extra ---- */

@@ -23,6 +23,11 @@ namespace Istanta.Models
         public List<ArticoliFoto> Foto { get; set; } = new List<ArticoliFoto>();
         /// Le foto extra da mostrare.
         public List<ArticoliFoto> Extra { get; set; } = new List<ArticoliFoto>();
+        /// Le foto extra presenti solo su alcune referenze del gruppo, da estendere o eliminare.
+        public List<Istanta.Utility.ParzialeDelGruppo> ExtraParziali { get; set; } = new List<Istanta.Utility.ParzialeDelGruppo>();
+        /// I GUID delle foto extra collegate a un logo che non e' piu' nell'archivio Loghi/Bolli: si
+        /// mostrano "non piu' a sistema", senza miniatura, da eliminare.
+        public HashSet<string> NonASistema { get; set; } = new HashSet<string>();
         /// Le referenze del gruppo che non sono in archivio.
         public List<string> CodiciSenzaArticolo { get; set; } = new List<string>();
         /// Quante referenze ha il gruppo.
