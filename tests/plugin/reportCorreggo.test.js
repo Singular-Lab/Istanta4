@@ -150,20 +150,40 @@ test("il piano raccoglie per box le voci approvate; le rifiutate e quelle senza 
     correggo.scegli(voce(voci, "edit:31:offerta", TIPO.azione), SCELTA.approva, true);
     correggo.scegli(voce(voci, "edit:31:descrizione", TIPO.loghi), SCELTA.rifiuta, true);
     correggo.scegli(voce(voci, "nota:12", TIPO.nota), SCELTA.approva, true);
+    correggo.scegli(voce(voci, "edit:31:descrizione", TIPO.descrizione), SCELTA.approva, true);
 
     const piano = correggo.pianoDellaConferma(voci);
 
     const b8001 = piano.box.find(b => b.basecode === "8001");
     assert.deepStrictEqual(b8001.prezzi, { prezzo_promo: "3.90" });
     assert.deepStrictEqual(b8001.azioni.map(a => a.idAzione != null ? a.idAzione : a.titolo), [3, "Cambia sconto"]);
-    assert.strictEqual(b8001.descrizione, null);
+    //I20-1233: la descrizione approvata non arriva al box.
+    assert.ok(!("descrizione" in b8001));
+    assert.ok(!b8001.voci.some(v => v.tipo === TIPO.descrizione));
     assert.strictEqual(b8001.foto.length, 1);
     assert.deepStrictEqual(b8001.loghiAggiunti, []);
     assert.strictEqual(b8001.elimina, false);
     assert.strictEqual(piano.box.find(b => b.basecode === "8002").elimina, true);
     assert.deepStrictEqual(piano.box.find(b => b.basecode === "8003").azioni.map(a => a.idAzione), [27]);
-    //La nota approvata non cambia l'impaginato: l'ha gestita l'operatore.
-    assert.deepStrictEqual(piano.senzaLavoro.map(v => v.idCorrezione), ["nota:12"]);
+    //La nota e la descrizione approvate non cambiano l'impaginato: le ha gestite l'operatore.
+    assert.deepStrictEqual(piano.senzaLavoro.map(v => v.idCorrezione + " " + v.tipo), ["nota:12 nota", "edit:31:descrizione descrizione"]);
+});
+
+test("I20-1233: la descrizione arriva per conoscenza e, approvata, si chiude senza toccare il box", () => {
+    const voci = correggo.importa(correzioni().filter(c => c.id === "edit:31:descrizione"), COOP, true);
+    const descrizione = voce(voci, "edit:31:descrizione", TIPO.descrizione);
+    assert.strictEqual(descrizione.soloInformativa, true);
+    assert.strictEqual(descrizione.scelta, SCELTA.nessuna);
+    //Foto e loghi della stessa correzione invece cambiano il box.
+    assert.strictEqual(voce(voci, "edit:31:descrizione", TIPO.foto).soloInformativa, undefined);
+
+    correggo.scegli(descrizione, SCELTA.approva, true);
+    const piano = correggo.pianoDellaConferma(voci);
+    assert.deepStrictEqual(piano.box[0].voci.map(v => v.tipo), [TIPO.foto, TIPO.loghi]);
+    assert.deepStrictEqual(piano.senzaLavoro.map(v => v.tipo), [TIPO.descrizione]);
+
+    const esiti = Object.fromEntries(voci.map(v => [v.chiave, true]));
+    assert.deepStrictEqual(correggo.correzioniDaChiudere(voci, esiti), ["edit:31:descrizione"]);
 });
 
 test("in Correggo4 si chiude una correzione solo se tutte le sue voci sono approvate e applicate", () => {
@@ -251,10 +271,286 @@ test("Elimina passa da rimuoviRefImpaginata con l'eliminazione gia' confermata",
     assert.match(index, /var eliminaDaTracciato = eliminazioneConfermata != null && eliminazioneConfermata\.eliminaDaTracciato === true;/);
 });
 
-test("la descrizione approvata diventa il meta del box indicato", () => {
-    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
-    assert.match(scheda, /salvaTestiDalBox\(richiesta, destinazione = null\)/);
-    assert.match(scheda, /formData\.append\("CodiceGruppo", destinazione != null \? destinazione\.codiceGruppo : schedaRef\[0\]/);
+test("I20-1233: la conferma non scrive la descrizione nella referenza", () => {
     const report = leggiFileDelPlugin("reportIntegrita/reportIntegrita.js").replace(/\r/g, "");
-    assert.match(report, /azione: schedaRef\.AZIONE_TESTO_DAL_BOX\.crea,/);
+    const inizio = report.indexOf("async _applicaCorrezioniAlBox(");
+    const fine = report.indexOf("async _applicaFotoCorreggo(", inizio);
+    assert.ok(inizio > 0 && fine > inizio);
+    const applica = report.substring(inizio, fine);
+    assert.doesNotMatch(applica, /salvaTestiDalBox/);
+    assert.doesNotMatch(applica, /p\.descrizione/);
+});
+
+test("I20-1233: con rifai il cambio strutturale non impagina e non confronta, rifa' il box chi lo chiede", () => {
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.match(scheda, /cambioStrutturaleSulBox\(params, dettaglio, rifai = null\) \{/);
+    const inizio = scheda.indexOf("cambioStrutturaleSulBox(params, dettaglio, rifai = null) {");
+    const conRifai = scheda.indexOf("if (typeof rifai === \"function\") {", inizio);
+    const impagina = scheda.indexOf("await impaginaBox(", inizio);
+    const confronto = scheda.indexOf("confronti.confrontoBox(", inizio);
+    //Il ramo di rifai viene prima di impaginaBox e del confronto, ed esce con resolve.
+    assert.ok(conRifai > inizio && conRifai < impagina && impagina < confronto);
+    const ramo = scheda.substring(conRifai, impagina);
+    assert.match(ramo, /const boxRifatto = await rifai\(\);/);
+    assert.match(ramo, /resolve\(\{ box: boxRifatto \}\);\s*return;/);
+    //Il ramo della referenza uscita dal volantino resta prima di rifai: un FVOL non rifa' il box.
+    const uscita = scheda.indexOf("await FuoriVolantino.aggiornaDopoUscita(params);", inizio);
+    assert.ok(uscita > inizio && uscita < conRifai);
+});
+
+/* ---- I20-1233: gli scambi del menabo' avanzato ---- */
+
+function scambi() {
+    const scambio = (idVoce, basecode, destinazione, aMano) => ({
+        id: "timone:" + idVoce, tipo: "timone", basecode: basecode, labelBox: "BOX_STD_" + basecode, pagina: 3,
+        autore: "Mario Marketing", tipoAutore: "Marketing", codice: basecode,
+        basecodeDestinazione: destinazione, labelBoxDestinazione: destinazione ? "BOX_STD_" + destinazione : "",
+        daSistemareAMano: aMano || null,
+        boundsDestinazione: aMano ? null : [10, 20, 60, 120]
+    });
+    return [
+        scambio(41, "8001", "8005"),
+        scambio(45, "8005", "8001"),
+        Object.assign(scambio(51, "9001", "9002"), { pagina: 5 }),
+        Object.assign(scambio(53, "9003", "9003"), { pagina: 5 }),
+        Object.assign(scambio(52, "9002", "", "pagina 5 con la griglia 3x3 scelta nel menabò avanzato: da sistemare a mano"), { pagina: 5 })
+    ];
+}
+
+test("I20-1233: uno scambio diventa una voce da decidere, con il box di destinazione", () => {
+    const voci = correggo.importa(scambi(), COOP, true);
+
+    const v = voce(voci, "timone:41", TIPO.scambio);
+    assert.strictEqual(v.testo, "Menabò avanzato: 8001 va al posto di 8005");
+    assert.strictEqual(v.basecode, "8001");
+    assert.strictEqual(v.basecodeDestinazione, "8005");
+    assert.deepStrictEqual(v.boundsDestinazione, [10, 20, 60, 120]);
+    assert.strictEqual(v.automatica, false);
+    assert.strictEqual(v.scelta, SCELTA.nessuna);
+    assert.strictEqual(v.approvabile, true);
+    assert.strictEqual(v.autore, "Mario Marketing");
+});
+
+test("I20-1233: uno scambio da sistemare a mano non si approva, neanche da superAdmin", () => {
+    const voci = correggo.importa(scambi(), COOP, true);
+
+    const v = voce(voci, "timone:52", TIPO.scambio);
+    assert.strictEqual(v.testo, "Menabò avanzato: 9002 spostata, pagina 5 con la griglia 3x3 scelta nel menabò avanzato: da sistemare a mano");
+    assert.strictEqual(v.approvabile, false);
+    assert.strictEqual(correggo.scegli(v, SCELTA.approva, true), false);
+    assert.strictEqual(v.scelta, SCELTA.nessuna);
+    //Rifiutarlo si puo'.
+    assert.strictEqual(correggo.scegli(v, SCELTA.rifiuta, true), true);
+});
+
+test("I20-1233: una referenza rimessa nella sua casella torna al suo posto", () => {
+    const voci = correggo.importa(scambi(), COOP, true);
+
+    const v = voce(voci, "timone:53", TIPO.scambio);
+    assert.strictEqual(v.testo, "Menabò avanzato: 9003 torna al suo posto");
+    assert.strictEqual(v.approvabile, true);
+});
+
+test("I20-1233: uno scambio senza il rettangolo di destinazione non si approva", () => {
+    const senza = scambi().slice(0, 1).map(c => Object.assign(c, { boundsDestinazione: null }));
+    const v = voce(correggo.importa(senza, COOP, true), "timone:41", TIPO.scambio);
+
+    assert.strictEqual(v.approvabile, false);
+});
+
+test("I20-1233: il piano mette gli scambi approvati a parte, per pagina, fuori dai box", () => {
+    const voci = correggo.importa(scambi().concat(correzioni()), COOP, true);
+    voci.filter(v => v.tipo === TIPO.scambio).forEach(v => correggo.scegli(v, SCELTA.approva, true));
+
+    const piano = correggo.pianoDellaConferma(voci);
+
+    assert.deepStrictEqual(piano.scambi.map(p => [p.pagina, p.voci.map(v => v.idCorrezione)]),
+        [[3, ["timone:41", "timone:45"]], [5, ["timone:51", "timone:53"]]]);
+    assert.ok(!piano.box.some(b => b.voci.some(v => v.tipo === TIPO.scambio)));
+    assert.ok(!piano.senzaLavoro.some(v => v.tipo === TIPO.scambio));
+});
+
+test("I20-1233: si mandano a Correggo4 gli scambi applicati, non quelli falliti", () => {
+    const voci = correggo.importa(scambi(), COOP, true);
+    voci.forEach(v => correggo.scegli(v, SCELTA.approva, true));
+    const esiti = {
+        [voce(voci, "timone:41", TIPO.scambio).chiave]: true,
+        [voce(voci, "timone:45", TIPO.scambio).chiave]: true,
+        [voce(voci, "timone:51", TIPO.scambio).chiave]: false
+    };
+
+    assert.deepStrictEqual(correggo.correzioniDaChiudere(voci, esiti).sort(), ["timone:41", "timone:45"]);
+});
+
+test("I20-1233: lo scambio si rifa' con rifaiBox nel rettangolo di destinazione", () => {
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.match(scheda, /async rifaiBox\(schedaRef, boxPrecedente, boundsDestinazione = null\) \{/);
+    assert.match(scheda, /var bounds = boundsDestinazione != null \? boundsDestinazione : boxPrecedente\.geometricBounds;/);
+    //Il box di prima va da parte dopo aver letto la posizione, come prima.
+    const inizio = scheda.indexOf("async rifaiBox(schedaRef, boxPrecedente, boundsDestinazione = null) {");
+    assert.ok(scheda.indexOf("var bounds = ", inizio) < scheda.indexOf("VersionePrecedente.mettiDaParte(boxPrecedente", inizio));
+});
+
+test("I20-1233: una referenza allargata dice su quante caselle", () => {
+    const larga = Object.assign(scambi()[0], { basecodeDestinazione: "8001", colonne: 2, righe: 1 });
+    const v = voce(correggo.importa([larga], COOP, true), "timone:41", TIPO.scambio);
+
+    assert.strictEqual(v.testo, "Menabò avanzato: 8001 allargata su 2×1 caselle");
+    assert.strictEqual(v.colonne, 2);
+    assert.strictEqual(v.approvabile, true);
+});
+
+test("I20-1233: uno scambio gia' al suo posto arriva approvato e non si cambia", () => {
+    const v = voce(correggo.importa(scambi(), COOP, true), "timone:41", TIPO.scambio);
+
+    assert.strictEqual(correggo.segnaGiaAlSuoPosto(v), true);
+    assert.strictEqual(v.scelta, SCELTA.approva);
+    assert.strictEqual(v.testo, "Menabò avanzato: 8001 è già al suo posto");
+    assert.strictEqual(correggo.scegli(v, SCELTA.rifiuta, true), false);
+    assert.strictEqual(v.scelta, SCELTA.approva);
+});
+
+test("I20-1233: su una pagina ridisegnata lo scambio va nella casella, non al posto di un box", () => {
+    const nella = Object.assign(scambi()[0], { basecodeDestinazione: "", labelBoxDestinazione: "", casella: 5 });
+    const larga = Object.assign(scambi()[1], { basecodeDestinazione: "", labelBoxDestinazione: "", casella: 1, colonne: 3 });
+    const voci = correggo.importa([nella, larga], COOP, true);
+
+    assert.strictEqual(voce(voci, "timone:41", TIPO.scambio).testo, "Menabò avanzato: 8001 va nella casella 5");
+    assert.strictEqual(voce(voci, "timone:45", TIPO.scambio).testo, "Menabò avanzato: 8005 allargata su 3×1 caselle dalla casella 1");
+    assert.ok(voci.every(v => v.approvabile === true));
+});
+
+test("I20-1233: un raggruppamento del menabò avanzato dice quali box unisce e dove", () => {
+    const gruppo = Object.assign(scambi()[0], {
+        basecodeDestinazione: "8001", casella: 1,
+        unisci: [{ basecode: "8002", labelBox: "BOX_STD_8002", pagina: 3 }], codici: ["8001", "8002"]
+    });
+    const v = voce(correggo.importa([gruppo], COOP, true), "timone:41", TIPO.scambio);
+
+    assert.strictEqual(v.testo, "Menabò avanzato: unisce 8001 e 8002 in un box, nella casella 1");
+    assert.deepStrictEqual(v.unisci, [{ basecode: "8002", labelBox: "BOX_STD_8002", pagina: 3, codici: [] }]);
+    assert.deepStrictEqual(v.codici, ["8001", "8002"]);
+    assert.strictEqual(v.approvabile, true);
+});
+
+test("I20-1233: un raggruppamento che prende solo una parte di una linea non si approva", () => {
+    const motivo = "il gruppo della casella 1 di pagina 3 prende solo una parte del box 8003 (8003 resta fuori): da sistemare a mano";
+    const gruppo = Object.assign(scambi()[0], {
+        basecodeDestinazione: "8001", casella: 1, daSistemareAMano: motivo, boundsDestinazione: null,
+        unisci: [{ basecode: "8003", labelBox: "BOX_LINEA_8003", pagina: 3 }], codici: ["8001", "8013"]
+    });
+    const v = voce(correggo.importa([gruppo], COOP, true), "timone:41", TIPO.scambio);
+
+    assert.strictEqual(v.testo, "Menabò avanzato: gruppo di 8001 e 8003: " + motivo);
+    assert.strictEqual(v.approvabile, false);
+});
+
+test("I20-1233: il Raggruppa della selezione multipla e quello del Report Correggo sono la stessa funzione", () => {
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.match(scheda, /raggruppaBox\(listaCodiciConId, pagina, bounds, boxDaTogliere\) \{/);
+    assert.match(scheda, /me\.raggruppaBox\(listaCodiciConId, pagCoinvolta, box\.geometricBounds, multiSelection\.map\(m => m\.item\)\)/);
+    const inizio = scheda.indexOf("raggruppaBox(listaCodiciConId, pagina, bounds, boxDaTogliere) {");
+    assert.ok(scheda.indexOf("Menabo/Raggruppa/", inizio) > inizio);
+    //Il box nuovo si impagina prima di togliere quelli raggruppati.
+    assert.ok(scheda.indexOf("await impaginaBox(meccanica, pagina, bounds, itemRef", inizio) < scheda.indexOf("daTogliere.remove()", inizio));
+});
+
+test("I20-1233: lo scambio porta le referenze che servono allo sgruppa", () => {
+    const staccata = Object.assign(scambi()[0], { codici: ["8002"], codiciDelBox: ["8002"], codiciTimone: ["8001", "8002", "8003"] });
+    const v = voce(correggo.importa([staccata], COOP, true), "timone:41", TIPO.scambio);
+
+    assert.deepStrictEqual(v.codici, ["8002"]);
+    assert.deepStrictEqual(v.codiciDelBox, ["8002"]);
+    assert.deepStrictEqual(v.codiciTimone, ["8001", "8002", "8003"]);
+});
+
+test("I20-1233: lo sgruppa del menabò resta a mano: lo Sgruppa della scheda ref non cambia", () => {
+    const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
+    assert.ok(!scheda.includes("sgruppaBox("));
+    const staccata = Object.assign(scambi()[0], { codici: ["8002"], codiciDelBox: ["8002"], codiciTimone: ["8001", "8002"] });
+    const v = voce(correggo.importa([staccata], COOP, true), "timone:41", TIPO.scambio);
+
+    assert.strictEqual(correggo.segnaDaSistemareAMano(v, "staccata nel menabò dal gruppo 8001,8002: lo sgruppa va fatto a mano"), true);
+    assert.strictEqual(v.approvabile, false);
+    assert.strictEqual(v.scelta, SCELTA.nessuna);
+    assert.strictEqual(v.testo, "Menabò avanzato: 8001, staccata nel menabò dal gruppo 8001,8002: lo sgruppa va fatto a mano");
+    assert.strictEqual(correggo.scegli(v, SCELTA.approva, true), false);
+});
+
+test("I20-1233: il Report Correggo si divide nelle sezioni di Correggo4, nel loro ordine", () => {
+    const voci = [
+        { idCorrezione: "timone:41", pagina: 3 },
+        { idCorrezione: "edit:7:prezzi", pagina: 2 },
+        { idCorrezione: "nota:5", pagina: 4 },
+        { idCorrezione: "timone:45", pagina: 3 },
+        { idCorrezione: "nota:6", pagina: 1 }
+    ];
+
+    const sezioni = correggo.perSezione(voci);
+
+    assert.deepStrictEqual(sezioni.map(s => s.titolo), ["Note", "Edit avanzato", "Menabò avanzato"]);
+    assert.deepStrictEqual(sezioni[0].voci.map(v => v.idCorrezione), ["nota:5", "nota:6"]);
+    assert.deepStrictEqual(sezioni[2].voci.map(v => v.idCorrezione), ["timone:41", "timone:45"]);
+    //Timbri non c'e': nessuna voce.
+    assert.ok(!sezioni.some(s => s.titolo === "Timbri"));
+});
+
+test("I20-1233: la testata del box nel Report Correggo non si stringe sotto la riga", () => {
+    const pannelli = leggiFileDelPlugin("reportIntegrita/pannelli.js").replace(/\r/g, "");
+    const inizio = pannelli.indexOf("    _crTestataBoxCorreggo(voce) {");
+    const fine = pannelli.indexOf("    _crRigaCorreggo(voce) {", inizio);
+    assert.ok(pannelli.slice(inizio, fine).includes('testata.style.flexShrink = "0";'));
+    assert.ok(pannelli.includes("sezioneCorreggo.perSezione(voci).forEach("));
+});
+
+test("I20-1233: nella riga del Report Correggo un codice gruppo lungo va a capo dopo le virgole", () => {
+    const pannelli = leggiFileDelPlugin("reportIntegrita/pannelli.js").replace(/\r/g, "");
+    const inizio = pannelli.indexOf("    _crRigaCorreggo(voce) {");
+    const corpo = pannelli.slice(inizio, pannelli.indexOf("const info = document.createElement", inizio));
+    assert.ok(corpo.includes('testo.style.overflowWrap = "anywhere";'));
+    assert.ok(corpo.includes('.replace(/(\\d{5}),(?=\\d{5})/g, "$1, ")'));
+    //La stessa sostituzione della riga: solo fra due codici, non nei prezzi.
+    const sostituisci = (t) => t.replace(/(\d{5}),(?=\d{5})/g, "$1, ");
+    assert.strictEqual(sostituisci("Menabò avanzato: 8167717 va al posto di 4016102,6638200,7200444"),
+        "Menabò avanzato: 8167717 va al posto di 4016102, 6638200, 7200444");
+    assert.strictEqual(sostituisci("Nota: prezzo 3,62, grazie"), "Nota: prezzo 3,62, grazie");
+});
+
+test("I20-1233: le rifiutate stanno nella sezione Rifiutati, in fondo", () => {
+    const voci = [
+        { idCorrezione: "nota:5", scelta: SCELTA.rifiuta },
+        { idCorrezione: "timone:41", scelta: SCELTA.nessuna },
+        { idCorrezione: "timone:45", scelta: SCELTA.rifiuta }
+    ];
+
+    const sezioni = correggo.perSezione(voci);
+
+    assert.deepStrictEqual(sezioni.map(s => s.titolo), ["Menabò avanzato", "Rifiutati"]);
+    assert.deepStrictEqual(sezioni[1].voci.map(v => v.idCorrezione), ["nota:5", "timone:45"]);
+});
+
+test("I20-1233: un rifiuto si ricorda finché la correzione non cambia", () => {
+    const prima = correggo.importa(scambi(), COOP, true);
+    const v = voce(prima, "timone:41", TIPO.scambio);
+    correggo.applicaRifiuti(prima, []);
+    correggo.scegli(v, SCELTA.rifiuta, true);
+    let rifiutate = correggo.aggiornaRifiuti([], v);
+    assert.strictEqual(rifiutate.length, 1);
+
+    //Importazione successiva, stessa correzione: torna rifiutata.
+    const dopo = correggo.applicaRifiuti(correggo.importa(scambi(), COOP, true), rifiutate);
+    assert.strictEqual(voce(dopo, "timone:41", TIPO.scambio).scelta, SCELTA.rifiuta);
+    assert.notStrictEqual(voce(dopo, "timone:45", TIPO.scambio).scelta, SCELTA.rifiuta);
+
+    //Il Marketing la cambia: torna da decidere.
+    const cambiate = scambi();
+    cambiate[0].basecodeDestinazione = "8003";
+    const nuove = correggo.applicaRifiuti(correggo.importa(cambiate, COOP, true), rifiutate);
+    assert.notStrictEqual(voce(nuove, "timone:41", TIPO.scambio).scelta, SCELTA.rifiuta);
+
+    //Tolto il rifiuto, la firma esce dall'elenco.
+    const w = voce(dopo, "timone:41", TIPO.scambio);
+    correggo.scegli(w, SCELTA.nessuna, true);
+    rifiutate = correggo.aggiornaRifiuti(rifiutate, w);
+    assert.deepStrictEqual(rifiutate, []);
 });

@@ -65,6 +65,22 @@ const VersionePrecedente = {
         return livello;
     },
 
+    /// I20-1233: spegne il livello delle versioni precedenti, se c'e'. Le versioni restano nel documento e
+    /// il Report Integrita' le trova lo stesso; si riaccende dal pannello Livelli per confrontare.
+    nascondiLivello(doc) {
+        try {
+            const livello = doc != null ? doc.layers.itemByName(NOME_LIVELLO) : null;
+            if (livello == null || !livello.isValid) {
+                return false;
+            }
+            livello.visible = false;
+            return true;
+        }
+        catch (e) {
+            return false;
+        }
+    },
+
     /// Mette da parte la versione precedente: scostata, sul suo livello, al 60%.
     mettiDaParte(box, doc) {
         box.move(undefined, SCOSTAMENTO.slice());

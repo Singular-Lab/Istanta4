@@ -2117,6 +2117,9 @@ const ReportIntegrita = {
             }
             const dati = r.dati || {};
             this._correggo.voci = sezioneCorreggo.importa(dati.correzioni || [], pluginMiddleware.getCampo("correzioniCorreggo"), this._superAdminPerCorreggo());
+            //I20-1233: quelle rifiutate in un giro precedente tornano rifiutate, nella sezione Rifiutati.
+            sezioneCorreggo.applicaRifiuti(this._correggo.voci, this._leggiRifiutateCorreggo());
+            this._segnaScambiGiaAlLoroPosto(this._correggo.voci);
             this._correggo.importate = true;
             this._correggo.volantino = dati.volantino || "";
             messaggioUtente("Code RIC-02 Correzioni di Correggo importate: " + this._correggo.voci.length, "success", false, 4);
@@ -2129,6 +2132,40 @@ const ReportIntegrita = {
             this._correggo.inCorso = false;
             this._disegnaCorrezioniCorreggo();
         }
+    },
+
+    /// I20-1233: le correzioni rifiutate di questa lavorazione, ricordate in un file della postazione come
+    /// la whitelist del Report Integrita'.
+    _percorsoRifiutateCorreggo(idKit = null) {
+        const kit = idKit != null ? idKit : (typeof idKitLavorazione !== "undefined" ? idKitLavorazione : "kit");
+        return Utility.percorsoDati(Utility.nomeFileCorreggoRifiutate(kit));
+    },
+
+    _leggiRifiutateCorreggo() {
+        try {
+            let dati = readFile(this._percorsoRifiutateCorreggo());
+            if (typeof dati === "string") {
+                dati = JSON.parse(dati);
+            }
+            return dati != null && Array.isArray(dati.rifiutate) ? dati.rifiutate : [];
+        }
+        catch (e) {
+            return [];
+        }
+    },
+
+    _salvaRifiutateCorreggo(rifiutate) {
+        try {
+            fs.writeFileSync(this._percorsoRifiutateCorreggo(), JSON.stringify({ rifiutate: rifiutate || [] }, null, 2));
+        }
+        catch (e) {
+            console.error("Code RIC-08 Correzioni rifiutate non salvate:", e);
+        }
+    },
+
+    /// I20-1233: dopo Approva o Rifiuta nel Report Correggo, il rifiuto si ricorda o si dimentica.
+    registraSceltaCorreggo(voce) {
+        this._salvaRifiutateCorreggo(sezioneCorreggo.aggiornaRifiuti(this._leggiRifiutateCorreggo(), voce));
     },
 
     /// "Conferma correzioni": applica le approvate box per box, chiude in Correggo4 quelle applicate
@@ -2169,6 +2206,12 @@ const ReportIntegrita = {
                 }
             }
 
+            //I20-1233: gli scambi del menabo' avanzato, dopo le correzioni dei box.
+            for (let i = 0; i < piano.scambi.length; i++) {
+                showLoading("Menabò avanzato: pagina " + piano.scambi[i].pagina);
+                await this._applicaScambiDellaPagina(piano.scambi[i], esiti, motivi);
+            }
+
             let chiuse = [];
             const daChiudere = sezioneCorreggo.correzioniDaChiudere(voci, esiti);
             if (daChiudere.length > 0) {
@@ -2182,6 +2225,11 @@ const ReportIntegrita = {
                     else {
                         (r.dati || []).forEach(c => {
                             if (c != null && c.ok === true) chiuse.push(c.id);
+                            //I20-1233: il FATTO del menabo' avanzato ha un motivo solo per tutti i suoi scambi.
+                            else if (c != null && c.codice === "timone_non_fatto") {
+                                const m = "menabò avanzato non FATTO: " + (c.messaggio || "non riuscito");
+                                if (!motivi.includes(m)) motivi.push(m);
+                            }
                             else if (c != null) motivi.push("chiusura di " + c.id + ": " + (c.messaggio || c.codice || "non riuscita"));
                         });
                     }
@@ -2196,6 +2244,8 @@ const ReportIntegrita = {
                 motivi.length > 0 ? "warning" : r.tipo, false, motivi.length > 0 ? 0 : 8);
         }
         finally {
+            //I20-1233: le versioni precedenti lasciate dai box rifatti non si vedono piu' (richiesta dell'operatore).
+            try { VersionePrecedente.nascondiLivello(app.activeDocument); } catch (e) { }
             hideLoading();
             indesignEvents.setBusy(false);
             this._correggo.inCorso = false;
@@ -2204,9 +2254,279 @@ const ReportIntegrita = {
         await this.importaCorrezioniCorreggo();
     },
 
-    /// Le voci approvate di un box: prima le modifiche sul server (foto, primarie e secondarie, loghi,
-    /// descrizione), poi il box si rifa' una volta sola, con le azioni sul box (prezzi, azioni, timbri)
-    /// se ci sono, altrimenti dalla scheda riletta. Un timbro Elimina toglie la referenza e basta.
+    /// I20-1233: gli scambi approvati di una pagina, e dopo di loro i raggruppamenti. Ogni referenza si rifa'
+    /// nel rettangolo della sua casella come Reimpagina box (il box di prima da parte su
+    /// cloneVecchioImpaginato); un raggruppamento unisce i suoi box con il Raggruppa di Istanta. Uno che non
+    /// riesce non ferma gli altri.
+    async _applicaScambiDellaPagina(pagina, esiti, motivi) {
+        //Ogni box va nel rettangolo che la sua casella aveva nell'impaginato esportato a Correggo
+        //(boundsDestinazione), non dove sta adesso il box che c'era: cosi' i giri del Marketing sullo
+        //stesso export si applicano uno dopo l'altro, e un box gia' al suo posto non si rifa'. Prova del
+        //13/11: Linea Fette, rimessa dal Marketing nella sua casella dopo un giro gia' applicato, restava
+        //dove l'aveva messa il giro prima.
+        //Il box si cerca subito prima di rifarlo: in UXP il riferimento a un gruppo della pagina segue il
+        //suo posto nell'elenco dei gruppi, non il box, e dopo un Reimpagina (il vecchio su
+        //cloneVecchioImpaginato, il nuovo al suo posto) puntava a un altro box.
+        //I raggruppamenti vengono dopo gli scambi: la casella del gruppo puo' essere quella di un box che
+        //uno scambio porta via.
+        const unisce = (v) => Array.isArray(v.unisci);
+        const ordinate = pagina.voci.filter(v => !unisce(v)).concat(pagina.voci.filter(unisce));
+        for (const v of ordinate) {
+            const fallisce = (motivo) => {
+                esiti[v.chiave] = false;
+                const chi = unisce(v) ? "gruppo di " + [v.basecode].concat(v.unisci.map(b => b.basecode)).join(" e ")
+                    : v.basecode + (v.basecode === v.basecodeDestinazione ? " al suo posto" : " al posto di " + v.basecodeDestinazione);
+                motivi.push(chi + ": " + motivo);
+            };
+            try {
+                const motivo = unisce(v) ? await this._applicaRaggruppamento(v, pagina.pagina) : await this._applicaScambio(v, pagina.pagina);
+                if (motivo != null) {
+                    fallisce(motivo);
+                    continue;
+                }
+                esiti[v.chiave] = true;
+            }
+            catch (e) {
+                console.error("Code RIC-07 Menabò avanzato " + v.basecode + ":", e);
+                fallisce(e && e.message ? e.message : String(e));
+            }
+        }
+    },
+
+    /// I20-1233: uno scambio del menabo' avanzato. Restituisce il motivo se non riesce, null se il box e' nel
+    /// rettangolo della sua casella. Se il box e' un gruppo formato in Correggo da cui il Marketing ha
+    /// staccato questa referenza non si tocca: lo sgruppa si fa a mano (decisione dell'operatore del 13/11).
+    async _applicaScambio(v, numeroPagina) {
+        const box = this._boxDelloScambio(v.basecode, numeroPagina);
+        if (box == null) {
+            return "box non trovato nel documento";
+        }
+        const pezzi = this._pezziDaSgruppare(v, box);
+        if (pezzi != null) {
+            return this._motivoSgruppaAMano(pezzi);
+        }
+        return this._mettiNelRettangolo(box, v.boundsDestinazione, numeroPagina, v.basecode);
+    },
+
+    _motivoSgruppaAMano(pezzi) {
+        return "staccata nel menabò dal gruppo " + pezzi.originale + ": lo sgruppa va fatto a mano";
+    },
+
+    /// I20-1233: se lo scambio stacca la sua referenza da un gruppo formato in Correggo, le referenze del box
+    /// del documento, o null. E' un gruppo formato in Correggo quando il box ha referenze in piu' di quelle
+    /// che nel menabo' stanno con lo scambio (codici), e quelle in piu' sono tutte referenze del menabo' su
+    /// quella pagina (codiciTimone) che nell'export stavano in altri box. Se vengono da altrove (il listato
+    /// cambiato dopo l'export) il box si sposta intero, come prima.
+    _pezziDaSgruppare(v, box) {
+        const separa = (c) => String(c || "").split(",").map(x => x.trim()).filter(x => x !== "");
+        const insieme = Array.isArray(v.codici) && v.codici.length > 0 ? v.codici.map(String) : separa(v.basecode);
+        const timone = Array.isArray(v.codiciTimone) ? v.codiciTimone.map(String) : [];
+        const delBox = Array.isArray(v.codiciDelBox) ? v.codiciDelBox.map(String) : [];
+        let dna = null;
+        try { dna = Utility.getDnaOfBox(box); } catch (e) { dna = null; }
+        const nelBox = separa(dna != null ? dna.codice_gruppo : "");
+        if (nelBox.length === 0 || !insieme.every(c => nelBox.includes(c))) {
+            return null;
+        }
+        const resto = nelBox.filter(c => !insieme.includes(c));
+        if (resto.length === 0 || !resto.every(c => timone.includes(c) && !delBox.includes(c))) {
+            return null;
+        }
+        return { originale: String(dna.codice_gruppo).trim(), scambio: insieme, resto: resto };
+    },
+
+    /// I20-1233: un raggruppamento del menabo' avanzato: il box del capogruppo (basecode) e quelli di unisci
+    /// diventano un box solo, nel rettangolo della casella del gruppo, con il Raggruppa di Istanta. Se nel
+    /// documento c'e' gia' un box con tutte le referenze del gruppo (un giro gia' applicato) non si unisce
+    /// di nuovo: lo si porta nel rettangolo, come uno scambio.
+    async _applicaRaggruppamento(v, numeroPagina) {
+        const codici = Array.isArray(v.codici) ? v.codici.filter(c => String(c).trim() !== "") : [];
+        const unito = codici.length > 1 ? this._boxDelloScambio(codici.join(","), numeroPagina) : null;
+        if (unito != null) {
+            return this._mettiNelRettangolo(unito, v.boundsDestinazione, numeroPagina, codici.join(","));
+        }
+
+        const capo = this._boxDelloScambio(v.basecode, numeroPagina);
+        if (capo == null) {
+            return "box " + v.basecode + " non trovato nel documento";
+        }
+        const altri = [];
+        for (const b of v.unisci) {
+            const box = this._boxDelloScambio(b.basecode, b.pagina != null ? b.pagina : numeroPagina);
+            if (box == null) {
+                return "box " + b.basecode + " non trovato nel documento";
+            }
+            altri.push(box);
+        }
+        //Un box che nel documento e' gia' in un gruppo formato in Correggo con altre referenze del menabo' non
+        //si unisce: si porterebbe dietro anche quelle. Va sistemato a mano.
+        const giaUnito = [{ box: capo, codici: v.codiciDelBox, basecode: v.basecode }]
+            .concat(v.unisci.map((b, i) => ({ box: altri[i], codici: b.codici, basecode: b.basecode })))
+            .find(x => this._pezziDaSgruppare({ codici: x.codici, codiciTimone: v.codiciTimone, codiciDelBox: x.codici, basecode: x.basecode }, x.box) != null);
+        if (giaUnito != null) {
+            return "il box " + giaUnito.basecode + " nel documento è già unito ad altre referenze del menabò: da sistemare a mano";
+        }
+        const bounds = this._boundsDelloScambio(v.boundsDestinazione, numeroPagina, capo);
+        if (bounds == null) {
+            return "posizione di destinazione non nota";
+        }
+        const pagina = this._getDocumentPageByName(numeroPagina) || capo.parentPage;
+        if (pagina == null) {
+            return "pagina " + numeroPagina + " non trovata nel documento";
+        }
+        //Il capogruppo va per primo: Istanta mette il gruppo nuovo nella pagina del primo box.
+        const lista = [capo].concat(altri).map((box, i) => {
+            const dna = Utility.getDnaOfBox(box);
+            const ripiego = i === 0 ? v.basecode : v.unisci[i - 1].basecode;
+            return {
+                codice: dna != null && String(dna.codice_gruppo || "").trim() !== "" ? String(dna.codice_gruppo).trim() : ripiego,
+                idRec: dna != null && dna.idRec != null && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : 0
+            };
+        });
+        const esito = await schedaRef.raggruppaBox(lista, pagina, bounds, [capo].concat(altri));
+        return esito != null && esito.esito === true ? null : (esito != null ? esito.errore : "Raggruppa non riuscito");
+    },
+
+    /// I20-1233: porta un box nel rettangolo di una casella dell'export come Reimpagina box. Null se c'e'
+    /// gia' o se e' stato rifatto, altrimenti il motivo.
+    async _mettiNelRettangolo(box, boundsDestinazione, numeroPagina, ripiego) {
+        const bounds = this._boundsDelloScambio(boundsDestinazione, numeroPagina, box);
+        if (bounds == null) {
+            return "posizione di destinazione non nota";
+        }
+        if (this._giaAlSuoPosto(box.geometricBounds, bounds)) {
+            return null;
+        }
+        const dna = Utility.getDnaOfBox(box);
+        const idRec = dna != null && dna.idRec != null && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : 0;
+        //La scheda si chiede con il codice che il box ha adesso: una linea che ha cambiato
+        //referenze dopo l'export, chiesta con il codice di allora, Istanta non la trova.
+        const codiceAttuale = dna != null && String(dna.codice_gruppo || "").trim() !== "" ? String(dna.codice_gruppo).trim() : ripiego;
+        const records = await this._leggiSchedaRefAggiornata(codiceAttuale, idRec);
+        if (records == null) {
+            return "scheda della referenza non letta";
+        }
+        const esito = await schedaRef.rifaiBox(records, box, bounds);
+        if (esito == null || (esito.boxFinale || esito.boxAggiunto) == null) {
+            return "il box non e' stato reimpaginato";
+        }
+        return null;
+    },
+
+    /// I20-1233: il box vivo di una referenza in pagina. Un Reimpagina lascia il box di prima su
+    /// cloneVecchioImpaginato con lo stesso DNA, e la ricerca per codice puo' trovare quello: con i giri
+    /// del menabo' avanzato uno dopo l'altro succede. Allora si cerca fra i gruppi della pagina quello che
+    /// non sta su quel livello.
+    /// Il codice e' quello dell'export a Correggo, e una linea puo' aver cambiato referenze dopo: se il
+    /// codice esatto non c'e', vale il box che le contiene tutte, purche' sia uno solo sulla pagina. Prova
+    /// del 13/11: il Formaggio era 4031872 nell'export e 4031872,4031873,6382378 nel documento.
+    _boxDelloScambio(codiceGruppo, numeroPagina) {
+        const box = this._resolveBoxByCodiceGruppo({ codiceGruppo: codiceGruppo, numeroPagina: numeroPagina });
+        if (box != null && !VersionePrecedente.eVersionePrecedente(box)) {
+            return box;
+        }
+        const pagina = this._getDocumentPageByName(numeroPagina);
+        if (pagina == null) {
+            return null;
+        }
+        const codice = String(codiceGruppo).trim();
+        const referenze = codice.split(",").map(c => c.trim()).filter(c => c !== "");
+        const contenenti = [];
+        const esatto = this._findItemInCollection(pagina.groups, (gruppo) => {
+            try {
+                if (!gruppo || !gruppo.isValid || VersionePrecedente.eVersionePrecedente(gruppo)) {
+                    return false;
+                }
+                const dna = Utility.getDnaOfBox(gruppo);
+                const codici = dna != null ? String(dna.codice_gruppo || "").trim() : "";
+                if (codici === codice) {
+                    return true;
+                }
+                const elenco = codici.split(",").map(c => c.trim());
+                if (referenze.length > 0 && referenze.every(r => elenco.includes(r))) {
+                    contenenti.push(gruppo);
+                }
+                return false;
+            }
+            catch (err) {
+                return false;
+            }
+        });
+        return esatto || (contenenti.length === 1 ? contenenti[0] : null);
+    },
+
+    /// I20-1233: gli scambi il cui box sta gia' nel rettangolo di destinazione non si fanno decidere di
+    /// nuovo. Succede quando un giro e' stato applicato ma il FATTO non si e' registrato (per esempio per
+    /// uno scambio da sistemare a mano su un'altra pagina): il piano torna intero.
+    _segnaScambiGiaAlLoroPosto(voci) {
+        (voci || []).forEach(v => {
+            if (v.tipo !== sezioneCorreggo.TIPO.scambio || v.approvabile === false) {
+                return;
+            }
+            try {
+                //Un raggruppamento e' gia' fatto se c'e' un box con tutte le referenze del gruppo, nella sua casella.
+                const codice = Array.isArray(v.unisci) ? (v.codici || []).join(",") : v.basecode;
+                const box = Array.isArray(v.unisci) && (v.codici || []).length < 2 ? null : this._boxDelloScambio(codice, v.pagina);
+                const bounds = box != null ? this._boundsDelloScambio(v.boundsDestinazione, v.pagina, box) : null;
+                const pezzi = box != null && !Array.isArray(v.unisci) ? this._pezziDaSgruppare(v, box) : null;
+                if (pezzi != null) {
+                    sezioneCorreggo.segnaDaSistemareAMano(v, this._motivoSgruppaAMano(pezzi));
+                    return;
+                }
+                if (bounds != null && this._giaAlSuoPosto(box.geometricBounds, bounds)) {
+                    sezioneCorreggo.segnaGiaAlSuoPosto(v);
+                }
+            }
+            catch (e) {
+                console.error("Scambio del menabò avanzato non controllato:", e);
+            }
+        });
+    },
+
+    /// I20-1233: il rettangolo dell'export portato nelle coordinate del documento. L'export per Correggo
+    /// (ficoProcess.processCorreggoExport) toglie alla x la larghezza della pagina quando la pagina non
+    /// comincia a 0, cioe' sulla pagina destra dello spread: qui si rimette, con la stessa regola.
+    _boundsDelloScambio(boundsPagina, numeroPagina, box) {
+        if (!Array.isArray(boundsPagina) || boundsPagina.length !== 4 || boundsPagina.some(n => n == null || isNaN(Number(n)))) {
+            return null;
+        }
+        let spostamento = 0;
+        try {
+            let paginaDoc = this._getDocumentPageByName(numeroPagina);
+            if (paginaDoc == null && box != null) {
+                paginaDoc = box.parentPage;
+            }
+            const pb = paginaDoc != null ? paginaDoc.bounds : null;
+            if (pb != null && pb[1] != 0) {
+                spostamento = pb[3] - pb[1];
+            }
+        }
+        catch (e) {
+            spostamento = 0;
+        }
+        const b = boundsPagina.map(Number);
+        return [b[0], b[1] + spostamento, b[2], b[3] + spostamento];
+    },
+
+    /// I20-1233: il box sta gia' nel rettangolo di destinazione? L'angolo in alto a sinistra entro un
+    /// punto (l'export arrotonda a due decimali); larghezza e altezza entro il 5%, perche' un box rifatto
+    /// puo' cambiare un poco di misura ma una referenza allargata no: parte dallo stesso angolo ed e' larga
+    /// il doppio.
+    _giaAlSuoPosto(attuali, destinazione) {
+        if (attuali == null || attuali.length !== 4) {
+            return false;
+        }
+        const a = [0, 1, 2, 3].map(i => Number(attuali[i]));
+        const misura = (x1, x2, y1, y2) => Math.abs((x2 - x1) - (y2 - y1)) <= Math.max(1, Math.abs(y2 - y1) * 0.05);
+        return Math.abs(a[0] - destinazione[0]) <= 1 && Math.abs(a[1] - destinazione[1]) <= 1
+            && misura(a[0], a[2], destinazione[0], destinazione[2]) && misura(a[1], a[3], destinazione[1], destinazione[3]);
+    },
+
+    /// Le voci approvate di un box: prima le modifiche sul server (foto, primarie e secondarie, loghi),
+    /// poi il box si rifa' una volta sola, con le azioni sul box (prezzi, azioni, timbri) se ci sono,
+    /// altrimenti dalla scheda riletta. Un timbro Elimina toglie la referenza e basta.
+    /// I20-1233: il box si rifa' sempre come Reimpagina box (schedaRef.rifaiBox): il nuovo al posto
+    /// del vecchio, il vecchio da parte su cloneVecchioImpaginato. La descrizione non arriva qui.
     async _applicaCorrezioniAlBox(p, esiti, motivi) {
         const fallisce = (voci, motivo) => {
             voci.forEach(v => { esiti[v.chiave] = false; });
@@ -2266,19 +2586,6 @@ const ReportIntegrita = {
             }
         }
 
-        if (p.descrizione != null) {
-            const campo = schedaRef.campoDescrizioneCompilatoDelPrimario(records);
-            const registrata = campo != null && await schedaRef.salvaTestiDalBox({ voci: [{
-                label: campo.labelName, azione: schedaRef.AZIONE_TESTO_DAL_BOX.crea,
-                contenuto: String(p.descrizione), contenutoServer: String(campo.content) }] }, destinazione);
-            if (registrata) {
-                cambiatoSulServer = true;
-            }
-            else {
-                fallisce(vociDi(sezioneCorreggo.TIPO.descrizione), campo == null ? "descrizione del server non trovata" : "meta della descrizione non registrato");
-            }
-        }
-
         //Le azioni sul box, tutte in una richiesta: i prezzi come azione a valori fissi.
         const azioni = [];
         const valori = {};
@@ -2316,7 +2623,15 @@ const ReportIntegrita = {
             records = (await this._leggiSchedaRefAggiornata(p.basecode, idRec)) || records;
             const params = schedaRef.parametriAzioniDelBox(records, azioni, valori, "tutto");
             const dettaglio = { item: box, pagRef: box.parentPage, codiceGruppo: p.basecode, idRec: idRec };
-            await schedaRef.cambioStrutturaleSulBox(params, dettaglio);
+            //I20-1233: dopo il cambio sul server il box si rifa' come Reimpagina box, dalla scheda riletta.
+            await schedaRef.cambioStrutturaleSulBox(params, dettaglio, async () => {
+                const aggiornati = await this._leggiSchedaRefAggiornata(p.basecode, idRec);
+                if (aggiornati == null) {
+                    throw new Error("scheda della referenza non riletta dopo il cambio");
+                }
+                const esito = await schedaRef.rifaiBox(aggiornati, box);
+                return esito != null ? (esito.boxFinale || esito.boxAggiunto || null) : null;
+            });
             riesce(daRifare);
         }
         else if (cambiatoSulServer) {
@@ -2397,7 +2712,8 @@ const ReportIntegrita = {
     },
 
     _etichettaLinguettaCorreggo() {
-        const voci = this._correggo.voci || [];
+        //I20-1233: gli scambi gia' al loro posto non si contano: non c'e' niente da vedere.
+        const voci = (this._correggo.voci || []).filter(v => v.giaAlSuoPosto !== true);
         return this._correggo.importate ? reportConteggi.etichettaLinguetta("Correggo", voci.length) : "Correggo";
     },
 

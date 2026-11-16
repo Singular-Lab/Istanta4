@@ -86,7 +86,7 @@ test("Reimpagina box attende l'impaginazione e seleziona il box nuovo; il cambio
     const reimpagina = corpoMembro(scheda, "    async applicaReimpaginazione(){");
     //I20-1063: il box si rifa' in rifaiBox, che usa anche il Reimpagina della selezione multipla.
     assert.match(reimpagina, /esito = await this\.rifaiBox\(schedaRef, this\.refSelected\.item\);/);
-    const rifai = corpoMembro(scheda, "    async rifaiBox(schedaRef, boxPrecedente) {");
+    const rifai = corpoMembro(scheda, "    async rifaiBox(schedaRef, boxPrecedente, boundsDestinazione = null) {");
     assert.match(rifai, /var esito = await impaginazioneSingoloIndd\(schedaRef, pagina, false, null, false, bounds, false, false\);/);
     assert.match(reimpagina, /Utility\.selezionaBox\(esito != null \? \(esito\.boxFinale \|\| esito\.boxAggiunto\) : null\);/);
 

@@ -1280,7 +1280,9 @@ const schedaRef = {
     /// Un cambio strutturale su un box della selezione: lo manda a Istanta e rifa' il box, come
     /// salvaCambioStrutturaleDo per il box della scheda. Si risolve con { box } (il box che resta
     /// in pagina, null se la referenza non va piu' impaginata) e fallisce col motivo.
-    cambioStrutturaleSulBox(params, dettaglio) {
+    /// I20-1233: rifai, se c'e', rifa' il box al posto di impaginaBox e del confronto (il Report
+    /// Correggo lo rifa' come Reimpagina box); restituisce il box che resta in pagina.
+    cambioStrutturaleSulBox(params, dettaglio, rifai = null) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequestClient();
 
@@ -1313,6 +1315,14 @@ const schedaRef = {
 
                     if (boxPrecedente == null || !boxPrecedente.isValid) {
                         throw new Error("il box non c'e' piu' in pagina");
+                    }
+                    if (typeof rifai === "function") {
+                        const boxRifatto = await rifai();
+                        if (boxRifatto == null) {
+                            throw new Error("il box non e' stato reimpaginato");
+                        }
+                        resolve({ box: boxRifatto });
+                        return;
                     }
                     const bounds = boxPrecedente.geometricBounds;
                     const pagina = dettaglio.pagRef != null ? dettaglio.pagRef : boxPrecedente.parentPage;
@@ -3555,12 +3565,14 @@ const schedaRef = {
     /// Rifa' un box dalla sua scheda, nella posizione del box di prima, e restituisce l'esito di
     /// impaginazioneSingoloIndd. Senza la pagina del box lancia l'errore SRF-22. I20-1063: la usano
     /// il Reimpagina della scheda e quello della selezione multipla.
-    async rifaiBox(schedaRef, boxPrecedente) {
+    /// I20-1233: boundsDestinazione, se c'e', e' la posizione in cui esce il box nuovo al posto di quella
+    /// del box di prima (gli scambi del menabo' avanzato del Report Correggo).
+    async rifaiBox(schedaRef, boxPrecedente, boundsDestinazione = null) {
         //I20-1124: il box nuovo esce nella posizione del box di prima; e' il box di prima che va da
         //parte, scostato di dieci punti, al 60%, sul livello cloneVecchioImpaginato. Prima era il
         //contrario: il nuovo usciva scostato e il vecchio restava al suo posto su InPagina, dove
         //la mappa dell'impaginato lo contava due volte.
-        var bounds = boxPrecedente.geometricBounds;
+        var bounds = boundsDestinazione != null ? boundsDestinazione : boxPrecedente.geometricBounds;
 
         var pagina = null;
         try {
@@ -8648,102 +8660,121 @@ const schedaRef = {
 
         console.log(listaCodiciConId);
         let box = multiSelection[0].item;
-
-        var params = "";
-        for (var i = 0; i < listaCodiciConId.length; i++) {
-            var codice = listaCodiciConId[i] != null && listaCodiciConId[i].codice != null ? listaCodiciConId[i].codice.toString() : "";
-            var idRec = listaCodiciConId[i] != null && listaCodiciConId[i].idRec != null && !isNaN(parseInt(listaCodiciConId[i].idRec))
-                ? parseInt(listaCodiciConId[i].idRec)
-                : 0;
-
-            if (codice === "") {
-                continue;
-            }
-
-            params += "ListaCodiciConId[" + i + "].codice=" + encodeURIComponent(codice) + "&";
-            params += "ListaCodiciConId[" + i + "].idRec=" + encodeURIComponent(idRec) + "&";
+        var pagCoinvolta = multiSelection[0].pagRef;
+        if (pagCoinvolta == null) {
+            //leggiamo la pagina da me.refSelected.item e la usiamo come pagCoinvolta
+            pagCoinvolta = box != null ? box.parentPage : null;
+        }
+        if (pagCoinvolta == null) {
+            messaggioUtente("Code RSF-97: Errore generico durante l'impaginazione: Impossibile trovare la pagina, assicurarsi di avere il box in pagina e riprovare", "error");
+            hideLoading();
+            return;
         }
 
-        var xhr = new XMLHttpRequestClient();
-        xhr.onload = async (objResult, parsed) => {
-            try {
-                if (!parsed) {
-                    try {
-                        objResult = JSON.parse(objResult);
-                    } catch (e) {
-                        messaggioUtente("Code RSF-95: Errore durante il parsing della risposta: " + e, "error");
-                        hideLoading();
-                        return;
-                    }
-                }
-                console.log(objResult);
-                //mi dovrebbe tornare un oggetto con tre parametri, esito, error e listaGruppi
-                if (!objResult.esito) {
-                    messaggioUtente("Code RSF-96: Errore durante il salvataggio delle modifiche: " + objResult.error, "error");
-                    hideLoading();
-                    return;
-                }
-
-                //for (var i = 0; i < objResult.listaGruppi.length; i++) {
-                //var itemRef = objResult.listaGruppi[i];
-                var itemRef = objResult.gruppo;//.listaGruppi[i];
-
-                var bounds = box.geometricBounds;
-                var meccanica = itemRef["codiceBox"].toString() != "" ? itemRef["codiceBox"].toString() : itemRef["combinazioneAssegnata"].toString();
-                var pagCoinvolta = multiSelection[0].pagRef;
-                if (pagCoinvolta == null) {
-                    //leggiamo la pagina da me.refSelected.item e la usiamo come pagCoinvolta
-                    pagCoinvolta = multiSelection[0].item.parentPage;
-                    if (pagCoinvolta == null) {
-                        throw "Impossibile trovare la pagina, assicurarsi di avere il box in pagina e riprovare";
-                    }
-                }
-                var listElementiNonImpaginati = [];
-
-                CssFramework.richiediDiScaricareFramework();
-                showLoading("Impaginazione in corso...");
-
-                res = await impaginaBox(meccanica, pagCoinvolta, bounds, itemRef, pathLavorazione, listElementiNonImpaginati, 1);
-                trovato = res.trovato;
-                listElementiNonImpaginati = res.listElementiNonImpaginati;
-                //}
-
-                //rimuoviamo il box originale
-
-                //rimuoviamo dalla pagina tutti i gruppi contenuti in multiSelection[].item
-                for (var i = multiSelection.length - 1; i >= 0; i--) {
-                    multiSelection[i].item.remove();
-                }
-
+        messaggioUtente("raggruppa: Richiesta inviata", "success", true, 3, true);
+        me.raggruppaBox(listaCodiciConId, pagCoinvolta, box.geometricBounds, multiSelection.map(m => m.item)).then(esito => {
+            if (esito.esito) {
+                messaggioUtente("Code RSF-98: Richiesta completata con successo", "success", false, 5);
                 me.resetRefSelected();
-
                 indesignEvents.resetLastSelection();
+            }
+            else {
+                messaggioUtente(esito.codice + ": " + esito.errore, "error");
+            }
+            hideLoading();
+        });
+    },
 
-                hideLoading();
+    /// I20-1233: il Raggruppa di Istanta su box gia' scelti, senza la selezione: lo usa il bottone Raggruppa
+    /// della selezione multipla e il Report Correggo per i raggruppamenti del menabo' avanzato.
+    /// listaCodiciConId e' [{ codice: codice gruppo del box, idRec }], il primo e' il box da cui il gruppo
+    /// eredita la pagina in Istanta. Il box nuovo si impagina nel rettangolo bounds della pagina e i box di
+    /// boxDaTogliere si tolgono, come ha sempre fatto il Raggruppa. Non mostra messaggi: restituisce
+    /// { esito, codice, errore }.
+    /// I box da togliere si ritrovano per id, letto prima di impaginare: in UXP il riferimento a un gruppo
+    /// della pagina segue il suo posto nell'elenco dei gruppi, e con il box nuovo in pagina puntava a un
+    /// altro box. Prova del 13/11, pagina 12: spariva la Pizza Margherita e restavano i Pisellini.
+    raggruppaBox(listaCodiciConId, pagina, bounds, boxDaTogliere) {
+        const idDaTogliere = (boxDaTogliere || []).map(b => {
+            try {
+                return b != null && b.isValid !== false ? b.id : null;
             }
             catch (e) {
-                messaggioUtente("Code RSF-97: Errore generico durante l'impaginazione: " + e, "error");
-                console.log(e);
+                return null;
             }
-        };
+        });
+        return new Promise(resolve => {
+            var params = "";
+            for (var i = 0; i < listaCodiciConId.length; i++) {
+                var codice = listaCodiciConId[i] != null && listaCodiciConId[i].codice != null ? listaCodiciConId[i].codice.toString() : "";
+                var idRec = listaCodiciConId[i] != null && listaCodiciConId[i].idRec != null && !isNaN(parseInt(listaCodiciConId[i].idRec))
+                    ? parseInt(listaCodiciConId[i].idRec)
+                    : 0;
 
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState == 4) {
-                if (xhr.status == 200) {
-                    messaggioUtente("Code RSF-98: Richiesta completata con successo", "success", false, 5);
-                } else {
-                    //messaggioUtente("raggruppa: Errore durante la richiesta: " + xhr.status, "error");
+                if (codice === "") {
+                    continue;
                 }
+
+                params += "ListaCodiciConId[" + i + "].codice=" + encodeURIComponent(codice) + "&";
+                params += "ListaCodiciConId[" + i + "].idRec=" + encodeURIComponent(idRec) + "&";
             }
-        };
 
-        xhr.onerror = function () {
-            //messaggioUtente("raggruppa: Errore di rete", "error");
-        }
+            var xhr = new XMLHttpRequestClient();
+            xhr.onload = async (objResult, parsed) => {
+                try {
+                    if (!parsed) {
+                        try {
+                            objResult = JSON.parse(objResult);
+                        } catch (e) {
+                            resolve({ esito: false, codice: "Code RSF-95", errore: "Errore durante il parsing della risposta: " + e });
+                            return;
+                        }
+                    }
+                    console.log(objResult);
+                    //mi dovrebbe tornare un oggetto con tre parametri, esito, error e listaGruppi
+                    if (!objResult.esito) {
+                        resolve({ esito: false, codice: "Code RSF-96", errore: "Errore durante il salvataggio delle modifiche: " + objResult.error });
+                        return;
+                    }
 
-        xhr.send("Menabo/Raggruppa/" + idKitLavorazione + "/" + 0, params, "PUT", "application/x-www-form-urlencoded");
-        messaggioUtente("raggruppa: Richiesta inviata", "success", true, 3, true);
+                    var itemRef = objResult.gruppo;
+                    var meccanica = itemRef["codiceBox"].toString() != "" ? itemRef["codiceBox"].toString() : itemRef["combinazioneAssegnata"].toString();
 
+                    CssFramework.richiediDiScaricareFramework();
+                    showLoading("Impaginazione in corso...");
+
+                    await impaginaBox(meccanica, pagina, bounds, itemRef, pathLavorazione, [], 1);
+
+                    //rimuoviamo dalla pagina i box che sono stati raggruppati
+                    for (var b = 0; b < idDaTogliere.length; b++) {
+                        if (idDaTogliere[b] == null) {
+                            continue;
+                        }
+                        var daTogliere = null;
+                        try {
+                            daTogliere = app.activeDocument.pageItems.itemByID(idDaTogliere[b]);
+                        }
+                        catch (e) {
+                            daTogliere = null;
+                        }
+                        if (daTogliere != null && daTogliere.isValid) {
+                            daTogliere.remove();
+                        }
+                    }
+                    resolve({ esito: true, gruppo: itemRef });
+                }
+                catch (e) {
+                    console.log(e);
+                    resolve({ esito: false, codice: "Code RSF-97", errore: "Errore generico durante l'impaginazione: " + e });
+                }
+            };
+
+            xhr.onerror = function (motivo) {
+                resolve({ esito: false, codice: "Code RSF-96", errore: "Raggruppa non riuscito: " + motivo });
+            };
+
+            xhr.send("Menabo/Raggruppa/" + idKitLavorazione + "/" + 0, params, "PUT", "application/x-www-form-urlencoded");
+        });
     },
 
     resetRefSelected() {

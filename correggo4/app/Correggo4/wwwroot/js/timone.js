@@ -1850,7 +1850,10 @@ var STILE_REPORT = `
 
     /* Indovina che griglia ha gia' la pagina, guardando dove stanno davvero i prodotti.
        Si contano le colonne e le righe raggruppando i box che si sovrappongono in orizzontale
-       (stessa colonna) e in verticale (stessa riga): e' come le conterebbe un occhio umano. */
+       (stessa colonna) e in verticale (stessa riga): e' come le conterebbe un occhio umano.
+       I20-1233: la stessa regola e' riscritta in ServizioTimone.GrigliaDiPartenza
+       (Servizi/ServizioTimone.Plugin.cs), che riconosce la griglia di partenza per gli scambi del
+       Report Correggo nel Plugin. Se la si cambia qui, va cambiata anche la'. */
     function indovinaGriglia(perForma, quante) {
         if (!perForma || !perForma.length) return null;
         var dentro = perForma;

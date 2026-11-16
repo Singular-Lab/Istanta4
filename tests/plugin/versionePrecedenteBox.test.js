@@ -334,8 +334,9 @@ test("azione sul box e Reimpagina box mettono da parte il vecchio allo stesso mo
     const scheda = sorgente("schedaRef.js");
     //I20-1063: Reimpagina box rifa' il box in rifaiBox, come il Reimpagina della selezione multipla.
     assert.match(corpoMembro(scheda, "    async applicaReimpaginazione(){"), /await this\.rifaiBox\(schedaRef, this\.refSelected\.item\)/);
-    const reimpagina = corpoMembro(scheda, "    async rifaiBox(schedaRef, boxPrecedente) {");
-    assert.match(reimpagina, /var bounds = boxPrecedente\.geometricBounds;/);
+    const reimpagina = corpoMembro(scheda, "    async rifaiBox(schedaRef, boxPrecedente, boundsDestinazione = null) {");
+    //I20-1233: senza destinazione (Reimpagina box) il nuovo esce dove era il vecchio.
+    assert.match(reimpagina, /var bounds = boundsDestinazione != null \? boundsDestinazione : boxPrecedente\.geometricBounds;/);
     assert.doesNotMatch(reimpagina, /bounds\[0\] - 10/);
     const daParte = reimpagina.indexOf("VersionePrecedente.mettiDaParte(boxPrecedente, docInLavorazione)");
     const impagina = reimpagina.indexOf("impaginazioneSingoloIndd(schedaRef, pagina, false, null, false, bounds, false, false)");
@@ -419,4 +420,15 @@ test("il ricollegamento atteso dal report usa la stessa richiesta della scheda",
     assert.match(dalReport, /Promise\.race/);
     const lettura = corpoMembro(report, "    _leggiSchedaRefConStato(codiceGruppo, idRec) {");
     assert.match(lettura, /risultato\.errorCode == 8/);
+});
+
+test("I20-1233: nascondiLivello spegne il livello delle versioni precedenti, se c'è", () => {
+    const livello = { isValid: true, visible: true };
+    const doc = { layers: { itemByName: (nome) => nome === "cloneVecchioImpaginato" ? livello : { isValid: false } } };
+    assert.strictEqual(VersionePrecedente.nascondiLivello(doc), true);
+    assert.strictEqual(livello.visible, false);
+
+    const senza = { layers: { itemByName: () => ({ isValid: false }) } };
+    assert.strictEqual(VersionePrecedente.nascondiLivello(senza), false);
+    assert.strictEqual(VersionePrecedente.nascondiLivello(null), false);
 });

@@ -650,6 +650,11 @@ const Utility=
         return "whitelistIntegrita_" + idKit + ".json";
     },
 
+    /// I20-1233: le correzioni di Correggo rifiutate nel Report Correggo di questa lavorazione.
+    nomeFileCorreggoRifiutate(idKit) {
+        return "correggoRifiutate_" + idKit + ".json";
+    },
+
     /// I20-1065: i file di lavoro di un documento presenti in una cartella: la lista del suo kit, gli
     /// allineamenti, il conteggio con le referenze escluse e i filtri (della cartella o del
     /// documento). Con tutti anche il report integrita', la whitelist e la lista impaginata del kit
