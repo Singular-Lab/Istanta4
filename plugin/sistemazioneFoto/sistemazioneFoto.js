@@ -780,6 +780,11 @@ const SistemazioneFoto = {
         //proporre il fix (avvisoFotoAMano): primarie in testa, quelle in noRender fuori.
         var listFoto = this.fotoDelFix(box);
 
+        //I20-1236: le ambientate entrano nella disposizione come prime foto della cascata, se la
+        //configurazione ne ha una per il numero totale; altrimenti si sistemano a parte, dopo.
+        var conAmbientate = selezioneFoto.fotoConAmbientate(listFoto, this.ambientateDelBox(box), configurazione.distanziamento);
+        listFoto = conAmbientate.lista;
+
         console.log(listFoto);
 
         var fotos = [];
@@ -994,6 +999,14 @@ const SistemazioneFoto = {
                 ];
             }
 
+            //I20-1236: le ambientate disposte con le foto del prodotto vanno in primo piano; senza una
+            //disposizione per loro prendono la scala della primaria, in basso a sinistra dello spazio scelto.
+            if (conAmbientate.ambientateNelFix) {
+                this.ambientateInPrimoPiano(fotos.map(f => f.object));
+            }
+            else {
+                this.sistemaAmbientate(box, base, bestCandidate, fotos.map(f => f.object));
+            }
         }
         
         //ripristiniamo la grandezza originale degli ostacoli
@@ -1011,6 +1024,111 @@ const SistemazioneFoto = {
             cssFramework().controllaSegnalazioniConflittiPendenti(box);
         }
         return areaFinale;
+    },
+
+    /// I20-1236: le foto ambientate visibili del box (foto_extra$<sigla>$tipo_4), nel loro ordine.
+    ambientateDelBox(box) {
+        var elementi = [];
+        try {
+            for (var i = 0; i < box.allPageItems.length; i++) {
+                elementi.push(box.allPageItems[i]);
+            }
+        }
+        catch (e) {
+            console.warn("Code CSF-33 Elementi del box non leggibili: " + e);
+        }
+        return selezioneFoto.ambientateDelBox(elementi);
+    },
+
+    /// I20-1236: porta in primo piano, davanti a tutto il box, le ambientate fra le foto appena disposte.
+    ambientateInPrimoPiano(foto) {
+        for (var i = 0; i < foto.length; i++) {
+            try {
+                if (selezioneFoto.eAmbientata(String(foto[i].label))) {
+                    foto[i].bringToFront();
+                }
+            }
+            catch (e) {
+                console.warn("Code CSF-33 Foto ambientata non portata in primo piano: " + e);
+            }
+        }
+    },
+
+    /// I20-1236: ripiego, quando le ambientate non entrano nella disposizione del fix. FotoPlacer le piazzava grandi
+    /// quanto il box e nessuno le sistemava. Le regole dell'operatore: l'ambientata prende la stessa
+    /// percentuale di ingrandimento della foto primaria (la prima di fotoDelProdotto, gia' sistemata dal
+    /// fix), sta in primo piano davanti a tutto il box e puo' sovrapporsi agli altri elementi. Va in
+    /// basso a sinistra dello spazio scelto per le foto, dentro la base (selezioneFoto.boundsAmbientata).
+    /// Senza una foto primaria con una scala leggibile l'ambientata resta com'e'. Torna quante ne ha
+    /// sistemate.
+    sistemaAmbientate(box, base, candidato, fotoDelProdotto) {
+        try {
+            var ambientate = this.ambientateDelBox(box);
+            if (ambientate.length == 0 || base == null || fotoDelProdotto == null || fotoDelProdotto.length == 0) {
+                return 0;
+            }
+            var scala = this.scalaXYDellaFoto(fotoDelProdotto[0]);
+            if (scala == null) {
+                console.warn("Code CSF-33 Scala della foto primaria non leggibile: ambientata non sistemata nel box " + (box.label || ""));
+                return 0;
+            }
+            var sistemate = 0;
+            for (var a = 0; a < ambientate.length; a++) {
+                var ambientata = ambientate[a];
+                var grafica = this.graficaDellaFoto(ambientata);
+                if (grafica == null) {
+                    //una cornice senza immagine resta com'e'
+                    continue;
+                }
+                grafica.horizontalScale = scala.orizzontale;
+                grafica.verticalScale = scala.verticale;
+                ambientata.fit(FitOptions.FRAME_TO_CONTENT);
+                var attuali = ambientata.geometricBounds;
+                var bounds = selezioneFoto.boundsAmbientata(base.geometricBounds, candidato, attuali[3] - attuali[1], attuali[2] - attuali[0]);
+                if (bounds != null) {
+                    ambientata.move(undefined, [bounds[1] - attuali[1], bounds[0] - attuali[0]]);
+                }
+                //in primo piano: davanti alla confezione e a tutto il resto del box
+                ambientata.bringToFront();
+                sistemate++;
+            }
+            return sistemate;
+        }
+        catch (e) {
+            console.error("Code CSF-33 Foto ambientata non sistemata nel box " + (box && box.label ? box.label : "") + ": " + e);
+            return 0;
+        }
+    },
+
+    /// I20-1236: l'immagine dentro una cornice, o null se la cornice e' vuota.
+    graficaDellaFoto(rect) {
+        if (rect.images != null && rect.images.length > 0) {
+            return rect.images.item(0);
+        }
+        if (rect.graphics != null && rect.graphics.length > 0) {
+            return rect.graphics.item(0);
+        }
+        return null;
+    },
+
+    /// I20-1236: la scala orizzontale e verticale dell'immagine di una foto, in percentuale, oppure
+    /// null se la foto e' vuota o la scala non si legge.
+    scalaXYDellaFoto(rect) {
+        try {
+            var grafica = this.graficaDellaFoto(rect);
+            if (grafica == null) {
+                return null;
+            }
+            var orizzontale = grafica.horizontalScale;
+            var verticale = grafica.verticalScale;
+            if (typeof orizzontale !== "number" || typeof verticale !== "number" || !(orizzontale > 0) || !(verticale > 0)) {
+                return null;
+            }
+            return { orizzontale: orizzontale, verticale: verticale };
+        }
+        catch (e) {
+            return null;
+        }
     },
 
     /// La scala a cui e' inserita l'immagine di una foto, in percentuale, oppure null se la
