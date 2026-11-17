@@ -24,7 +24,9 @@
                     </div>
                 </div>
                 <div class="col-3" style="display:flex;">
-                    <select class="form-select form-select-lg" id="cmbFiltroTracciato" name="cmbFiltroTracciato">
+                    @*I20-1239: parte nascosta. La mostra syncfoto.js, a pagina caricata, solo se il plugin di agenzia non la nasconde:
+                       visibile da subito, si vedeva sotto il "loading" e poi spariva.*@
+                    <select class="form-select form-select-lg" id="cmbFiltroTracciato" name="cmbFiltroTracciato" style="display:none;">
                         <option value="0" selected>Filtro Tracciato/Promo</option>
 @*                         @foreach(Istanta.Models_2.PromoTracciati tItem in ViewBag.TracciatiAperti)
                         {

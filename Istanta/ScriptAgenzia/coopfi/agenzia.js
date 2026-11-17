@@ -1601,8 +1601,9 @@ class Agenzia extends IAgenzia {
         }
     }
 
+    /// I20-1239: Coop usa il filtro per promo della sincronizzazione foto (e "Scan by URI"): la tendina resta visibile.
     nascondiFiltroTracciatiInSyncFoto() {
-        return true;
+        return false;
     }
 
 }

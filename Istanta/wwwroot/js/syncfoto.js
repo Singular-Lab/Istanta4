@@ -16,8 +16,9 @@ class SyncFoto {
         this.agenzia = new Agenzia();
         //this.worker = new Worker('js/worker.js');
 
-        let visFiltroTracciato = this.agenzia.nascondiFiltroTracciatiInSyncFoto();
-        $("#cmbFiltroTracciato").css("display", visFiltroTracciato ? "none" : "block");
+        //I20-1239: nella pagina la tendina parte nascosta; qui si mostra solo se l'agenzia non la nasconde.
+        let nascondiFiltro = this.agenzia.nascondiFiltroTracciatiInSyncFoto();
+        $("#cmbFiltroTracciato").css("display", nascondiFiltro ? "none" : "block");
 
         //// Log dal worker
         //this.worker.onmessage = (e) => {
