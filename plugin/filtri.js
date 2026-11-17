@@ -2006,7 +2006,11 @@ const filtri = {
                     //$('<select '+ (criterio == null ? '' : 'disabled' ) +'></select>')
                     $('<sp-picker maxWidth="300px" minWidth="200px"></sp-picker>')
                         .addClass('filtro-valore-tendina')
-                        .css({ width: '200px', marginRight: '10px', fontSize:'10px' })
+                        //I20-1241: nel Menabo' la tendina prende lo spazio libero della riga, cosi' allargando
+                        //il pannello un valore lungo si legge, e con lei il suo menu, largo quanto la tendina.
+                        //I 200px restano la base: a pannello stretto non c'e' spazio libero e la riga resta
+                        //com'era, compreso l'allargamento al passaggio del mouse di setPickerWidthHack.
+                        .css({ width: '200px', flexGrow: (isTracciato ? '0' : '1'), marginRight: '10px', fontSize:'10px' })
                         .attr('title', 'Scegli il valore cercato') // Tooltip aggiunto
                         .on('change', async function (e) {
                             //console.log(e.target.selectedOptions[0]._properties);
@@ -2044,7 +2048,8 @@ const filtri = {
                         .addClass('filtro-valore-hidden')
                         .attr('title', 'Scrivi il valore da cercare') // Tooltip aggiunto
                         .val('')
-                        .css({ width: (isTracciato?'200px':'30%'), height:'30px', marginRight: '10px' ,display: 'none', color: 'lightblue' }) // Nascondiamo il campo di testo
+                        //I20-1241: come la tendina, nel Menabo' il valore libero prende lo spazio libero della riga.
+                        .css({ width: (isTracciato?'200px':'30%'), flexGrow: (isTracciato ? '0' : '1'), height:'30px', marginRight: '10px' ,display: 'none', color: 'lightblue' }) // Nascondiamo il campo di testo
                         .on('keyup', function () {
                             let campo = this;
                             let filtro = $(this).closest('.filtro');
