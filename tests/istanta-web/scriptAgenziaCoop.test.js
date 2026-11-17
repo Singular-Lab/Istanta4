@@ -44,7 +44,8 @@ const SOLO_EDRO21 = ["getNaturaScattoNelReport", "nascondiAzioniDiretteReport", 
 
 //TASK-110bdfa0: le funzioni che Coop ha diverse da Edro21, o solo sue, per scelta: le colonne del report
 //dell'importazione (tema e settore al posto del segmento, senza la colonna Alterazioni).
-const DIVERSE_IN_COOP = ["getParametriReport", "getColonneCoreEscluseReport"];
+//I20-1239: e il filtro Tracciato/Promo della sincronizzazione foto, che Coop vede e Edro21 no.
+const DIVERSE_IN_COOP = ["getParametriReport", "getColonneCoreEscluseReport", "nascondiFiltroTracciatiInSyncFoto"];
 
 /// Il testo senza le funzioni che ha solo Edro21, commento di testa compreso.
 function senzaLeFunzioniSoloDiEdro21(testo) {
