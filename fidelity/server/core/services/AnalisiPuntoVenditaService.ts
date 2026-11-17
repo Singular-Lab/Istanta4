@@ -6,13 +6,14 @@ import type {
   EsitoVerifica,
   PaginaRigheNonAbbinate,
   PaginaVerificaCollegamenti,
+  PeriodoAnalisi,
   PosizioneRiga,
   QualitaPuntiVendita,
   ReteInsegne,
   TipoCollegamento,
   VolantiniRigaNonAbbinata,
 } from '../../../lib/puntiVendita/analisi';
-import { ESITI_VERIFICA } from '../../../lib/puntiVendita/analisi';
+import { edizioneNelPeriodo, ESITI_VERIFICA, MINIMO_VOLANTINI_RICORRENTE } from '../../../lib/puntiVendita/analisi';
 import { DIMENSIONI_PAGINA_STORIA } from '../../../lib/puntiVendita/storia';
 import { BadRequestError, NotFoundError } from '../../../lib/errors';
 import type { IAnalisiPuntoVenditaService } from '../interfaces/IAnalisiPuntoVenditaService';
@@ -33,6 +34,7 @@ import {
   dettaglioReferenza,
   type EdizionePuntoVendita,
   edizioniDelPuntoVendita,
+  inizioEdizione,
   kitDaDescrivere,
   MARCHE_IN_EVIDENZA,
   NUMERO_PRODOTTI_RICORRENTI,
@@ -53,6 +55,7 @@ import {
   righeDaRevisionare,
   volantiniDelGruppo,
 } from '../utils/gestionePuntiVendita';
+import type { VolantinoSenzaPuntoVendita } from '../utils/storiaPuntoVendita';
 import { contaPerEsito, verificaCollegamenti } from '../utils/verificaCollegamenti';
 import { coordinateValide } from './importPuntiVendita';
 import type { IndirizzoDaCercare } from './PosizioniRigheJob';
@@ -133,7 +136,7 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
 
   constructor(
     private readonly repository: IAnalisiPuntiVenditaRepository,
-    private readonly storia: Pick<IPuntiVenditaVolantinoRepository, 'trovaPuntoVendita' | 'apparizioni'>,
+    private readonly storia: Pick<IPuntiVenditaVolantinoRepository, 'trovaPuntoVendita' | 'apparizioni' | 'volantiniSenzaPuntoVendita'>,
     opzioni: OpzioniAnalisiPuntoVendita = {},
   ) {
     this.chiaveMeta = opzioni.chiaveMetaPuntoVendita?.trim() || null;
@@ -190,17 +193,56 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
 
   // ─── Scheda, volantino, referenza ──────────────────────────────────
 
-  async analisi(idPuntoVendita: string, idGdo: string | null): Promise<AnalisiPuntoVendita> {
+  /**
+   * I volantini della combinazione attuale del PV (con la lista registrata) in cui il PV non c'e',
+   * dopo la sua prima apparizione; nessuno se il PV non ha una combinazione o non compare mai.
+   */
+  private async assenze(puntoVendita: PuntoVenditaDellaStoria, edizioni: readonly EdizionePuntoVendita[]): Promise<VolantinoSenzaPuntoVendita[]> {
+    const [prima] = edizioni;
+    if (!prima || !puntoVendita.idCanale || !puntoVendita.idArea) return [];
+    return this.storia.volantiniSenzaPuntoVendita({
+      idPuntoVendita: puntoVendita.id,
+      idGdo: puntoVendita.idGdo,
+      idCanale: puntoVendita.idCanale,
+      idArea: puntoVendita.idArea,
+      dopo: prima.data,
+    });
+  }
+
+  /**
+   * La scheda del PV nel periodo indicato (null per tutta la storia): i riepiloghi di tutti i suoi
+   * volantini, per la timeline; prodotti e marche dei soli volantini che iniziano nel periodo. Dei
+   * ricorrenti si chiede il doppio dei candidati: quelli senza descrizione non si mostrano.
+   */
+  async analisi(idPuntoVendita: string, idGdo: string | null, periodo: PeriodoAnalisi | null = null): Promise<AnalisiPuntoVendita> {
     const puntoVendita = await this.puntoVenditaDellaGdo(idPuntoVendita, idGdo);
     const edizioni = await this.edizioni(puntoVendita.id);
     const aggregati = await this.aggregati(edizioni.map(edizione => edizione.idKit));
     const statistiche = await this.repository.statisticheProdotti(
-      edizioni.map(edizione => ({ idKit: edizione.idKit, data: edizione.data })),
-      { soglia: SOGLIA_PRODOTTO_FREQUENTE, ricorrenti: NUMERO_PRODOTTI_RICORRENTI, marche: MARCHE_IN_EVIDENZA },
+      edizioni
+        .filter(edizione => edizioneNelPeriodo(inizioEdizione(edizione), periodo))
+        .map(edizione => ({ idKit: edizione.idKit, data: edizione.data })),
+      {
+        soglia: SOGLIA_PRODOTTO_FREQUENTE,
+        ricorrenti: 2 * NUMERO_PRODOTTI_RICORRENTI,
+        minimoVolantini: MINIMO_VOLANTINI_RICORRENTE,
+        marche: MARCHE_IN_EVIDENZA,
+      },
     );
-    const descrizioni = descrizioniRicorrenti(statistiche.ricorrenti, await this.repository.descrizioniProdotti(coppieDaDescrivere(statistiche.ricorrenti)));
-    const reparti = await this.repartiDellaGdo(puntoVendita.idGdo);
-    return calcolaAnalisiPuntoVendita(puntoVendita.id, edizioni, aggregati, statistiche, descrizioni, this.oggi(), reparto => reparti.nome(reparto));
+    const [trovate, reparti, assenze] = await Promise.all([
+      this.repository.descrizioniProdotti(coppieDaDescrivere(statistiche.ricorrenti)),
+      this.repartiDellaGdo(puntoVendita.idGdo),
+      this.assenze(puntoVendita, edizioni),
+    ]);
+    return calcolaAnalisiPuntoVendita(
+      puntoVendita.id,
+      edizioni,
+      aggregati,
+      statistiche,
+      descrizioniRicorrenti(statistiche.ricorrenti, trovate),
+      this.oggi(),
+      { periodo, assenze, nomeReparto: reparto => reparti.nome(reparto) },
+    );
   }
 
   async volantino(idPuntoVendita: string, idKit: string, idGdo: string | null): Promise<DettaglioVolantinoPv> {

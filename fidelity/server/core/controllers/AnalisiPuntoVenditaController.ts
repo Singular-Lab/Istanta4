@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
 import { BadRequestError, NotFoundError } from '../../../lib/errors';
+import { dataIsoValida, type PeriodoAnalisi } from '../../../lib/puntiVendita/analisi';
 import { gdoOperativaPerRichiesta, operaPerPiuGdo } from '../accessi/contestoAccesso';
 import { BaseController } from '../base/BaseController';
 import type { IAnalisiPuntoVenditaService } from '../interfaces/IAnalisiPuntoVenditaService';
@@ -22,6 +23,22 @@ const numero = (valore: unknown): number | undefined => {
   if (typeof valore !== 'string' || valore.trim() === '') return undefined;
   const intero = Number.parseInt(valore, 10);
   return Number.isFinite(intero) ? intero : undefined;
+};
+
+/** Un giorno del periodo dalla query: assente (o vuoto) null, altrimenti una data ISO vera o 400. */
+const giornoDelPeriodo = (nome: 'dal' | 'al', valore: unknown): string | null => {
+  if (valore === undefined || valore === '') return null;
+  if (!dataIsoValida(valore)) throw new BadRequestError({ message: `Data non valida in "${nome}": serve un giorno YYYY-MM-DD` });
+  return valore;
+};
+
+/** Il periodo della scheda del PV da ?dal=&al= (PeriodoAnalisi); null senza nessuno dei due, 400 se dal viene dopo al. */
+const periodoDallaRichiesta = (query: Request['query']): PeriodoAnalisi | null => {
+  const dal = giornoDelPeriodo('dal', query.dal);
+  const al = giornoDelPeriodo('al', query.al);
+  if (dal === null && al === null) return null;
+  if (dal !== null && al !== null && dal > al) throw new BadRequestError({ message: 'Periodo non valido: "dal" viene dopo "al"' });
+  return { dal, al };
 };
 
 /**
@@ -90,8 +107,10 @@ export class AnalisiPuntoVenditaController extends BaseController {
 
   private async getAnalisi(req: Request<{ id: string }>, res: Response): Promise<void> {
     try {
+      // Il periodo prima del PV: una richiesta sbagliata e' 400 senza leggere nulla
+      const periodo = periodoDallaRichiesta(req.query);
       const idGdo = await this.gdoDelPuntoVendita(req, res);
-      this.sendResponse(res, HttpStatusCode.OK, await this.analisi.analisi(req.params.id, idGdo));
+      this.sendResponse(res, HttpStatusCode.OK, await this.analisi.analisi(req.params.id, idGdo, periodo));
     } catch (error) {
       this.handleError(res, error);
     }

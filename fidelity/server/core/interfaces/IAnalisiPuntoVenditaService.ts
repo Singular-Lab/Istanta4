@@ -4,6 +4,7 @@ import type {
   DettaglioVolantinoPv,
   PaginaRigheNonAbbinate,
   PaginaVerificaCollegamenti,
+  PeriodoAnalisi,
   PosizioneRiga,
   QualitaPuntiVendita,
   ReteInsegne,
@@ -19,7 +20,8 @@ import type { IndirizzoDaCercare } from '../services/PosizioniRigheJob';
  * fra tutte; un PV di un'altra GDO, o un kit che non e' nella storia del PV, da' NotFoundError.
  */
 export interface IAnalisiPuntoVenditaService {
-  analisi(idPuntoVendita: string, idGdo: string | null): Promise<AnalisiPuntoVendita>;
+  /** La scheda del PV; numeri, marche, prodotti e copertura del periodo (null o assente: tutta la storia). */
+  analisi(idPuntoVendita: string, idGdo: string | null, periodo?: PeriodoAnalisi | null): Promise<AnalisiPuntoVendita>;
   volantino(idPuntoVendita: string, idKit: string, idGdo: string | null): Promise<DettaglioVolantinoPv>;
   referenza(idPuntoVendita: string, chiave: string, idGdo: string | null): Promise<DettaglioReferenzaPv>;
   reteInsegne(idGdo: string): Promise<ReteInsegne>;

@@ -52,7 +52,12 @@ export interface PuntoVenditaAttuale {
 /** Un volantino della stessa insegna e area, con la lista registrata, in cui il PV non c'e'. */
 export interface VolantinoSenzaPuntoVendita {
   idKit: string;
+  /** Giorno dell'edizione (YYYY-MM-DD). */
   data: string;
+  /** Date ISO di validita' della promo; senza la data di inizio, il giorno dell'edizione. */
+  dal: string;
+  al: string | null;
+  promo: { id: string; nome: string };
 }
 
 interface Edizione {
@@ -245,7 +250,7 @@ const dataEvento = (evento: EventoStoria): string => (evento.tipo === 'assente' 
 export function calcolaStoria(
   puntoVendita: PuntoVenditaAttuale,
   elencoApparizioni: readonly ApparizioneStoria[],
-  volantiniSenza: readonly VolantinoSenzaPuntoVendita[] = [],
+  volantiniSenza: ReadonlyArray<Pick<VolantinoSenzaPuntoVendita, 'idKit' | 'data'>> = [],
 ): StoriaPuntoVendita {
   const apparizioni = unaPerKit(ordinaApparizioni(elencoApparizioni));
   if (apparizioni.length === 0) {

@@ -4,30 +4,34 @@ import {
   type CoperturaDati,
   type DettaglioReferenzaPv,
   type DettaglioVolantinoPv,
+  edizioneNelPeriodo,
   type EdizioneTimeline,
   MECCANICHE,
   type MeccanicaReferenza,
+  MINIMO_VOLANTINI_RICORRENTE,
   type PaginaVolantino,
+  type PeriodoAnalisi,
   type PresenzaReferenza,
   type ProdottoRicorrente,
   type ReferenzaSintesi,
   type ReteInsegne,
+  type VolantinoAssente,
 } from '../../../lib/puntiVendita/analisi';
 import type { PromoStoria, RiferimentoStoria, TipoAbbinamento } from '../../../lib/puntiVendita/storia';
 import { AGGREGATI_VUOTI, type AggregatiKit, type BoxKit, type DescrizioneProdotto, type ProdottoNelKit } from './analisiKit';
 import { DESCRIZIONE_ASSENTE, type ProdottoStampato } from './referenzaStampata';
-import { type ApparizioneStoria, ordinaApparizioni } from './storiaPuntoVendita';
+import { type ApparizioneStoria, ordinaApparizioni, type VolantinoSenzaPuntoVendita } from './storiaPuntoVendita';
 
 /**
  * Le pagine del punto vendita costruite sulla timeline dei suoi volantini (contratto in
  * lib/puntiVendita/analisi.ts): scheda del PV, volantino, referenza e rete per insegna, dai
  * riepiloghi dei kit (analisiKit.ts) e dalle apparizioni del PV nelle liste. Funzioni pure.
  *
- * Un anno è quello del giorno dell'edizione (inizio della promo, calendario di Roma). Le quote
- * sono percentuali con un decimale; gli sconti hanno due decimali.
+ * Un volantino sta nell'anno e nel periodo in cui inizia la sua validità (inizioEdizione, calendario
+ * di Roma). Le quote sono percentuali con un decimale; gli sconti hanno due decimali.
  */
 
-/** Un prodotto è frequente se compare in più di tanti volantini del PV. */
+/** Un prodotto è frequente se compare in più di tanti volantini del periodo. */
 export const SOGLIA_PRODOTTO_FREQUENTE = 10;
 export const MARCHE_IN_EVIDENZA = 8;
 export const NUMERO_PRODOTTI_RICORRENTI = 10;
@@ -95,33 +99,47 @@ export const scontoMedio = (sconto: AggregatiKit['sconto']): number | null =>
 
 // ─── Scheda del PV ──────────────────────────────────────────────────
 
-/** Un prodotto fra i più presenti nei volantini del PV, come lo calcola l'SQL sui riepiloghi dei kit. */
+/** Il giorno in cui inizia il volantino: la validità della promo o, senza, il giorno dell'edizione. */
+export const inizioEdizione = (edizione: EdizionePuntoVendita): string => edizione.promo.validitaDal ?? edizione.data;
+
+/**
+ * Un prodotto fra i più presenti nei volantini del periodo, come lo calcola l'SQL sui riepiloghi
+ * dei kit.
+ */
 export interface ProdottoFrequente {
   chiave: string;
   volantini: number;
-  /** Volantini per anno; gli anni senza presenze mancano. */
-  perAnno: Record<string, number>;
+  /** I kit dei volantini in cui compare, dal più vecchio. */
+  kit: string[];
   prezzoMinimo: number | null;
   prezzoMassimo: number | null;
+  /** Il prezzo nel volantino più recente che lo ha con un prezzo. */
+  prezzoUltimo: number | null;
   /** Il kit piu' recente che lo contiene, e il piu' recente in cui ha una foto. */
   ultimoKit: string;
   ultimoKitConFoto: string | null;
 }
 
 /**
- * Prodotti e marche di tutti i volantini del PV, aggregati in SQL sulle forme compatte dei
- * riepiloghi (i prodotti di centinaia di volantini non escono dal database).
+ * Prodotti e marche dei volantini indicati (quelli del periodo), aggregati in SQL sulle forme
+ * compatte dei riepiloghi (i prodotti di centinaia di volantini non escono dal database).
  */
 export interface StatisticheProdotti {
   /** Prodotti diversi. */
   prodotti: number;
   /** Prodotti in piu' di SOGLIA_PRODOTTO_FREQUENTE volantini. */
   frequenti: number;
-  /** I NUMERO_PRODOTTI_RICORRENTI piu' presenti: per volantini, poi i piu' recenti, poi per chiave. */
+  /**
+   * I piu' presenti, in almeno MINIMO_VOLANTINI_RICORRENTE volantini: per volantini, poi i piu'
+   * recenti, poi per chiave.
+   */
   ricorrenti: ProdottoFrequente[];
-  /** Le MARCHE_IN_EVIDENZA marche con piu' referenze, col nome stampato piu' spesso. */
-  marche: Array<{ marca: string; referenze: number }>;
-  /** Referenze con una marca, in tutti i volantini. */
+  /**
+   * Le MARCHE_IN_EVIDENZA marche con piu' referenze, col nome stampato piu' spesso e i volantini
+   * in cui compaiono.
+   */
+  marche: Array<{ marca: string; referenze: number; volantini: number }>;
+  /** Referenze con una marca, in tutti i volantini indicati. */
   referenzeConMarca: number;
 }
 
@@ -160,9 +178,58 @@ export function descrizioniRicorrenti(
   return descrizioni;
 }
 
+/** Il volantino nella timeline, con i numeri del suo riepilogo. */
+function edizioneTimeline(
+  edizione: EdizionePuntoVendita,
+  riepilogo: AggregatiKit,
+  oggi: string,
+  nomeReparto: (reparto: string) => string,
+): EdizioneTimeline {
+  const perMeccanica = new Map<MeccanicaReferenza, number>();
+  for (const voce of riepilogo.meccaniche) perMeccanica.set(voce.meccanica, (perMeccanica.get(voce.meccanica) ?? 0) + voce.referenze);
+  const perReparto = new Map<string, number>();
+  for (const voce of riepilogo.reparti) {
+    const nome = nomeReparto(voce.reparto);
+    perReparto.set(nome, (perReparto.get(nome) ?? 0) + voce.spazio);
+  }
+  return {
+    idKit: edizione.idKit,
+    dal: inizioEdizione(edizione),
+    al: edizione.promo.validitaAl,
+    promo: { id: edizione.promo.id, nome: edizione.promo.nome },
+    canale: edizione.canale,
+    area: edizione.area,
+    numeroReferenze: riepilogo.referenze,
+    attivo: edizioneAttiva(edizione, oggi),
+    pagine: riepilogo.pagine,
+    scontoMedio: scontoMedio(riepilogo.sconto),
+    referenzeConSconto: riepilogo.sconto.referenze,
+    meccaniche: MECCANICHE
+      .filter(meccanica => (perMeccanica.get(meccanica) ?? 0) > 0)
+      .map(meccanica => ({ meccanica, referenze: perMeccanica.get(meccanica) as number })),
+    reparti: [...perReparto.entries()]
+      .map(([reparto, spazio]) => ({ reparto, spazio: arrotonda(spazio, 2) }))
+      .sort((a, b) => b.spazio - a.spazio || confronta(a.reparto, b.reparto)),
+  };
+}
+
+export interface OpzioniSchedaPuntoVendita {
+  /** Il periodo di numeri, marche, prodotti e copertura; null (o assente) per tutta la storia. */
+  periodo?: PeriodoAnalisi | null;
+  /** I volantini della combinazione del PV, dopo la sua prima apparizione, in cui il PV non c'e'. */
+  assenze?: readonly VolantinoSenzaPuntoVendita[];
+  /**
+   * Il nome da mostrare per un reparto dei riepiloghi salvati (descrizione, sigla o "Reparto NN"):
+   * con le Impostazioni GDO il nome per il marketing, e i reparti con lo stesso nome si sommano.
+   */
+  nomeReparto?: (reparto: string) => string;
+}
+
 /**
- * La scheda del PV: aggregati di ogni kit anno per anno, statistiche dei prodotti e delle marche
- * (dall'SQL) e descrizioni dei prodotti ricorrenti.
+ * La scheda del PV: la timeline e le assenze di tutta la storia, con i numeri di ogni volantino dal
+ * suo riepilogo; numeri, copertura, marche e prodotti ricorrenti dei soli volantini del periodo
+ * (quelli che vi iniziano). Le statistiche dei prodotti e delle marche vengono dall'SQL sui volantini
+ * del periodo, con le descrizioni dei prodotti ricorrenti.
  */
 export function calcolaAnalisiPuntoVendita(
   idPuntoVendita: string,
@@ -171,115 +238,79 @@ export function calcolaAnalisiPuntoVendita(
   statistiche: StatisticheProdotti,
   descrizioni: ReadonlyMap<string, DescrizioneProdotto>,
   oggi: string,
-  /**
-   * Il nome da mostrare per un reparto dei riepiloghi salvati (descrizione, sigla o "Reparto NN"):
-   * con le Impostazioni GDO il nome per il marketing, e i reparti con lo stesso nome si sommano.
-   */
-  nomeReparto: (reparto: string) => string = reparto => reparto,
+  opzioni: OpzioniSchedaPuntoVendita = {},
 ): AnalisiPuntoVendita {
-  const anni = [...new Set(edizioni.map(edizione => annoDi(edizione.data)))].sort((a, b) => a - b);
-  const meccanichePerAnno = new Map<number, Map<MeccanicaReferenza, number>>();
-  const scontoPerAnno = new Map<number, { somma: number; referenze: number }>();
-  const repartiPerAnno = new Map<number, Map<string, number>>();
+  const periodo = opzioni.periodo ?? null;
+  const nomeReparto = opzioni.nomeReparto ?? (reparto => reparto);
+  const timeline = edizioni.map(edizione => edizioneTimeline(edizione, aggregatiDelKit(aggregati, edizione.idKit), oggi, nomeReparto));
+  const anni = [...new Set(timeline.map(edizione => annoDi(edizione.dal)))].sort((a, b) => a - b);
+
   const insegne = new Map<string, RiferimentoStoria>();
   const copertura = { conCodice: 0, conReparto: 0, conPrezzo: 0, conMarca: 0 };
   const sconto = { somma: 0, referenze: 0 };
   let referenze = 0;
-
-  const timeline: EdizioneTimeline[] = edizioni.map((edizione) => {
+  let volantini = 0;
+  let volantiniAttivi = 0;
+  edizioni.forEach((edizione, indice) => {
+    if (!edizioneNelPeriodo(timeline[indice].dal, periodo)) return;
     const riepilogo = aggregatiDelKit(aggregati, edizione.idKit);
-    const anno = annoDi(edizione.data);
+    volantini += 1;
+    if (timeline[indice].attivo) volantiniAttivi += 1;
     referenze += riepilogo.referenze;
     if (!insegne.has(edizione.canale.id)) insegne.set(edizione.canale.id, edizione.canale);
     for (const chiave of ['conCodice', 'conReparto', 'conPrezzo', 'conMarca'] as const) copertura[chiave] += riepilogo.copertura[chiave];
     sconto.somma += riepilogo.sconto.somma;
     sconto.referenze += riepilogo.sconto.referenze;
-
-    const scontoAnno = scontoPerAnno.get(anno) ?? { somma: 0, referenze: 0 };
-    scontoAnno.somma += riepilogo.sconto.somma;
-    scontoAnno.referenze += riepilogo.sconto.referenze;
-    scontoPerAnno.set(anno, scontoAnno);
-
-    const meccanicheAnno = meccanichePerAnno.get(anno) ?? new Map<MeccanicaReferenza, number>();
-    for (const voce of riepilogo.meccaniche) meccanicheAnno.set(voce.meccanica, (meccanicheAnno.get(voce.meccanica) ?? 0) + voce.referenze);
-    meccanichePerAnno.set(anno, meccanicheAnno);
-
-    const repartiAnno = repartiPerAnno.get(anno) ?? new Map<string, number>();
-    for (const voce of riepilogo.reparti) {
-      const nome = nomeReparto(voce.reparto);
-      repartiAnno.set(nome, (repartiAnno.get(nome) ?? 0) + voce.spazio);
-    }
-    repartiPerAnno.set(anno, repartiAnno);
-
-    return {
-      idKit: edizione.idKit,
-      dal: edizione.promo.validitaDal ?? edizione.data,
-      al: edizione.promo.validitaAl,
-      promo: { id: edizione.promo.id, nome: edizione.promo.nome },
-      canale: edizione.canale,
-      area: edizione.area,
-      numeroReferenze: riepilogo.referenze,
-      attivo: edizioneAttiva(edizione, oggi),
-    };
   });
 
-  const scontoAnni = anni.map(anno => ({ anno, sconto: scontoMedio(scontoPerAnno.get(anno) ?? { somma: 0, referenze: 0 }) }));
+  // I kit di un prodotto nell'ordine della timeline
+  const posizione = new Map(timeline.map((edizione, indice) => [edizione.idKit, indice] as const));
+  const ordineTimeline = (a: string, b: string): number =>
+    (posizione.get(a) ?? Number.MAX_SAFE_INTEGER) - (posizione.get(b) ?? Number.MAX_SAFE_INTEGER) || confronta(a, b);
 
-  const ricorrenti: ProdottoRicorrente[] = statistiche.ricorrenti.slice(0, NUMERO_PRODOTTI_RICORRENTI).map((prodotto) => {
-    const descrizione = descrizioni.get(prodotto.chiave);
-    return {
-      chiave: prodotto.chiave,
-      nome: descrizione?.nome ?? DESCRIZIONE_ASSENTE,
-      marca: descrizione?.marca ?? null,
-      formato: descrizione?.formato ?? null,
-      foto: descrizione?.foto ?? null,
-      volantini: prodotto.volantini,
-      perAnno: anni.map(anno => ({ anno, volantini: prodotto.perAnno[String(anno)] ?? 0 })),
-      prezzoMinimo: prodotto.prezzoMinimo,
-      prezzoMassimo: prodotto.prezzoMassimo,
-    };
-  });
+  const ricorrenti: ProdottoRicorrente[] = statistiche.ricorrenti
+    .filter(prodotto => prodotto.volantini >= MINIMO_VOLANTINI_RICORRENTE)
+    .flatMap((prodotto): ProdottoRicorrente[] => {
+      const descrizione = descrizioni.get(prodotto.chiave);
+      // Un prodotto senza descrizione non si riconosce nella scheda
+      if (!descrizione || descrizione.nome === DESCRIZIONE_ASSENTE) return [];
+      return [{
+        chiave: prodotto.chiave,
+        nome: descrizione.nome,
+        marca: descrizione.marca,
+        formato: descrizione.formato,
+        foto: descrizione.foto,
+        volantini: prodotto.volantini,
+        kit: [...prodotto.kit].sort(ordineTimeline),
+        prezzoMinimo: prodotto.prezzoMinimo,
+        prezzoMassimo: prodotto.prezzoMassimo,
+        prezzoUltimo: prodotto.prezzoUltimo,
+      }];
+    })
+    .slice(0, NUMERO_PRODOTTI_RICORRENTI);
 
   return {
     idPuntoVendita,
+    periodo,
     numeri: {
-      volantini: edizioni.length,
-      volantiniAttivi: timeline.filter(edizione => edizione.attivo).length,
+      volantini,
+      volantiniAttivi,
       referenze,
-      mediaReferenze: edizioni.length > 0 ? arrotonda(referenze / edizioni.length) : null,
+      mediaReferenze: volantini > 0 ? arrotonda(referenze / volantini) : null,
       prodotti: statistiche.prodotti,
       prodottiFrequenti: statistiche.frequenti,
       scontoMedio: scontoMedio(sconto),
-      // Il primo anno con un dato: un anno senza prezzi barrati non fa da confronto
-      scontoMedioPrimoAnno: scontoAnni.find(voce => voce.sconto !== null)?.sconto ?? null,
       insegne: [...insegne.values()],
     },
     timeline,
+    assenze: [...(opzioni.assenze ?? [])]
+      .map(({ idKit, dal, al, promo }): VolantinoAssente => ({ idKit, dal, al, promo: { id: promo.id, nome: promo.nome } }))
+      .sort((a, b) => confronta(a.dal, b.dal) || confronta(a.idKit, b.idKit)),
     anni,
-    meccaniche: MECCANICHE.map(meccanica => ({
-      meccanica,
-      anni: anni.map((anno) => {
-        const perMeccanica = meccanichePerAnno.get(anno) ?? new Map<MeccanicaReferenza, number>();
-        const totale = [...perMeccanica.values()].reduce((somma, valore) => somma + valore, 0);
-        return { anno, quota: quota(perMeccanica.get(meccanica) ?? 0, totale) };
-      }),
-    })),
-    scontoPerAnno: scontoAnni,
     marche: statistiche.marche
       .slice(0, MARCHE_IN_EVIDENZA)
-      .map(marca => ({ marca: marca.marca, quota: quota(marca.referenze, statistiche.referenzeConMarca) })),
+      .map(marca => ({ marca: marca.marca, quota: quota(marca.referenze, statistiche.referenzeConMarca), volantini: marca.volantini })),
     prodottiRicorrenti: ricorrenti,
-    reparti: anni.flatMap((anno) => {
-      const perReparto = repartiPerAnno.get(anno);
-      const totale = perReparto ? [...perReparto.values()].reduce((somma, valore) => somma + valore, 0) : 0;
-      if (!perReparto || totale <= 0) return [];
-      return [{
-        anno,
-        reparti: [...perReparto.entries()]
-          .map(([reparto, spazio]) => ({ reparto, quota: quota(spazio, totale) }))
-          .sort((a, b) => b.quota - a.quota || confronta(a.reparto, b.reparto)),
-      }];
-    }),
     copertura: coperturaDi(copertura, referenze),
   };
 }

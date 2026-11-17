@@ -6,7 +6,7 @@ import { ApplicationError, BadRequestError, NotFoundError } from '../../../../li
 import type { IAnalisiPuntoVenditaService } from '../../interfaces/IAnalisiPuntoVenditaService';
 import type { IConsultazionePuntiVenditaService } from '../../interfaces/IConsultazionePuntiVenditaService';
 import type { CollegamentiPuntiVenditaVolantino, IStoriaPuntoVenditaService } from '../../interfaces/IStoriaPuntoVenditaService';
-import type { PosizioneRiga, StatoRicercaPosizioni } from '../../../../lib/puntiVendita/analisi';
+import type { PeriodoAnalisi, PosizioneRiga, StatoRicercaPosizioni } from '../../../../lib/puntiVendita/analisi';
 import type { EsitoRicercaPosizione } from '../../repositories/PosizioniRigheRepository';
 import type { FiltriVerifica } from '../../services/AnalisiPuntoVenditaService';
 import { type IndirizzoDaCercare, type OperazioniPosizioni, RicercaPosizioniGiaInCorso } from '../../services/PosizioniRigheJob';
@@ -51,7 +51,7 @@ const ID_KIT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 function servizioFinto() {
   return {
-    analisi: vi.fn(async (idPuntoVendita: string, _idGdo: string | null) => ({ idPuntoVendita } as never)),
+    analisi: vi.fn(async (idPuntoVendita: string, _idGdo: string | null, _periodo?: PeriodoAnalisi | null) => ({ idPuntoVendita } as never)),
     volantino: vi.fn(async (_id: string, idKit: string, _idGdo: string | null) => ({ kit: { id: idKit, titolo: 'SS LI 45' } } as never)),
     referenza: vi.fn(async (_id: string, chiave: string, _idGdo: string | null) => ({ chiave } as never)),
     reteInsegne: vi.fn(async (_idGdo: string) => ({ anni: [], insegne: [] })),
@@ -135,7 +135,46 @@ describe('GET /api/punti-vendita/:id/analisi', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ idPuntoVendita: ID_PV });
-    expect(analisi.analisi).toHaveBeenCalledWith(ID_PV, 'gdo-sessione');
+    // Senza dal ne' al: tutta la storia
+    expect(analisi.analisi).toHaveBeenCalledWith(ID_PV, 'gdo-sessione', null);
+  });
+
+  it('il periodo da ?dal=&al=, primo e ultimo giorno; anche solo dal (senza fine) o solo al', async () => {
+    const { app, analisi } = creaApp();
+
+    const anno = await request(app).get(`/api/punti-vendita/${ID_PV}/analisi`).query({ dal: '2025-01-01', al: '2025-12-31' });
+    const soloDal = await request(app).get(`/api/punti-vendita/${ID_PV}/analisi`).query({ dal: '2025-01-01' });
+    const soloAl = await request(app).get(`/api/punti-vendita/${ID_PV}/analisi`).query({ al: '2024-02-29' });
+
+    expect([anno.status, soloDal.status, soloAl.status]).toEqual([200, 200, 200]);
+    expect(analisi.analisi.mock.calls.map(chiamata => chiamata[2])).toEqual([
+      { dal: '2025-01-01', al: '2025-12-31' },
+      { dal: '2025-01-01', al: null },
+      { dal: null, al: '2024-02-29' },
+    ]);
+  });
+
+  it('una data che non esiste o non e\' YYYY-MM-DD, o dal dopo al: 400 senza leggere nulla', async () => {
+    const { app, analisi } = creaApp();
+
+    for (const query of [
+      { dal: '2025-02-30' },
+      { al: '2025-13-01' },
+      { dal: '2025-1-1' },
+      { dal: 'ieri' },
+      { dal: '2025-12-31', al: '2025-01-01' },
+    ]) {
+      const res = await request(app).get(`/api/punti-vendita/${ID_PV}/analisi`).query(query);
+      expect(res.status, JSON.stringify(query)).toBe(400);
+    }
+    expect(analisi.analisi).not.toHaveBeenCalled();
+  });
+
+  it('un periodo di un giorno solo e\' valido', async () => {
+    const { app, analisi } = creaApp();
+
+    expect((await request(app).get(`/api/punti-vendita/${ID_PV}/analisi`).query({ dal: '2025-06-01', al: '2025-06-01' })).status).toBe(200);
+    expect(analisi.analisi).toHaveBeenCalledWith(ID_PV, 'gdo-sessione', { dal: '2025-06-01', al: '2025-06-01' });
   });
 
   it('senza "gdo.visualizza" 403', async () => {
@@ -158,7 +197,7 @@ describe('GET /api/punti-vendita/:id/analisi', () => {
     anagrafica.idGdo = null;
     const superadmin = creaApp({ tipo: TIPO_UTENTI.SUPERADMIN });
     expect((await request(superadmin.app).get(`/api/punti-vendita/${ID_PV}/analisi`)).status).toBe(200);
-    expect(superadmin.analisi.analisi).toHaveBeenCalledWith(ID_PV, null);
+    expect(superadmin.analisi.analisi).toHaveBeenCalledWith(ID_PV, null, null);
 
     const marketing = creaApp({ tipo: TIPO_UTENTI.MARKETING });
     expect((await request(marketing.app).get(`/api/punti-vendita/${ID_PV}/analisi`)).status).toBe(404);

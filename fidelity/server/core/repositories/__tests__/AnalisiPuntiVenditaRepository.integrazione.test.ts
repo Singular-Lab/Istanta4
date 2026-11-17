@@ -151,7 +151,7 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
       {
         idKit: k1.idRuntime, versione: 1, referenzeAl: null, riepilogo: riepilogo(2, {
           prodotti: [['c-A', 1.5, null, 0, 5, 1, 5, 0], ['c-B', 2, null, 0, 5, 1, 5, 1]],
-          marche: [['conad', 'CONAD', 3], ['barilla', 'Barilla', 1]],
+          marche: [['conad', 'CONAD', 3]],
           descrizioni: { 'c-A': ['Pasta', 'Barilla', '500 g', null], 'c-B': ['Biscotti', null, null, 'foto-b'] },
         }),
       },
@@ -163,8 +163,8 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
         }),
       },
       {
-        idKit: k3.idRuntime, versione: 1, referenzeAl: null, riepilogo: riepilogo(2, {
-          prodotti: [['c-A', 1.9, null, 0, 5, 1, 5, 0], ['c-C', null, null, 0, null, null, null, 0]],
+        idKit: k3.idRuntime, versione: 1, referenzeAl: null, riepilogo: riepilogo(3, {
+          prodotti: [['c-A', 1.9, null, 0, 5, 1, 5, 0], ['c-B', null, null, 0, null, 2, 3, 0], ['c-C', null, null, 0, null, null, null, 0]],
           marche: [['barilla', 'Barilla', 2]],
         }),
       },
@@ -175,21 +175,35 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
       { idKit: k3.idRuntime, data: '2022-02-03' },
     ];
 
-    expect(await repository.statisticheProdotti(edizioni, { soglia: 1, ricorrenti: 2, marche: 1 })).toEqual({
+    expect(await repository.statisticheProdotti(edizioni, { soglia: 1, ricorrenti: 10, minimoVolantini: 2, marche: 2 })).toEqual({
       prodotti: 3,
-      frequenti: 1,
+      frequenti: 2,
+      // c-C e' in un volantino solo: non e' ricorrente
       ricorrenti: [
-        { chiave: 'c-A', volantini: 3, perAnno: { 2021: 1, 2022: 2 }, prezzoMinimo: 1.2, prezzoMassimo: 1.9, ultimoKit: k3.idRuntime, ultimoKitConFoto: k2.idRuntime },
-        // A parita' di volantini il piu' recente
-        { chiave: 'c-C', volantini: 1, perAnno: { 2022: 1 }, prezzoMinimo: null, prezzoMassimo: null, ultimoKit: k3.idRuntime, ultimoKitConFoto: null },
+        {
+          chiave: 'c-A', volantini: 3, kit: [k1.idRuntime, k2.idRuntime, k3.idRuntime],
+          prezzoMinimo: 1.2, prezzoMassimo: 1.9, prezzoUltimo: 1.9, ultimoKit: k3.idRuntime, ultimoKitConFoto: k2.idRuntime,
+        },
+        // L'ultimo prezzo e' quello del volantino piu' recente che ne ha uno
+        {
+          chiave: 'c-B', volantini: 2, kit: [k1.idRuntime, k3.idRuntime],
+          prezzoMinimo: 2, prezzoMassimo: 2, prezzoUltimo: 2, ultimoKit: k3.idRuntime, ultimoKitConFoto: k1.idRuntime,
+        },
       ],
-      // "CONAD" e "Conad" sono la stessa marca: vale il nome stampato piu' spesso
-      marche: [{ marca: 'CONAD', referenze: 4 }],
-      referenzeConMarca: 7,
+      // "CONAD" e "Conad" sono la stessa marca: vale il nome stampato piu' spesso; i volantini in cui compare
+      marche: [{ marca: 'CONAD', referenze: 4, volantini: 2 }, { marca: 'Barilla', referenze: 2, volantini: 1 }],
+      referenzeConMarca: 6,
     });
+    expect((await repository.statisticheProdotti(edizioni, { soglia: 1, ricorrenti: 1, minimoVolantini: 2, marche: 1 })).ricorrenti.map(voce => voce.chiave)).toEqual(['c-A']);
     // A parita' di volantini e di data, per chiave
-    expect((await repository.statisticheProdotti([edizioni[0]], { soglia: 10, ricorrenti: 10, marche: 8 })).ricorrenti.map(voce => voce.chiave)).toEqual(['c-A', 'c-B']);
-    expect(await repository.statisticheProdotti([], { soglia: 10, ricorrenti: 10, marche: 8 })).toEqual({ prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], referenzeConMarca: 0 });
+    expect((await repository.statisticheProdotti([edizioni[0]], { soglia: 10, ricorrenti: 10, minimoVolantini: 1, marche: 8 })).ricorrenti.map(voce => voce.chiave)).toEqual(['c-A', 'c-B']);
+    // Kit e ultimo prezzo solo dei volantini indicati (senza un prezzo: null); a parita' di volantini e di data, per chiave
+    expect((await repository.statisticheProdotti(edizioni.slice(1), { soglia: 10, ricorrenti: 10, minimoVolantini: 1, marche: 8 })).ricorrenti.map(voce => [voce.chiave, voce.kit, voce.prezzoUltimo])).toEqual([
+      ['c-A', [k2.idRuntime, k3.idRuntime], 1.9],
+      ['c-B', [k3.idRuntime], null],
+      ['c-C', [k3.idRuntime], null],
+    ]);
+    expect(await repository.statisticheProdotti([], { soglia: 10, ricorrenti: 10, minimoVolantini: 2, marche: 8 })).toEqual({ prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], referenzeConMarca: 0 });
 
     const descrizioni = await repository.descrizioniProdotti([
       { idKit: k2.idRuntime, chiave: 'c-A' },

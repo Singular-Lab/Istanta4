@@ -6,13 +6,13 @@ import type { ComponentType } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { STATO_PROMO } from "../../../lib/enums";
-import type { AnalisiPuntoVendita, DettaglioVolantinoPv, EdizioneTimeline } from "../../../lib/puntiVendita/analisi";
+import type { AnalisiPuntoVendita, DettaglioVolantinoPv, EdizioneTimeline, PeriodoAnalisi } from "../../../lib/puntiVendita/analisi";
 import type { PuntoVenditaConsultazione } from "../../../lib/puntiVendita/consultazione";
 import type { PaginaVolantiniStoria, StoriaPuntoVendita, VolantinoNellaStoria } from "../../../lib/puntiVendita/storia";
 
 // Scheda di consultazione del punto vendita (/punti-vendita/:id), costruita sulla timeline dei
-// volantini: numeri, storia con il volantino scelto, infografiche, recapiti, eventi, volantini attivi,
-// tutti i volantini, dati e mappa
+// volantini: un periodo per tutta la scheda, numeri, storia con le corsie e il volantino scelto,
+// infografiche del periodo, cambiamenti, volantini attivi, tutti i volantini, dati e mappa
 
 const finti = vi.hoisted(() => ({
   permessi: new Set<string>(),
@@ -24,6 +24,7 @@ const finti = vi.hoisted(() => ({
   dettaglio: (_idKit: string) => ({}) as Record<string, unknown>,
   richiesteVolantiniStoria: [] as Array<[string, number, number]>,
   richiesteVolantino: [] as string[],
+  richiesteAnalisi: [] as Array<PeriodoAnalisi | null>,
 }));
 
 vi.mock("leaflet/dist/leaflet.css", () => ({}));
@@ -55,7 +56,10 @@ vi.mock("@/query/query", () => ({
     finti.richiesteVolantiniStoria.push([idPv, pagina, dimensione]);
     return finti.volantiniStoria;
   },
-  useFetchAnalisiPuntoVendita: () => finti.analisi,
+  useFetchAnalisiPuntoVendita: (_idPv: string, periodo: PeriodoAnalisi | null) => {
+    finti.richiesteAnalisi.push(periodo);
+    return finti.analisi;
+  },
   useFetchVolantinoPuntoVendita: (_idPv: string, idKit: string) => {
     finti.richiesteVolantino.push(idKit);
     return finti.dettaglio(idKit);
@@ -146,34 +150,54 @@ const edizione = (idKit: string, dal: string, al: string, canale: typeof CITY, d
   area: { id: "a1", nome: "Toscana" },
   numeroReferenze: 120,
   attivo: false,
+  pagine: 24,
+  scontoMedio: null,
+  referenzeConSconto: 0,
+  meccaniche: [],
+  reparti: [],
   ...dati,
 });
 
 const ANALISI: AnalisiPuntoVendita = {
   idPuntoVendita: "pv1",
+  periodo: null,
   numeri: {
     volantini: 3,
     volantiniAttivi: 1,
-    referenze: 400,
-    mediaReferenze: 133.3,
+    referenze: 398,
+    mediaReferenze: 132.7,
     prodotti: 250,
     prodottiFrequenti: 12,
-    scontoMedio: 27.8,
-    scontoMedioPrimoAnno: 20.9,
+    scontoMedio: 24.3,
     insegne: [CITY, SUPERSTORE],
   },
   timeline: [
-    edizione("k1", "2025-03-03", "2025-03-16", CITY, { numeroReferenze: 110 }),
-    edizione("k2", "2025-10-06", "2025-10-19", SUPERSTORE, { numeroReferenze: 140 }),
-    edizione("k3", "2026-10-23", "2026-11-05", SUPERSTORE, { numeroReferenze: 148, attivo: true }),
+    edizione("k1", "2025-03-03", "2025-03-16", CITY, {
+      numeroReferenze: 110,
+      scontoMedio: 18.5,
+      referenzeConSconto: 40,
+      meccaniche: [{ meccanica: "sconto", referenze: 50 }, { meccanica: "fidelity", referenze: 10 }],
+      reparti: [{ reparto: "Freschi", spazio: 300 }, { reparto: "Drogheria", spazio: 200 }],
+    }),
+    edizione("k2", "2025-10-06", "2025-10-19", SUPERSTORE, {
+      numeroReferenze: 140,
+      scontoMedio: 22,
+      referenzeConSconto: 60,
+      meccaniche: [{ meccanica: "sconto", referenze: 40 }, { meccanica: "fidelity", referenze: 20 }],
+      reparti: [{ reparto: "Drogheria", spazio: 300 }, { reparto: "Freschi", spazio: 200 }],
+    }),
+    edizione("k3", "2026-10-23", "2026-11-05", SUPERSTORE, {
+      numeroReferenze: 148,
+      attivo: true,
+      scontoMedio: 29.3,
+      referenzeConSconto: 74,
+      meccaniche: [{ meccanica: "sconto", referenze: 37 }, { meccanica: "fidelity", referenze: 21 }],
+      reparti: [{ reparto: "Freschi", spazio: 600 }, { reparto: "Drogheria", spazio: 400 }],
+    }),
   ],
+  assenze: [{ idKit: "a1", dal: "2025-06-02", al: "2025-06-15", promo: { id: "pa1", nome: "Promo assente" } }],
   anni: [2025, 2026],
-  meccaniche: [
-    { meccanica: "fidelity", anni: [{ anno: 2025, quota: 14 }, { anno: 2026, quota: 21 }] },
-    { meccanica: "sconto", anni: [{ anno: 2025, quota: 41 }, { anno: 2026, quota: 37 }] },
-  ],
-  scontoPerAnno: [{ anno: 2025, sconto: 20.9 }, { anno: 2026, sconto: 27.8 }],
-  marche: [{ marca: "Barilla", quota: 3.2 }, { marca: "Granarolo", quota: 2.5 }],
+  marche: [{ marca: "Barilla", quota: 3.2, volantini: 3 }, { marca: "Granarolo", quota: 2.5, volantini: 1 }],
   prodottiRicorrenti: [
     {
       chiave: "mozzarella-granarolo",
@@ -181,13 +205,13 @@ const ANALISI: AnalisiPuntoVendita = {
       marca: "Granarolo",
       formato: "3 × 100 g",
       foto: null,
-      volantini: 23,
-      perAnno: [{ anno: 2025, volantini: 10 }, { anno: 2026, volantini: 13 }],
+      volantini: 2,
+      kit: ["k1", "k3"],
       prezzoMinimo: 1.49,
       prezzoMassimo: 1.99,
+      prezzoUltimo: 1.79,
     },
   ],
-  reparti: [{ anno: 2026, reparti: [{ reparto: "Freschi", quota: 60 }, { reparto: "Drogheria", quota: 40 }] }],
   copertura: COPERTURA,
 };
 
@@ -247,6 +271,7 @@ describe("Scheda del punto vendita", () => {
     finti.dettaglio = idKit => caricato(dettaglio(idKit));
     finti.richiesteVolantiniStoria = [];
     finti.richiesteVolantino = [];
+    finti.richiesteAnalisi = [];
   });
 
   it("intestazione con nome, insegna e area, e ritorno all'elenco", () => {
@@ -269,17 +294,36 @@ describe("Scheda del punto vendita", () => {
     expect(sezione("Dati").parentElement).toHaveAttribute("id", "dati-e-mappa");
   });
 
-  it("Numeri: volantini, referenze, prodotti, sconto medio e insegne, con il contesto", () => {
+  it("Numeri: volantini con le assenze, giorni coperti, referenze, sconto e prodotti di tutta la storia", () => {
     apri();
 
     const numeri = screen.getByLabelText("Il punto vendita in numeri");
-    expect(numeri).toHaveTextContent("volantini dal mar 2025");
+    expect(numeri).toHaveTextContent("volantini dal marzo 2025");
     expect(numeri).toHaveTextContent("1 attivo adesso");
-    expect(numeri).toHaveTextContent("133 per volantino in media");
-    expect(numeri).toHaveTextContent("12 presenti in più di 10 volantini");
-    expect(numeri).toHaveTextContent("27,8%");
-    expect(numeri).toHaveTextContent("+6,9 punti dal 2025");
-    expect(numeri).toHaveTextContent("Conad City → Conad Superstore");
+    expect(numeri).toHaveTextContent("assente da 1 su 4 della sua insegna e area");
+    expect(numeri).toHaveTextContent("dei giorni con un volantino valido");
+    const cella = (etichetta: string) => within(numeri).getByText(etichetta).parentElement!;
+    expect(cella("referenze per volantino")).toHaveTextContent("133");
+    expect(cella("referenze per volantino")).toHaveTextContent("398 in tutto");
+    // Sconto pesato sulle referenze col prezzo barrato di ogni volantino
+    expect(numeri).toHaveTextContent("24,3%");
+    expect(cella("prodotti diversi")).toHaveTextContent("250");
+    expect(cella("prodotti diversi")).toHaveTextContent("12 presenti in più di 10 volantini");
+    // Tutta la storia non ha un periodo prima con cui confrontarsi
+    expect(numeri).not.toHaveTextContent("rispetto");
+    expect(finti.richiesteAnalisi.at(-1)).toBeNull();
+  });
+
+  it("Numeri di un anno: confronto con l'anno prima e richiesta del periodo al server", () => {
+    apri("/punti-vendita/pv1?anno=2026");
+
+    const numeri = screen.getByLabelText("Il punto vendita in numeri");
+    expect(numeri).toHaveTextContent("volantini nel 2026");
+    expect(numeri).toHaveTextContent("+23 rispetto al 2025");
+    expect(numeri).toHaveTextContent("+8,7 punti rispetto al 2025");
+    // Nel 2026 il punto vendita non manca da nessun volantino della sua insegna e area
+    expect(numeri).not.toHaveTextContent("assente");
+    expect(finti.richiesteAnalisi.at(-1)).toEqual({ dal: "2026-01-01", al: "2026-12-31" });
   });
 
   it("Numeri e riquadri in caricamento: gli scheletri", () => {
@@ -361,38 +405,56 @@ describe("Scheda del punto vendita", () => {
     expect(scelto).toHaveTextContent("Promo k3");
     expect(scelto).toHaveTextContent("23 ottobre – 5 novembre 2026");
     expect(scelto).toHaveTextContent("attivo");
+    expect(scelto).toHaveTextContent("148 referenze");
+    // La media del periodo: (110 + 140 + 148) / 3
+    expect(scelto).toHaveTextContent("+15 sulla media del periodo");
+    expect(scelto).toHaveTextContent("29,3% sconto medio");
     expect(scelto).toHaveTextContent("24 pagine");
-    expect(scelto).toHaveTextContent("sconto medio 31,2%");
     expect(scelto).toHaveTextContent("212 punti vendita nella lista");
+    expect(within(scelto).getByRole("img", { name: "Meccaniche di questo volantino: Sconto in % 64%, Prezzo Fidelity 36%" })).toBeInTheDocument();
+    expect(within(scelto).getByRole("list", { name: "Reparti con più spazio" })).toHaveTextContent("Freschi 60%");
     expect(scelto).toHaveTextContent("LUCCA - Via Roma 1 - tel. 0583 123456 (k3)");
     expect(within(scelto).getByRole("link", { name: "Apri volantino" })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k3");
     expect(within(scelto).getByRole("button", { name: "Volantino successivo" })).toBeDisabled();
   });
 
-  it("Storia: insegne ed eventi della storia in legenda", () => {
-    apri();
-
-    const legenda = within(sezione("Storia")).getByRole("list", { name: "Legenda" });
-    expect(within(legenda).getAllByRole("listitem").map(v => v.textContent)).toEqual(["Conad City", "Conad Superstore", "cambio di insegna", "indirizzo cambiato"]);
-  });
-
-  it("Storia: il periodo predefinito va dal primo anno a oggi, con la linea di oggi sul calendario", () => {
+  it("Storia: insegne, eventi, meccaniche e assenze in legenda", () => {
     apri();
 
     const storia = sezione("Storia");
-    expect(within(storia).getAllByRole("radio").map(r => r.textContent)).toEqual(["Dal 2025", "2026", "2025", "Ultimi 3 mesi"]);
-    expect(within(storia).getByRole("radio", { name: "Dal 2025" })).toHaveAttribute("aria-checked", "true");
-    const timeline = within(storia).getByRole("group", { name: /Timeline/ });
+    const voci = within(within(storia).getByRole("list", { name: "Legenda" })).getAllByRole("listitem").map(v => v.textContent);
+    for (const voce of ["Conad City", "Conad Superstore", "cambio di insegna", "indirizzo cambiato"]) expect(voci).toContain(voce);
+    expect(voci.some(v => v?.includes("senza il punto vendita"))).toBe(true);
+    // Le meccaniche hanno la legenda della loro corsia, a parte da quella delle insegne
+    const meccaniche = within(within(storia).getByRole("list", { name: "Meccaniche" })).getAllByRole("listitem").map(v => v.textContent);
+    expect(meccaniche).toEqual(["Sconto in %", "Prezzo Fidelity"]);
+  });
+
+  it("Storia: sotto la timeline le corsie di referenze, sconto, meccaniche e indirizzo stampato", () => {
+    apri();
+
+    const timeline = within(sezione("Storia")).getByRole("group", { name: /Timeline/ });
+    expect(within(timeline).getByText(/^Referenze/)).toBeInTheDocument();
+    expect(within(timeline).getByText(/^Sconto medio/)).toBeInTheDocument();
+    expect(within(timeline).getByText(/^Meccaniche/)).toBeInTheDocument();
+    expect(within(timeline).getByText(/^Indirizzo stampato/)).toBeInTheDocument();
+  });
+
+  it("Periodo: dal primo anno a oggi, per tutta la scheda, con la linea di oggi sul calendario", () => {
+    apri();
+
+    expect(screen.getAllByRole("radio").map(r => r.textContent)).toEqual(["Dal 2025", "2026", "2025", "Ultimi 12 mesi", "Ultimi 3 mesi"]);
+    expect(screen.getByRole("radio", { name: "Dal 2025" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.queryByText("Il periodo vale per timeline, numeri e grafici.")).not.toBeInTheDocument();
+    const timeline = within(sezione("Storia")).getByRole("group", { name: /Timeline/ });
     expect(within(timeline).getByText("oggi")).toBeInTheDocument();
   });
 
-  it("Storia: nello zoom su un anno l'insegna è scritta nella fascia e l'asse va per mesi del calendario", () => {
+  it("Storia: nello zoom su un anno l'asse va per mesi del calendario e ci sono solo i volantini dell'anno", () => {
     apri("/punti-vendita/pv1?anno=2026");
 
     const timeline = within(sezione("Storia")).getByRole("group", { name: /Timeline/ });
-    expect(timeline).toHaveTextContent("Conad Superstore · Toscana");
-    expect(within(timeline).getByText("gen 2026")).toBeInTheDocument();
-    expect(within(timeline).getByText("ott 2026")).toBeInTheDocument();
+    expect(within(timeline).getByText(/^ott( 2026)?$/)).toBeInTheDocument();
     expect(within(sezione("Storia")).getAllByRole("option")).toHaveLength(1);
   });
 
@@ -403,7 +465,8 @@ describe("Scheda del punto vendita", () => {
       apri("/punti-vendita/pv1?anno=ultimi3mesi&volantino=k1");
 
       const storia = sezione("Storia");
-      expect(within(storia).getByRole("radio", { name: "Ultimi 3 mesi" })).toHaveAttribute("aria-checked", "true");
+      expect(screen.getByRole("radio", { name: "Ultimi 3 mesi" })).toHaveAttribute("aria-checked", "true");
+      expect(finti.richiesteAnalisi.at(-1)).toEqual({ dal: "2026-08-10", al: null });
       // Il volantino di marzo 2025 non è nel periodo: si sceglie il più recente
       expect(within(storia).getAllByRole("option")).toHaveLength(1);
       expect(within(storia).getByRole("option", { name: /Promo k3/ })).toHaveAttribute("aria-selected", "true");
@@ -414,8 +477,9 @@ describe("Scheda del punto vendita", () => {
       expect(within(timeline).getByText("12")).toBeInTheDocument();
       expect(within(timeline).getByText("oggi")).toBeInTheDocument();
 
-      fireEvent.click(within(storia).getByRole("radio", { name: "Dal 2025" }));
+      fireEvent.click(screen.getByRole("radio", { name: "Dal 2025" }));
       expect(within(storia).getAllByRole("option")).toHaveLength(3);
+      expect(finti.richiesteAnalisi.at(-1)).toBeNull();
     } finally {
       vi.useRealTimers();
     }
@@ -461,9 +525,10 @@ describe("Scheda del punto vendita", () => {
     apri("/punti-vendita/pv1?volantino=k3");
 
     const storia = sezione("Storia");
-    await userEvent.click(within(storia).getByRole("radio", { name: "2025" }));
+    await userEvent.click(screen.getByRole("radio", { name: "2025" }));
 
     expect(within(storia).getAllByRole("option")).toHaveLength(2);
+    expect(finti.richiesteAnalisi.at(-1)).toEqual({ dal: "2025-01-01", al: "2025-12-31" });
     expect(within(storia).getByRole("option", { name: /Promo k2/ })).toHaveAttribute("aria-selected", "true");
     expect(within(storia).getByRole("region", { name: "Volantino selezionato" })).toHaveTextContent("Promo k2");
   });
@@ -483,12 +548,10 @@ describe("Scheda del punto vendita", () => {
       ...ANALISI,
       numeri: { ...ANALISI.numeri, volantini: 0, volantiniAttivi: 0, referenze: 0, prodotti: 0, prodottiFrequenti: 0, scontoMedio: null, insegne: [] },
       timeline: [],
+      assenze: [],
       anni: [],
-      meccaniche: [],
-      scontoPerAnno: [],
       marche: [],
       prodottiRicorrenti: [],
-      reparti: [],
     });
     finti.storia = caricato({ ...STORIA, sintesi: null, anni: [], insegne: [], recapiti: [], eventi: [] });
     apri();
@@ -498,7 +561,9 @@ describe("Scheda del punto vendita", () => {
     // La guida alla lettura della timeline non serve senza timeline
     expect(storia).not.toHaveTextContent("Ogni barra è un volantino");
     expect(screen.queryByLabelText("Il punto vendita in numeri")).not.toBeInTheDocument();
-    for (const titolo of ["Come si promuove", "Sconto medio", "Marche più presenti", "Prodotti che tornano", "Dove sta nel volantino", "Indirizzo e telefono stampati", "Eventi"]) {
+    // Senza volantini non c'è un periodo da scegliere
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+    for (const titolo of ["Come si promuove", "Spazio per reparto", "Marche più presenti", "Stagionalità dei reparti", "Prodotti che tornano", "Cambiamenti"]) {
       expect(screen.queryByRole("region", { name: titolo })).not.toBeInTheDocument();
     }
     expect(screen.queryByRole("complementary", { name: "Grafici senza dati" })).not.toBeInTheDocument();
@@ -526,7 +591,11 @@ describe("Scheda del punto vendita", () => {
   });
 
   it("Numeri: lo sconto che non si può calcolare non ha la sua cella, niente N/D", () => {
-    finti.analisi = caricato({ ...ANALISI, numeri: { ...ANALISI.numeri, scontoMedio: null, prodottiFrequenti: 0 } });
+    finti.analisi = caricato({
+      ...ANALISI,
+      numeri: { ...ANALISI.numeri, scontoMedio: null, prodottiFrequenti: 0 },
+      timeline: ANALISI.timeline.map(e => ({ ...e, scontoMedio: null, referenzeConSconto: 0 })),
+    });
     apri();
 
     const numeri = screen.getByLabelText("Il punto vendita in numeri");
@@ -556,61 +625,115 @@ describe("Scheda del punto vendita", () => {
     expect(within(sezione("Come si promuove")).getByRole("alert")).toHaveTextContent("Timeout");
     expect(within(sezione("Prodotti che tornano")).getByRole("alert")).toHaveTextContent("Prodotti non caricati");
     expect(sezione("Volantini attivi")).toHaveTextContent("Promo novembre");
-    await userEvent.click(within(sezione("Sconto medio")).getByRole("button", { name: "Riprova" }));
+    await userEvent.click(within(sezione("Marche più presenti")).getByRole("button", { name: "Riprova" }));
     expect(refetch).toHaveBeenCalled();
   });
 
-  it("Come si promuove: le meccaniche per anno, nell'ordine fisso delle meccaniche", () => {
+  it("Come si promuove: le quote del periodo dalla più alta, col colore della meccanica", () => {
     apri();
 
-    const grafico = within(sezione("Come si promuove")).getByRole("img", { name: "Meccaniche per anno" });
-    const righe = within(grafico).getAllByText(/^(Sconto in %|Prezzo Fidelity)$/).map(t => t.textContent);
-    expect(righe).toEqual(["Sconto in %", "Prezzo Fidelity"]);
-    expect(within(grafico).getByText("41%")).toBeInTheDocument();
+    const grafico = within(sezione("Come si promuove")).getByRole("img", { name: "Meccaniche del periodo" });
+    // Tutta la storia: sconto 127 e fidelity 51 referenze su 178
+    expect(grafico).toHaveTextContent("Sconto in %");
+    expect(grafico).toHaveTextContent("71,3%");
+    expect(grafico).toHaveTextContent("28,7%");
+    // Senza un periodo prima non c'è il segno del confronto
+    expect(sezione("Come si promuove")).not.toHaveTextContent("Il segno verticale");
   });
 
-  it("Sconto medio e marche più presenti: i grafici con i loro valori", () => {
+  it("Come si promuove e Spazio per reparto in un anno: il valore dell'anno prima e la differenza in punti", () => {
+    apri("/punti-vendita/pv1?anno=2026");
+
+    const meccaniche = sezione("Come si promuove");
+    expect(meccaniche).toHaveTextContent("Quota delle referenze per meccanica nel 2026. Il segno verticale è il valore nel 2025.");
+    // 2026: fidelity 21 su 58 (36,2%); 2025: 30 su 120 (25%)
+    expect(meccaniche).toHaveTextContent("36,2%");
+    expect(meccaniche).toHaveTextContent("+11,2 punti");
+    const reparti = sezione("Spazio per reparto");
+    // 2026: Freschi 600 su 1000; 2025: 500 su 1000
+    expect(reparti).toHaveTextContent("60%");
+    expect(reparti).toHaveTextContent("+10 punti");
+  });
+
+  it("Marche più presenti: quota e volantini in cui compaiono", () => {
     apri();
 
-    expect(within(sezione("Sconto medio")).getByRole("img", { name: "Sconto medio per anno" })).toHaveTextContent("27,8%");
-    const marche = within(sezione("Marche più presenti")).getByRole("img", { name: "Marche più presenti" });
-    expect(marche).toHaveTextContent("Barilla");
+    const marche = sezione("Marche più presenti");
+    expect(within(marche).getByRole("img", { name: "Marche più presenti" })).toHaveTextContent("Barilla");
     expect(marche).toHaveTextContent("3,2%");
+    expect(marche).toHaveTextContent("in 3 volantini");
+    expect(marche).toHaveTextContent("in 1 volantino");
+    expect(marche).toHaveTextContent("Quota delle referenze con la marca dal marzo 2025.");
   });
 
-  it("Prodotti che tornano: ogni prodotto apre la sua referenza, con la presenza anno per anno", () => {
+  it("Prodotti che tornano: presenza volantino per volantino, forbice del prezzo e ultima volta; ogni prodotto apre la sua referenza", () => {
     apri();
 
     const prodotti = sezione("Prodotti che tornano");
     expect(within(prodotti).getByRole("link", { name: "Mozzarella Alta Qualità" })).toHaveAttribute("href", "/punti-vendita/pv1/referenze/mozzarella-granarolo");
-    expect(within(prodotti).getByRole("img", { name: "Volantini per anno: 2025 10, 2026 13" })).toBeInTheDocument();
     expect(prodotti).toHaveTextContent("Granarolo · 3 × 100 g");
-    // Il prezzo minimo sopra, il massimo sotto: la colonna resta stretta e il nome del prodotto ha spazio
-    expect(prodotti).toHaveTextContent("€ 1,49");
-    expect(prodotti).toHaveTextContent("fino a € 1,99");
+    expect(prodotti).toHaveTextContent("2 su 3");
+    expect(within(prodotti).getByRole("img", { name: "Mozzarella Alta Qualità: presente in 2 su 3 volantini" })).toBeInTheDocument();
+    expect(prodotti).toHaveTextContent("€ 1,49 – € 1,99");
+    // L'ultima volta è il volantino k3
+    expect(prodotti).toHaveTextContent("23/10/2026");
+    expect(prodotti).toHaveTextContent("in almeno 2 volantini dal marzo 2025");
   });
 
-  it("Dove sta nel volantino: con pochi reparti noti dice che il dato è parziale e da dove viene", () => {
+  it("Spazio per reparto: con pochi reparti noti dice che il dato è parziale e da dove viene", () => {
     apri();
 
-    const reparti = sezione("Dove sta nel volantino");
-    expect(within(reparti).getByRole("img", { name: "Spazio di pagina per reparto" })).toBeInTheDocument();
+    const reparti = sezione("Spazio per reparto");
+    expect(within(reparti).getByRole("img", { name: "Spazio per reparto" })).toHaveTextContent("Freschi");
+    // Tutta la storia: Freschi 1100 su 2000
+    expect(reparti).toHaveTextContent("55%");
     expect(reparti).toHaveTextContent("Dato parziale.");
     expect(reparti).toHaveTextContent("Il reparto arriva da DB1");
     expect(reparti).toHaveTextContent("35%");
   });
 
-  it("Dove sta nel volantino: senza reparti niente riquadro vuoto, una nota dice che manca e perché", () => {
-    finti.analisi = caricato({ ...ANALISI, reparti: [], copertura: { ...COPERTURA, conReparto: 0 } });
+  it("Spazio per reparto: oltre 8 reparti i 7 più grandi e gli altri sommati in \"Altri reparti\", in fondo", () => {
+    const reparti = Array.from({ length: 10 }, (_, i) => ({ reparto: `Reparto ${String.fromCharCode(65 + i)}`, spazio: 100 - i * 5 }));
+    finti.analisi = caricato({ ...ANALISI, timeline: ANALISI.timeline.map(e => ({ ...e, reparti })) });
     apri();
 
-    expect(screen.queryByRole("region", { name: "Dove sta nel volantino" })).not.toBeInTheDocument();
+    const grafico = within(sezione("Spazio per reparto")).getByRole("img", { name: "Spazio per reparto" });
+    expect(grafico).toHaveTextContent("Reparto A");
+    expect(grafico).toHaveTextContent("Reparto G");
+    expect(grafico).not.toHaveTextContent("Reparto H");
+    expect(grafico).toHaveTextContent("Altri reparti");
+    // Reparti H, I e J: 65 + 60 + 55 su 775
+    expect(grafico).toHaveTextContent("23,2%");
+  });
+
+  it("Storia: le barre dei volantini nel colore del tema, non in quello dell'insegna; nella testata l'insegna senza pallino colorato", () => {
+    const { container } = apri();
+
+    expect(container.querySelector('[data-barra="k3"]')).toHaveClass("fill-theme-1");
+    const intestazione = screen.getByRole("heading", { level: 1 }).parentElement!;
+    // Il pallino dell'insegna (PuntoInsegna) era un cerchio di raggio 4,5
+    expect(intestazione.querySelector('circle[r="4.5"]')).toBeNull();
+  });
+
+  it("Spazio per reparto: senza reparti niente riquadro vuoto, una nota dice che manca e perché", () => {
+    finti.analisi = caricato({ ...ANALISI, timeline: ANALISI.timeline.map(e => ({ ...e, reparti: [] })), copertura: { ...COPERTURA, conReparto: 0 } });
+    apri();
+
+    expect(screen.queryByRole("region", { name: "Spazio per reparto" })).not.toBeInTheDocument();
     const nota = screen.getByRole("complementary", { name: "Grafici senza dati" });
-    expect(nota).toHaveTextContent("Dove sta nel volantino");
+    expect(nota).toHaveTextContent("Spazio per reparto");
     expect(nota).toHaveTextContent("il reparto non è arrivato da DB1 né da Istanta");
     expect(nota).not.toHaveTextContent("Prodotti che tornano");
     // Gli altri grafici restano
     expect(sezione("Prodotti che tornano")).toBeInTheDocument();
+  });
+
+  it("Prodotti che tornano: senza prodotti in almeno 2 volantini la nota lo dice, senza riquadro vuoto", () => {
+    finti.analisi = caricato({ ...ANALISI, prodottiRicorrenti: [] });
+    apri();
+
+    expect(screen.queryByRole("region", { name: "Prodotti che tornano" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "Grafici senza dati" })).toHaveTextContent("nessun prodotto compare in almeno 2 volantini del periodo");
   });
 
   it("con tutti i grafici disegnati non c'è la nota dei grafici senza dati", () => {
@@ -618,46 +741,49 @@ describe("Scheda del punto vendita", () => {
     expect(screen.queryByRole("complementary", { name: "Grafici senza dati" })).not.toBeInTheDocument();
   });
 
-  it("Marche più presenti: senza anni la descrizione si chiude senza la virgola", () => {
-    finti.analisi = caricato({ ...ANALISI, anni: [] });
-    apri();
-    expect(sezione("Marche più presenti")).toHaveTextContent("Quota delle referenze con la marca.");
+  it("niente griglie colorate per mese: anche con volantini in tutti i 12 mesi lo spazio per reparto resta a barre", () => {
+    const anno = Array.from({ length: 12 }, (_, m) =>
+      edizione(`m${m + 1}`, `2025-${String(m + 1).padStart(2, "0")}-05`, `2025-${String(m + 1).padStart(2, "0")}-18`, SUPERSTORE, {
+        meccaniche: [{ meccanica: "sconto", referenze: 10 }],
+        reparti: [{ reparto: "Bevande", spazio: m === 6 ? 40 : 20 }, { reparto: "Drogheria", spazio: m === 6 ? 60 : 80 }],
+      })
+    );
+    finti.analisi = caricato({ ...ANALISI, timeline: anno, assenze: [], anni: [2025] });
+    apri("/punti-vendita/pv1?anno=2025");
+
+    expect(screen.queryByRole("region", { name: "Stagionalità dei reparti" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/media del reparto/)).not.toBeInTheDocument();
+    expect(within(sezione("Spazio per reparto")).getByRole("img", { name: "Spazio per reparto" })).toHaveTextContent("Bevande");
   });
 
-  it("Eventi: in italiano, con la data, e il primo volantino registrato in fondo", () => {
+  it("Cambiamenti: eventi e recapiti stampati dal più recente, il primo volantino registrato in fondo", () => {
     apri();
 
-    const voci = within(within(sezione("Eventi")).getByRole("list", { name: "Eventi" })).getAllByRole("listitem");
+    const voci = within(within(sezione("Cambiamenti")).getByRole("list", { name: "Cambiamenti" })).getAllByRole("listitem");
+    expect(voci).toHaveLength(5);
     expect(voci[0]).toHaveTextContent("Cambio di insegna");
     expect(voci[0]).toHaveTextContent("10/01/2023");
     expect(voci[0]).toHaveTextContent("Da Conad City a Conad Superstore.");
     expect(voci[1]).toHaveTextContent("Nei volantini era «Via Vecchia 3», poi «Via Roma 1».");
-    expect(voci[2]).toHaveTextContent("Primo volantino registrato");
-    expect(voci[2]).toHaveTextContent("03/03/2025");
-    expect(voci[2]).toHaveTextContent("Promo k1 · Conad City · Toscana");
+    expect(voci[2]).toHaveTextContent("Stampato come in anagrafica");
+    expect(voci[2]).toHaveTextContent("Via Roma 1, Lucca · tel. 0583 123456");
+    expect(voci[2]).not.toHaveTextContent("Diverso dall'attuale");
+    expect(voci[3]).toHaveTextContent("Via Vecchia 3, Lucca · tel. 0583 000000");
+    expect(voci[3]).toHaveTextContent("Diverso dall'attuale");
+    expect(voci[4]).toHaveTextContent("Primo volantino registrato");
+    expect(voci[4]).toHaveTextContent("03/03/2025");
+    expect(voci[4]).toHaveTextContent("Promo k1 · Conad City · Toscana");
   });
 
-  it("Indirizzo e telefono stampati: i tratti nel tempo e i recapiti diversi dall'attuale segnalati", () => {
-    apri();
-
-    const recapiti = sezione("Indirizzo e telefono stampati");
-    expect(within(recapiti).getByRole("img", { name: "Indirizzo e telefono stampati nel tempo" })).toBeInTheDocument();
-    const voci = within(within(recapiti).getByRole("list", { name: "Recapiti stampati" })).getAllByRole("listitem");
-    expect(voci[0]).toHaveTextContent("Via Roma 1, Lucca · tel. 0583 123456");
-    expect(voci[0]).not.toHaveTextContent("Diverso dall'attuale");
-    expect(voci[1]).toHaveTextContent("Via Vecchia 3, Lucca · tel. 0583 000000");
-    expect(voci[1]).toHaveTextContent("Diverso dall'attuale");
-  });
-
-  it("Storia del punto vendita non arrivata: eventi e recapiti mostrano l'errore, la timeline resta", async () => {
+  it("Storia del punto vendita non arrivata: i cambiamenti mostrano l'errore, la timeline resta", async () => {
     const refetch = vi.fn();
     finti.storia = { data: undefined, isLoading: false, isError: true, error: new Error("Timeout"), refetch };
     apri();
 
-    expect(within(sezione("Eventi")).getByRole("alert")).toHaveTextContent("Eventi non caricati");
-    expect(within(sezione("Indirizzo e telefono stampati")).getByRole("alert")).toHaveTextContent("Timeout");
+    expect(within(sezione("Cambiamenti")).getByRole("alert")).toHaveTextContent("Cambiamenti non caricati");
+    expect(within(sezione("Cambiamenti")).getByRole("alert")).toHaveTextContent("Timeout");
     expect(within(sezione("Storia")).getAllByRole("option")).toHaveLength(3);
-    await userEvent.click(within(sezione("Eventi")).getByRole("button", { name: "Riprova" }));
+    await userEvent.click(within(sezione("Cambiamenti")).getByRole("button", { name: "Riprova" }));
     expect(refetch).toHaveBeenCalled();
   });
 
