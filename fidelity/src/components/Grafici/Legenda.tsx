@@ -2,8 +2,11 @@ import { twMerge } from "@/utils/twMerge";
 import type { Tinta } from "./colori";
 import { percorsoCroce, percorsoRombo, percorsoTriangolo } from "./scale";
 
-/** Forma del segno in legenda: rimanda al segno del grafico (barre e aree quadrate, linee, marcatori). */
-export type FormaSegno = "quadrato" | "linea" | "cerchio" | "rombo" | "triangolo" | "croce" | "anello";
+/**
+ * Forma del segno in legenda: rimanda al segno del grafico (barre e aree quadrate, linee, marcatori;
+ * la tacca verticale di un valore di riferimento).
+ */
+export type FormaSegno = "quadrato" | "linea" | "cerchio" | "rombo" | "triangolo" | "croce" | "anello" | "tacca";
 
 export interface VoceLegenda {
   id: string;
@@ -34,6 +37,7 @@ export function SegnoLegenda({ forma, tinta, classeTratto }: Omit<VoceLegenda, "
       {forma === "rombo" && <path d={percorsoRombo(6, 6, 4.5)} strokeWidth="1.5" fill={fill} className={twMerge(classeFill, !tinta && "fill-white dark:fill-darkmode-600", tratto)} />}
       {forma === "triangolo" && <path d={percorsoTriangolo(6, 6.5, 4.5)} strokeWidth="1.5" className={twMerge("fill-white dark:fill-darkmode-600", tratto)} />}
       {forma === "croce" && <path d={percorsoCroce(6, 6, 3.5)} strokeWidth="2" strokeLinecap="round" className={tratto} />}
+      {forma === "tacca" && <line x1="6" x2="6" y1="0.5" y2="11.5" strokeWidth="2" className={tratto} />}
     </svg>
   );
 }

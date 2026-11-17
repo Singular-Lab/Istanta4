@@ -13,7 +13,8 @@ import type { PromoStoria, RiferimentoStoria, TipoAbbinamento } from './storia';
  *
  * Endpoint, tutti con "gdo.visualizza" salvo dove indicato; un PV o un kit fuori dalla GDO
  * dell'utente risponde 404:
- * - GET /api/punti-vendita/:id/analisi                         -> AnalisiPuntoVendita
+ * - GET /api/punti-vendita/:id/analisi                         dal?, al? (YYYY-MM-DD) -> AnalisiPuntoVendita
+ *        (400 se dal o al non sono date valide o dal viene dopo al; vedi PeriodoAnalisi)
  * - GET /api/punti-vendita/:id/volantini/:idKit                -> DettaglioVolantinoPv per la scheda inline della timeline
  * - GET /api/punti-vendita/:id/referenze/:chiave               -> DettaglioReferenzaPv (chiave di ProdottoRicorrente/ReferenzaSintesi)
  * - GET /api/punti-vendita/rete/insegne                        -> ReteInsegne
@@ -68,21 +69,49 @@ export interface CoperturaDati {
 
 /* ---------- Scheda del PV ---------- */
 
+/**
+ * Il periodo della scheda (GET .../analisi?dal=&al=): giorni ISO (YYYY-MM-DD), primo e ultimo
+ * compresi; senza `al` il periodo non ha fine (gli ultimi 12 o 3 mesi, volantini in arrivo
+ * compresi). Senza nessuno dei due è tutta la storia (`periodo` null nella risposta).
+ */
+export interface PeriodoAnalisi {
+  dal: string | null;
+  al: string | null;
+}
+
+/** Una data ISO del calendario (YYYY-MM-DD) che esiste davvero. */
+export const dataIsoValida = (valore: unknown): valore is string => {
+  if (typeof valore !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(valore)) return false;
+  const data = new Date(`${valore}T00:00:00Z`);
+  return !Number.isNaN(data.getTime()) && data.toISOString().slice(0, 10) === valore;
+};
+
+/**
+ * Un volantino appartiene al periodo se la sua validità inizia nel periodo: ogni volantino sta in
+ * un anno solo, anche quando finisce in quello dopo. La stessa regola vale sul server (numeri,
+ * marche, prodotti) e nella pagina (timeline e grafici per volantino).
+ */
+export const edizioneNelPeriodo = (dal: string, periodo: PeriodoAnalisi | null): boolean =>
+  periodo === null || ((periodo.dal === null || dal >= periodo.dal) && (periodo.al === null || dal <= periodo.al));
+
+/** Un prodotto ricorrente compare almeno in tanti volantini del periodo. */
+export const MINIMO_VOLANTINI_RICORRENTE = 2;
+
 export interface NumeriPuntoVendita {
+  /** Del periodo, come tutti i numeri. */
   volantini: number;
   volantiniAttivi: number;
   referenze: number;
   mediaReferenze: number | null;
   prodotti: number;
-  /** Prodotti presenti in più di 10 volantini del PV. */
+  /** Prodotti presenti in più di 10 volantini del periodo. */
   prodottiFrequenti: number;
   /** Sconto medio sulle referenze con prezzo barrato, 0–100. */
   scontoMedio: number | null;
-  scontoMedioPrimoAnno: number | null;
   insegne: RiferimentoStoria[];
 }
 
-/** Un volantino in cui compare il PV, per la timeline. */
+/** Un volantino in cui compare il PV, per la timeline, con i numeri del suo riepilogo. */
 export interface EdizioneTimeline {
   idKit: string;
   /** Date ISO (YYYY-MM-DD) di validità della promo. */
@@ -93,6 +122,32 @@ export interface EdizioneTimeline {
   area: RiferimentoStoria;
   numeroReferenze: number;
   attivo: boolean;
+  /** La pagina più alta con una referenza. */
+  pagine: number;
+  /** Sconto medio delle referenze con il prezzo barrato, 0–100 con due decimali; null se nessuna lo ha. */
+  scontoMedio: number | null;
+  /** Referenze con il prezzo barrato: il peso del volantino nello sconto medio di un periodo. */
+  referenzeConSconto: number;
+  /** Referenze per meccanica: solo le meccaniche presenti, nell'ordine di MECCANICHE. */
+  meccaniche: Array<{ meccanica: MeccanicaReferenza; referenze: number }>;
+  /**
+   * Spazio dei box per reparto (somma delle percentuali di pagina), col nome per il marketing
+   * delle Impostazioni GDO (i reparti con lo stesso nome si sommano), dal più grande; vuoto se il
+   * reparto non è noto.
+   */
+  reparti: Array<{ reparto: string; spazio: number }>;
+}
+
+/**
+ * Un volantino della stessa insegna e della stessa area del PV, con la lista dei punti vendita
+ * registrata, in cui il PV non compare.
+ */
+export interface VolantinoAssente {
+  idKit: string;
+  /** Date ISO di validità della promo; senza la data di inizio, il giorno dell'edizione. */
+  dal: string;
+  al: string | null;
+  promo: { id: string; nome: string };
 }
 
 export interface ProdottoRicorrente {
@@ -103,26 +158,35 @@ export interface ProdottoRicorrente {
   formato: string | null;
   /** Guid Olimpo della foto più recente. */
   foto: string | null;
+  /** Volantini del periodo in cui compare: almeno MINIMO_VOLANTINI_RICORRENTE. */
   volantini: number;
-  perAnno: Array<{ anno: number; volantini: number }>;
+  /** I kit di quei volantini (EdizioneTimeline.idKit). */
+  kit: string[];
   prezzoMinimo: number | null;
   prezzoMassimo: number | null;
+  /** Il prezzo nel volantino più recente del periodo che lo ha con un prezzo. */
+  prezzoUltimo: number | null;
 }
 
 export interface AnalisiPuntoVendita {
   idPuntoVendita: string;
+  /** Il periodo di numeri, marche, prodotti e copertura; null per tutta la storia. */
+  periodo: PeriodoAnalisi | null;
   numeri: NumeriPuntoVendita;
-  /** Dal più vecchio. */
+  /** Tutti i volantini della combinazione attuale, dal più vecchio, qualunque sia il periodo. */
   timeline: EdizioneTimeline[];
+  /** Le assenze dal primo volantino del PV in poi, dalla più vecchia, qualunque sia il periodo. */
+  assenze: VolantinoAssente[];
+  /** Anni in cui inizia almeno un volantino della timeline, dal più vecchio. */
   anni: number[];
-  meccaniche: Array<{ meccanica: MeccanicaReferenza; anni: QuotaAnno[] }>;
-  scontoPerAnno: Array<{ anno: number; sconto: number | null }>;
-  /** Le 8 marche con più referenze, quota sul totale delle referenze con marca. */
-  marche: Array<{ marca: string; quota: number }>;
-  /** I 10 prodotti più presenti. */
+  /** Le 8 marche con più referenze nel periodo: quota sulle referenze con marca e volantini in cui compare. */
+  marche: Array<{ marca: string; quota: number; volantini: number }>;
+  /**
+   * I 10 prodotti più presenti nel periodo, in almeno MINIMO_VOLANTINI_RICORRENTE volantini e con
+   * una descrizione: per volantini, poi i più recenti.
+   */
   prodottiRicorrenti: ProdottoRicorrente[];
-  /** Spazio di pagina per reparto, anno per anno; vuoto se il reparto non è noto. */
-  reparti: Array<{ anno: number; reparti: Array<{ reparto: string; quota: number }> }>;
+  /** Del periodo. */
   copertura: CoperturaDati;
 }
 

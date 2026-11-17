@@ -16,21 +16,25 @@ import {
   type FormaEvento,
   type RigaFasce,
   type Tinta,
+  type TracciaTimeline,
   type VoceLegenda,
 } from "@/components/Grafici";
-import type { BarraTimeline } from "@/components/Grafici/TimelineVolantini";
+import type { AssenzaTimeline, BarraTimeline } from "@/components/Grafici/TimelineVolantini";
 import { useFetchReteInsegne } from "@/query/query";
 import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
 import dayjs from "dayjs";
 import "dayjs/locale/it";
 import { useMemo } from "react";
 import {
+  edizioneNelPeriodo,
   ETICHETTA_MECCANICA,
   MECCANICHE,
   type AnalisiPuntoVendita,
   type BoxVolantino,
   type EdizioneTimeline,
   type MeccanicaReferenza,
+  type PeriodoAnalisi,
+  type VolantinoAssente,
 } from "../../../lib/puntiVendita/analisi";
 import type { EventoStoria, PeriodoRecapito, RiferimentoStoria, TipoAbbinamento } from "../../../lib/puntiVendita/storia";
 
@@ -89,10 +93,13 @@ export const identificativiGdo = <T extends { etichetta: string }>(codici: reado
 
 /**
  * Parametri nell'indirizzo: periodo e volantino scelti nella scheda. Il periodo è un anno
- * (`?anno=2025`), gli ultimi 3 mesi (`?anno=ultimi3mesi`) o, senza il parametro, tutto.
+ * (`?anno=2025`), gli ultimi 12 mesi (`?anno=ultimi12mesi`), gli ultimi 3 mesi
+ * (`?anno=ultimi3mesi`) o, senza il parametro, tutto.
  */
 export const PARAMETRO_ANNO = "anno";
 export const PARAMETRO_VOLANTINO = "volantino";
+/** Valore di PARAMETRO_ANNO per gli ultimi 12 mesi. */
+export const ULTIMI_12_MESI = "ultimi12mesi";
 /** Valore di PARAMETRO_ANNO per gli ultimi 3 mesi. */
 export const ULTIMI_3_MESI = "ultimi3mesi";
 
@@ -135,25 +142,18 @@ export function useTinteCanali(locali: ReadonlyArray<RiferimentoStoria>): (idCan
 
 /* ---------- Timeline della scheda ---------- */
 
-/** I canali distinti delle edizioni, nell'ordine in cui compaiono. */
-export const canaliDelleEdizioni = (edizioni: readonly EdizioneTimeline[]): RiferimentoStoria[] => {
-  const visti = new Map<string, RiferimentoStoria>();
-  for (const edizione of edizioni) if (!visti.has(edizione.canale.id)) visti.set(edizione.canale.id, edizione.canale);
-  return [...visti.values()];
-};
-
 export const annoEdizione = (edizione: Pick<EdizioneTimeline, "dal">): number => Number(edizione.dal.slice(0, 4));
 
 /** Ultimo giorno di validità dell'edizione (ISO): senza la fine, o con la fine prima dell'inizio, il primo. */
 export const fineEdizione = (edizione: Pick<EdizioneTimeline, "dal" | "al">): string =>
   edizione.al && edizione.al > edizione.dal ? edizione.al : edizione.dal;
 
-/** Periodo della storia: un anno, gli ultimi 3 mesi o (null) tutto. */
-export type PeriodoStoria = number | typeof ULTIMI_3_MESI | null;
+/** Periodo della scheda: un anno, gli ultimi 12 mesi, gli ultimi 3 mesi o (null) tutto. */
+export type PeriodoStoria = number | typeof ULTIMI_12_MESI | typeof ULTIMI_3_MESI | null;
 
-/** Il periodo scritto nell'indirizzo: un anno dei dati, gli ultimi 3 mesi, altrimenti tutto. */
+/** Il periodo scritto nell'indirizzo: un anno dei dati, gli ultimi 12 o 3 mesi, altrimenti tutto. */
 export const periodoDaParametro = (valore: string | null, anni: readonly number[]): PeriodoStoria => {
-  if (valore === ULTIMI_3_MESI) return ULTIMI_3_MESI;
+  if (valore === ULTIMI_3_MESI || valore === ULTIMI_12_MESI) return valore;
   const anno = Number(valore);
   return valore && anni.includes(anno) ? anno : null;
 };
@@ -164,38 +164,198 @@ export const oggiIso = (): string => isoData(msOggi());
 /** Primo giorno degli ultimi 3 mesi: lo stesso giorno di tre mesi fa (ISO). */
 export const inizioUltimi3Mesi = (oggi: string): string => dayjs(oggi).subtract(3, "month").format("YYYY-MM-DD");
 
+/** Primo giorno degli ultimi 12 mesi: lo stesso giorno di un anno fa (ISO). */
+export const inizioUltimi12Mesi = (oggi: string): string => dayjs(oggi).subtract(12, "month").format("YYYY-MM-DD");
+
+const mesiDelPeriodo = (periodo: typeof ULTIMI_12_MESI | typeof ULTIMI_3_MESI): number => (periodo === ULTIMI_12_MESI ? 12 : 3);
+
 /**
- * Le edizioni del periodo, nell'ordine della timeline (dal più vecchio): tutte, quelle iniziate
- * nell'anno scelto, oppure quelle valide negli ultimi 3 mesi o dopo (attive e in arrivo comprese).
+ * I giorni del periodo, per il server (GET .../analisi?dal=&al=) e per i filtri della pagina: un
+ * anno intero; gli ultimi 12 o 3 mesi senza fine, perché comprendano i volantini attivi e quelli
+ * in arrivo; null per tutto.
  */
-export const edizioniDelPeriodo = (edizioni: readonly EdizioneTimeline[], periodo: PeriodoStoria, oggi: string = oggiIso()): EdizioneTimeline[] => {
-  if (periodo === null) return [...edizioni];
-  if (periodo === ULTIMI_3_MESI) {
-    const inizio = inizioUltimi3Mesi(oggi);
-    return edizioni.filter(e => fineEdizione(e) >= inizio);
-  }
-  return edizioni.filter(e => annoEdizione(e) === periodo);
+export const periodoAnalisi = (periodo: PeriodoStoria, oggi: string = oggiIso()): PeriodoAnalisi | null => {
+  if (periodo === null) return null;
+  if (periodo === ULTIMI_3_MESI) return { dal: inizioUltimi3Mesi(oggi), al: null };
+  if (periodo === ULTIMI_12_MESI) return { dal: inizioUltimi12Mesi(oggi), al: null };
+  return { dal: `${periodo}-01-01`, al: `${periodo}-12-31` };
 };
 
-/** Giorni dopo oggi sempre in vista negli ultimi 3 mesi, perché la linea di oggi non stia sul bordo. */
+/**
+ * Il periodo con cui confrontare quello scelto, della stessa durata e subito prima: l'anno prima,
+ * oppure i 12 o 3 mesi prima. Null per tutta la storia, che non ha un "prima".
+ */
+export const periodoPrecedente = (periodo: PeriodoStoria, oggi: string = oggiIso()): PeriodoAnalisi | null => {
+  if (periodo === null) return null;
+  if (periodo === ULTIMI_3_MESI || periodo === ULTIMI_12_MESI) {
+    const inizio = dayjs(periodoAnalisi(periodo, oggi)!.dal!);
+    return { dal: inizio.subtract(mesiDelPeriodo(periodo), "month").format("YYYY-MM-DD"), al: inizio.subtract(1, "day").format("YYYY-MM-DD") };
+  }
+  return { dal: `${periodo - 1}-01-01`, al: `${periodo - 1}-12-31` };
+};
+
+/** Il periodo nelle frasi: "dal marzo 2025", "nel 2025", "negli ultimi 12 mesi". */
+export const nomePeriodo = (periodo: PeriodoStoria, primoVolantino: string | null): string => {
+  if (periodo === ULTIMI_3_MESI) return "negli ultimi 3 mesi";
+  if (periodo === ULTIMI_12_MESI) return "negli ultimi 12 mesi";
+  if (periodo !== null) return `nel ${periodo}`;
+  if (!primoVolantino) return "in tutta la storia";
+  const mese = dayjs(primoVolantino).locale("it").format("MMMM YYYY");
+  return /^[aeiou]/i.test(mese) ? `dall'${mese}` : `dal ${mese}`;
+};
+
+/**
+ * Il periodo del confronto nelle frasi: `nel` accanto a un valore ("nel 2024", "nei 12 mesi
+ * prima"), `rispetto` dopo una differenza ("rispetto al 2024"). Null per tutta la storia.
+ */
+export const nomeConfronto = (periodo: PeriodoStoria): { nel: string; rispetto: string } | null => {
+  if (periodo === null) return null;
+  if (periodo === ULTIMI_3_MESI) return { nel: "nei 3 mesi prima", rispetto: "rispetto ai 3 mesi prima" };
+  if (periodo === ULTIMI_12_MESI) return { nel: "nei 12 mesi prima", rispetto: "rispetto ai 12 mesi prima" };
+  return { nel: `nel ${periodo - 1}`, rispetto: `rispetto al ${periodo - 1}` };
+};
+
+/** Il periodo scelto, con i giorni, il periodo prima e i nomi per le frasi: lo stesso per tutta la scheda. */
+export interface ContestoPeriodo {
+  periodo: PeriodoStoria;
+  /** I giorni del periodo (null: tutto). */
+  giorni: PeriodoAnalisi | null;
+  /** I giorni del periodo prima, per i confronti (null: nessun confronto). */
+  precedente: PeriodoAnalisi | null;
+  /** "dal marzo 2025", "nel 2025", "negli ultimi 3 mesi". */
+  nome: string;
+  confronto: { nel: string; rispetto: string } | null;
+  oggi: string;
+}
+
+export const contestoPeriodo = (periodo: PeriodoStoria, primoVolantino: string | null, oggi: string = oggiIso()): ContestoPeriodo => ({
+  periodo,
+  giorni: periodoAnalisi(periodo, oggi),
+  precedente: periodoPrecedente(periodo, oggi),
+  nome: nomePeriodo(periodo, primoVolantino),
+  confronto: nomeConfronto(periodo),
+  oggi,
+});
+
+/** "+5", "−12", "±0": la differenza di un conteggio, col segno. */
+export const formatDifferenza = (differenza: number): string => {
+  const arrotondata = Math.round(differenza);
+  return arrotondata === 0 ? "±0" : `${arrotondata > 0 ? "+" : "−"}${formatNumero(Math.abs(arrotondata))}`;
+};
+
+/**
+ * Le edizioni del periodo, nell'ordine della timeline (dal più vecchio): un volantino è del periodo
+ * se la sua validità inizia nel periodo (edizioneNelPeriodo, la stessa regola del server).
+ */
+export const edizioniDelPeriodo = <T extends Pick<EdizioneTimeline, "dal">>(edizioni: readonly T[], periodo: PeriodoAnalisi | null): T[] =>
+  edizioni.filter(e => edizioneNelPeriodo(e.dal, periodo));
+
+/** Giorni dopo oggi sempre in vista negli ultimi mesi, perché la linea di oggi non stia sul bordo. */
 const GIORNI_DOPO_OGGI = 7;
 
 /**
  * I giorni dell'asse della timeline (primo e ultimo compresi) per il periodo: l'anno intero, oppure
- * da tre mesi fa a una settimana dopo oggi, o fino alla fine dell'ultima edizione se va oltre.
- * Undefined per tutto: l'asse lo decide la timeline dai dati.
+ * dall'inizio degli ultimi 12 o 3 mesi a una settimana dopo oggi, o fino alla fine dell'ultima
+ * edizione se va oltre. Undefined per tutto: l'asse lo decide la timeline dai dati.
  */
 export const intervalloPeriodo = (
   periodo: PeriodoStoria,
-  edizioni: readonly EdizioneTimeline[],
+  edizioni: readonly Pick<EdizioneTimeline, "dal" | "al">[],
   oggi: string = oggiIso()
 ): { dal: string; al: string } | undefined => {
   if (periodo === null) return undefined;
-  if (periodo === ULTIMI_3_MESI) {
+  if (periodo === ULTIMI_3_MESI || periodo === ULTIMI_12_MESI) {
     const fine = Math.max(msData(oggi) + GIORNI_DOPO_OGGI * MS_GIORNO, ...edizioni.map(e => msData(fineEdizione(e))));
-    return { dal: inizioUltimi3Mesi(oggi), al: isoData(fine) };
+    return { dal: periodoAnalisi(periodo, oggi)!.dal!, al: isoData(fine) };
   }
   return { dal: `${periodo}-01-01`, al: `${periodo}-12-31` };
+};
+
+/* ---------- Il periodo in sintesi ---------- */
+
+/** Quanto pesa ogni meccanica, ogni reparto e lo sconto nei volantini di un periodo. */
+export interface SintesiPeriodo {
+  volantini: number;
+  referenze: number;
+  mediaReferenze: number | null;
+  /** Sconto medio delle referenze col prezzo barrato, pesato su quante sono in ogni volantino. */
+  scontoMedio: number | null;
+  /** Quota delle referenze (0–100) per meccanica, sulle referenze con una meccanica. */
+  meccaniche: Map<MeccanicaReferenza, number>;
+  /** Quota dello spazio dei box (0–100) per reparto, dal più grande; vuota se il reparto non è noto. */
+  reparti: Array<{ reparto: string; quota: number }>;
+}
+
+/** Le quote per meccanica di un volantino (0–100), sulle sue referenze con una meccanica. */
+/**
+ * Arrotonda come il server (quote con un decimale, sconti con due): senza, 1100 su 2000 fa
+ * 55,00000000000001 e la pagina scrive "55,0%" accanto a "45%".
+ */
+export const arrotonda = (valore: number, cifre = 1): number => {
+  const fattore = 10 ** cifre;
+  return Math.round(valore * fattore) / fattore;
+};
+
+export const quoteMeccaniche = (meccaniche: ReadonlyArray<{ meccanica: MeccanicaReferenza; referenze: number }>): Map<MeccanicaReferenza, number> => {
+  const totale = meccaniche.reduce((somma, voce) => somma + voce.referenze, 0);
+  return new Map(totale > 0 ? meccaniche.map(voce => [voce.meccanica, arrotonda((voce.referenze / totale) * 100)] as const) : []);
+};
+
+export const sintesiPeriodo = (edizioni: readonly EdizioneTimeline[]): SintesiPeriodo => {
+  const referenze = edizioni.reduce((somma, e) => somma + e.numeroReferenze, 0);
+  const conSconto = edizioni.filter(e => e.scontoMedio !== null && e.referenzeConSconto > 0);
+  const pesoSconto = conSconto.reduce((somma, e) => somma + e.referenzeConSconto, 0);
+  const meccaniche = new Map<MeccanicaReferenza, number>();
+  for (const e of edizioni) for (const voce of e.meccaniche) meccaniche.set(voce.meccanica, (meccaniche.get(voce.meccanica) ?? 0) + voce.referenze);
+  const reparti = new Map<string, number>();
+  for (const e of edizioni) for (const voce of e.reparti) reparti.set(voce.reparto, (reparti.get(voce.reparto) ?? 0) + voce.spazio);
+  const spazio = [...reparti.values()].reduce((somma, valore) => somma + valore, 0);
+  return {
+    volantini: edizioni.length,
+    referenze,
+    mediaReferenze: edizioni.length > 0 ? referenze / edizioni.length : null,
+    scontoMedio: pesoSconto > 0 ? arrotonda(conSconto.reduce((somma, e) => somma + (e.scontoMedio ?? 0) * e.referenzeConSconto, 0) / pesoSconto, 2) : null,
+    meccaniche: quoteMeccaniche([...meccaniche].map(([meccanica, n]) => ({ meccanica, referenze: n }))),
+    reparti:
+      spazio > 0
+        ? [...reparti].map(([reparto, valore]) => ({ reparto, quota: arrotonda((valore / spazio) * 100) })).sort((a, b) => b.quota - a.quota || a.reparto.localeCompare(b.reparto, "it"))
+        : [],
+  };
+};
+
+/**
+ * Quanti giorni del periodo hanno almeno un volantino valido: dal primo volantino del punto vendita
+ * (o dall'inizio del periodo, se viene dopo) fino a oggi (o alla fine del periodo, se viene prima).
+ * Contano tutti i volantini, anche quelli iniziati prima del periodo e ancora validi. Null se il
+ * periodo non ha giorni da contare (tutto nel futuro, o prima del primo volantino).
+ */
+export const giorniCoperti = (
+  edizioni: readonly Pick<EdizioneTimeline, "dal" | "al">[],
+  periodo: PeriodoAnalisi | null,
+  oggi: string = oggiIso()
+): { quota: number; giorni: number; scoperti: number } | null => {
+  if (edizioni.length === 0) return null;
+  const primo = Math.min(...edizioni.map(e => msData(e.dal)));
+  const inizio = Math.max(primo, periodo?.dal ? msData(periodo.dal) : primo);
+  const fine = Math.min(msData(oggi), periodo?.al ? msData(periodo.al) : Infinity);
+  if (fine < inizio) return null;
+  const giorni = Math.round((fine - inizio) / MS_GIORNO) + 1;
+  // Validità come intervalli di giorni [da, a], tagliati sul periodo e uniti dove si sovrappongono
+  const intervalli = edizioni
+    .map(e => [Math.max(inizio, msData(e.dal)), Math.min(fine, msData(fineEdizione(e)))] as const)
+    .filter(([da, a]) => a >= da)
+    .sort((x, y) => x[0] - y[0]);
+  let coperti = 0;
+  let corrente: [number, number] | null = null;
+  for (const [da, a] of intervalli) {
+    if (corrente && da <= corrente[1] + MS_GIORNO) corrente[1] = Math.max(corrente[1], a);
+    else {
+      if (corrente) coperti += Math.round((corrente[1] - corrente[0]) / MS_GIORNO) + 1;
+      corrente = [da, a];
+    }
+  }
+  if (corrente) coperti += Math.round((corrente[1] - corrente[0]) / MS_GIORNO) + 1;
+  return { quota: (coperti / giorni) * 100, giorni, scoperti: giorni - coperti };
 };
 
 /**
@@ -207,7 +367,8 @@ export const edizioneScelta = (edizioni: readonly EdizioneTimeline[], richiesta:
 
 /**
  * Barre della timeline: una per volantino, dal primo all'ultimo giorno di validità (senza la fine,
- * il primo giorno solo), colorata per insegna, con area, referenze e stato nel tooltip.
+ * il primo giorno solo), colorata per insegna, con area e stato nel tooltip (referenze, sconto e
+ * meccaniche arrivano dalle corsie sotto).
  */
 export const barreTimeline = (edizioni: readonly EdizioneTimeline[]): BarraTimeline[] =>
   edizioni.map(edizione => ({
@@ -219,10 +380,59 @@ export const barreTimeline = (edizioni: readonly EdizioneTimeline[]): BarraTimel
     sottotitolo: periodoValidita(edizione.dal, edizione.al),
     dettagli: [
       { etichetta: "Area", valore: edizione.area.nome },
-      { etichetta: "Referenze", valore: formatNumero(edizione.numeroReferenze) },
       ...(edizione.attivo ? [{ etichetta: "Stato", valore: "attivo" }] : []),
     ],
   }));
+
+/** I volantini della sua insegna e area senza il punto vendita, come contorni sulla timeline. */
+export const assenzeTimeline = (assenze: readonly VolantinoAssente[]): AssenzaTimeline[] =>
+  assenze.map(assenza => ({ id: assenza.idKit, dal: assenza.dal, al: assenza.al, titolo: assenza.promo.nome }));
+
+/**
+ * Le corsie sotto la timeline, sullo stesso asse: referenze, sconto medio e meccaniche di ogni
+ * volantino, poi indirizzo e telefono come erano stampati (dai recapiti della storia).
+ */
+export const tracceStoria = (edizioni: readonly EdizioneTimeline[], recapiti: readonly PeriodoRecapito[] = []): TracciaTimeline[] => {
+  const presenti = MECCANICHE.filter(m => edizioni.some(e => e.meccaniche.some(voce => voce.meccanica === m && voce.referenze > 0)));
+  const tracce: TracciaTimeline[] = [
+    {
+      tipo: "colonne",
+      id: "referenze",
+      etichetta: "Referenze",
+      valori: Object.fromEntries(edizioni.map(e => [e.idKit, e.numeroReferenze])),
+      formatta: valore => formatNumero(valore),
+    },
+  ];
+  if (edizioni.some(e => e.scontoMedio !== null)) {
+    tracce.push({
+      tipo: "linea",
+      id: "sconto",
+      etichetta: "Sconto medio",
+      valori: Object.fromEntries(edizioni.map(e => [e.idKit, e.scontoMedio])),
+      formatta: valore => formatPercentuale(valore),
+    });
+  }
+  if (presenti.length > 0) {
+    tracce.push({
+      tipo: "impilate",
+      id: "meccaniche",
+      etichetta: "Meccaniche",
+      categorie: presenti.map(m => ({ id: m, etichetta: ETICHETTA_MECCANICA[m], tinta: tintaMeccanica(m) })),
+      valori: Object.fromEntries(edizioni.map(e => [e.idKit, Object.fromEntries(quoteMeccaniche(e.meccaniche))])),
+      formatta: valore => formatPercentuale(Math.round(valore)),
+    });
+  }
+  for (const riga of righeRecapiti(recapiti)) {
+    tracce.push({
+      tipo: "fasce",
+      id: `recapito-${riga.id}`,
+      etichetta: riga.id === "indirizzo" ? "Indirizzo stampato" : "Telefono stampato",
+      fasce: riga.fasce,
+      nomiToni: NOMI_TONI_RECAPITI,
+    });
+  }
+  return tracce;
+};
 
 /**
  * Fascia delle insegne: i tratti consecutivi di volantini con la stessa insegna e la stessa area,
@@ -344,58 +554,53 @@ export const righeRecapiti = (recapiti: readonly PeriodoRecapito[]): RigaFasce[]
 
 /* ---------- Infografiche della scheda ---------- */
 
-export type InfograficaScheda = "meccaniche" | "sconto" | "marche" | "prodotti" | "reparti";
+export type InfograficaScheda = "meccaniche" | "reparti" | "marche" | "prodotti";
 
-/** Le infografiche nell'ordine della scheda, con il titolo del riquadro e perché manca il grafico. */
+/** Le infografiche del periodo nell'ordine della scheda, con il titolo del riquadro e perché manca il grafico. */
 export const INFOGRAFICHE_SCHEDA: ReadonlyArray<{ id: InfograficaScheda; titolo: string; senzaDati: string }> = [
   { id: "meccaniche", titolo: "Come si promuove", senzaDati: "le referenze non dicono la meccanica" },
-  { id: "sconto", titolo: "Sconto medio", senzaDati: "nessuna referenza ha il prezzo barrato" },
+  { id: "reparti", titolo: "Spazio per reparto", senzaDati: "il reparto non è arrivato da DB1 né da Istanta" },
   { id: "marche", titolo: "Marche più presenti", senzaDati: "le referenze non hanno la marca" },
-  { id: "prodotti", titolo: "Prodotti che tornano", senzaDati: "nessun prodotto compare in più di un volantino" },
-  { id: "reparti", titolo: "Dove sta nel volantino", senzaDati: "il reparto non è arrivato da DB1 né da Istanta" },
+  { id: "prodotti", titolo: "Prodotti che tornano", senzaDati: "nessun prodotto compare in almeno 2 volantini del periodo" },
 ];
 
 /**
- * Quali infografiche hanno qualcosa da disegnare: quelle senza dati non diventano un riquadro con
- * lo stato vuoto, ma una riga della nota "senza grafico".
+ * Quali infografiche del periodo hanno qualcosa da disegnare: quelle senza dati non diventano un
+ * riquadro con lo stato vuoto, ma una riga della nota "senza grafico".
  */
 export const infograficheConDati = (
-  analisi: Pick<AnalisiPuntoVendita, "meccaniche" | "anni" | "scontoPerAnno" | "marche" | "prodottiRicorrenti" | "reparti">
+  sintesi: Pick<SintesiPeriodo, "meccaniche" | "reparti">,
+  analisi: Pick<AnalisiPuntoVendita, "marche" | "prodottiRicorrenti">
 ): Record<InfograficaScheda, boolean> => ({
-  meccaniche: analisi.meccaniche.length > 0 && analisi.anni.length > 0,
-  sconto: analisi.scontoPerAnno.some(a => a.sconto !== null),
+  meccaniche: sintesi.meccaniche.size > 0,
+  reparti: sintesi.reparti.length > 0,
   marche: analisi.marche.length > 0,
   prodotti: analisi.prodottiRicorrenti.length > 0,
-  reparti: analisi.reparti.some(a => a.reparti.length > 0),
 });
-
-/* ---------- Reparti ---------- */
 
 export const ETICHETTA_ALTRI_REPARTI = "Altri reparti";
 
 /**
- * Reparti per anno in barre al 100%: i reparti con più spazio (fino a MASSIMO_CATEGORIE - 1) hanno
- * il loro colore, ordinato per nome; gli altri finiscono in "Altri reparti".
+ * I reparti del periodo come barre: i più grandi (fino a MASSIMO_CATEGORIE - 1) e gli altri sommati in
+ * "Altri reparti", in fondo. Accanto a ognuno la quota del periodo prima (0 se allora mancava),
+ * con "Altri reparti" che somma quelli prima fuori dai più grandi di adesso; null senza periodo prima.
  */
-export const repartiImpilati = (reparti: ReadonlyArray<{ anno: number; reparti: ReadonlyArray<{ reparto: string; quota: number }> }>) => {
-  const anni = [...reparti].filter(a => a.reparti.length > 0).sort((a, b) => b.anno - a.anno);
-  const totali = new Map<string, number>();
-  for (const anno of anni) for (const r of anno.reparti) totali.set(r.reparto, (totali.get(r.reparto) ?? 0) + r.quota);
-  const perSpazio = [...totali].sort((a, b) => b[1] - a[1]).map(([nome]) => nome);
-  const conColore = perSpazio.length > MASSIMO_CATEGORIE ? perSpazio.slice(0, MASSIMO_CATEGORIE - 1) : perSpazio;
-  const nomi = [...conColore].sort((a, b) => a.localeCompare(b, "it"));
-  const altri = perSpazio.length > conColore.length;
-  const categorie = [
-    ...nomi.map((nome, i) => ({ id: nome, etichetta: nome, tinta: tintaCategoria(i) })),
-    ...(altri ? [{ id: ETICHETTA_ALTRI_REPARTI, etichetta: ETICHETTA_ALTRI_REPARTI, tinta: TINTA_NEUTRA }] : []),
-  ];
-  const valori = anni.map(anno => {
-    const riga = nomi.map(nome => anno.reparti.find(r => r.reparto === nome)?.quota ?? 0);
-    if (altri) riga.push(anno.reparti.filter(r => !nomi.includes(r.reparto)).reduce((s, r) => s + r.quota, 0));
-    return riga;
-  });
-  return { righe: anni.map(a => ({ id: String(a.anno), etichetta: String(a.anno) })), categorie, valori };
+export const repartiInBarre = (
+  attuali: SintesiPeriodo["reparti"],
+  prima: SintesiPeriodo["reparti"] | null
+): Array<{ reparto: string; quota: number; prima: number | null; altri: boolean }> => {
+  const principali = attuali.length > MASSIMO_CATEGORIE ? attuali.slice(0, MASSIMO_CATEGORIE - 1) : attuali;
+  const nomi = new Set(principali.map(r => r.reparto));
+  const quotaPrima = (reparto: string) => (prima ? (prima.find(r => r.reparto === reparto)?.quota ?? 0) : null);
+  const voci = principali.map(r => ({ reparto: r.reparto, quota: r.quota, prima: quotaPrima(r.reparto), altri: false }));
+  if (principali.length === attuali.length) return voci;
+  const somma = (reparti: SintesiPeriodo["reparti"]) => arrotonda(reparti.filter(r => !nomi.has(r.reparto)).reduce((s, r) => s + r.quota, 0));
+  return [...voci, { reparto: ETICHETTA_ALTRI_REPARTI, quota: somma(attuali), prima: prima ? somma(prima) : null, altri: true }];
 };
+
+/** Differenza fra due quote in punti, col segno, per la nota accanto alla barra: "+4,1 punti", "stabile". */
+export const notaDifferenza = (attuale: number, prima: number | null | undefined): string | undefined =>
+  prima === null || prima === undefined ? undefined : formatDifferenzaPunti(attuale - prima);
 
 /* ---------- Pagina del volantino ---------- */
 

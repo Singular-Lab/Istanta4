@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { STATO_PROMO } from '../../../lib/enums';
-import { MECCANICHE } from '../../../lib/puntiVendita/analisi';
+import { MINIMO_VOLANTINI_RICORRENTE } from '../../../lib/puntiVendita/analisi';
 import { AGGREGATI_VUOTI, type AggregatiKit, boxDelKit, type DescrizioneProdotto, type ProdottoNelKit } from './analisiKit';
 import {
   calcolaAnalisiPuntoVendita,
@@ -12,6 +12,7 @@ import {
   edizioneAttiva,
   type EdizionePuntoVendita,
   edizioniDelPuntoVendita,
+  inizioEdizione,
   kitDaDescrivere,
   MASSIMO_FOTO_REFERENZA,
   MASSIMO_PAGINE,
@@ -70,19 +71,23 @@ const EDIZIONI = [
 const AGGREGATI = new Map<string, AggregatiKit>([
   ['k1', aggregati({
     referenze: 100,
+    pagine: 16,
     sconto: { somma: 300, referenze: 10 },
-    meccaniche: [{ meccanica: 'sconto', referenze: 10, spazio: 50 }, { meccanica: 'prezzo', referenze: 90, spazio: 300 }],
+    // Fuori ordine e con una meccanica senza referenze: nella timeline l'ordine del contratto, solo le presenti
+    meccaniche: [{ meccanica: 'prezzo', referenze: 90, spazio: 300 }, { meccanica: 'nxm', referenze: 0, spazio: 5 }, { meccanica: 'sconto', referenze: 10, spazio: 50 }],
     reparti: [{ reparto: 'Ortofrutta', spazio: 40 }, { reparto: 'Bevande', spazio: 10 }],
     copertura: { conCodice: 0, conReparto: 50, conPrezzo: 100, conMarca: 40 },
   })],
   ['k2', aggregati({
     referenze: 120,
-    sconto: { somma: 100, referenze: 10 },
+    pagine: 12,
+    sconto: { somma: 100, referenze: 3 },
     meccaniche: [{ meccanica: 'fidelity', referenze: 60, spazio: 200 }, { meccanica: 'prezzo', referenze: 60, spazio: 200 }],
     copertura: { conCodice: 120, conReparto: 0, conPrezzo: 110, conMarca: 20 },
   })],
   ['k3', aggregati({
     referenze: 80,
+    pagine: 8,
     sconto: { somma: 150, referenze: 5 },
     meccaniche: [{ meccanica: 'punti', referenze: 20, spazio: 80 }, { meccanica: 'prezzo', referenze: 60, spazio: 240 }],
     reparti: [{ reparto: 'Bevande', spazio: 30 }],
@@ -90,16 +95,20 @@ const AGGREGATI = new Map<string, AggregatiKit>([
   })],
 ]);
 
-/** Prodotti e marche come li aggrega l'SQL: c-A in k1, k2 e k3 (con la foto in k2), c-C in k2, c-B in k1. */
+/**
+ * Prodotti e marche come li aggrega l'SQL: c-A in k1, k2 e k3 (con la foto in k2), c-C in k1 e k2
+ * senza descrizione, c-B in k1 e k2 (con la foto in k1).
+ */
 const STATISTICHE: StatisticheProdotti = {
   prodotti: 3,
   frequenti: 0,
   ricorrenti: [
-    { chiave: 'c-A', volantini: 3, perAnno: { 2021: 2, 2022: 1 }, prezzoMinimo: 1.2, prezzoMassimo: 1.9, ultimoKit: 'k3', ultimoKitConFoto: 'k2' },
-    { chiave: 'c-C', volantini: 1, perAnno: { 2021: 1 }, prezzoMinimo: null, prezzoMassimo: null, ultimoKit: 'k2', ultimoKitConFoto: null },
-    { chiave: 'c-B', volantini: 1, perAnno: { 2021: 1 }, prezzoMinimo: 0.99, prezzoMassimo: 0.99, ultimoKit: 'k1', ultimoKitConFoto: 'k1' },
+    { chiave: 'c-A', volantini: 3, kit: ['k1', 'k2', 'k3'], prezzoMinimo: 1.2, prezzoMassimo: 1.9, prezzoUltimo: 1.5, ultimoKit: 'k3', ultimoKitConFoto: 'k2' },
+    { chiave: 'c-C', volantini: 2, kit: ['k1', 'k2'], prezzoMinimo: null, prezzoMassimo: null, prezzoUltimo: null, ultimoKit: 'k2', ultimoKitConFoto: null },
+    // Kit fuori ordine: nella scheda quello della timeline
+    { chiave: 'c-B', volantini: 2, kit: ['k2', 'k1'], prezzoMinimo: 0.99, prezzoMassimo: 1.09, prezzoUltimo: 1.09, ultimoKit: 'k2', ultimoKitConFoto: 'k1' },
   ],
-  marche: [{ marca: 'CONAD', referenze: 50 }, { marca: 'Barilla', referenze: 40 }],
+  marche: [{ marca: 'CONAD', referenze: 50, volantini: 3 }, { marca: 'Barilla', referenze: 40, volantini: 2 }],
   referenzeConMarca: 90,
 };
 
@@ -107,6 +116,7 @@ const STATISTICHE: StatisticheProdotti = {
 const TROVATE = new Map<string, DescrizioneProdotto>([
   [chiaveDescrizione('k3', 'c-A'), descrizione('Pasta di semola', { marca: 'Barilla', formato: '500 g' })],
   [chiaveDescrizione('k2', 'c-A'), descrizione('Pasta', { marca: 'Barilla', foto: 'f-a' })],
+  [chiaveDescrizione('k2', 'c-B'), descrizione('Biscotti')],
   [chiaveDescrizione('k1', 'c-B'), descrizione('Biscotti', { foto: 'f-b' })],
 ]);
 
@@ -131,6 +141,12 @@ describe('edizioni del PV', () => {
     expect(edizioneAttiva({ ...voce, promo: { ...voce.promo, validitaAl: null } }, '2026-10-23')).toBe(true);
     expect(edizioneAttiva({ ...voce, promo: { ...voce.promo, validitaDal: null } }, '2026-10-23')).toBe(false);
   });
+
+  it('inizia il giorno d\'inizio della promo o, senza, il giorno dell\'edizione', () => {
+    const voce = edizione('k', '2026-10-23');
+    expect(inizioEdizione(voce)).toBe('2026-10-23');
+    expect(inizioEdizione({ ...voce, data: '2026-10-30', promo: { ...voce.promo, validitaDal: null } })).toBe('2026-10-30');
+  });
 });
 
 describe('descrizioni dei prodotti ricorrenti', () => {
@@ -139,6 +155,7 @@ describe('descrizioni dei prodotti ricorrenti', () => {
       { idKit: 'k3', chiave: 'c-A' },
       { idKit: 'k2', chiave: 'c-A' },
       { idKit: 'k2', chiave: 'c-C' },
+      { idKit: 'k2', chiave: 'c-B' },
       { idKit: 'k1', chiave: 'c-B' },
     ]);
   });
@@ -156,8 +173,9 @@ describe('calcolaAnalisiPuntoVendita', () => {
   const DESCRIZIONI = descrizioniRicorrenti(STATISTICHE.ricorrenti, TROVATE);
   const analisi = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, STATISTICHE, DESCRIZIONI, '2022-10-25');
 
-  it('numeri: volantini, attivi, referenze, prodotti, sconto medio e del primo anno, insegne nel tempo', () => {
+  it('senza periodo, tutta la storia: volantini, attivi, referenze, prodotti, sconto medio, insegne nel tempo', () => {
     expect(analisi.idPuntoVendita).toBe('pv-1');
+    expect(analisi.periodo).toBeNull();
     expect(analisi.numeri).toEqual({
       volantini: 4,
       volantiniAttivi: 1,
@@ -165,10 +183,11 @@ describe('calcolaAnalisiPuntoVendita', () => {
       mediaReferenze: 75,
       prodotti: 3,
       prodottiFrequenti: 0,
-      scontoMedio: 22,
-      scontoMedioPrimoAnno: 20,
+      // 550 / 18 referenze con lo sconto
+      scontoMedio: 30.56,
       insegne: [{ id: 'SS', nome: 'Conad Superstore' }, { id: 'CC', nome: 'Conad City' }],
     });
+    expect(analisi.copertura).toEqual({ conCodice: 50, conReparto: 20, conPrezzo: 96.7, conMarca: 30 });
   });
 
   it('timeline dalla piu\' vecchia, con le referenze di ogni volantino', () => {
@@ -182,29 +201,48 @@ describe('calcolaAnalisiPuntoVendita', () => {
     expect(analisi.anni).toEqual([2021, 2022]);
   });
 
-  it('meccaniche: quota delle referenze anno per anno, tutte e sei nell\'ordine del contratto', () => {
-    expect(analisi.meccaniche.map(voce => voce.meccanica)).toEqual([...MECCANICHE]);
-    const quote = Object.fromEntries(analisi.meccaniche.map(voce => [voce.meccanica, voce.anni.map(anno => anno.quota)]));
-    expect(quote).toEqual({
-      sconto: [4.5, 0],
-      fidelity: [27.3, 0],
-      punti: [0, 25],
-      sottocosto: [0, 0],
-      nxm: [0, 0],
-      prezzo: [68.2, 75],
-    });
+  it('ogni volantino col suo riepilogo: pagine, sconto medio con due decimali, meccaniche presenti nell\'ordine del contratto, reparti', () => {
+    expect(analisi.timeline.map(({ pagine, scontoMedio, referenzeConSconto, meccaniche, reparti }) => ({ pagine, scontoMedio, referenzeConSconto, meccaniche, reparti }))).toEqual([
+      {
+        pagine: 16, scontoMedio: 30, referenzeConSconto: 10,
+        meccaniche: [{ meccanica: 'sconto', referenze: 10 }, { meccanica: 'prezzo', referenze: 90 }],
+        reparti: [{ reparto: 'Ortofrutta', spazio: 40 }, { reparto: 'Bevande', spazio: 10 }],
+      },
+      {
+        pagine: 12, scontoMedio: 33.33, referenzeConSconto: 3,
+        meccaniche: [{ meccanica: 'fidelity', referenze: 60 }, { meccanica: 'prezzo', referenze: 60 }],
+        reparti: [],
+      },
+      {
+        pagine: 8, scontoMedio: 30, referenzeConSconto: 5,
+        meccaniche: [{ meccanica: 'punti', referenze: 20 }, { meccanica: 'prezzo', referenze: 60 }],
+        reparti: [{ reparto: 'Bevande', spazio: 30 }],
+      },
+      // Senza riepilogo, e senza referenze con lo sconto: nessuno sconto medio
+      { pagine: 0, scontoMedio: null, referenzeConSconto: 0, meccaniche: [], reparti: [] },
+    ]);
   });
 
-  it('sconto per anno sulle referenze con uno sconto', () => {
-    expect(analisi.scontoPerAnno).toEqual([{ anno: 2021, sconto: 20 }, { anno: 2022, sconto: 30 }]);
+  it('reparti con il nome per il marketing della GDO: quelli con lo stesso nome si sommano, dal piu\' grande', () => {
+    const conReparti = new Map<string, AggregatiKit>([...AGGREGATI, ['k2', { ...AGGREGATI.get('k2') as AggregatiKit, reparti: [{ reparto: 'Frutta', spazio: 0.1 }, { reparto: 'Verdura', spazio: 0.2 }, { reparto: 'Pane', spazio: 0.25 }] }]]);
+    const nomeReparto = (reparto: string) => (reparto === 'Ortofrutta' || reparto === 'Bevande' ? 'Mercato' : reparto === 'Frutta' || reparto === 'Verdura' ? 'Ortofrutta' : reparto);
+
+    const conNomi = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, conReparti, STATISTICHE, DESCRIZIONI, '2022-10-25', { nomeReparto });
+
+    expect(conNomi.timeline.map(voce => voce.reparti)).toEqual([
+      [{ reparto: 'Mercato', spazio: 50 }],
+      [{ reparto: 'Ortofrutta', spazio: 0.3 }, { reparto: 'Pane', spazio: 0.25 }],
+      [{ reparto: 'Mercato', spazio: 30 }],
+      [],
+    ]);
   });
 
-  it('marche: quota sulle referenze con marca', () => {
-    expect(analisi.marche).toEqual([{ marca: 'CONAD', quota: 55.6 }, { marca: 'Barilla', quota: 44.4 }]);
+  it('marche: quota sulle referenze con marca e volantini in cui compaiono', () => {
+    expect(analisi.marche).toEqual([{ marca: 'CONAD', quota: 55.6, volantini: 3 }, { marca: 'Barilla', quota: 44.4, volantini: 2 }]);
   });
 
-  it('prodotti ricorrenti nell\'ordine dell\'SQL, con la descrizione e la presenza di ogni anno della scheda', () => {
-    expect(analisi.prodottiRicorrenti.map(voce => voce.chiave)).toEqual(['c-A', 'c-C', 'c-B']);
+  it('prodotti ricorrenti nell\'ordine dell\'SQL, con la descrizione, i kit nell\'ordine della timeline e l\'ultimo prezzo; senza descrizione no', () => {
+    expect(analisi.prodottiRicorrenti.map(voce => voce.chiave)).toEqual(['c-A', 'c-B']);
     expect(analisi.prodottiRicorrenti[0]).toEqual({
       chiave: 'c-A',
       nome: 'Pasta di semola',
@@ -212,62 +250,116 @@ describe('calcolaAnalisiPuntoVendita', () => {
       formato: '500 g',
       foto: 'f-a',
       volantini: 3,
-      perAnno: [{ anno: 2021, volantini: 2 }, { anno: 2022, volantini: 1 }],
+      kit: ['k1', 'k2', 'k3'],
       prezzoMinimo: 1.2,
       prezzoMassimo: 1.9,
+      prezzoUltimo: 1.5,
     });
-    expect(analisi.prodottiRicorrenti[1]).toMatchObject({
-      nome: DESCRIZIONE_ASSENTE, prezzoMinimo: null, prezzoMassimo: null, perAnno: [{ anno: 2021, volantini: 1 }, { anno: 2022, volantini: 0 }],
-    });
+    expect(analisi.prodottiRicorrenti[1]).toMatchObject({ nome: 'Biscotti', foto: 'f-b', kit: ['k1', 'k2'], prezzoUltimo: 1.09 });
   });
 
-  it('reparti: quota dello spazio dei box anno per anno; gli anni senza reparti noti non ci sono', () => {
-    expect(analisi.reparti).toEqual([
-      { anno: 2021, reparti: [{ reparto: 'Ortofrutta', quota: 80 }, { reparto: 'Bevande', quota: 20 }] },
-      { anno: 2022, reparti: [{ reparto: 'Bevande', quota: 100 }] },
-    ]);
-    const senzaReparti = calcolaAnalisiPuntoVendita('pv-1', [EDIZIONI[1]], AGGREGATI, STATISTICHE_VUOTE, new Map(), '2022-10-25');
-    expect(senzaReparti.reparti).toEqual([]);
+  it(`un prodotto in meno di ${MINIMO_VOLANTINI_RICORRENTE} volantini non e' ricorrente`, () => {
+    const conUnoSolo: StatisticheProdotti = {
+      ...STATISTICHE,
+      ricorrenti: [...STATISTICHE.ricorrenti, { chiave: 'c-D', volantini: 1, kit: ['k3'], prezzoMinimo: 2, prezzoMassimo: 2, prezzoUltimo: 2, ultimoKit: 'k3', ultimoKitConFoto: null }],
+    };
+    const descrizioni = new Map<string, DescrizioneProdotto>([...DESCRIZIONI, ['c-D', descrizione('Olio')]]);
+
+    const risultato = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, conUnoSolo, descrizioni, '2022-10-25');
+
+    expect(risultato.prodottiRicorrenti.map(voce => voce.chiave)).toEqual(['c-A', 'c-B']);
   });
 
-  it('reparti con il nome per il marketing della GDO: quelli con lo stesso nome si sommano', () => {
-    const nomeReparto = (reparto: string) => (reparto === 'Ortofrutta' || reparto === 'Bevande' ? 'Mercato' : reparto);
-
-    const conNomi = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, STATISTICHE, DESCRIZIONI, '2022-10-25', nomeReparto);
-
-    expect(conNomi.reparti).toEqual([
-      { anno: 2021, reparti: [{ reparto: 'Mercato', quota: 100 }] },
-      { anno: 2022, reparti: [{ reparto: 'Mercato', quota: 100 }] },
-    ]);
-  });
-
-  it('copertura: percentuale delle referenze con codice, reparto, prezzo e marca', () => {
-    expect(analisi.copertura).toEqual({ conCodice: 50, conReparto: 20, conPrezzo: 96.7, conMarca: 30 });
-  });
-
-  it('al massimo 8 marche e 10 prodotti ricorrenti, anche se le statistiche ne portano di piu\'', () => {
+  it('al massimo 8 marche e 10 prodotti ricorrenti, anche togliendo quelli senza descrizione', () => {
     const molte: StatisticheProdotti = {
       prodotti: 40,
       frequenti: 12,
-      ricorrenti: Array.from({ length: 12 }, (_, indice) => ({
-        chiave: `c-${indice}`, volantini: 20 - indice, perAnno: { 2021: 20 - indice }, prezzoMinimo: 1, prezzoMassimo: 2, ultimoKit: 'k1', ultimoKitConFoto: null,
+      ricorrenti: Array.from({ length: 14 }, (_, indice) => ({
+        chiave: `c-${indice}`, volantini: 20 - indice, kit: ['k1', 'k2'], prezzoMinimo: 1, prezzoMassimo: 2, prezzoUltimo: 2, ultimoKit: 'k2', ultimoKitConFoto: null,
       })),
-      marche: Array.from({ length: 9 }, (_, indice) => ({ marca: `Marca ${indice}`, referenze: 9 - indice })),
+      marche: Array.from({ length: 9 }, (_, indice) => ({ marca: `Marca ${indice}`, referenze: 9 - indice, volantini: 2 })),
       referenzeConMarca: 45,
     };
+    // c-1 e c-3 senza descrizione: al loro posto c-10 e c-11
+    const descrizioni = new Map(molte.ricorrenti
+      .filter(voce => voce.chiave !== 'c-1' && voce.chiave !== 'c-3')
+      .map(voce => [voce.chiave, descrizione(`Prodotto ${voce.chiave}`)] as const));
 
-    const risultato = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, molte, new Map(), '2026-10-30');
+    const risultato = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, molte, descrizioni, '2026-10-30');
 
     expect(risultato.numeri).toMatchObject({ prodotti: 40, prodottiFrequenti: 12 });
     expect(risultato.marche).toHaveLength(8);
-    expect(risultato.marche[0]).toEqual({ marca: 'Marca 0', quota: 20 });
-    expect(risultato.prodottiRicorrenti.map(voce => voce.chiave)).toEqual(Array.from({ length: 10 }, (_, indice) => `c-${indice}`));
+    expect(risultato.marche[0]).toEqual({ marca: 'Marca 0', quota: 20, volantini: 2 });
+    expect(risultato.prodottiRicorrenti.map(voce => voce.chiave)).toEqual(['c-0', 'c-2', ...[4, 5, 6, 7, 8, 9, 10, 11].map(indice => `c-${indice}`)]);
+  });
+
+  it('con un periodo: numeri e copertura dei soli volantini che vi iniziano; timeline e anni di tutta la storia', () => {
+    const periodo = { dal: '2022-01-01', al: '2022-12-31' };
+
+    const delPeriodo = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, STATISTICHE, DESCRIZIONI, '2022-10-25', { periodo });
+
+    expect(delPeriodo.periodo).toEqual(periodo);
+    expect(delPeriodo.numeri).toEqual({
+      volantini: 2,
+      volantiniAttivi: 1,
+      referenze: 80,
+      mediaReferenze: 40,
+      // Prodotti e marche sono quelli delle statistiche, gia' del periodo
+      prodotti: 3,
+      prodottiFrequenti: 0,
+      scontoMedio: 30,
+      insegne: [{ id: 'CC', nome: 'Conad City' }],
+    });
+    expect(delPeriodo.copertura).toEqual({ conCodice: 37.5, conReparto: 12.5, conPrezzo: 100, conMarca: 37.5 });
+    expect(delPeriodo.timeline.map(voce => voce.idKit)).toEqual(['k1', 'k2', 'k3', 'k4']);
+    expect(delPeriodo.anni).toEqual([2021, 2022]);
+  });
+
+  it('il periodo comprende il primo e l\'ultimo giorno; senza fine arriva a oggi e oltre', () => {
+    const volantini = (periodo: { dal: string | null; al: string | null }) =>
+      calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, STATISTICHE_VUOTE, new Map(), '2022-10-25', { periodo }).numeri.volantini;
+
+    expect(volantini({ dal: '2021-09-10', al: '2022-02-03' })).toBe(2);
+    expect(volantini({ dal: '2022-02-03', al: null })).toBe(2);
+    expect(volantini({ dal: null, al: '2021-03-04' })).toBe(1);
+    expect(volantini({ dal: '2023-01-01', al: null })).toBe(0);
+  });
+
+  it('un volantino sta nell\'anno in cui inizia, anche se finisce in quello dopo', () => {
+    const aCavallo = [{ ...edizione('k-dic', '2024-12-28'), promo: { ...edizione('k-dic', '2024-12-28').promo, validitaAl: '2025-01-10' } }];
+    const nel = (anno: number) => calcolaAnalisiPuntoVendita(
+      'pv-1', aCavallo, AGGREGATI, STATISTICHE_VUOTE, new Map(), '2025-01-05', { periodo: { dal: `${anno}-01-01`, al: `${anno}-12-31` } },
+    );
+
+    expect(nel(2024).numeri.volantini).toBe(1);
+    expect(nel(2025).numeri).toMatchObject({ volantini: 0, volantiniAttivi: 0, referenze: 0, mediaReferenze: null, scontoMedio: null, insegne: [] });
+    expect(nel(2025).anni).toEqual([2024]);
+    expect(nel(2025).timeline.map(voce => voce.attivo)).toEqual([true]);
+  });
+
+  it('assenze: dalla piu\' vecchia, con le date di validita\' e la promo, qualunque sia il periodo', () => {
+    const assenze = [
+      { idKit: 'k-b', data: '2022-11-03', dal: '2022-11-03', al: null, promo: { id: 'p-b', nome: 'Promo B' } },
+      { idKit: 'k-a', data: '2021-04-01', dal: '2021-04-01', al: '2021-04-14', promo: { id: 'p-a', nome: 'Promo A' } },
+    ];
+
+    const conAssenze = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, STATISTICHE, DESCRIZIONI, '2022-10-25', {
+      periodo: { dal: '2022-01-01', al: '2022-12-31' }, assenze,
+    });
+
+    expect(conAssenze.assenze).toEqual([
+      { idKit: 'k-a', dal: '2021-04-01', al: '2021-04-14', promo: { id: 'p-a', nome: 'Promo A' } },
+      { idKit: 'k-b', dal: '2022-11-03', al: null, promo: { id: 'p-b', nome: 'Promo B' } },
+    ]);
+    expect(analisi.assenze).toEqual([]);
   });
 
   it('un PV senza volantini: tutto vuoto, medie nulle', () => {
     const vuota = calcolaAnalisiPuntoVendita('pv-1', [], new Map(), STATISTICHE_VUOTE, new Map(), '2026-10-30');
-    expect(vuota.numeri).toMatchObject({ volantini: 0, referenze: 0, prodotti: 0, mediaReferenze: null, scontoMedio: null, scontoMedioPrimoAnno: null, insegne: [] });
+    expect(vuota.numeri).toMatchObject({ volantini: 0, referenze: 0, prodotti: 0, mediaReferenze: null, scontoMedio: null, insegne: [] });
     expect(vuota.timeline).toEqual([]);
+    expect(vuota.assenze).toEqual([]);
+    expect(vuota.anni).toEqual([]);
     expect(vuota.marche).toEqual([]);
     expect(vuota.prodottiRicorrenti).toEqual([]);
     expect(vuota.copertura).toEqual({ conCodice: 0, conReparto: 0, conPrezzo: 0, conMarca: 0 });

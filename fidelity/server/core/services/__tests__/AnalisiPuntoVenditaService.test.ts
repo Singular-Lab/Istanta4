@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { STATO_PROMO } from '../../../../lib/enums';
-import { MECCANICHE } from '../../../../lib/puntiVendita/analisi';
+import { MECCANICHE, MINIMO_VOLANTINI_RICORRENTE } from '../../../../lib/puntiVendita/analisi';
 import { BadRequestError, NotFoundError } from '../../../../lib/errors';
 import type {
   EdizionePerStatistiche,
@@ -10,7 +10,7 @@ import type {
   RiepilogoDaSalvare,
   RigaReferenzaKit,
 } from '../../repositories/AnalisiPuntiVenditaRepository';
-import type { PuntoVenditaDellaStoria } from '../../repositories/PuntiVenditaVolantinoRepository';
+import type { IPuntiVenditaVolantinoRepository, PuntoVenditaDellaStoria } from '../../repositories/PuntiVenditaVolantinoRepository';
 import {
   AGGREGATI_VUOTI,
   aggregatiDi,
@@ -25,7 +25,7 @@ import type { RegolaCollegamento } from '../../utils/chiaviRigheVolantino';
 import type { RigaCollegata } from '../../utils/verificaCollegamenti';
 import type { IPosizioniRigheRepository } from '../../repositories/PosizioniRigheRepository';
 import type { PosizioneRiga } from '../../../../lib/puntiVendita/analisi';
-import type { ApparizioneStoria } from '../../utils/storiaPuntoVendita';
+import type { ApparizioneStoria, VolantinoSenzaPuntoVendita } from '../../utils/storiaPuntoVendita';
 import { AnalisiPuntoVenditaService, KIT_PER_LETTURA, oggiARoma, type OpzioniAnalisiPuntoVendita } from '../AnalisiPuntoVenditaService';
 
 vi.mock('../../logger', () => ({
@@ -114,17 +114,18 @@ const RIEPILOGO_SENZA_REFERENZE: RiepilogoKit = { dati: { ...AGGREGATI_VUOTI, ma
 
 /** Le aggregazioni dell'SQL di statisticheProdotti, sui riepiloghi in memoria. */
 function statisticheInMemoria(salvati: ReadonlyMap<string, RiepilogoKit>, edizioni: readonly EdizionePerStatistiche[], limiti: LimitiStatistiche): StatisticheProdotti {
-  const prodotti = new Map<string, ProdottoFrequente & { ultimaData: string; prezzi: number[] }>();
-  const marche = new Map<string, Map<string, number>>();
+  type Prezzi = 'prezzoMinimo' | 'prezzoMassimo' | 'prezzoUltimo';
+  const prodotti = new Map<string, Omit<ProdottoFrequente, Prezzi> & { ultimaData: string; prezzi: number[] }>();
+  const marche = new Map<string, { nomi: Map<string, number>; kit: Set<string> }>();
   for (const { idKit, data } of [...edizioni].sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0))) {
     const riepilogo = salvati.get(idKit);
     if (!riepilogo) continue;
     for (const tupla of riepilogo.dati.prodotti) {
       const voce = prodotti.get(tupla[0]) ?? {
-        chiave: tupla[0], volantini: 0, perAnno: {}, prezzoMinimo: null, prezzoMassimo: null, ultimoKit: idKit, ultimoKitConFoto: null, ultimaData: data, prezzi: [],
+        chiave: tupla[0], volantini: 0, kit: [], ultimoKit: idKit, ultimoKitConFoto: null, ultimaData: data, prezzi: [],
       };
       voce.volantini += 1;
-      voce.perAnno[data.slice(0, 4)] = (voce.perAnno[data.slice(0, 4)] ?? 0) + 1;
+      voce.kit.push(idKit);
       if (tupla[1] !== null) voce.prezzi.push(tupla[1]);
       voce.ultimoKit = idKit;
       voce.ultimaData = data;
@@ -132,28 +133,32 @@ function statisticheInMemoria(salvati: ReadonlyMap<string, RiepilogoKit>, edizio
       prodotti.set(tupla[0], voce);
     }
     for (const [chiave, marca, referenze] of riepilogo.dati.marche) {
-      const nomi = marche.get(chiave) ?? new Map<string, number>();
-      nomi.set(marca, (nomi.get(marca) ?? 0) + referenze);
-      marche.set(chiave, nomi);
+      const voce = marche.get(chiave) ?? { nomi: new Map<string, number>(), kit: new Set<string>() };
+      voce.nomi.set(marca, (voce.nomi.get(marca) ?? 0) + referenze);
+      voce.kit.add(idKit);
+      marche.set(chiave, voce);
     }
   }
-  const perMarca = [...marche.entries()].map(([chiave, nomi]) => ({
+  const perMarca = [...marche.entries()].map(([chiave, { nomi, kit }]) => ({
     chiave,
     marca: [...nomi.entries()].sort((a, b) => b[1] - a[1])[0][0],
     referenze: [...nomi.values()].reduce((somma, valore) => somma + valore, 0),
+    volantini: kit.size,
   })).sort((a, b) => b.referenze - a.referenze || (a.chiave < b.chiave ? -1 : 1));
   return {
     prodotti: prodotti.size,
     frequenti: [...prodotti.values()].filter(voce => voce.volantini > limiti.soglia).length,
     ricorrenti: [...prodotti.values()]
+      .filter(voce => voce.volantini >= limiti.minimoVolantini)
       .sort((a, b) => b.volantini - a.volantini || (a.ultimaData < b.ultimaData ? 1 : a.ultimaData > b.ultimaData ? -1 : 0) || (a.chiave < b.chiave ? -1 : 1))
       .slice(0, limiti.ricorrenti)
       .map(({ ultimaData: _data, prezzi, ...voce }) => ({
         ...voce,
         prezzoMinimo: prezzi.length > 0 ? Math.min(...prezzi) : null,
         prezzoMassimo: prezzi.length > 0 ? Math.max(...prezzi) : null,
+        prezzoUltimo: prezzi[prezzi.length - 1] ?? null,
       })),
-    marche: perMarca.slice(0, limiti.marche).map(({ marca, referenze }) => ({ marca, referenze })),
+    marche: perMarca.slice(0, limiti.marche).map(({ marca, referenze, volantini }) => ({ marca, referenze, volantini })),
     referenzeConMarca: perMarca.reduce((somma, voce) => somma + voce.referenze, 0),
   };
 }
@@ -184,6 +189,7 @@ function creaServizio(opzioni: {
   puntiVendita?: PuntoVenditaPerSuggerimenti[];
   posizioni?: OpzioniAnalisiPuntoVendita['posizioni'];
   regole?: RegolaCollegamento[];
+  assenze?: VolantinoSenzaPuntoVendita[];
 } = {}) {
   /** analisi_kit in memoria. */
   const salvati = new Map(opzioni.salvati ?? [[K1, RIEPILOGO_K1]]);
@@ -223,6 +229,7 @@ function creaServizio(opzioni: {
   const storia = {
     trovaPuntoVendita: vi.fn(async (id: string) => (opzioni.puntoVendita === undefined ? (id === PV ? PUNTO_VENDITA : null) : opzioni.puntoVendita)),
     apparizioni: vi.fn(async () => APPARIZIONI),
+    volantiniSenzaPuntoVendita: vi.fn(async (_criteri: Parameters<IPuntiVenditaVolantinoRepository['volantiniSenzaPuntoVendita']>[0]) => opzioni.assenze ?? []),
   };
   const servizio = new AnalisiPuntoVenditaService(repository, storia, {
     chiaveMetaPuntoVendita: opzioni.chiaveMeta,
@@ -284,23 +291,48 @@ describe('riepiloghi dei kit e scheda del PV', () => {
 
     const analisi = await servizio.analisi(PV, GDO);
 
-    // Dopo il salvataggio dei riepiloghi mancanti, con i giorni delle edizioni
+    // Dopo il salvataggio dei riepiloghi mancanti, con i giorni delle edizioni; il doppio dei
+    // ricorrenti, perche' quelli senza descrizione non si mostrano
     expect(repository.salvaRiepiloghi.mock.invocationCallOrder[0]).toBeLessThan(repository.statisticheProdotti.mock.invocationCallOrder[0]);
     expect(repository.statisticheProdotti).toHaveBeenCalledWith(
       [{ idKit: K1, data: '2022-01-06' }, { idKit: K2, data: '2022-01-13' }, { idKit: K3, data: '2022-01-20' }],
-      { soglia: 10, ricorrenti: 10, marche: 8 },
+      { soglia: 10, ricorrenti: 20, minimoVolantini: MINIMO_VOLANTINI_RICORRENTE, marche: 8 },
     );
-    expect(repository.descrizioniProdotti).toHaveBeenCalledWith([
-      { idKit: K3, chiave: 'c-A' },
-      { idKit: K2, chiave: 'c-C' },
-      { idKit: K2, chiave: 'c-D' },
-    ]);
-    expect(analisi.prodottiRicorrenti.map(prodotto => prodotto.chiave)).toEqual(['c-A', 'c-C', 'c-D']);
-    expect(analisi.prodottiRicorrenti[0]).toEqual({
+    // c-C e c-D sono solo in K2: non sono ricorrenti
+    expect(repository.descrizioniProdotti).toHaveBeenCalledWith([{ idKit: K3, chiave: 'c-A' }]);
+    expect(analisi.prodottiRicorrenti).toEqual([{
       chiave: 'c-A', nome: 'Mozzarella di bufala', marca: null, formato: null, foto: 'foto-k3', volantini: 3,
-      perAnno: [{ anno: 2022, volantini: 3 }], prezzoMinimo: 1.1, prezzoMassimo: 1.5,
-    });
-    expect(analisi.marche).toEqual([{ marca: 'Granarolo', quota: 100 }]);
+      kit: [K1, K2, K3], prezzoMinimo: 1.1, prezzoMassimo: 1.5, prezzoUltimo: 1.5,
+    }]);
+    expect(analisi.numeri).toMatchObject({ prodotti: 3 });
+    expect(analisi.marche).toEqual([{ marca: 'Granarolo', quota: 100, volantini: 1 }]);
+    expect(analisi.periodo).toBeNull();
+  });
+
+  it('con un periodo: timeline e riepiloghi di tutti i volantini, statistiche dei soli volantini che vi iniziano', async () => {
+    const { servizio, repository } = creaServizio();
+    const periodo = { dal: '2022-01-10', al: '2022-01-15' };
+
+    const analisi = await servizio.analisi(PV, GDO, periodo);
+
+    expect(repository.aggregatiKit).toHaveBeenCalledWith([K1, K2, K3], VERSIONE_ANALISI_KIT);
+    expect(repository.statisticheProdotti).toHaveBeenCalledWith([{ idKit: K2, data: '2022-01-13' }], expect.objectContaining({ ricorrenti: 20 }));
+    expect(analisi.periodo).toEqual(periodo);
+    expect(analisi.timeline.map(edizione => edizione.idKit)).toEqual([K1, K2, K3]);
+    expect(analisi.numeri).toMatchObject({ volantini: 1, volantiniAttivi: 1, referenze: 3, prodotti: 3 });
+    // In un solo volantino nessun prodotto e' ricorrente
+    expect(analisi.prodottiRicorrenti).toEqual([]);
+    expect(analisi.marche).toEqual([]);
+  });
+
+  it('un periodo senza volantini: statistiche vuote, timeline intera', async () => {
+    const { servizio, repository } = creaServizio();
+
+    const analisi = await servizio.analisi(PV, GDO, { dal: '2023-01-01', al: null });
+
+    expect(repository.statisticheProdotti).toHaveBeenCalledWith([], expect.anything());
+    expect(analisi.numeri).toMatchObject({ volantini: 0, referenze: 0, prodotti: 0, mediaReferenze: null });
+    expect(analisi.timeline).toHaveLength(3);
   });
 
   it('un kit senza referenze ha un riepilogo vuoto, salvato anche lui', async () => {
@@ -343,6 +375,39 @@ describe('riepiloghi dei kit e scheda del PV', () => {
     expect(repository.referenzeDeiKit).not.toHaveBeenCalled();
     expect(repository.salvaRiepiloghi).not.toHaveBeenCalled();
     expect(repository.statisticheProdotti).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('assenze nella scheda del PV', () => {
+  const CON_COMBINAZIONE: PuntoVenditaDellaStoria = { ...PUNTO_VENDITA, idCanale: 'SS', nomeCanale: 'Conad Superstore', idArea: 'LI', nomeArea: 'Liguria' };
+  const ASSENZE: VolantinoSenzaPuntoVendita[] = [
+    { idKit: 'k-assente-1', data: '2022-01-27', dal: '2022-01-27', al: '2022-02-02', promo: { id: 'p-a1', nome: 'Promo A1' } },
+    { idKit: 'k-assente-2', data: '2022-02-03', dal: '2022-02-03', al: null, promo: { id: 'p-a2', nome: 'Promo A2' } },
+  ];
+
+  it('i volantini della combinazione attuale del PV senza il PV, dopo la sua prima apparizione, qualunque sia il periodo', async () => {
+    const { servizio, storia } = creaServizio({ puntoVendita: CON_COMBINAZIONE, assenze: ASSENZE });
+
+    const analisi = await servizio.analisi(PV, GDO, { dal: '2022-01-10', al: '2022-01-15' });
+
+    expect(storia.volantiniSenzaPuntoVendita).toHaveBeenCalledWith({
+      idPuntoVendita: PV, idGdo: GDO, idCanale: 'SS', idArea: 'LI', dopo: '2022-01-06',
+    });
+    expect(analisi.assenze).toEqual([
+      { idKit: 'k-assente-1', dal: '2022-01-27', al: '2022-02-02', promo: { id: 'p-a1', nome: 'Promo A1' } },
+      { idKit: 'k-assente-2', dal: '2022-02-03', al: null, promo: { id: 'p-a2', nome: 'Promo A2' } },
+    ]);
+  });
+
+  it('un PV senza combinazione canale/area, o mai stampato, non ha assenze', async () => {
+    const senzaCombinazione = creaServizio({ assenze: ASSENZE });
+    expect((await senzaCombinazione.servizio.analisi(PV, GDO)).assenze).toEqual([]);
+    expect(senzaCombinazione.storia.volantiniSenzaPuntoVendita).not.toHaveBeenCalled();
+
+    const maiStampato = creaServizio({ puntoVendita: CON_COMBINAZIONE, assenze: ASSENZE });
+    maiStampato.storia.apparizioni.mockResolvedValueOnce([]);
+    expect((await maiStampato.servizio.analisi(PV, GDO)).assenze).toEqual([]);
+    expect(maiStampato.storia.volantiniSenzaPuntoVendita).not.toHaveBeenCalled();
   });
 });
 
@@ -533,7 +598,7 @@ describe('reparti della GDO del PV (Impostazioni GDO)', () => {
 
     expect(repartiGdo.repartiSalvati).toHaveBeenCalledWith(GDO);
     expect(config.getFlyerInsightsConfig).toHaveBeenCalledWith(GDO);
-    expect(analisi.reparti).toEqual([{ anno: 2022, reparti: [{ reparto: 'Ortofrutta', quota: 60 }, { reparto: 'Dispensa', quota: 40 }] }]);
+    expect(analisi.timeline.map(edizione => edizione.reparti)).toEqual([[{ reparto: 'Ortofrutta', spazio: 60 }, { reparto: 'Dispensa', spazio: 40 }], [], []]);
   });
 
   it('senza reparti salvati i nomi restano quelli dei riepiloghi', async () => {
@@ -541,7 +606,7 @@ describe('reparti della GDO del PV (Impostazioni GDO)', () => {
 
     const analisi = await servizio.analisi(PV, GDO);
 
-    expect(analisi.reparti[0].reparti.map(voce => voce.reparto)).toEqual(['Ortofrutta', 'Drogheria alimentare', 'Reparto 05']);
+    expect(analisi.timeline[0].reparti.map(voce => voce.reparto)).toEqual(['Ortofrutta', 'Drogheria alimentare', 'Reparto 05']);
   });
 });
 

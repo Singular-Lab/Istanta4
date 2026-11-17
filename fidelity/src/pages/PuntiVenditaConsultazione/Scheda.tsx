@@ -3,6 +3,7 @@ import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
+import Segmenti from "@/components/Base/Segmenti";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
@@ -11,19 +12,73 @@ import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
 import { useFetchAnalisiPuntoVendita, useFetchPuntoVenditaConsultazione, useFetchStoriaPuntoVendita } from "@/query/query";
 import { twMerge } from "@/utils/twMerge";
+import dayjs from "dayjs";
 import "leaflet/dist/leaflet.css";
-import { Children, useMemo, useState, type ReactNode } from "react";
+import { Children, useState, type ReactNode } from "react";
 import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { PuntoVenditaConsultazione } from "../../../lib/puntiVendita/consultazione";
 import type { CustomError } from "../../../lib/server_call";
 import { codiciGdo } from "../../utils/puntoVendita";
 import { ImportStoricoVolantini } from "../PuntiVendita/ImportStoricoVolantini";
-import { canaliDelleEdizioni, identificativiGdo, infograficheConDati, INFOGRAFICHE_SCHEDA, righeRecapiti, useTinteCanali, type InfograficaScheda } from "./analisi";
-import { PuntoInsegna } from "./componenti";
-import { ComeSiPromuove, DoveStaNelVolantino, GraficiSenzaDati, MarchePiuPresenti, NumeriScheda, ProdottiCheTornano, ScontoMedio } from "./Infografiche";
-import { BoxStoria, EventiStoria, RecapitiStampati, TuttiIVolantini } from "./StoriaPuntoVendita";
+import {
+  contestoPeriodo,
+  edizioniDelPeriodo,
+  identificativiGdo,
+  infograficheConDati,
+  INFOGRAFICHE_SCHEDA,
+  oggiIso,
+  PARAMETRO_ANNO,
+  PARAMETRO_VOLANTINO,
+  periodoAnalisi,
+  periodoDaParametro,
+  sintesiPeriodo,
+  ULTIMI_12_MESI,
+  ULTIMI_3_MESI,
+  type ContestoPeriodo,
+  type InfograficaScheda,
+} from "./analisi";
+import { ComeSiPromuove, GraficiSenzaDati, MarchePiuPresenti, NumeriScheda, ProdottiCheTornano, SpazioPerReparto } from "./Infografiche";
+import { BoxStoria, Cambiamenti, TuttiIVolantini } from "./StoriaPuntoVendita";
 import { VolantiniAttivi } from "./VolantiniAttivi";
+
+/** Oltre tanti giorni di storia la scelta comprende gli ultimi 12 mesi: prima sarebbero tutto il periodo. */
+const GIORNI_PER_ULTIMI_12_MESI = 400;
+
+/**
+ * La scelta del periodo, per tutta la scheda: dal primo anno, ogni anno, gli ultimi 12 mesi (con più
+ * di un anno di storia) e gli ultimi 3 mesi. Cambiandolo si torna al volantino più recente del periodo.
+ */
+function SceltaPeriodo({
+  contesto,
+  anni,
+  primoVolantino,
+  onCambia,
+}: {
+  contesto: ContestoPeriodo;
+  anni: readonly number[];
+  primoVolantino: string;
+  onCambia: (valore: string | null) => void;
+}) {
+  const primoAnno = Number(primoVolantino.slice(0, 4));
+  const lunga = dayjs(contesto.oggi).diff(dayjs(primoVolantino), "day") > GIORNI_PER_ULTIMI_12_MESI;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Segmenti
+        etichetta="Periodo"
+        opzioni={[
+          { valore: "tutti", etichetta: `Dal ${primoAnno}` },
+          // Con un anno solo, l'anno e "Dal" sarebbero lo stesso periodo
+          ...(anni.length > 1 ? anni.map(a => ({ valore: String(a), etichetta: String(a) })) : []),
+          ...(lunga ? [{ valore: ULTIMI_12_MESI, etichetta: "Ultimi 12 mesi" }] : []),
+          { valore: ULTIMI_3_MESI, etichetta: "Ultimi 3 mesi" },
+        ]}
+        valore={contesto.periodo === null ? "tutti" : String(contesto.periodo)}
+        onChange={valore => onCambia(valore === "tutti" ? null : valore)}
+      />
+    </div>
+  );
+}
 
 const INDIETRO = { to: "/punti-vendita", etichetta: "Torna ai punti vendita" };
 
@@ -122,28 +177,44 @@ function MappaPuntoVendita({ pv }: { pv: PuntoVenditaConsultazione }) {
 
 /**
  * Scheda di consultazione del punto vendita (/punti-vendita/:id), con "gdo.visualizza", costruita
- * sulla timeline dei suoi volantini: numeri, storia con il volantino scelto, infografiche
- * (meccaniche, sconto, marche, prodotti, reparti), recapiti stampati ed eventi, volantini attivi,
- * tutti i volantini, dati e mappa. La gestione (dispositivi, contesti display, modifica) resta
- * sotto /gestione-interna e si apre con "Gestisci" a chi ha il permesso.
+ * sulla timeline dei suoi volantini. Un periodo (nell'indirizzo, `?anno=`) vale per tutta la
+ * scheda: numeri, storia con le corsie dei numeri di ogni volantino e il volantino scelto,
+ * meccaniche e reparti col periodo prima, marche, prodotti che tornano;
+ * poi cambiamenti, volantini attivi, tutti i volantini, dati e mappa. La gestione (dispositivi,
+ * contesti display, modifica) resta sotto /gestione-interna e si apre con "Gestisci" a chi ha il permesso.
  */
 function SchedaPuntoVendita() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const [parametri, setParametri] = useSearchParams();
   const query = useFetchPuntoVenditaConsultazione(id);
-  const analisi = useFetchAnalisiPuntoVendita(id);
   const storia = useFetchStoriaPuntoVendita(id);
   const puoGestire = usePermission(PERMISSIONS.GDO.GESTISCI_PUNTI_VENDITA);
   const [importAperto, setImportAperto] = useState(false);
+  // Il periodo viene dall'indirizzo: un anno scritto vale anche prima che arrivino gli anni dei
+  // volantini (servono a chiederli), e un anno senza volantini lo dice la storia
+  const oggi = oggiIso();
+  const valorePeriodo = parametri.get(PARAMETRO_ANNO);
+  const annoRichiesto = Number(valorePeriodo);
+  const periodo = periodoDaParametro(valorePeriodo, Number.isInteger(annoRichiesto) && annoRichiesto >= 2000 && annoRichiesto <= 2100 ? [annoRichiesto] : []);
+  const analisi = useFetchAnalisiPuntoVendita(id, periodoAnalisi(periodo, oggi));
   const pv = query.data;
   const timeline = analisi.data?.timeline;
-  const canaleAttuale = pv?.canale;
-  // Le insegne della pagina: quelle dei volantini e quella di oggi, per i colori
-  const canali = useMemo(
-    () => [...canaliDelleEdizioni(timeline ?? []), ...(canaleAttuale ? [{ id: canaleAttuale.id, nome: canaleAttuale.nome }] : [])],
-    [timeline, canaleAttuale]
-  );
-  const tinta = useTinteCanali(canali);
+  const primoVolantino = timeline?.[0]?.dal ?? null;
+  const contesto = contestoPeriodo(periodo, primoVolantino, oggi);
+  const anni = [...(analisi.data?.anni ?? [])].sort((a, b) => b - a);
+
+  const cambiaPeriodo = (valore: string | null) =>
+    setParametri(
+      attuali => {
+        const nuovi = new URLSearchParams(attuali);
+        if (valore === null) nuovi.delete(PARAMETRO_ANNO);
+        else nuovi.set(PARAMETRO_ANNO, valore);
+        nuovi.delete(PARAMETRO_VOLANTINO);
+        return nuovi;
+      },
+      { replace: true }
+    );
 
   if (query.isLoading) {
     return (
@@ -196,14 +267,16 @@ function SchedaPuntoVendita() {
   ].filter(Boolean);
 
   // Analisi arrivata e nessun volantino: la storia lo spiega una volta sola, i riquadri che ne
-  // dipendono (numeri, grafici, recapiti, eventi) non si disegnano
+  // dipendono (numeri, grafici, cambiamenti) non si disegnano
   const senzaStoria = analisi.data !== undefined && analisi.data.timeline.length === 0;
+  // Un periodo senza volantini: lo dice la storia, i grafici del periodo non si disegnano
+  const edizioniPeriodo = analisi.data ? edizioniDelPeriodo(analisi.data.timeline, contesto.giorni) : null;
+  const periodoVuoto = edizioniPeriodo !== null && edizioniPeriodo.length === 0;
   // In caricamento o in errore ogni grafico mostra il suo stato; arrivati i dati, solo quelli che ne hanno
-  const conDati = analisi.data ? infograficheConDati(analisi.data) : null;
-  const mostra = (infografica: InfograficaScheda) => !senzaStoria && (conDati === null || conDati[infografica]);
-  const senzaGrafico = conDati && !senzaStoria ? INFOGRAFICHE_SCHEDA.filter(voce => !conDati[voce.id]).map(voce => voce.id) : [];
-  const conRecapiti = !senzaStoria && (!storia.data || righeRecapiti(storia.data.recapiti).length > 0);
-  const conEventi = !senzaStoria && (!storia.data || storia.data.eventi.length > 0 || Boolean(timeline?.[0]));
+  const conDati = analisi.data && edizioniPeriodo ? infograficheConDati(sintesiPeriodo(edizioniPeriodo), analisi.data) : null;
+  const mostra = (infografica: InfograficaScheda) => !senzaStoria && !periodoVuoto && (conDati === null || conDati[infografica]);
+  const senzaGrafico = conDati && !senzaStoria && !periodoVuoto ? INFOGRAFICHE_SCHEDA.filter(voce => !conDati[voce.id]).map(voce => voce.id) : [];
+  const conCambiamenti = !senzaStoria && (!storia.data || storia.data.eventi.length > 0 || storia.data.recapiti.length > 0 || Boolean(timeline?.[0]));
 
   return (
     <Pagina
@@ -222,7 +295,7 @@ function SchedaPuntoVendita() {
         <>
           {pv.canale && (
             <Badge variant="secondary" size="sm">
-              <PuntoInsegna tinta={tinta(pv.canale.id)} />
+              <Lucide icon="Store" aria-hidden="true" className="h-3 w-3" />
               {pv.canale.nome}
             </Badge>
           )}
@@ -249,29 +322,23 @@ function SchedaPuntoVendita() {
         </>
       }
     >
-      <NumeriScheda analisi={analisi} />
+      {primoVolantino && <SceltaPeriodo contesto={contesto} anni={anni} primoVolantino={primoVolantino} onCambia={cambiaPeriodo} />}
+      <NumeriScheda analisi={analisi} contesto={contesto} />
       <BoxStoria
         idPv={pv.id}
         analisi={analisi}
         storia={storia.data}
-        tinta={tinta}
+        contesto={contesto}
         onImporta={puoGestire ? () => setImportAperto(true) : undefined}
       />
-      <Fila>
-        {mostra("meccaniche") && <ComeSiPromuove analisi={analisi} />}
-        {mostra("sconto") && <ScontoMedio analisi={analisi} />}
-        {mostra("marche") && <MarchePiuPresenti analisi={analisi} />}
-      </Fila>
-      {/* La tabella dei prodotti è alta: il riquadro dei reparti accanto resta della sua altezza */}
       <Fila className="items-start">
-        {mostra("prodotti") && <ProdottiCheTornano idPv={pv.id} analisi={analisi} />}
-        {mostra("reparti") && <DoveStaNelVolantino analisi={analisi} />}
+        {mostra("meccaniche") && <ComeSiPromuove analisi={analisi} contesto={contesto} />}
+        {mostra("reparti") && <SpazioPerReparto analisi={analisi} contesto={contesto} />}
+        {mostra("marche") && <MarchePiuPresenti analisi={analisi} contesto={contesto} />}
       </Fila>
+      {mostra("prodotti") && <ProdottiCheTornano idPv={pv.id} analisi={analisi} contesto={contesto} />}
       <GraficiSenzaDati assenti={senzaGrafico} />
-      <Fila>
-        {conRecapiti && <RecapitiStampati storia={storia} />}
-        {conEventi && <EventiStoria storia={storia} primo={timeline?.[0] ?? null} />}
-      </Fila>
+      {conCambiamenti && <Cambiamenti storia={storia} primo={timeline?.[0] ?? null} />}
       <VolantiniAttivi idPv={pv.id} canaleArea={insegnaArea} />
       {storia.data?.sintesi && <TuttiIVolantini idPv={pv.id} />}
       <div id="dati-e-mappa" className="grid scroll-mt-6 grid-cols-1 gap-6 lg:grid-cols-2">

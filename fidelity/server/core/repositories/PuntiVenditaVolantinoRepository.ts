@@ -150,7 +150,10 @@ export interface IPuntiVenditaVolantinoRepository {
   trovaPuntoVendita(id: string): Promise<PuntoVenditaDellaStoria | null>;
   /** Le apparizioni del PV nei volantini, dalla piu' vecchia. */
   apparizioni(idPuntoVendita: string): Promise<ApparizioneStoria[]>;
-  /** Volantini con la lista registrata della stessa insegna e area, dopo la data indicata, in cui il PV non c'e'. */
+  /**
+   * Volantini con la lista registrata della stessa insegna e area, con l'edizione dopo la data
+   * indicata, in cui il PV non c'e': dal piu' vecchio, con le date di validita' e la promo.
+   */
   volantiniSenzaPuntoVendita(criteri: {
     idPuntoVendita: string;
     idGdo: string;
@@ -635,8 +638,12 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
     idArea: string;
     dopo: string;
   }): Promise<VolantinoSenzaPuntoVendita[]> {
-    const righe = await this.seleziona<{ id_kit: string; data: string }>(
-      `SELECT k.id::text AS id_kit, ${DATA_EDIZIONE} AS data
+    const righe = await this.seleziona<{
+      id_kit: string; data: string; validita_dal: string | null; validita_al: string | null; id_promo: string; nome_promo: string;
+    }>(
+      `SELECT k.id::text AS id_kit, ${DATA_EDIZIONE} AS data,
+              ${giorno('p.validita_dal')} AS validita_dal, ${giorno('p.validita_al')} AS validita_al,
+              p.id_promo::text AS id_promo, p.nome_promo
        FROM runtime_kit k
        JOIN promo p ON p.id_promo = k.id_promo
        WHERE k.id_canale = :idCanale AND k.id_area = :idArea AND ${KIT_VALIDI}
@@ -648,7 +655,13 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
        ORDER BY data, k.id`,
       criteri
     );
-    return righe.map(riga => ({ idKit: riga.id_kit, data: riga.data }));
+    return righe.map(riga => ({
+      idKit: riga.id_kit,
+      data: riga.data,
+      dal: riga.validita_dal ?? riga.data,
+      al: riga.validita_al,
+      promo: { id: riga.id_promo, nome: riga.nome_promo },
+    }));
   }
 
   async paginaVolantini(idPuntoVendita: string, limite: number, scarto: number): Promise<{ volantini: VolantinoNellaStoria[]; totale: number }> {

@@ -9,7 +9,7 @@ import type { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponse
 import type { PuntoVenditaConsultazione } from "../../lib/puntiVendita/consultazione";
 import type { PaginaVolantiniStoria, StoriaPuntoVendita } from "../../lib/puntiVendita/storia";
 import type { CorrezionePosizione, EsitoCollegamento, EsitoScollegamento, EsitoVerifica, PaginaCollegamentiManuali, PaginaRigheNonAbbinate, PaginaVerificaCollegamenti, PosizioneRiga, QualitaPuntiVendita, ReteInsegne, RichiestaCambioCollegamento, RichiestaCollegamento, TipoCollegamento, VolantiniRigaNonAbbinata } from "../../lib/puntiVendita/analisi";
-import type { AnalisiPuntoVendita, DettaglioReferenzaPv, DettaglioVolantinoPv } from "../../lib/puntiVendita/analisi";
+import type { AnalisiPuntoVendita, DettaglioReferenzaPv, DettaglioVolantinoPv, PeriodoAnalisi } from "../../lib/puntiVendita/analisi";
 
 
 
@@ -695,11 +695,19 @@ export const useFetchVolantiniStoriaPuntoVendita = (idPv: string, pagina: number
   });
 
 /** Numeri, timeline dei volantini e infografiche della scheda del punto vendita. */
-export const useFetchAnalisiPuntoVendita = (idPv: string) =>
+export const useFetchAnalisiPuntoVendita = (idPv: string, periodo: PeriodoAnalisi | null = null) =>
   useQuery({
-    queryKey: ["puntiVendita", "analisi", idPv],
-    queryFn: () => ServerCall.get<AnalisiPuntoVendita>(`/punti-vendita/${encodeURIComponent(idPv)}/analisi`),
+    queryKey: ["puntiVendita", "analisi", idPv, periodo?.dal ?? null, periodo?.al ?? null],
+    queryFn: () => {
+      const parametri = new URLSearchParams();
+      if (periodo?.dal) parametri.set("dal", periodo.dal);
+      if (periodo?.al) parametri.set("al", periodo.al);
+      const query = parametri.toString();
+      return ServerCall.get<AnalisiPuntoVendita>(`/punti-vendita/${encodeURIComponent(idPv)}/analisi${query ? `?${query}` : ""}`);
+    },
     enabled: !!idPv,
+    // Cambiando periodo la scheda resta com'era finché arrivano i numeri nuovi; un altro PV parte da zero
+    placeholderData: (precedenti, queryPrecedente) => (queryPrecedente?.queryKey[2] === idPv ? precedenti : undefined),
   });
 
 /** Un volantino della storia del punto vendita: pagine, box, numeri e riga stampata del punto vendita. */

@@ -63,9 +63,15 @@ export interface EdizionePerStatistiche {
 export interface LimitiStatistiche {
   /** Un prodotto e' frequente oltre questi volantini. */
   soglia: number;
+  /** Quanti prodotti ricorrenti, al massimo. */
   ricorrenti: number;
+  /** Un prodotto e' ricorrente se compare almeno in tanti volantini (MINIMO_VOLANTINI_RICORRENTE). */
+  minimoVolantini: number;
   marche: number;
 }
+
+/** I prezzi di un prodotto ricorrente: numeric dal database, numeri in uscita. */
+type PrezziProdotto = 'prezzoMinimo' | 'prezzoMassimo' | 'prezzoUltimo';
 
 export interface KitDelVolantino {
   id: string;
@@ -97,7 +103,10 @@ export interface IAnalisiPuntiVenditaRepository {
   referenzeDeiKit(idKit: readonly string[]): Promise<RigaReferenzaKit[]>;
   /** Salva (o sostituisce) i riepiloghi; quelli di un kit eliminato nel frattempo si saltano. */
   salvaRiepiloghi(riepiloghi: readonly RiepilogoDaSalvare[]): Promise<void>;
-  /** Prodotti diversi e frequenti, i piu' presenti e le marche dei volantini indicati, dai riepiloghi salvati. */
+  /**
+   * Prodotti diversi e frequenti, i piu' presenti (con i loro kit e l'ultimo prezzo) e le marche (con
+   * i volantini in cui compaiono) dei volantini indicati, dai riepiloghi salvati.
+   */
   statisticheProdotti(edizioni: readonly EdizionePerStatistiche[], limiti: LimitiStatistiche): Promise<StatisticheProdotti>;
   /** Le descrizioni dei prodotti nei kit indicati, per chiaveDescrizione(idKit, chiave). */
   descrizioniProdotti(coppie: ReadonlyArray<{ idKit: string; chiave: string }>): Promise<Map<string, DescrizioneProdotto>>;
@@ -208,20 +217,22 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
 
   async statisticheProdotti(edizioni: readonly EdizionePerStatistiche[], limiti: LimitiStatistiche): Promise<StatisticheProdotti> {
     if (edizioni.length === 0) return { prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], referenzeConMarca: 0 };
-    const voci = edizioni.map(edizione => ({ id_kit: edizione.idKit, data: edizione.data, anno: Number(edizione.data.slice(0, 4)) }));
+    const voci = edizioni.map(edizione => ({ id_kit: edizione.idKit, data: edizione.data }));
     // Un prodotto compare una volta per kit (riassumiKit): le righe di un prodotto sono i suoi volantini.
     // L'ultimo kit e' il massimo di "giorno|kit" (larghezza fissa, collation "C"): niente ordinamenti per
-    // prodotto, l'aggregazione resta in memoria. Ordinamenti col collation "C": gli stessi di JavaScript.
+    // prodotto, l'aggregazione resta in memoria; kit e ultimo prezzo solo per i pochi ricorrenti.
+    // Lo stesso vale per una marca, una volta per kit con le sue referenze. Ordinamenti col collation
+    // "C": gli stessi di JavaScript.
     const [riga] = await this.seleziona<{
       prodotti: number; frequenti: number; referenze_con_marca: number;
-      ricorrenti: Array<Omit<ProdottoFrequente, 'prezzoMinimo' | 'prezzoMassimo'> & { prezzoMinimo: number | string | null; prezzoMassimo: number | string | null }>;
-      marche: Array<{ marca: string; referenze: number }>;
+      ricorrenti: Array<Omit<ProdottoFrequente, PrezziProdotto> & Record<PrezziProdotto, number | string | null>>;
+      marche: Array<{ marca: string; referenze: number; volantini: number }>;
     }>(
       `WITH e AS (
-         SELECT * FROM jsonb_to_recordset(CAST(:edizioni AS jsonb)) AS e(id_kit uuid, data text, anno int)
+         SELECT * FROM jsonb_to_recordset(CAST(:edizioni AS jsonb)) AS e(id_kit uuid, data text)
        ),
        p AS MATERIALIZED (
-         SELECT e.anno, (e.data || '|' || e.id_kit::text) COLLATE "C" AS volantino,
+         SELECT (e.data || '|' || e.id_kit::text) COLLATE "C" AS volantino,
                 t ->> 0 AS chiave, (t ->> 1)::numeric AS prezzo, (t ->> 7) = '1' AS con_foto
          FROM e
          JOIN analisi_kit a ON a.id_kit_runtime = e.id_kit
@@ -240,24 +251,27 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
        ),
        ricorrenti AS MATERIALIZED (
          SELECT * FROM per_prodotto
+         WHERE volantini >= :minimoVolantini
          ORDER BY volantini DESC, ultimo DESC, chiave COLLATE "C"
          LIMIT :ricorrenti
        ),
-       per_anno AS MATERIALIZED (
-         SELECT p.chiave, p.anno, COUNT(*)::int AS volantini
+       dei_ricorrenti AS MATERIALIZED (
+         SELECT p.chiave,
+                array_agg(split_part(p.volantino, '|', 2) ORDER BY p.volantino) AS kit,
+                (array_agg(p.prezzo ORDER BY p.volantino DESC) FILTER (WHERE p.prezzo IS NOT NULL))[1] AS prezzo_ultimo
          FROM p
          WHERE p.chiave IN (SELECT chiave FROM ricorrenti)
-         GROUP BY p.chiave, p.anno
+         GROUP BY p.chiave
        ),
        nomi_marca AS (
-         SELECT m ->> 0 AS chiave, m ->> 1 AS marca, SUM((m ->> 2)::int)::int AS referenze
+         SELECT m ->> 0 AS chiave, m ->> 1 AS marca, SUM((m ->> 2)::int)::int AS referenze, COUNT(DISTINCT e.id_kit)::int AS volantini
          FROM e
          JOIN analisi_kit a ON a.id_kit_runtime = e.id_kit
          CROSS JOIN LATERAL jsonb_array_elements(a.dati -> 'marche') m
          GROUP BY 1, 2
        ),
        per_marca AS MATERIALIZED (
-         SELECT chiave, SUM(referenze)::int AS referenze,
+         SELECT chiave, SUM(referenze)::int AS referenze, SUM(volantini)::int AS volantini,
                 (array_agg(marca ORDER BY referenze DESC, marca COLLATE "C"))[1] AS marca
          FROM nomi_marca
          GROUP BY chiave
@@ -270,26 +284,39 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
            SELECT jsonb_agg(jsonb_build_object(
              'chiave', r.chiave,
              'volantini', r.volantini,
-             'perAnno', COALESCE((SELECT jsonb_object_agg(pa.anno::text, pa.volantini) FROM per_anno pa WHERE pa.chiave = r.chiave), '{}'::jsonb),
+             'kit', to_jsonb(d.kit),
              'prezzoMinimo', r.prezzo_minimo,
              'prezzoMassimo', r.prezzo_massimo,
+             'prezzoUltimo', d.prezzo_ultimo,
              'ultimoKit', split_part(r.ultimo, '|', 2),
              'ultimoKitConFoto', NULLIF(split_part(r.ultimo_con_foto, '|', 2), '')
            ) ORDER BY r.volantini DESC, r.ultimo DESC, r.chiave COLLATE "C")
            FROM ricorrenti r
+           JOIN dei_ricorrenti d ON d.chiave = r.chiave
          ), '[]'::jsonb) AS ricorrenti,
          COALESCE((
-           SELECT jsonb_agg(jsonb_build_object('marca', pm.marca, 'referenze', pm.referenze) ORDER BY pm.referenze DESC, pm.chiave COLLATE "C")
+           SELECT jsonb_agg(jsonb_build_object('marca', pm.marca, 'referenze', pm.referenze, 'volantini', pm.volantini) ORDER BY pm.referenze DESC, pm.chiave COLLATE "C")
            FROM (SELECT * FROM per_marca ORDER BY referenze DESC, chiave COLLATE "C" LIMIT :marche) pm
          ), '[]'::jsonb) AS marche
        FROM conteggi c`,
-      { edizioni: JSON.stringify(voci), soglia: limiti.soglia, ricorrenti: limiti.ricorrenti, marche: limiti.marche }
+      {
+        edizioni: JSON.stringify(voci),
+        soglia: limiti.soglia,
+        ricorrenti: limiti.ricorrenti,
+        minimoVolantini: limiti.minimoVolantini,
+        marche: limiti.marche,
+      }
     );
     const prezzo = (valore: number | string | null): number | null => (valore === null ? null : Number(valore));
     return {
       prodotti: numero(riga?.prodotti),
       frequenti: numero(riga?.frequenti),
-      ricorrenti: (riga?.ricorrenti ?? []).map(voce => ({ ...voce, prezzoMinimo: prezzo(voce.prezzoMinimo), prezzoMassimo: prezzo(voce.prezzoMassimo) })),
+      ricorrenti: (riga?.ricorrenti ?? []).map(voce => ({
+        ...voce,
+        prezzoMinimo: prezzo(voce.prezzoMinimo),
+        prezzoMassimo: prezzo(voce.prezzoMassimo),
+        prezzoUltimo: prezzo(voce.prezzoUltimo),
+      })),
       marche: riga?.marche ?? [],
       referenzeConMarca: numero(riga?.referenze_con_marca),
     };

@@ -36,7 +36,8 @@ export interface FasceNelTempoProps {
   className?: string;
 }
 
-const CLASSI_TONO: Record<TonoFascia, string> = {
+/** Classi dei toni dei tratti (fondo e, per "attenzione", bordo): anche le fasce della timeline. */
+export const CLASSI_TONO: Record<TonoFascia, string> = {
   neutro: "fill-slate-100 dark:fill-darkmode-400",
   evidenza: "fill-theme-1/10 dark:fill-indigo-300/20",
   attenzione: "fill-amber-50 stroke-amber-500 dark:fill-amber-500/15 dark:stroke-amber-400",

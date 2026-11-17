@@ -6,8 +6,11 @@ import { createPortal } from "react-dom";
 export interface RigaTooltip {
   etichetta: string;
   valore: string;
-  /** Segno della serie accanto all'etichetta: un colore CSS o classi bg-*. */
-  chiave?: { colore?: string; classe?: string };
+  /**
+   * Segno della serie accanto all'etichetta: un colore CSS o classi bg-*; per una Tinta senza
+   * colore CSS (classi fill-* col tema scuro) `classeFill`, disegnato in SVG.
+   */
+  chiave?: { colore?: string; classe?: string; classeFill?: string };
 }
 
 export interface ContenutoTooltip {
@@ -53,16 +56,21 @@ function RiquadroTooltip({ contenuto, x, y }: StatoTooltip) {
       {contenuto.testo && <p className="mt-1 text-slate-600 dark:text-slate-300">{contenuto.testo}</p>}
       {contenuto.righe && contenuto.righe.length > 0 && (
         <dl className="mt-1 flex flex-col gap-0.5">
-          {contenuto.righe.map(riga => (
-            <div key={riga.etichetta} className="flex items-baseline justify-between gap-4">
+          {contenuto.righe.map((riga, i) => (
+            <div key={`${i}-${riga.etichetta}`} className="flex items-baseline justify-between gap-4">
               <dt className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
-                {riga.chiave && (
-                  <span
-                    aria-hidden="true"
-                    className={twMerge("inline-block h-0.5 w-3 flex-none rounded-full", riga.chiave.classe)}
-                    style={riga.chiave.colore ? { backgroundColor: riga.chiave.colore } : undefined}
-                  />
-                )}
+                {riga.chiave &&
+                  (riga.chiave.classeFill && !riga.chiave.colore ? (
+                    <svg aria-hidden="true" width="12" height="2" className="flex-none">
+                      <rect width="12" height="2" rx="1" className={riga.chiave.classeFill} />
+                    </svg>
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className={twMerge("inline-block h-0.5 w-3 flex-none rounded-full", riga.chiave.classe)}
+                      style={riga.chiave.colore ? { backgroundColor: riga.chiave.colore } : undefined}
+                    />
+                  ))}
                 {riga.etichetta}
               </dt>
               <dd className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{riga.valore}</dd>

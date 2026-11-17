@@ -313,7 +313,9 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
 
   it('volantini successivi della stessa insegna e area con la lista registrata, senza il PV', async () => {
     const primo = await creaKitRuntime({ validitaDal: giorno('2022-01-06') });
-    const senzaPv = await creaKitRuntime({ stessaCombinazioneDi: primo, validitaDal: giorno('2022-01-13') });
+    const senzaPv = await creaKitRuntime({
+      stessaCombinazioneDi: primo, validitaDal: giorno('2022-01-13'), validitaAl: giorno('2022-01-19'), nomePromo: 'Promo del 13 gennaio',
+    });
     await creaKitRuntime({ stessaCombinazioneDi: primo, validitaDal: giorno('2022-01-20') }); // lista non registrata: non conta
     const altraInsegna = await creaKitRuntime({ validitaDal: giorno('2022-01-27'), promo: { idGdo: primo.idGdo, idPromo: senzaPv.idPromo } });
     const combinazione = await creaCombinazione(primo);
@@ -325,7 +327,10 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
       idPuntoVendita: pra, idGdo: primo.idGdo, idCanale: primo.idCanale, idArea: primo.idArea, dopo: '2022-01-06',
     });
 
-    expect(senza).toEqual([{ idKit: senzaPv.idRuntime, data: '2022-01-13' }]);
+    // Con le date di validita' e la promo, per le assenze della scheda del PV
+    expect(senza).toEqual([{
+      idKit: senzaPv.idRuntime, data: '2022-01-13', dal: '2022-01-13', al: '2022-01-19', promo: { id: senzaPv.idPromo, nome: 'Promo del 13 gennaio' },
+    }]);
   });
 
   it('volantini del PV dal piu\' recente, a pagine, solo nella combinazione corrente, col PDF e le referenze', async () => {

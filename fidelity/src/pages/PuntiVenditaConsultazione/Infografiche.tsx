@@ -2,95 +2,112 @@ import Lucide from "@/components/Base/Lucide";
 import Sezione from "@/components/Base/Sezione";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
-import { BarreImpilate100, BarreOrizzontali, GraficoLinee, Heatmap, MiniBarre, StrisciaNumeri, type NumeroStriscia } from "@/components/Grafici";
-import { formatNumero } from "@/utils/format";
+import { BarreOrizzontali, ForbicePrezzo, StrisciaNumeri, StrisciaPresenze, TINTA_NEUTRA, type NumeroStriscia } from "@/components/Grafici";
+import { formatData, formatNumero } from "@/utils/format";
 import { Fragment } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ETICHETTA_MECCANICA, MECCANICHE, type AnalisiPuntoVendita } from "../../../lib/puntiVendita/analisi";
 import {
   coperturaParziale,
+  edizioniDelPeriodo,
+  formatDifferenza,
   formatDifferenzaPunti,
   formatEuro,
   formatPercentuale,
-  infograficheConDati,
+  giorniCoperti,
   INFOGRAFICHE_SCHEDA,
   marcaFormato,
-  meseAnnoBreve,
+  notaDifferenza,
   percorsoReferenza,
-  repartiImpilati,
+  repartiInBarre,
+  sintesiPeriodo,
+  tintaMeccanica,
+  type ContestoPeriodo,
   type InfograficaScheda,
 } from "./analisi";
-import { NotaDato, StatoBox, type QueryBox } from "./componenti";
+import { FotoReferenza, NotaDato, StatoBox, type QueryBox } from "./componenti";
 
 /**
- * Le infografiche della scheda del punto vendita (contratto in lib/puntiVendita/analisi.ts):
- * numeri, meccaniche, sconto medio, marche, prodotti che tornano e reparti. Ogni riquadro ha il suo
- * caricamento, il suo errore e dice quando il dato è parziale.
+ * Le infografiche della scheda del punto vendita (contratto in lib/puntiVendita/analisi.ts), tutte
+ * del periodo scelto (ContestoPeriodo): numeri, meccaniche e reparti col periodo prima, marche e
+ * prodotti che tornano. Niente griglie colorate per intensità: le ha escluse l'utente. Meccaniche, reparti e sconto si calcolano qui dai
+ * numeri di ogni volantino della timeline; marche, prodotti e copertura arrivano dal server per il
+ * periodo. Ogni riquadro ha il suo caricamento e il suo errore e dice quando il dato è parziale.
  */
 
 type Analisi = QueryBox<AnalisiPuntoVendita>;
 
-const intervalloAnni = (anni: readonly number[]): string => {
-  if (anni.length === 0) return "";
-  const ordinati = [...anni].sort((a, b) => a - b);
-  return ordinati[0] === ordinati[ordinati.length - 1] ? String(ordinati[0]) : `${ordinati[0]}–${ordinati[ordinati.length - 1]}`;
+/** I volantini del periodo e di quello prima, con le loro sintesi. */
+const datiDelPeriodo = (dati: AnalisiPuntoVendita, contesto: ContestoPeriodo) => {
+  const edizioni = edizioniDelPeriodo(dati.timeline, contesto.giorni);
+  const prima = contesto.precedente ? edizioniDelPeriodo(dati.timeline, contesto.precedente) : [];
+  return { edizioni, sintesi: sintesiPeriodo(edizioni), sintesiPrima: prima.length > 0 ? sintesiPeriodo(prima) : null };
 };
 
 /**
- * La striscia dei numeri in testa alla scheda. Senza volantini non c'è: la storia spiega da dove
- * arrivano; un numero che non si può calcolare (lo sconto senza prezzi barrati) non ha la sua cella.
+ * La striscia dei numeri del periodo in testa alla scheda. Senza volantini non c'è: la storia spiega
+ * da dove arrivano; un numero che non si può calcolare (lo sconto senza prezzi barrati) non ha la
+ * sua cella. Le differenze sono col periodo prima, quando ha volantini.
  */
-export function NumeriScheda({ analisi }: { analisi: Analisi }) {
+export function NumeriScheda({ analisi, contesto }: { analisi: Analisi; contesto: ContestoPeriodo }) {
   if (analisi.isLoading || analisi.isError || !analisi.data) {
     // L'errore lo mostra il riquadro della storia, che dipende dagli stessi dati
     return analisi.isLoading ? <StrisciaNumeri titolo="Il punto vendita in numeri" voci={[]} loading vociAttese={5} /> : null;
   }
-  const { numeri, timeline, scontoPerAnno } = analisi.data;
-  if (timeline.length === 0) return null;
-  const primo = timeline[0];
-  const primoAnno = [...scontoPerAnno].sort((a, b) => a.anno - b.anno).find(a => a.sconto !== null);
+  const dati = analisi.data;
+  const { edizioni, sintesi, sintesiPrima } = datiDelPeriodo(dati, contesto);
+  if (edizioni.length === 0) return null;
+  const assenti = edizioniDelPeriodo(dati.assenze, contesto.giorni).length;
+  const attivi = edizioni.filter(e => e.attivo).length;
+  const copertura = giorniCoperti(dati.timeline, contesto.giorni, contesto.oggi);
+  const rispetto = contesto.confronto?.rispetto;
   const voci: NumeroStriscia[] = [
     {
       id: "volantini",
-      valore: formatNumero(numeri.volantini),
-      etichetta: `volantini dal ${meseAnnoBreve(primo.dal)}`,
-      dettaglio: numeri.volantiniAttivi === 0 ? "nessuno attivo adesso" : `${formatNumero(numeri.volantiniAttivi)} ${numeri.volantiniAttivi === 1 ? "attivo" : "attivi"} adesso`,
+      valore: formatNumero(edizioni.length),
+      etichetta: `volantini ${contesto.nome}`,
+      dettaglio: [
+        attivi > 0 ? `${formatNumero(attivi)} ${attivi === 1 ? "attivo" : "attivi"} adesso` : null,
+        assenti > 0 ? `assente da ${formatNumero(assenti)} su ${formatNumero(edizioni.length + assenti)} della sua insegna e area` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ") || undefined,
     },
+    ...(copertura
+      ? [
+          {
+            id: "giorni",
+            valore: formatPercentuale(Math.round(copertura.quota)),
+            etichetta: "dei giorni con un volantino valido",
+            dettaglio: copertura.scoperti === 0 ? "nessun giorno senza volantino" : `${formatNumero(copertura.scoperti)} ${copertura.scoperti === 1 ? "giorno" : "giorni"} senza volantino`,
+          },
+        ]
+      : []),
     {
       id: "referenze",
-      valore: formatNumero(numeri.referenze),
-      etichetta: "referenze promosse",
-      dettaglio: numeri.mediaReferenze !== null ? `${formatNumero(Math.round(numeri.mediaReferenze))} per volantino in media` : undefined,
+      valore: formatNumero(Math.round(sintesi.mediaReferenze ?? 0)),
+      etichetta: "referenze per volantino",
+      dettaglio:
+        sintesiPrima?.mediaReferenze != null && rispetto
+          ? `${formatDifferenza((sintesi.mediaReferenze ?? 0) - sintesiPrima.mediaReferenze)} ${rispetto}`
+          : `${formatNumero(sintesi.referenze)} in tutto`,
     },
-    {
-      id: "prodotti",
-      valore: formatNumero(numeri.prodotti),
-      etichetta: "prodotti diversi",
-      dettaglio: numeri.prodottiFrequenti > 0 ? `${formatNumero(numeri.prodottiFrequenti)} presenti in più di 10 volantini` : undefined,
-    },
-    ...(numeri.scontoMedio !== null
+    ...(sintesi.scontoMedio !== null
       ? [
           {
             id: "sconto",
-            valore: formatPercentuale(numeri.scontoMedio),
+            valore: formatPercentuale(sintesi.scontoMedio),
             etichetta: "sconto medio",
-            dettaglio:
-              numeri.scontoMedioPrimoAnno !== null && primoAnno
-                ? `${formatDifferenzaPunti(numeri.scontoMedio - numeri.scontoMedioPrimoAnno)} dal ${primoAnno.anno}`
-                : undefined,
+            dettaglio: sintesiPrima?.scontoMedio != null && rispetto ? `${formatDifferenzaPunti(sintesi.scontoMedio - sintesiPrima.scontoMedio)} ${rispetto}` : undefined,
           },
         ]
       : []),
-    ...(numeri.insegne.length > 0
-      ? [
-          {
-            id: "insegne",
-            valore: formatNumero(numeri.insegne.length),
-            etichetta: numeri.insegne.length === 1 ? "insegna nel tempo" : "insegne nel tempo",
-            dettaglio: numeri.insegne.map(i => i.nome).join(" → "),
-          },
-        ]
-      : []),
+    {
+      id: "prodotti",
+      valore: formatNumero(dati.numeri.prodotti),
+      etichetta: "prodotti diversi",
+      dettaglio: dati.numeri.prodottiFrequenti > 0 ? `${formatNumero(dati.numeri.prodottiFrequenti)} presenti in più di 10 volantini` : undefined,
+    },
   ];
   return <StrisciaNumeri titolo="Il punto vendita in numeri" voci={voci} />;
 }
@@ -109,7 +126,7 @@ export function GraficiSenzaDati({ assenti }: { assenti: readonly InfograficaSch
     >
       <Lucide icon="Info" aria-hidden="true" className="mt-px h-3.5 w-3.5 flex-none text-slate-500 dark:text-slate-400" />
       <p>
-        <span className="font-medium">Senza grafico per mancanza di dati nei volantini:</span>{" "}
+        <span className="font-medium">Senza grafico per mancanza di dati nei volantini del periodo:</span>{" "}
         {voci.map((voce, i) => (
           <Fragment key={voce.id}>
             {i > 0 && "; "}
@@ -122,30 +139,39 @@ export function GraficiSenzaDati({ assenti }: { assenti: readonly InfograficaSch
   );
 }
 
-/** "Come si promuove": quota delle referenze per meccanica, anno per anno. */
-export function ComeSiPromuove({ analisi }: { analisi: Analisi }) {
+const descrizioneConfronto = (contesto: ContestoPeriodo, conPrima: boolean) =>
+  conPrima && contesto.confronto ? ` Il segno verticale è il valore ${contesto.confronto.nel}.` : "";
+
+/** "Come si promuove": la quota delle referenze per meccanica nel periodo, col periodo prima. */
+export function ComeSiPromuove({ analisi, contesto }: { analisi: Analisi; contesto: ContestoPeriodo }) {
+  const conPrima = analisi.data ? datiDelPeriodo(analisi.data, contesto).sintesiPrima !== null : false;
   return (
-    <Sezione titolo="Come si promuove" descrizione="Quota delle referenze per meccanica, anno per anno.">
+    <Sezione titolo="Come si promuove" descrizione={`Quota delle referenze per meccanica ${contesto.nome}.${descrizioneConfronto(contesto, conPrima)}`}>
       <StatoBox
         query={analisi}
         titoloErrore="Meccaniche non caricate"
         vuoto={dati =>
-          !infograficheConDati(dati).meccaniche ? (
+          datiDelPeriodo(dati, contesto).sintesi.meccaniche.size === 0 ? (
             <EmptyState compatta icon="Tags" title="Meccaniche non riconosciute" description="Le referenze dei volantini non dicono con quale meccanica sono promosse." />
           ) : null
         }
       >
         {dati => {
-          const anni = [...dati.anni].sort((a, b) => a - b);
-          const righe = MECCANICHE.map(m => dati.meccaniche.find(r => r.meccanica === m)).filter(r => r !== undefined);
+          const { sintesi, sintesiPrima } = datiDelPeriodo(dati, contesto);
+          const voci = MECCANICHE.filter(m => sintesi.meccaniche.has(m))
+            .map(m => {
+              const valore = sintesi.meccaniche.get(m) ?? 0;
+              const prima = sintesiPrima ? (sintesiPrima.meccaniche.get(m) ?? 0) : null;
+              return { id: m, etichetta: ETICHETTA_MECCANICA[m], valore, tinta: tintaMeccanica(m), riferimento: prima, nota: notaDifferenza(valore, prima) };
+            })
+            .sort((a, b) => b.valore - a.valore);
           return (
-            <Heatmap
-              righe={righe.map(r => ({ id: r.meccanica, etichetta: ETICHETTA_MECCANICA[r.meccanica] }))}
-              colonne={anni.map(a => ({ id: String(a), etichetta: String(a) }))}
-              valori={righe.map(r => anni.map(a => r.anni.find(q => q.anno === a)?.quota ?? null))}
-              titolo="Meccaniche per anno"
+            <BarreOrizzontali
+              voci={voci}
+              titolo="Meccaniche del periodo"
               descrizioneValore="Quota delle referenze"
-              formatta={v => formatPercentuale(Math.round(v))}
+              formatta={v => formatPercentuale(v)}
+              nomeRiferimento={contesto.confronto?.nel}
             />
           );
         }}
@@ -154,53 +180,68 @@ export function ComeSiPromuove({ analisi }: { analisi: Analisi }) {
   );
 }
 
-/** "Sconto medio": una linea, anno per anno, sulle referenze con il prezzo barrato. */
-export function ScontoMedio({ analisi }: { analisi: Analisi }) {
+/** "Spazio per reparto": la quota dello spazio dei box per reparto nel periodo, col periodo prima. */
+export function SpazioPerReparto({ analisi, contesto }: { analisi: Analisi; contesto: ContestoPeriodo }) {
+  const conPrima = analisi.data ? datiDelPeriodo(analisi.data, contesto).sintesiPrima !== null : false;
   return (
-    <Sezione titolo="Sconto medio" descrizione="Sulle referenze con il prezzo barrato, anno per anno.">
+    <Sezione titolo="Spazio per reparto" descrizione={`Superficie dei box per reparto, sul totale, ${contesto.nome}.${descrizioneConfronto(contesto, conPrima)}`}>
       <StatoBox
         query={analisi}
-        titoloErrore="Sconto medio non caricato"
+        titoloErrore="Reparti non caricati"
         vuoto={dati =>
-          !infograficheConDati(dati).sconto ? (
-            <EmptyState compatta icon="Percent" title="Nessuno sconto calcolabile" description="Nessuna referenza di questi volantini ha il prezzo barrato." />
+          datiDelPeriodo(dati, contesto).sintesi.reparti.length === 0 ? (
+            <EmptyState
+              compatta
+              icon="LayoutGrid"
+              title="Reparti non disponibili"
+              description="Il reparto arriva da DB1 o da Istanta con i dati della referenza: per i volantini di questo periodo non c'è."
+            />
           ) : null
         }
       >
-        {dati => (
-          <>
-            <GraficoLinee
-              serie={[{ id: "sconto", nome: "Sconto medio", punti: [...dati.scontoPerAnno].sort((a, b) => a.anno - b.anno).map(a => ({ x: a.anno, y: a.sconto })) }]}
-              titolo="Sconto medio per anno"
-              descrizioneX="Anno"
-              formattaX={String}
-              formattaY={v => formatPercentuale(v)}
-              area
-              altezza={170}
-            />
-            {coperturaParziale(dati.copertura.conPrezzo) && (
-              <NotaDato>
-                Dato parziale: solo il {formatPercentuale(dati.copertura.conPrezzo, 0)} delle referenze ha il prezzo, quindi lo sconto si calcola su quelle.
-              </NotaDato>
-            )}
-          </>
-        )}
+        {dati => {
+          const { sintesi, sintesiPrima } = datiDelPeriodo(dati, contesto);
+          // I più grandi e gli altri in una barra sola, neutra: una lista lunga non si legge
+          const voci = repartiInBarre(sintesi.reparti, sintesiPrima?.reparti ?? null).map(({ reparto, quota, prima, altri }) => ({
+            id: reparto,
+            etichetta: reparto,
+            valore: quota,
+            riferimento: prima,
+            nota: notaDifferenza(quota, prima),
+            ...(altri ? { tinta: TINTA_NEUTRA } : {}),
+          }));
+          return (
+            <>
+              <BarreOrizzontali
+                voci={voci}
+                titolo="Spazio per reparto"
+                descrizioneValore="Spazio dei box"
+                formatta={v => formatPercentuale(v)}
+                nomeRiferimento={contesto.confronto?.nel}
+              />
+              {coperturaParziale(dati.copertura.conReparto) && (
+                <NotaDato>
+                  <b className="font-semibold text-slate-600 dark:text-slate-300">Dato parziale.</b> Il reparto arriva da DB1, nei campi della
+                  referenza, e c&apos;è solo per il {formatPercentuale(dati.copertura.conReparto, 0)} delle referenze del periodo: le quote valgono per quelle.
+                </NotaDato>
+              )}
+            </>
+          );
+        }}
       </StatoBox>
     </Sezione>
   );
 }
 
-/** "Marche più presenti": le 8 marche con più referenze. */
-export function MarchePiuPresenti({ analisi }: { analisi: Analisi }) {
-  // Senza anni (dati in arrivo o nessun volantino) la frase si chiude senza il periodo
-  const periodo = intervalloAnni(analisi.data?.anni ?? []);
+/** "Marche più presenti": le 8 marche con più referenze nel periodo, con i volantini in cui compaiono. */
+export function MarchePiuPresenti({ analisi, contesto }: { analisi: Analisi; contesto: ContestoPeriodo }) {
   return (
-    <Sezione titolo="Marche più presenti" descrizione={`Quota delle referenze con la marca${periodo ? `, ${periodo}` : ""}.`}>
+    <Sezione titolo="Marche più presenti" descrizione={`Quota delle referenze con la marca ${contesto.nome}.`}>
       <StatoBox
         query={analisi}
         titoloErrore="Marche non caricate"
         vuoto={dati =>
-          !infograficheConDati(dati).marche ? (
+          dati.marche.length === 0 ? (
             <EmptyState compatta icon="Award" title="Nessuna marca riconosciuta" description="Le referenze di questi volantini non hanno la marca." />
           ) : null
         }
@@ -208,7 +249,12 @@ export function MarchePiuPresenti({ analisi }: { analisi: Analisi }) {
         {dati => (
           <>
             <BarreOrizzontali
-              voci={dati.marche.map(m => ({ id: m.marca, etichetta: m.marca, valore: m.quota }))}
+              voci={dati.marche.map(m => ({
+                id: m.marca,
+                etichetta: m.marca,
+                valore: m.quota,
+                nota: m.volantini === 1 ? "in 1 volantino" : `in ${formatNumero(m.volantini)} volantini`,
+              }))}
               titolo="Marche più presenti"
               descrizioneValore="Quota delle referenze"
               formatta={v => formatPercentuale(v)}
@@ -223,30 +269,33 @@ export function MarchePiuPresenti({ analisi }: { analisi: Analisi }) {
   );
 }
 
-/** "Prodotti che tornano": i prodotti più presenti, con la presenza anno per anno; ogni riga apre la referenza. */
-export function ProdottiCheTornano({ idPv, analisi }: { idPv: string; analisi: Analisi }) {
+/**
+ * "Prodotti che tornano": i prodotti in almeno 2 volantini del periodo, con la loro presenza
+ * volantino per volantino e la forbice del prezzo in offerta; ogni riga apre la referenza.
+ */
+export function ProdottiCheTornano({ idPv, analisi, contesto }: { idPv: string; analisi: Analisi; contesto: ContestoPeriodo }) {
   const navigate = useNavigate();
+  const prodotti = analisi.data?.numeri.prodotti;
   return (
     <Sezione
       senzaPadding
       titolo="Prodotti che tornano"
-      descrizione={`I più presenti nei volantini del punto vendita${analisi.data?.numeri.prodotti ? `, su ${formatNumero(analisi.data.numeri.prodotti)} prodotti diversi` : ""}.`}
+      descrizione={`I prodotti in almeno 2 volantini ${contesto.nome}, dai più presenti${prodotti ? `, su ${formatNumero(prodotti)} prodotti diversi` : ""}. Ogni tacca è un volantino del periodo: piena se il prodotto c'era.`}
     >
       <div className="px-5 pb-5">
         <StatoBox
           query={analisi}
           titoloErrore="Prodotti non caricati"
           vuoto={dati =>
-            !infograficheConDati(dati).prodotti ? (
-              <EmptyState compatta icon="PackageSearch" title="Nessun prodotto ricorrente" description="Nessun prodotto compare in più di un volantino di questo punto vendita." />
+            dati.prodottiRicorrenti.length === 0 ? (
+              <EmptyState compatta icon="PackageSearch" title="Nessun prodotto che torna" description="Nessun prodotto compare in almeno 2 volantini del periodo." />
             ) : null
           }
         >
           {dati => {
-            const anni = [...dati.anni].sort((a, b) => a - b);
-            const massimo = Math.max(1, ...dati.prodottiRicorrenti.flatMap(p => p.perAnno.map(a => a.volantini)));
-            // Le barre per anno larghe quanto servono: con due anni la colonna resta stretta e il nome ha spazio
-            const larghezzaBarre = Math.max(40, Math.min(132, anni.length * 18 + 4));
+            const edizioni = edizioniDelPeriodo(dati.timeline, contesto.giorni);
+            const volantini = edizioni.map(e => ({ id: e.idKit, etichetta: `${e.promo.nome} · ${formatData(e.dal)}` }));
+            const inizio = new Map(dati.timeline.map(e => [e.idKit, e.dal]));
             return (
               <div className="-mx-5 overflow-x-auto">
                 <Table sm>
@@ -254,98 +303,63 @@ export function ProdottiCheTornano({ idPv, analisi }: { idPv: string; analisi: A
                     <Table.Tr>
                       <Table.Th className="pl-5">Prodotto</Table.Th>
                       <Table.Th className="text-right">Volantini</Table.Th>
-                      <Table.Th>{intervalloAnni(anni).replace("–", " → ")}</Table.Th>
-                      <Table.Th className="pr-5 text-right">In offerta</Table.Th>
+                      <Table.Th>Presenza nel periodo</Table.Th>
+                      <Table.Th>Prezzo in offerta</Table.Th>
+                      <Table.Th className="pr-5 text-right">Ultima volta</Table.Th>
                     </Table.Tr>
                   </Table.Thead>
                   <Table.Tbody>
                     {dati.prodottiRicorrenti.map(prodotto => {
                       const percorso = percorsoReferenza(idPv, prodotto.chiave);
-                      const conMassimo = prodotto.prezzoMassimo !== null && prodotto.prezzoMassimo !== prodotto.prezzoMinimo;
+                      const ultimo = prodotto.kit.length > 0 ? inizio.get(prodotto.kit[prodotto.kit.length - 1]) : undefined;
+                      const forbice =
+                        prodotto.prezzoMinimo === null
+                          ? "—"
+                          : prodotto.prezzoMassimo === null || prodotto.prezzoMassimo === prodotto.prezzoMinimo
+                            ? formatEuro(prodotto.prezzoMinimo)
+                            : `${formatEuro(prodotto.prezzoMinimo)} – ${formatEuro(prodotto.prezzoMassimo)}`;
                       return (
                         <Table.Tr key={prodotto.chiave} className="cursor-pointer" onClick={() => navigate(percorso)}>
-                          <Table.Td className="min-w-40 pl-5">
-                            <Link
-                              to={percorso}
-                              onClick={evento => evento.stopPropagation()}
-                              className="font-medium text-slate-800 [overflow-wrap:anywhere] hover:text-primary hover:underline dark:text-slate-200"
-                            >
-                              {prodotto.nome}
-                            </Link>
-                            {marcaFormato(prodotto) && <div className="text-xs text-slate-500 [overflow-wrap:anywhere]">{marcaFormato(prodotto)}</div>}
+                          <Table.Td className="min-w-48 pl-5">
+                            <div className="flex items-center gap-3">
+                              <FotoReferenza foto={prodotto.foto} nome={prodotto.nome} className="h-9 w-9" />
+                              <div className="min-w-0">
+                                <Link
+                                  to={percorso}
+                                  onClick={evento => evento.stopPropagation()}
+                                  className="font-medium text-slate-800 [overflow-wrap:anywhere] hover:text-primary hover:underline dark:text-slate-200"
+                                >
+                                  {prodotto.nome}
+                                </Link>
+                                {marcaFormato(prodotto) && <div className="text-xs text-slate-500 [overflow-wrap:anywhere]">{marcaFormato(prodotto)}</div>}
+                              </div>
+                            </div>
                           </Table.Td>
-                          <Table.Td className="text-right font-semibold tabular-nums dark:text-slate-200">{formatNumero(prodotto.volantini)}</Table.Td>
+                          <Table.Td className="whitespace-nowrap text-right tabular-nums dark:text-slate-200">
+                            <b className="font-semibold">{formatNumero(prodotto.volantini)}</b>
+                            <span className="text-xs text-slate-500"> su {formatNumero(edizioni.length)}</span>
+                          </Table.Td>
                           <Table.Td>
-                            <MiniBarre
-                              valori={anni.map(a => ({ etichetta: String(a), valore: prodotto.perAnno.find(p => p.anno === a)?.volantini ?? 0 }))}
-                              massimo={massimo}
-                              descrizioneValore="Volantini per anno"
-                              larghezza={larghezzaBarre}
-                            />
+                            <StrisciaPresenze volantini={volantini} presenti={new Set(prodotto.kit)} titolo={prodotto.nome} />
                           </Table.Td>
-                          <Table.Td className="whitespace-nowrap pr-5 text-right tabular-nums dark:text-slate-200">
-                            {prodotto.prezzoMinimo === null ? (
-                              "—"
-                            ) : (
-                              <>
-                                <span className="block font-medium">{formatEuro(prodotto.prezzoMinimo)}</span>
-                                {conMassimo && <span className="block text-xs text-slate-500">fino a {formatEuro(prodotto.prezzoMassimo)}</span>}
-                              </>
-                            )}
+                          <Table.Td className="whitespace-nowrap">
+                            <div className="flex items-center gap-3 tabular-nums dark:text-slate-200">
+                              <ForbicePrezzo minimo={prodotto.prezzoMinimo} massimo={prodotto.prezzoMassimo} ultimo={prodotto.prezzoUltimo} formatta={formatEuro} />
+                              <span>{forbice}</span>
+                            </div>
                           </Table.Td>
+                          <Table.Td className="whitespace-nowrap pr-5 text-right tabular-nums dark:text-slate-200">{ultimo ? formatData(ultimo) : "—"}</Table.Td>
                         </Table.Tr>
                       );
                     })}
                   </Table.Tbody>
                 </Table>
+                <NotaDato className="mx-5">Il punto pieno della forbice è il prezzo nell&apos;ultimo volantino che lo ha, fra il più basso e il più alto del periodo.</NotaDato>
               </div>
             );
           }}
         </StatoBox>
       </div>
-    </Sezione>
-  );
-}
-
-/** "Dove sta nel volantino": lo spazio di pagina per reparto, anno per anno. */
-export function DoveStaNelVolantino({ analisi }: { analisi: Analisi }) {
-  return (
-    <Sezione titolo="Dove sta nel volantino" descrizione="Spazio di pagina per reparto, in percentuale della superficie dei box.">
-      <StatoBox
-        query={analisi}
-        titoloErrore="Reparti non caricati"
-        vuoto={dati =>
-          !infograficheConDati(dati).reparti ? (
-            <EmptyState
-              compatta
-              icon="LayoutGrid"
-              title="Reparti non disponibili"
-              description="Il reparto arriva da DB1 o da Istanta con i dati della referenza: per i volantini di questo punto vendita non c'è."
-            />
-          ) : null
-        }
-      >
-        {dati => {
-          const { righe, categorie, valori } = repartiImpilati(dati.reparti);
-          return (
-            <>
-              <BarreImpilate100
-                righe={righe}
-                categorie={categorie}
-                valori={valori}
-                titolo="Spazio di pagina per reparto"
-                descrizioneValore="Spazio di pagina"
-              />
-              {coperturaParziale(dati.copertura.conReparto) && (
-                <NotaDato>
-                  <b className="font-semibold text-slate-600 dark:text-slate-300">Dato parziale.</b> Il reparto arriva da DB1, nei campi della
-                  referenza, e c&apos;è solo per il {formatPercentuale(dati.copertura.conReparto, 0)} delle referenze: le quote valgono per quelle.
-                </NotaDato>
-              )}
-            </>
-          );
-        }}
-      </StatoBox>
     </Sezione>
   );
 }

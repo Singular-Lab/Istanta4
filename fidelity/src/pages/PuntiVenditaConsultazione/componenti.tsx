@@ -1,7 +1,6 @@
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
 import Skeleton from "@/components/Base/Skeleton";
-import type { Tinta } from "@/components/Grafici";
 import { twMerge } from "@/utils/twMerge";
 import { useState, type ReactNode } from "react";
 import { urlFotoOlimpo } from "../../../lib/olimpo/url";
@@ -88,15 +87,6 @@ export function RigaStampata({ children, evidenziata = false, className }: { chi
     >
       {children}
     </span>
-  );
-}
-
-/** Il pallino colorato dell'insegna accanto al suo nome (il nome resta nel colore del testo). */
-export function PuntoInsegna({ tinta }: { tinta: Tinta }) {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true" className="flex-none">
-      <circle cx="5" cy="5" r="4.5" fill={tinta.colore} className={tinta.classe} />
-    </svg>
   );
 }
 

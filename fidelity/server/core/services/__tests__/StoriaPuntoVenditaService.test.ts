@@ -17,7 +17,7 @@ import { chiaviRigaVolantino } from '../../utils/chiaviRigheVolantino';
 import { chiaveCombinazione } from '../../utils/confrontoPuntiVendita';
 import type { PuntoVenditaAnagrafica } from '../../utils/abbinamentoPuntiVendita';
 import { chiaveIndirizzo, chiaveTelefono } from '../../utils/puntoVenditaNormalization';
-import type { ApparizioneStoria } from '../../utils/storiaPuntoVendita';
+import type { ApparizioneStoria, VolantinoSenzaPuntoVendita } from '../../utils/storiaPuntoVendita';
 import { MOTIVI_SCARTO_EXPORT, StoriaPuntoVenditaService } from '../StoriaPuntoVenditaService';
 
 vi.mock('../../logger', () => ({
@@ -165,7 +165,7 @@ function repositoryInMemoria(opzioni: { kit?: KitVolantino[]; anagrafica?: Punto
     })),
     trovaPuntoVendita: vi.fn(async (id: string) => (opzioni.puntiVendita ?? []).find(pv => pv.id === id) ?? null),
     apparizioni: vi.fn(async (_id: string): Promise<ApparizioneStoria[]> => []),
-    volantiniSenzaPuntoVendita: vi.fn(async (_criteri: Parameters<IPuntiVenditaVolantinoRepository['volantiniSenzaPuntoVendita']>[0]) => [] as Array<{ idKit: string; data: string }>),
+    volantiniSenzaPuntoVendita: vi.fn(async (_criteri: Parameters<IPuntiVenditaVolantinoRepository['volantiniSenzaPuntoVendita']>[0]) => [] as VolantinoSenzaPuntoVendita[]),
     paginaVolantini: vi.fn(async (_id: string, _limite: number, _scarto: number) => ({ volantini: [], totale: 0 })),
   } satisfies IPuntiVenditaVolantinoRepository;
   return { repository, righe, anagrafica, collegamenti };
@@ -421,7 +421,9 @@ describe('StoriaPuntoVenditaService: letture', () => {
   it('storia: cerca i volantini successivi senza il PV nell\'insegna e nell\'area dell\'ultima apparizione', async () => {
     const { repository } = repositoryInMemoria({ puntiVendita: [puntoVendita] });
     repository.apparizioni.mockResolvedValue([apparizione('2024-03-07'), apparizione('2022-01-06')]);
-    repository.volantiniSenzaPuntoVendita.mockResolvedValue(['2024-03-14', '2024-03-21', '2024-03-28'].map(data => ({ idKit: `k-${data}`, data })));
+    repository.volantiniSenzaPuntoVendita.mockResolvedValue(['2024-03-14', '2024-03-21', '2024-03-28'].map(data => ({
+      idKit: `k-${data}`, data, dal: data, al: null, promo: { id: `p-${data}`, nome: `Promo ${data}` },
+    })));
 
     const storia = await servizio(repository).getStoria(PV_PRA, null);
 
