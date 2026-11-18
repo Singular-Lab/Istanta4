@@ -23,7 +23,7 @@ body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-s
 .hdr{background:#fff;border-top:4px solid var(--teal);box-shadow:0 1px 0 var(--line)}
 .hdr-in{display:flex;align-items:center;gap:16px;padding:10px 28px;min-height:64px}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
-.brand .co{width:36px;height:36px;border-radius:8px;background:var(--co);color:#fff;display:grid;place-items:center;font-weight:800}
+.brand .co{height:36px;width:auto;display:block} /* I20-1243: l'icona di Correggo, come nell'editor */
 .brand small{display:block;font-size:11px;color:var(--ink-3);margin-top:-2px}
 .sp{flex:1}
 main{max-width:900px;margin:24px auto;padding:0 20px}
@@ -46,7 +46,7 @@ th{color:var(--ink-3);font-weight:600;font-size:12px}
 <body>
 <header class="hdr">
   <div class="hdr-in">
-    <a class="brand" href="~/Volantini"><span class="co">Co</span><span><b>Correggo</b><small>Gestisci promo</small></span></a>
+    <a class="brand" href="~/Volantini"><img class="co" src="~/immagini-correggo/Icon_Correggo.png" alt=""><span><b>Correggo</b><small>Gestisci promo</small></span></a>
     <div class="sp"></div>
     <span style="color:var(--ink-2);font-weight:600">@nome</span>
   </div>

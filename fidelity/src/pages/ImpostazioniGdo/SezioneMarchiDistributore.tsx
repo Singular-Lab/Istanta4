@@ -41,20 +41,20 @@ function SezioneMarchiDistributore({ lineeDistributore }: { lineeDistributore: I
       id="marchi-distributore"
       className="scroll-mt-24"
       icona="BadgeCheck"
-      titolo="Marchi del distributore"
-      descrizione="Le linee e i bolli del distributore che la libreria agenzia del cliente riconosce nelle referenze. Sola lettura: si cambiano nella libreria agenzia."
+      titolo="Private Labels"
+      descrizione="Le Private Labels e i bolli del distributore che la libreria agenzia del cliente riconosce nelle referenze. Sola lettura: si cambiano nella libreria agenzia."
     >
       {!lineeDistributore || (linee.length === 0 && bolli.length === 0) ? (
         <EmptyState
           compatta
           icon="BadgeCheck"
-          title="Nessuna linea del distributore"
-          description="La libreria agenzia del cliente non dichiara linee del distributore."
+          title="Nessuna Private Label"
+          description="La libreria agenzia del cliente non dichiara Private Labels."
         />
       ) : (
         <div className="flex flex-col gap-5">
           {linee.length > 0 && (
-            <ul aria-label="Linee del distributore" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            <ul aria-label="Private Labels" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
               {linee.map((linea) => (
                 <li key={linea.sigla} className="flex items-center gap-3 rounded-card border border-slate-200 bg-white p-3">
                   <LogoMarchio nome={linea.nome} logo={linea.logo} colore={linea.colore} />

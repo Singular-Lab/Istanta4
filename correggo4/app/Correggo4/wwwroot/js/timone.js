@@ -1053,8 +1053,8 @@ var STILE_REPORT = `
         '  <button type="button" id="tim_filtri" style="display:none" ' +
         'title="Scarica il pacchetto dei filtri da copiare nella cartella di lavorazione del plug-in">' +
         'FILTRI</button>' +
-        '  <a id="tim_guida" href="' + C4_BASE + 'guide/guida-timone.pdf?v=j309" target="_blank" rel="noopener" ' +
-        'title="Guida del timone: cosa fa ogni pulsante (PDF, 5 pagine)">i</a>' +
+        '  <a id="tim_guida" href="' + C4_BASE + 'guide/guida-timone.pdf?v=i1242" target="_blank" rel="noopener" ' +
+        'title="Guida del menabò avanzato: cosa fa ogni pulsante (PDF, 11 pagine)">i</a>' +
         '  <span class="sporco" id="tim_sporco" style="display:none"></span>' +
         '  <button type="button" id="tim_annulla" style="display:none">ANNULLA LE MODIFICHE</button>' +
         '  <button type="button" id="tim_salva" class="salva" style="display:none">SALVA</button>' +

@@ -27,6 +27,11 @@
     // I20-1173: senza promo si vede solo «Nessuna promo attiva». Ricerca e colonne restano nella
     // pagina, nascoste, perche' lo script le cerca all'avvio.
     bool nessunaPromo = Model.Promo.Count == 0;
+    // I20-1243: LEGENDA tolta per ora (il PDF non e' sul server, il clic non dava niente).
+    // Si rimette nei prossimi giorni: basta true qui e in Dettaglio.cshtml.
+    bool legendaAttiva = false;
+    // I20-1243: il riquadro «Notifiche email» in basso e' tolto; si riattivera' in futuro.
+    bool emailVisibili = false;
 }
 <!DOCTYPE html>
 <html lang="it">
@@ -80,11 +85,8 @@ svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-widt
 }
 .hdr-in{display:flex;align-items:center;gap:18px;height:64px;padding-inline:28px}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
-.co{
-  width:36px;height:36px;border-radius:8px;background:var(--co);
-  color:#fff;font-weight:800;font-size:17px;letter-spacing:-.5px;
-  display:grid;place-items:center;
-}
+/* I20-1243: l'icona di Correggo, la stessa dell'editor, al posto del quadratino "Co" */
+.co{height:36px;width:auto;display:block}
 .brand b{font-size:18px;font-weight:700;letter-spacing:-.2px}
 .brand small{display:block;font-size:11px;color:var(--ink-3);font-weight:500;margin-top:-2px}
 .sep{width:1px;height:30px;background:var(--line)}
@@ -415,8 +417,9 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
 <header class="hdr">
   <div class="hdr-in">
     <a class="brand" href="~/Volantini" aria-label="Correggo — home">
-      <span class="co">Co</span>
-      <span><b>Correggo</b><small>Hub correzioni</small></span>
+      <img class="co" src="~/immagini-correggo/Icon_Correggo.png" alt="">
+      @* I20-1243: tolto il sottotitolo «Hub correzioni» *@
+      <span><b>Correggo</b></span>
     </a>
     <span class="sep" aria-hidden="true"></span>
     @if (string.IsNullOrWhiteSpace(Model.LogoCliente))
@@ -430,10 +433,11 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
     <div class="hdr-sp"></div>
     @* CONSULTA TUTTI I VOLANTINI (j213): per tutti, come ftp.aspx:58 e Home.aspx dell'originale *@
     <a class="logout" href="~/Storico" style="display:inline-flex;align-items:center;text-decoration:none">Consulta tutti i volantini</a>
-    @if (!User.IsInRole("Agenzia"))
+    @if (legendaAttiva && !User.IsInRole("Agenzia"))
     {
         @* LEGENDA (j216): il manuale di Correggo in PDF. Solo Category e Marketing: l'Agenzia non corregge
-           (decisione di Michele del 14/9). Il PDF lo serve /Legenda, non sta in wwwroot. *@
+           (decisione di Michele del 14/9). Il PDF lo serve /Legenda, non sta in wwwroot.
+           I20-1243: spenta con legendaAttiva, in cima alla pagina. *@
         <a class="logout" href="~/Legenda" target="_blank" rel="noopener" title="Legenda: il manuale di Correggo (PDF)"
            style="display:inline-flex;align-items:center;gap:6px;text-decoration:none">
             <img src="~/immagini-correggo/infoButton.png" alt="" style="width:18px;height:18px">LEGENDA
@@ -476,28 +480,14 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
 {
     <div class="nessuna-promo">
       <div class="empty"><b>Nessuna promo attiva</b></div>
-      @if (Model.MostraScadute)
-      {
-          <a class="more" href="~/Volantini">Nascondi le promo non più valide</a>
-      }
-      else if (Model.PromoScadute > 0)
-      {
-          <a class="more" href="~/Volantini?scadute=true">Mostra anche le promo non più valide (@Model.PromoScadute)</a>
-      }
     </div>
 }
 <main class="main" hidden="@nessunaPromo">
   <aside class="side">
     <h2 class="sec">Promo attive <small id="campCount"></small></h2>
     <div class="camps" id="camps"></div>
-    @if (Model.MostraScadute)
-    {
-        <a class="more" href="~/Volantini">Nascondi le promo non più valide</a>
-    }
-    else if (Model.PromoScadute > 0)
-    {
-        <a class="more" href="~/Volantini?scadute=true">Mostra anche le promo non più valide (@Model.PromoScadute)</a>
-    }
+    @* I20-1243: niente piu' «Mostra anche le promo non più valide»: in home solo le promo valide.
+       Le scadute si consultano da «Consulta tutti i volantini». *@
   </aside>
 
   <section class="content" aria-live="polite">
@@ -515,13 +505,18 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
 </main>
 
 @* j243: l'interruttore adesso si salva davvero, e dice cosa governa: le email di avviso
-   (decisione di Michele del 16/9). La campanella non si silenzia: quella e' il semaforo. *@
+   (decisione di Michele del 16/9). La campanella non si silenzia: quella e' il semaforo.
+   I20-1243: il riquadro e' tolto finche' non si riattiva (Correggo4 le email non le spedisce
+   ancora): si rimette con emailVisibili = true, in cima alla pagina. *@
+@if (emailVisibili)
+{
 <div class="notif" id="notif" role="switch" aria-checked="@emailOn" tabindex="0"
      title="Le email di avviso quando cambia qualcosa sui volantini">
   <div class="ic"><svg class="i"><use href="@emailIco"/></svg></div>
   <div><b>Notifiche email</b><span id="notifTxt">@emailTxt</span></div>
   <div class="sw" aria-hidden="true"></div>
 </div>
+}
 
 <script>
 /* ============================================================
@@ -1203,8 +1198,11 @@ const STILE_NOTIFICHE = `
       .then(j => { if(!j.ok) mostraInterruttore(!on); })
       .catch(() => { mostraInterruttore(!on); });
   }
-  notif.addEventListener("click", toggleNotif);
-  notif.addEventListener("keydown", e => { if(e.key===" "||e.key==="Enter"){ e.preventDefault(); toggleNotif(); } });
+  // I20-1243: il riquadro delle email e' tolto dalla pagina finche' non si riattiva
+  if(notif){
+    notif.addEventListener("click", toggleNotif);
+    notif.addEventListener("keydown", e => { if(e.key===" "||e.key==="Enter"){ e.preventDefault(); toggleNotif(); } });
+  }
 })();
 
 /* ---------- j317: i volantini che aspettano l'Agenzia ----------

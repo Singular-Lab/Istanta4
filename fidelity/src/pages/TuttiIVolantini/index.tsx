@@ -273,7 +273,7 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
             )}
 
             {dati.lineeDistributore && (
-              <Sezione titolo="Marchi del distributore" descrizione="Lo spazio delle linee di marca del distributore, linea per linea, e i bolli stampati sui box.">
+              <Sezione titolo="Private Labels" descrizione="Lo spazio delle Private Labels, linea per linea, e i bolli stampati sui box.">
                 <MarchiDistributore linee={dati.lineeDistributore} />
               </Sezione>
             )}
