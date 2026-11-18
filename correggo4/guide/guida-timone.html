@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<!--
+  Guida del menabò avanzato (il timone) di Correggo4 - sorgente del PDF servito da
+  app/Correggo4/wwwroot/guide/guida-timone.pdf, linkato dalla «i» bordeaux della barra
+  (timone.js, tim_guida).
+
+  I20-1242: riscritta sul codice della versione j328 e dei task fino a I20-1233. Il sorgente
+  della guida precedente (29/09/2026, j308) era andato perso: per questo adesso sta qui, fuori
+  da wwwroot, cosi' non viene pubblicato ma si aggiorna invece di riscriverlo.
+
+  Le icone sono quelle di timone.js (le costanti ICO_*), copiate e non ridisegnate. Gli screenshot
+  stanno in img/: si mettono interi, e il ritaglio e la misura si fanno qui con lo stile, cosi'
+  l'originale resta.
+
+  Per rigenerare il PDF, dalla cartella correggo4/ (Chrome del Mac, o chromium altrove):
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --no-pdf-header-footer --print-to-pdf=app/Correggo4/wwwroot/guide/guida-timone.pdf \
+      "file://$PWD/guide/guida-timone.html"
+
+  Poi, in timone.js, cambiare il ?v= del link tim_guida (i browser tengono il PDF in cache) e,
+  se e' cambiato, il numero di pagine scritto nel suo title.
+-->
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Il menabò avanzato - guida ai pulsanti</title>
+<style>
+  :root {
+    --verde: #1d5b55;
+    --bordeaux: #7a1e2d;
+    --rosso: #c0392b;
+    --arancio: #b5451b;
+    --giallo: #ffd166;
+    --fatto: #1d7a4f;
+    --blu: #1f5fd0;
+    --testo: #262c30;
+    --grigio: #5f6b72;
+    --riga: #dde2e5;
+  }
+  @page {
+    size: A4;
+    margin: 16mm 16mm 18mm 16mm;
+    @bottom-left { content: "Correggo4 · guida del menabò avanzato"; font: 8.5pt Arial, Helvetica, sans-serif; color: #5f6b72; }
+    @bottom-right { content: counter(page); font: 8.5pt Arial, Helvetica, sans-serif; color: #5f6b72; }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font: 10pt/1.45 Arial, Helvetica, sans-serif; color: var(--testo); }
+  b, strong { font-weight: 700; }
+
+  .copertina { border: 2.5px solid var(--verde); border-radius: 14px; padding: 18px 24px 16px; margin-bottom: 18px; }
+  .copertina h1 { margin: 0 0 6px; font-size: 25pt; color: var(--verde); }
+  .copertina .sotto { color: var(--grigio); margin: 0 0 10px; }
+  .copertina p { margin: 0 0 8px; }
+  .ruoli { display: flex; gap: 18px; margin-top: 12px; }
+  .ruoli div { flex: 1; font-size: 9.5pt; }
+  .ruoli h4 { margin: 0 0 3px; color: var(--bordeaux); font-size: 10pt; }
+
+  h2 { color: var(--bordeaux); font-size: 13.5pt; margin: 20px 0 6px; padding-bottom: 5px;
+       border-bottom: 2px solid var(--bordeaux); break-after: avoid; }
+  h3 { color: var(--verde); font-size: 10.5pt; margin: 14px 0 4px; break-after: avoid; }
+  p.intro { color: var(--grigio); margin: 0 0 8px; }
+  p { margin: 0 0 8px; }
+
+  table.voci { width: 100%; border-collapse: collapse; margin: 4px 0 10px; }
+  table.voci td { border-bottom: 1px solid var(--riga); padding: 7px 6px; vertical-align: top; }
+  table.voci tr { break-inside: avoid; }
+  table.voci td.ico { width: 92px; text-align: center; }
+  table.voci td.nome { width: 150px; font-weight: 700; }
+
+  .nota { border-left: 4px solid #3f9e95; background: #eef6f5; padding: 9px 12px; margin: 10px 0; break-inside: avoid; }
+  .nota.attenzione { border-left-color: var(--arancio); background: #fdf1ea; }
+  .nota b.titolo { color: var(--verde); }
+  .nota.attenzione b.titolo { color: var(--arancio); }
+
+  /* le «pastiglie»: i pulsanti come si vedono nel menabò avanzato */
+  .p { display: inline-block; border-radius: 6px; padding: 2px 7px; font-size: 7.5pt; font-weight: 800;
+       color: #fff; background: var(--bordeaux); white-space: nowrap; line-height: 1.5; letter-spacing: .02em; }
+  .p.verde { background: var(--verde); }
+  .p.giallo { background: var(--giallo); color: #4a3200; }
+  .p.fatto { background: var(--fatto); }
+  .p.blu { background: var(--blu); }
+  .p.chiaro { background: #e9edef; color: #4a5860; }
+  .p.arancio { background: var(--arancio); }
+  .p.tondo { border-radius: 50%; width: 20px; height: 20px; padding: 0; line-height: 20px; text-align: center; }
+  .p.ps { color: #1c3315; background: #a5bb9b; }
+  .p.ps.s { color: #3a3316; background: #bbb79b; }
+  .p + .p { margin-left: 3px; }
+  .stack .p { display: block; margin: 0 auto 3px; width: max-content; }
+  svg.i { width: 18px; height: 18px; vertical-align: middle; fill: var(--bordeaux); }
+  svg.i.rosso { fill: var(--rosso); }
+  svg.i.verde { fill: var(--verde); }
+  svg.i.bianco { fill: #fff; }
+  .p svg.i { width: 12px; height: 12px; fill: #fff; vertical-align: -2px; margin-right: 3px; }
+
+  .griglie { display: flex; justify-content: space-between; margin: 6px 0 10px; text-align: center; }
+  .griglie div { font-size: 8.5pt; color: var(--grigio); }
+  .griglie b { display: block; color: var(--verde); font-size: 11pt; }
+
+  .etichette span { display: inline-block; margin: 0 4px 4px 0; }
+  .salto { break-before: page; }
+
+  /* gli screenshot del menabò avanzato (img/), con la didascalia sotto */
+  figure { margin: 8px 0 12px; break-inside: avoid; text-align: center; }
+  figure img { display: block; margin: 0 auto; border: 1px solid var(--riga); border-radius: 6px; }
+  figcaption { margin-top: 4px; font-size: 8.5pt; color: var(--grigio); line-height: 1.35; }
+  .affianca { display: flex; gap: 16px; align-items: flex-start; break-inside: avoid; margin: 6px 0 10px; }
+  .affianca > figure { flex: 0 0 auto; margin: 0; }
+  .affianca > .testo { flex: 1 1 auto; min-width: 0; }
+  .affianca > .testo > .nota:first-child, .affianca > .testo > table:first-child { margin-top: 0; }
+  .testo .griglie div { flex: 1 1 0; }
+  .finale { margin-top: 16px; padding-top: 8px; border-top: 1px solid var(--riga); color: #8a959b; font-size: 8.5pt; }
+</style>
+</head>
+<body>
+
+<div class="copertina">
+  <h1>Il menabò avanzato</h1>
+  <p class="sotto">Guida ai pulsanti — Correggo4, versione del 17 novembre 2026</p>
+  <p>Il menabò avanzato serve a decidere <b>dove va ogni referenza</b> sul volantino: in quale pagina, in quale
+    casella, quanto spazio prende, e quali referenze stanno insieme nello stesso box. Prezzi e descrizioni si
+    correggono come sempre; dal menabò avanzato si arriva alla scheda con la matita.</p>
+  <p>Si apre col pulsante <span class="p blu">MENABÒ AVANZATO</span> in alto nell'editor del volantino. Dentro,
+    la barra verde dice ancora <b>TIMONE</b>: è il vecchio nome, e lo trovi anche in qualche messaggio. Tutto
+    quello che si fa resta una <b>bozza</b> finché non si preme SALVA: chiudendo senza salvare non cambia niente.</p>
+  <div class="ruoli">
+    <div><h4>Marketing</h4>Mentre la finestra del Marketing è aperta: sposta le referenze, sceglie le griglie,
+      blocca le caselle, unisce e corregge i gruppi, salva.</div>
+    <div><h4>Agenzia</h4>Apre la finestra del Marketing. Quando è chiusa riporta le richieste sull'impaginato:
+      guarda il REPORT, può spostare e salvare, scarica i FILTRI per il plug-in, preme FATTO.</div>
+    <div><h4>Category</h4>Il menabò avanzato non lo vede: corregge dall'editor normale.</div>
+  </div>
+</div>
+
+<div class="nota">
+  <b class="titolo">La finestra del Marketing.</b> L'Agenzia la apre da <i>Gestisci promo</i>, nel riquadro
+  «Finestra per timone». Quando si apre, il menabò avanzato di ogni volantino della promo si prepara da solo,
+  fotografando l'impaginato: non c'è niente da aprire volantino per volantino. Finché è aperta scrive il
+  Marketing; quando si chiude tocca all'Agenzia. Chi è fuori dal suo momento vede in barra
+  <span class="p chiaro">sola lettura — …</span> col motivo, per esempio «La finestra del Marketing e' aperta:
+  si aspetta che finisca.»
+</div>
+
+<!-- La schermata intera. Il nome dell'utente in alto a destra e' coperto con un riquadro del colore della
+     barra (left/top/width/height in percentuale sui 1912x852 px dello screenshot: x 1616-1738, y 26-56). -->
+<figure>
+  <div style="position:relative;width:178mm;margin:0 auto">
+    <img src="img/schermata-principale.png" alt="" style="width:178mm">
+    <div style="position:absolute;left:84.52%;top:3.05%;width:6.38%;height:3.52%;background:#57c2b3;
+                color:#fff;font-weight:700;font-size:4pt;display:flex;align-items:center">Nome Utente</div>
+  </div>
+  <figcaption>La schermata del menabò avanzato, per il Marketing a finestra aperta. In alto la barra dell'editor
+    con MENABÒ AVANZATO e REPORT COMPLETO, sotto la barra verde; a sinistra i tre pannelli, al centro la pagina
+    con le sue caselle, a destra le miniature delle pagine del volantino.</figcaption>
+</figure>
+
+<div style="break-inside: avoid">
+<h2>1 · La barra in alto</h2>
+<p class="intro">Riguarda <b>la pagina che stai guardando</b>. Su una finestra stretta va su due righe.</p>
+<!-- La barra e' larga 1920 px e alta 47: intera nella pagina si leggerebbe minuscola, quindi si mostra
+     in due pezzi alla stessa scala (178 mm per i primi 1290 px). Il ritaglio e' solo qui: barra.png
+     resta intera. -->
+<figure>
+  <div style="width:178mm;height:6.49mm;overflow:hidden;margin:0 auto;border-radius:4px">
+    <img src="img/barra.png" alt="" style="width:264.9mm;border:0;border-radius:0;margin:0"></div>
+  <div style="width:77.96mm;height:6.49mm;overflow:hidden;margin:4px 0 0 auto;border-radius:4px">
+    <img src="img/barra.png" alt="" style="width:264.9mm;max-width:none;border:0;border-radius:0;margin:0 0 0 -186.97mm"></div>
+  <figcaption>La barra del Marketing a finestra aperta, con una modifica non salvata. Sopra la parte sinistra,
+    sotto la destra.</figcaption>
+</figure>
+</div>
+<table class="voci">
+  <tr><td class="ico stack"><span class="p">‹</span><span class="p">›</span></td>
+      <td class="nome">Pagina precedente / successiva</td>
+      <td>Cambia pagina. Fra le due freccette c'è il numero della pagina, con accanto «di N»: si può
+        <b>scrivere dentro</b> e premere Invio, che con quaranta pagine è più rapido che cliccare quaranta volte.</td></tr>
+  <tr><td class="ico"><span class="p verde">griglia 2x3 ▾</span></td>
+      <td class="nome">La griglia della pagina</td>
+      <td>Dice in quante caselle è divisa la pagina e apre la scelta fra le sette griglie (capitolo 7), ognuna col
+        suo disegno e i suoi posti. Quelle troppo piccole per le referenze della pagina sono spente. Cambiando
+        griglia le referenze si ridistribuiscono, tenendo l'ordine che hanno.</td></tr>
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M12 5C6.5 5 2.3 9.1 1 12c1.3 2.9 5.5 7 11 7s9.7-4.1 11-7c-1.3-2.9-5.5-7-11-7zm0 11.5A4.5 4.5 0 1 1 16.5 12 4.5 4.5 0 0 1 12 16.5zm0-7A2.5 2.5 0 1 0 14.5 12 2.5 2.5 0 0 0 12 9.5z"/></svg></td>
+      <td class="nome">Guarda com'era impaginato prima</td>
+      <td>Un clic e la pagina torna come è stampata adesso, senza le schede sopra; in barra compare
+        «stai guardando l'impaginato di prima». Un altro clic (il pulsante dice «Torna al timone») e si torna
+        al piano. Serve a confrontare il prima e il dopo.</td></tr>
+  <tr><td class="ico stack"><span class="p">−</span><span class="p">+</span></td>
+      <td class="nome">Zoom</td>
+      <td>Rimpicciolisce e ingrandisce il foglio, anche col cursore fra i due pulsanti; accanto ci sono la
+        percentuale e <b>adatta</b>, che fa entrare la pagina nello spazio che resta. Oltre «adatta» la scheda di
+        ogni casella si ingrandisce tutta insieme, scritte e foto comprese.</td></tr>
+  <tr><td class="ico"><svg class="i rosso" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><rect x="5.6" y="10.5" width="12.8" height="3" rx="1.2" fill="#fff"/></svg> <b style="color:#c0392b;font-size:8pt">blocca</b></td>
+      <td class="nome">Il divieto da trascinare</td>
+      <td>Si prende da qui e si molla su una casella per bloccarla. È lo stesso divieto che trovi sulle
+        caselle, ma parte da qui. C'è solo per chi può scrivere.</td></tr>
+  <tr><td class="ico"><span class="p chiaro">6 caselle · 5 referenze</span></td>
+      <td class="nome">La riga di stato</td>
+      <td>Quante caselle e referenze ha la pagina, quante caselle sono bloccate e fino a quando è aperta la
+        finestra del Marketing.</td></tr>
+</table>
+
+<div class="affianca">
+  <div class="testo">
+    <div class="nota attenzione">
+      <b class="titolo">Attenzione:</b> quando la finestra del Marketing si chiude, le pagine cambiate e salvate si
+      <b>oscurano nell'editor normale</b> con la scritta «In attesa che l'Agenzia sistemi l'impaginato», per tutti
+      tranne l'Agenzia, che le vede segnate nelle miniature. Su quelle pagine si lavora solo dal menabò avanzato,
+      finché non arriva il volantino reimpaginato. Mentre la finestra è aperta, nessuna pagina viene oscurata.
+    </div>
+  </div>
+  <figure><img src="img/pagina-in-attesa.png" alt="" style="width:38mm">
+    <figcaption>Una pagina oscurata, vista dal<br>Marketing a finestra chiusa.</figcaption></figure>
+</div>
+
+<h3>A destra, nell'ordine in cui compaiono</h3>
+<table class="voci">
+  <tr><td class="ico"><span class="p fatto">FATTO</span></td>
+      <td class="nome">Fatto (Agenzia)</td>
+      <td>Solo per l'Agenzia, quando il Marketing ha salvato delle modifiche e la finestra è chiusa: «Ho
+        riportato sull'impaginato le modifiche del Marketing». Spegne l'avviso TIMONE nella home. Capitolo 8.</td></tr>
+  <tr><td class="ico"><span class="p chiaro">REPORT</span></td>
+      <td class="nome">Report (Agenzia)</td>
+      <td>Il report delle modifiche: cosa ha cambiato il Marketing, pagina per pagina. Capitolo 8.</td></tr>
+  <tr><td class="ico"><span class="p chiaro">FILTRI</span></td>
+      <td class="nome">Filtri (Agenzia)</td>
+      <td>Solo per l'Agenzia a finestra chiusa: scarica il pacchetto dei filtri da copiare nella cartella di
+        lavorazione del plug-in. Capitolo 8.</td></tr>
+  <tr><td class="ico"><span class="p tondo">i</span></td>
+      <td class="nome">La guida</td>
+      <td>Apre questa guida.</td></tr>
+  <tr><td class="ico"><span class="p giallo">3 modifiche non salvate</span></td>
+      <td class="nome">Il bollino giallo</td>
+      <td>Quante modifiche hai in mano e non hai ancora salvato.</td></tr>
+  <tr><td class="ico"><span class="p arancio">ANNULLA LE MODIFICHE</span></td>
+      <td class="nome">Annulla le modifiche</td>
+      <td>Butta la bozza e rimette tutto come l'ultimo salvataggio. Non chiede al server: la bozza era solo tua.</td></tr>
+  <tr><td class="ico"><span class="p giallo">SALVA</span></td>
+      <td class="nome">Salva</td>
+      <td>Scrive nel piano tutto quello che hai fatto. SALVA e ANNULLA ci sono sempre per chi può scrivere, e
+        restano spenti finché non c'è niente da salvare.</td></tr>
+  <tr><td class="ico"><span class="p">CHIUDI</span></td>
+      <td class="nome">Chiudi</td>
+      <td>Esce dal menabò avanzato. Se ci sono modifiche non salvate chiede cosa fare: «Salva ed esci», «Esci
+        senza salvare» o «Torna indietro». Anche il tasto <b>Esc</b> chiude: prima la finestrella aperta, poi il
+        report, poi il menabò avanzato.</td></tr>
+</table>
+
+
+
+<h2>2 · La casella di una referenza</h2>
+<p class="intro">Ogni referenza in pagina è una scheda su fondo bianco: la foto del prodotto presa da Istanta,
+  la pastiglia P o S, il codice, la descrizione che va in stampa, la meccanica del box (BOX_STD, BOX_FID…), il
+  peso e il prezzo. Se la casella è piccola la scheda mostra meno cose: prima spariscono meccanica e peso, e
+  nelle caselle più piccole restano la foto col prezzo e il codice nella striscia in fondo. Il numero in alto a
+  sinistra è il numero della casella.</p>
+
+<div class="affianca">
+  <figure><img src="img/pagina-griglia.png" alt="" style="width:54mm">
+    <figcaption>Una pagina in griglia 2x4: la casella 1 è bloccata,<br>la 3 è un gruppo di 4, la 8 è libera e
+      lascia<br>vedere l'impaginato che c'è sotto.</figcaption></figure>
+  <div class="testo">
+    <p>Sulla casella ci sono il numero, il codice con la pastiglia P o S, l'etichetta «gruppo di N» quando è un
+      gruppo, la descrizione, la meccanica, il peso e il prezzo; in fondo, nella striscia verde, il codice intero
+      col pulsante per copiarlo.</p>
+    <p>Una casella libera resta trasparente e lascia vedere com'è impaginata adesso quella parte della pagina.</p>
+  </div>
+</div>
+
+<h3>La striscia bordeaux, col mouse sopra la casella</h3>
+<p>C'è solo per chi può scrivere: in sola lettura resta soltanto la matita. Se a destra non c'è spazio, esce
+  a sinistra.</p>
+<figure><img src="img/casella-striscia.png" alt="" style="width:52mm">
+  <figcaption>La striscia sopra la casella 1: il numero, «sposta a pagina», sospeso, cestino, matita, graffetta e
+    divieto; le maniglie + e − sul bordo destro e in basso.</figcaption></figure>
+<table class="voci">
+  <tr><td class="ico"><span class="p">3 ▾</span></td>
+      <td class="nome">Il numero della casella</td>
+      <td>Aprendolo si sposta la referenza in un'altra casella <b>della stessa pagina</b>. Le caselle bloccate
+        sono elencate ma non si possono scegliere.</td></tr>
+  <tr><td class="ico"><span class="p">sposta a pagina</span></td>
+      <td class="nome">Sposta a pagina</td>
+      <td>Apre l'elenco delle pagine, ognuna con le caselle occupate e i posti: la referenza arriva nella casella
+        1 e le altre scalano. C'è anche il campo «manda a pagina» per scrivere il numero. Su una pagina piena la
+        griglia si allarga da sola.</td></tr>
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg></td>
+      <td class="nome">Metti in sospeso</td>
+      <td>La toglie dalla pagina ma la tiene da parte, nel primo pannello a sinistra. È il «devo ancora decidere».</td></tr>
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zM6 8h12l-1 12.2A1.8 1.8 0 0 1 15.2 22H8.8a1.8 1.8 0 0 1-1.8-1.8L6 8zm4 2v9h1.5v-9H10zm3.5 0v9H15v-9h-1.5z"/></svg></td>
+      <td class="nome">Togli dal volantino</td>
+      <td>Apre due scelte: <b>Fuori volantino</b> (non va in pagina, ma è una scelta fatta apposta) oppure
+        <b>Eliminata</b> (non deve più andarci). Nessuna delle due blocca il salvataggio.</td></tr>
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg></td>
+      <td class="nome">Modifica referenza</td>
+      <td>Apre la scheda dell'Edit avanzato su questo prodotto: prezzi, foto, loghi e azioni, le stesse cose che
+        fai dall'editor. Va salvato prima il menabò avanzato, perché la correzione della scheda si salva subito.
+        Su un gruppo di referenze di box diversi la matita funziona in un altro modo: capitolo 5.</td></tr>
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M16.1 6.3 8.4 14a2.1 2.1 0 0 0 3 3l7.2-7.2a4.2 4.2 0 0 0-6-6L4.9 11.4a6.3 6.3 0 0 0 8.9 8.9l6.3-6.3-1.4-1.4-6.3 6.3a4.3 4.3 0 0 1-6.1-6.1l7.7-7.7a2.2 2.2 0 0 1 3.1 3.1l-7.2 7.2a.1.1 0 0 1-.2-.2l7.7-7.7-1.3-1.2z"/></svg></td>
+      <td class="nome">Gruppo e unione</td>
+      <td>Apre la finestra del gruppo: le referenze che stanno in questa casella, il modo di staccarne una e
+        l'elenco di quelle da unire. È il capitolo 4.</td></tr>
+  <tr><td class="ico"><svg class="i rosso" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><rect x="5.6" y="10.5" width="12.8" height="3" rx="1.2" fill="#fff"/></svg></td>
+      <td class="nome">Blocca questa casella</td>
+      <td>Qui non deve andare niente, perché ci va un elemento grafico. La referenza che c'era <b>scorre</b> nella
+        prima casella libera dopo.</td></tr>
+  <tr><td class="ico"><span class="p verde">+</span><span class="p verde">−</span></td>
+      <td class="nome">Le maniglie per allargare</td>
+      <td>Sul bordo destro allargano e stringono la referenza di una casella, sul bordo in basso la alzano e la
+        abbassano. Se nella griglia di adesso non ci sta, la griglia si allarga da sola e te lo dice.</td></tr>
+  <tr><td class="ico"><svg class="i verde" viewBox="0 0 24 24"><path d="M9 2h9a2 2 0 0 1 2 2v12h-2V4H9V2z"/><path d="M5 6h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zm0 2v12h9V8H5z"/></svg></td>
+      <td class="nome">Copia il codice</td>
+      <td>Nella striscia verde in fondo alla casella, anche in sola lettura. Mette negli appunti il codice
+        <b>intero</b>, anche quando si vede tagliato coi puntini: un gruppo di nove referenze ha un codice da
+        settanta caratteri. Dopo il clic compare la spunta.</td></tr>
+</table>
+
+<div class="nota">
+  <b class="titolo">Si trascina.</b> Una referenza si prende col mouse e si molla su un'altra casella.
+  Su una casella <b>occupata</b> si infila lì e le altre <b>scalano</b>, come quando si sposta una riga in un
+  elenco. Su una casella <b>vuota</b> ci va e basta, e dov'era resta un posto libero. Fra referenze allargate
+  della stessa misura i due posti si scambiano; se la misura è diversa compare «Di misura diversa».
+  Si può trascinare anche sui tre pannelli laterali, per mandarla in sospeso, fuori volantino o fra le eliminate.
+</div>
+
+<div class="nota">
+  <b class="titolo">La griglia si adatta da sola.</b> Quando una pagina non basta più (per un allargamento, una
+  referenza che arriva, una casella bloccata) la griglia si allarga, e un avviso dice per esempio «La pagina 4
+  e' passata da 2x3 a 2x4». Quando la pagina si libera torna giù da sola, ma <b>mai sotto la griglia che hai
+  scelto tu</b>. Se si aprono dei buchi, le referenze dopo scalano indietro a chiuderli.
+</div>
+
+<h2>3 · Le caselle vuote e quelle bloccate</h2>
+<table class="voci">
+  <tr><td class="ico"><svg class="i rosso" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><rect x="5.6" y="10.5" width="12.8" height="3" rx="1.2" fill="#fff"/></svg></td>
+      <td class="nome">Blocca una casella vuota</td>
+      <td>Passando col mouse su una casella vuota compare il divieto: cliccandolo la casella diventa a righe con
+        la scritta BLOCCATA, e nessuna referenza ci andrà.</td></tr>
+  <tr><td class="ico"><span class="p">✕</span></td>
+      <td class="nome">Libera la casella</td>
+      <td>Sulla casella bloccata, col mouse sopra: la sblocca.</td></tr>
+</table>
+<div class="nota">Il divieto è un <b>messaggio all'Agenzia</b>: qui lasciami lo spazio. Una pagina con caselle
+  bloccate risulta da sistemare come se avessi spostato una referenza.</div>
+
+<h2>4 · Il gruppo: più referenze in una casella</h2>
+<div class="affianca">
+<div class="testo">
+<p>Un gruppo è un box che contiene più referenze: una descrizione, una foto, un prezzo, e <b>una casella
+  sola</b>. È il motivo per cui esiste: prendere meno spazio sul volantino. Sulla casella si vede l'etichetta
+  «gruppo di 3» e nella striscia in fondo il codice di tutte, separato da virgole. La foto e la descrizione che
+  vedi sono quelle della referenza primaria di Istanta, che è quella che va in stampa: non è sempre quella che
+  tiene la casella.</p>
+<p>La graffetta sulla casella apre la finestra del gruppo, qui a fianco: sopra le referenze del gruppo, una per
+  cartoncino, sotto quelle che si possono unire. Le voci sono spiegate qui sotto.</p>
+</div>
+<figure><img src="img/finestra-gruppo.png" alt="" style="width:60mm">
+  <figcaption>Un gruppo di 4 referenze nella casella 2:<br>la prima tiene la casella; sotto, quelle<br>della
+    pagina che si possono unire.</figcaption></figure>
+</div>
+
+<h3>La finestra della graffetta</h3>
+<table class="voci">
+  <tr><td class="ico"><span class="p verde">Gruppo di 3 referenze in casella 2</span></td>
+      <td class="nome">La fascia verde</td>
+      <td>Quante referenze ha il gruppo e in quale casella sta. Sotto, con la mano
+        <svg class="i verde" viewBox="0 0 24 24"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74z"/><path d="M18.84 15.87l-4.54-2.26a1.3 1.3 0 0 0-.54-.11H13v-6c0-.83-.67-1.5-1.5-1.5S10 6.67 10 7.5v10.74l-3.43-.72a1.1 1.1 0 0 0-1.03.3l-.79.8 4.94 4.94c.27.27.65.44 1.06.44h6.79c.75 0 1.33-.55 1.44-1.28l.75-5.27c.01-.07.02-.14.02-.2 0-.62-.38-1.16-.91-1.38z"/></svg>,
+        cosa si può fare.</td></tr>
+  <tr><td class="ico"><span class="p ps">P</span><span class="p ps s">S</span></td>
+      <td class="nome">Le referenze del gruppo</td>
+      <td>Un cartoncino per referenza, affiancati: foto, nome, la pastiglia <b>P</b>, <b>S</b> o <b>–</b>
+        (primaria, secondaria o non selezionata in Istanta), il codice, il peso e il prezzo. Quella che tiene la
+        casella ha la pastiglia «casella 2».</td></tr>
+  <tr><td class="ico"><span class="p">SGRUPPA E SOSPENDI</span></td>
+      <td class="nome">Stacca dal gruppo</td>
+      <td>La referenza esce dal gruppo e va <b>in sospeso</b>: da lì la rimetti in pagina dove vuoi. Se stacchi
+        quella che tiene la casella e nel gruppo restano in tre o più, ti chiede <b>a chi passarla</b>; se restano
+        in due passa da sola.</td></tr>
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></td>
+      <td class="nome">Cerca</td>
+      <td>Nella parte «Unisci un'altra referenza a questo gruppo»: filtra l'elenco per nome, codice, reparto o tema.</td></tr>
+  <tr><td class="ico"><span class="p"><svg class="i" viewBox="0 0 24 24"><path d="M15 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>UNISCI AL GRUPPO</span></td>
+      <td class="nome">Unisci un'altra referenza</td>
+      <td>L'elenco di quelle che puoi far entrare in questa casella, diviso in <b>in questa pagina</b>,
+        <b>nelle altre pagine</b> e <b>in sospeso</b>. Entrando, la loro casella si libera, anche se sta in
+        un'altra pagina.</td></tr>
+  <tr><td class="ico"><span class="p arancio tondo">●</span></td>
+      <td class="nome">Il pallino arancione</td>
+      <td>Su una riga dell'elenco vuol dire che quella referenza ha un <b>prezzo promo diverso</b> da questa
+        casella. Si unisce comunque, ma prima ti dice i due numeri e quale dei due si stampa.</td></tr>
+</table>
+<div class="nota attenzione">
+  <b class="titolo">Da un'altra pagina si può unire.</b> La referenza arriva nella casella del gruppo e la
+  pagina da cui viene si ricompatta. Il gruppo però sta sempre su una pagina sola, e spostando un gruppo si
+  sposta tutto insieme. Le referenze fuori volantino o eliminate non compaiono fra quelle da unire: si
+  rimettono in pagina dal loro pannello. La finestra del gruppo si apre dalla graffetta, quindi solo per chi
+  può scrivere.
+</div>
+
+<h2>5 · Correggere un gruppo con la matita</h2>
+<p>Un gruppo fatto nel menabò avanzato con referenze di <b>box diversi</b> dell'impaginato non ha ancora un box
+  suo. Per questo la matita, su un gruppo così, apre la scheda dell'Edit avanzato con le referenze di tutto il
+  gruppo (prezzi e azioni, descrizione, foto P/S, loghi), ma <b>la correzione resta nel menabò avanzato</b>:</p>
+<table class="voci">
+  <tr><td class="ico"><span class="p giallo">SALVA</span></td>
+      <td class="nome">SALVA della scheda</td>
+      <td>«SALVA tiene la modifica nel timone: arriva all'Agenzia con il SALVA del timone.» La correzione entra
+        nella bozza; va salvato poi il menabò avanzato. Non si propaga ad altri volantini.</td></tr>
+  <tr><td class="ico"><span class="p ps">P</span></td>
+      <td class="nome">Le foto proposte</td>
+      <td>Finché non scegli tu, la primaria proposta è la foto della referenza che tiene la casella, e le altre
+        sono secondarie.</td></tr>
+  <tr><td class="ico"><span class="p">SGRUPPA E SOSPENDI</span></td>
+      <td class="nome">Gruppo sciolto</td>
+      <td>Sciogliendo il gruppo la correzione si perde. Se cambia chi tiene la casella, la correzione passa a lui.</td></tr>
+</table>
+<p>Nel report la correzione esce come <span class="p">GRUPPO MODIFICATO</span>, con quello che l'Agenzia deve
+  riportare a mano. La scheda si modifica solo dal Marketing a finestra aperta; l'Agenzia la vede in sola lettura.</p>
+<div class="nota attenzione">
+  <b class="titolo">Dall'editor normale non si può.</b> Sui box che stanno in un gruppo così, l'Edit avanzato
+  dell'editor è chiuso al Marketing: la scheda è in sola lettura con il riquadro «Impossibile modificare tramite
+  Edit avanzato: l'elemento fa parte di un gruppo impostato sul timone. Modificalo da «Modifica referenza» nel
+  timone.» Agenzia e Category non sono fermati. Un gruppo di referenze nate nello stesso box, invece, si
+  corregge dall'Edit avanzato come sempre.
+</div>
+
+<h2>6 · I tre pannelli a sinistra</h2>
+<p class="intro">Ogni riga porta la foto della referenza, da che pagina viene, la meccanica, il codice, il
+  prezzo e la descrizione, con il pulsante <b>rimettila in pagina</b>, che chiede in quale pagina. Un gruppo
+  occupa una riga sola, non tre. In testa a ogni pannello c'è quante referenze contiene.</p>
+<div class="affianca">
+<figure><img src="img/pannelli.png" alt="" style="width:34mm">
+  <figcaption>I tre pannelli, con un gruppo<br>di 2 fuori volantino.</figcaption></figure>
+<div class="testo">
+<table class="voci">
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><rect x="6.5" y="5" width="4" height="14" rx="1.2"/><rect x="13.5" y="5" width="4" height="14" rx="1.2"/></svg></td>
+      <td class="nome">Elementi sospesi</td>
+      <td>Quello che hai tolto dalla pagina e <b>devi ancora sistemare</b>. Finché ce n'è anche uno, il menabò
+        avanzato <b>non si salva</b>: vanno rimessi in pagina, o mandati fuori volantino, o fra le eliminate.</td></tr>
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M4.5 3h8.5v2H6.5v14H13v2H4.5a1.5 1.5 0 0 1-1.5-1.5v-15A1.5 1.5 0 0 1 4.5 3z"/><path d="M16.6 7.4 15.2 8.8l2.2 2.2H9.5v2h7.9l-2.2 2.2 1.4 1.4L21.4 12z"/></svg></td>
+      <td class="nome">Referenze fuori volantino</td>
+      <td>Non vanno in pagina, ma è una scelta fatta apposta. Non bloccano il salvataggio.</td></tr>
+  <tr><td class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zM6 8h12l-1 12.2A1.8 1.8 0 0 1 15.2 22H8.8a1.8 1.8 0 0 1-1.8-1.8L6 8zm4 2v9h1.5v-9H10zm3.5 0v9H15v-9h-1.5z"/></svg></td>
+      <td class="nome">Referenze eliminate</td>
+      <td>Non devono più andare sul volantino. Non bloccano il salvataggio.</td></tr>
+</table>
+</div>
+</div>
+
+<h2>7 · Le sette griglie</h2>
+<p class="intro">La griglia divide la pagina in caselle. Sono sette e fisse; il primo numero sono le
+  <b>colonne</b>, il secondo le <b>righe</b>. Le caselle si contano per righe, da sinistra a destra.</p>
+<div class="affianca">
+<figure><img src="img/scelta-griglia.png" alt="" style="width:48mm">
+  <figcaption>La scelta della griglia: la 1x3 è spenta<br>perché in pagina ci sono 6 referenze.</figcaption></figure>
+<div class="testo">
+<div class="griglie">
+  <div><b>1x3</b>3 caselle</div><div><b>2x3</b>6 caselle</div><div><b>2x4</b>8 caselle</div>
+  <div><b>3x3</b>9 caselle</div>
+</div>
+<div class="griglie">
+  <div><b>3x4</b>12 caselle</div><div><b>4x4</b>16 caselle</div><div><b>5x4</b>20 caselle</div><div></div>
+</div>
+<p>Si sceglie dal pulsante della griglia in barra. Quelle che non bastano per le referenze della pagina sono
+  spente; quella di adesso è evidenziata.</p>
+<div class="nota">Le griglie <b>non crescono in modo ordinato</b>: dalla 2x4 alla 3x3 si guadagna una colonna ma
+  si perde una riga. Per questo, quando serve più spazio, il menabò avanzato non cerca solo una griglia con più
+  posti, ma una che abbia abbastanza colonne <i>e</i> abbastanza righe per tutto quello che c'è già.</div>
+</div>
+</div>
+
+<h2>8 · Il lavoro dell'Agenzia: report, filtri, fatto</h2>
+
+<h3>REPORT — cosa ha cambiato il Marketing</h3>
+<p>Il pulsante <span class="p chiaro">REPORT</span> in barra, solo per l'Agenzia, apre il report del piano
+  <b>salvato</b>: per ogni pagina cambiata, le referenze con «DOV'ERA → ADESSO» e sotto le correzioni fatte
+  nell'editor su quella pagina (note, timbri, Edit avanzato). Le pagine senza modifiche sono solo elencate in
+  una riga. Ogni voce ha le sue etichette colorate:</p>
+<p class="etichette">
+  <span class="p">SPOSTATA</span><span class="p">CAMBIATA DI PAGINA</span><span class="p">TOLTA DAL VOLANTINO</span>
+  <span class="p">ELIMINATA</span><span class="p">IN SOSPESO</span><span class="p">SCIOLTA DAL GRUPPO</span>
+  <span class="p">UNITA A UN GRUPPO</span><span class="p">GRUPPO CAMBIATO</span><span class="p">ALLARGATA</span>
+  <span class="p">GRUPPO MODIFICATO</span><span class="p">CASELLA TENUTA</span><span class="p">CORREZIONI</span>
+</p>
+<table class="voci">
+  <tr><td class="ico"><span class="p chiaro">FILTRA</span></td>
+      <td class="nome">Il filtro</td>
+      <td>Una spunta per etichetta, con SELEZIONA TUTTE e DESELEZIONA TUTTE: mostra solo le voci con almeno
+        un'etichetta scelta e nasconde le pagine rimaste vuote. Vale solo a schermo: stampa e PDF escono completi.</td></tr>
+  <tr><td class="ico"><span class="p verde">VEDI PREVIEW</span></td>
+      <td class="nome">La preview di una pagina</td>
+      <td>In fondo a ogni pagina: affianca PRIMA, la pagina com'è arrivata su Correggo, e DOPO, lo schema della
+        pagina secondo il piano.</td></tr>
+  <tr><td class="ico"><span class="p verde">MOSTRA PREVIEW COMPLETA</span></td>
+      <td class="nome">Tutte le pagine</td>
+      <td>In fondo al report: la preview prima/dopo di tutte le pagine del volantino, con «SENZA MODIFICHE» su
+        quelle ferme.</td></tr>
+  <tr><td class="ico stack"><span class="p">STAMPA</span><span class="p">ESPORTA PDF</span></td>
+      <td class="nome">Stampa e PDF</td>
+      <td>STAMPA usa la stampa del browser. ESPORTA PDF scarica il file «Report timone - titolo - vN - data.pdf»
+        con il report completo e, in coda, la preview di tutte le pagine. Se il PDF non si può fare, il messaggio
+        dice perché: con STAMPA si può scegliere «Salva come PDF».</td></tr>
+</table>
+
+<h3>REPORT COMPLETO — dall'editor, senza aprire il menabò avanzato</h3>
+<p>Nell'editor, accanto a <span class="p blu">MENABÒ AVANZATO</span>, Agenzia e Marketing trovano
+  <span class="p verde">REPORT COMPLETO</span> quando il volantino ha un piano salvato: scarica nei Download lo
+  stesso PDF del report. Se il server non può produrlo, si apre la stampa del browser con lo stesso report.</p>
+
+<h3>FILTRI e FATTO — a finestra chiusa</h3>
+<table class="voci">
+  <tr><td class="ico"><span class="p chiaro">FILTRI</span></td>
+      <td class="nome">Il pacchetto per il plug-in</td>
+      <td>Scarica uno .zip con i filtri delle pagine, l'elenco delle referenze escluse, il piano e un LEGGIMI: si
+        copia nella cartella di lavorazione del plug-in, che impagina seguendo il piano. Prima va salvato.</td></tr>
+  <tr><td class="ico"><span class="p fatto">FATTO</span></td>
+      <td class="nome">Ho finito</td>
+      <td>Quando le modifiche del Marketing sono riportate sull'impaginato: chiede «Hai finito con questo
+        volantino?» e, con «Sì, ho finito», spegne l'avviso TIMONE che lampeggia nella home. Con modifiche non
+        salvate chiede prima di salvare.</td></tr>
+</table>
+
+<h2>9 · Le regole che non sono pulsanti</h2>
+<h3>Tutto è una bozza finché non salvi</h3>
+<p>Spostare, allargare, bloccare, sgruppare, correggere un gruppo con la matita: niente va al server prima di
+  SALVA. Il bollino giallo dice quante modifiche hai in mano. Chiudendo, se ce ne sono, il menabò avanzato te lo chiede.</p>
+<h3>Gli elementi in sospeso fermano il salvataggio</h3>
+<p>È voluto: il sospeso vuol dire «non ho ancora deciso», e un piano con dentro un pezzo non deciso non si
+  salva. Sistemali e salva.</p>
+<h3>Ognuno scrive nel suo momento</h3>
+<p>Il Marketing scrive mentre la finestra del Marketing è aperta, l'Agenzia quando è chiusa. Fuori dal proprio
+  momento il menabò avanzato si apre in sola lettura, e la barra dice perché.</p>
+<h3>Dopo la finestra, le pagine cambiate passano all'Agenzia</h3>
+<p>A finestra chiusa le pagine toccate si oscurano nell'editor normale con la scritta «In attesa che l'Agenzia
+  sistemi l'impaginato», e su quelle si lavora solo dal menabò avanzato. L'Agenzia le vede segnate nel pannello
+  delle pagine e continua a lavorare normalmente. Quando reimpagina e reimporta il volantino, le pagine si
+  sbloccano da sé: non c'è niente da premere.</p>
+<h3>La scheda ha permessi suoi</h3>
+<p>La matita apre la scheda dell'Edit avanzato, e lì valgono i permessi di quella scheda: il Marketing salva le
+  correzioni, l'Agenzia le conferma. Per questo la matita c'è anche quando il menabò avanzato è in sola lettura.
+  Fanno eccezione i gruppi di box diversi (capitolo 5).</p>
+
+<h2>10 · Se qualcosa non va</h2>
+<p class="intro">I messaggi che il menabò avanzato può darti, e cosa vogliono dire.</p>
+<table class="voci">
+  <tr><td class="ico"><span class="p arancio tondo">!</span></td>
+      <td class="nome">«Non si e' potuto salvare»</td>
+      <td>Se dice «Ci sono N elementi in sospeso», nel primo pannello a sinistra c'è ancora qualcosa da
+        sistemare: rimettilo in pagina, o mandalo fuori volantino o fra le eliminate, e risalva.</td></tr>
+  <tr><td class="ico"><span class="p arancio tondo">!</span></td>
+      <td class="nome">«Non ci stanno tutte»</td>
+      <td>La griglia che hai scelto ha meno posti di quello che c'è in pagina. Il messaggio ti dice qual è la più
+        piccola che le contiene tutte.</td></tr>
+  <tr><td class="ico"><span class="p arancio tondo">!</span></td>
+      <td class="nome">«Non ci sta»</td>
+      <td>Hai trascinato una referenza allargata in un punto dove il suo spazio non è tutto libero: va messa dove
+        c'è spazio, o prima ristretta con le maniglie.</td></tr>
+  <tr><td class="ico"><span class="p arancio tondo">!</span></td>
+      <td class="nome">«Non ci sta da nessuna parte»</td>
+      <td>La pagina di arrivo è piena e nessuna griglia è abbastanza grande per una referenza in più: prima va
+        tolto qualcosa da quella pagina.</td></tr>
+  <tr><td class="ico"><span class="p arancio tondo">!</span></td>
+      <td class="nome">«Di misura diversa»</td>
+      <td>Hai trascinato una referenza allargata su un'altra di misura diversa: le due non si possono scambiare.</td></tr>
+  <tr><td class="ico"><span class="p arancio tondo">!</span></td>
+      <td class="nome">«Prima la griglia»</td>
+      <td>La pagina non ha ancora una griglia, e senza griglia le caselle non ci sono: scegline una, poi blocca la
+        casella o allarga la referenza.</td></tr>
+  <tr><td class="ico"><span class="p arancio tondo">!</span></td>
+      <td class="nome">«Prima salva il timone»</td>
+      <td>Hai premuto la matita con delle modifiche non salvate. La correzione della scheda si salva subito, gli
+        spostamenti no: se si mescolano, al primo ricaricamento ti ritrovi la correzione salvata e gli spostamenti
+        persi. Premi SALVA IL TIMONE e riapri la matita. Sui gruppi di box diversi non compare, perché lì la
+        correzione resta nella bozza.</td></tr>
+  <tr><td class="ico"><span class="p arancio tondo">!</span></td>
+      <td class="nome">«I prezzi promo sono diversi»</td>
+      <td>Stai unendo due referenze con prezzi diversi. Il messaggio ti dice i due numeri e quale dei due si
+        stampa: quello di chi tiene la casella. Puoi premere UNISCI COMUNQUE; se il prezzo non è quello giusto, si
+        cambia dalla matita.</td></tr>
+  <tr><td class="ico"><span class="p tondo">?</span></td>
+      <td class="nome">La foto non si vede</td>
+      <td>Se al posto della foto c'è l'immagine «nessuna foto», a sistema non c'è una foto per quella referenza:
+        la si carica dalla matita, con <b>Carica nuova foto</b>. Se invece c'è scritto «carico…», la si sta ancora
+        chiedendo a Istanta: arriva da sé.</td></tr>
+  <tr><td class="ico"><span class="p tondo">?</span></td>
+      <td class="nome">La foto cambiata non si aggiorna</td>
+      <td>Cambiando la foto dalla matita, nella casella la nuova si vede dopo aver ricaricato la pagina.</td></tr>
+  <tr><td class="ico"><span class="p tondo">?</span></td>
+      <td class="nome">Non trovo i pulsanti sulla casella</td>
+      <td>La striscia dei comandi compare <b>passando col mouse</b> sopra la casella, e solo a chi può scrivere:
+        in sola lettura resta la matita. Sulle griglie fitte può uscire dai bordi, ed è l'unico modo per averli tutti.</td></tr>
+  <tr><td class="ico"><span class="p tondo">?</span></td>
+      <td class="nome">Tutto è in sola lettura</td>
+      <td>Non è il tuo momento: il Marketing scrive a finestra aperta, l'Agenzia a finestra chiusa. Il motivo è
+        scritto in barra, accanto a «sola lettura».</td></tr>
+</table>
+
+<p class="finale">Guida scritta il 17 novembre 2026 sulla versione j328 del menabò avanzato. Ogni icona di questa
+  guida è la stessa che vedi nell'applicazione: sono prese dal file del menabò avanzato, non ridisegnate.</p>
+
+</body>
+</html>
