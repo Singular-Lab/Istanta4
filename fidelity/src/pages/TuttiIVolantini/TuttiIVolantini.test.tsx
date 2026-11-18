@@ -257,13 +257,13 @@ describe("Dettaglio del volantino", () => {
     finti.insights = caricato({ ...datiInsight, lineeDistributore: LINEE });
     apri();
 
-    expect(titoliSezioni()).toEqual(["Il volantino", "Distribuzione nelle pagine", "Marchi del distributore", "Referenze in volantino · 4"]);
+    expect(titoliSezioni()).toEqual(["Il volantino", "Distribuzione nelle pagine", "Private Labels", "Referenze in volantino · 4"]);
     // I numeri stanno prima del volantino, le analisi fra i marchi e le referenze
     const volantino = screen.getByRole("heading", { level: 2, name: "Il volantino" });
     expect(numeri().compareDocumentPosition(volantino) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole("region", { name: "File del volantino" })).not.toBeInTheDocument();
     const analisi = screen.getByTestId("analisi");
-    const marchi = screen.getByRole("heading", { level: 2, name: "Marchi del distributore" });
+    const marchi = screen.getByRole("heading", { level: 2, name: "Private Labels" });
     const referenze = screen.getByRole("heading", { level: 2, name: "Referenze in volantino · 4" });
     expect(marchi.compareDocumentPosition(analisi) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(analisi.compareDocumentPosition(referenze) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -339,22 +339,24 @@ describe("Dettaglio del volantino", () => {
     expect(numero("Prezzo Fidelity")).toHaveTextContent("1 box");
     expect(numero("Sottocosto")).toHaveTextContent("1");
     expect(numero("Marche")).toHaveTextContent("2");
-    expect(within(numeri()).queryByText("Marchi del distributore")).not.toBeInTheDocument();
+    expect(within(numeri()).queryByText("Private Labels")).not.toBeInTheDocument();
   });
 
-  it("con le linee del distributore mostra il riquadro e la sezione dei suoi marchi; senza, nessuno dei due", () => {
+  // TASK-7b68e012: riquadro e sezione delle linee del distributore si chiamano Private Labels
+  it("con le linee del distributore mostra il riquadro e la sezione Private Labels; senza, nessuno dei due", () => {
     finti.insights = caricato({ ...datiInsight, lineeDistributore: LINEE });
     const { unmount } = apri();
 
-    expect(numero("Marchi del distributore")).toHaveTextContent("33,3%");
-    const sezione = screen.getByRole("region", { name: "Marchi del distributore" });
+    expect(numero("Private Labels")).toHaveTextContent("33,3%");
+    const sezione = screen.getByRole("region", { name: "Private Labels" });
+    expect(screen.queryByText(/Marchi del distributore|Linee del distributore/)).not.toBeInTheDocument();
     expect(within(sezione).getByText("Sapori & Dintorni")).toBeInTheDocument();
     expect(within(sezione).getByRole("list", { name: "Bolli nel volantino" })).toHaveTextContent("DOP");
     unmount();
 
     finti.insights = caricato({ ...datiInsight, lineeDistributore: null });
     apri();
-    expect(screen.queryByRole("region", { name: "Marchi del distributore" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Private Labels" })).not.toBeInTheDocument();
   });
 
   it("scegliendo una pagina nella distribuzione, dalla colonna o dal riquadro, il volantino va a quella pagina, anche da tastiera", () => {
@@ -395,16 +397,16 @@ describe("Dettaglio del volantino", () => {
     expect(screen.getByText("Box chiesto b3 volta 2")).toBeInTheDocument();
   });
 
-  it("la tabella delle referenze ha la colonna Linea solo con le linee del distributore", () => {
+  it("la tabella delle referenze ha la colonna Private Label solo con le linee del distributore", () => {
     finti.insights = caricato({ ...datiInsight, lineeDistributore: LINEE });
     const { unmount } = apri();
-    expect(within(screen.getByRole("table", { name: "Referenze in volantino" })).getByRole("columnheader", { name: "Linea" })).toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Referenze in volantino" })).getByRole("columnheader", { name: "Private Label" })).toBeInTheDocument();
     unmount();
 
     // Senza linee del distributore negli insight
     finti.insights = caricato({ ...datiInsight, lineeDistributore: null });
     apri();
-    expect(within(screen.getByRole("table", { name: "Referenze in volantino" })).queryByRole("columnheader", { name: "Linea" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("table", { name: "Referenze in volantino" })).queryByRole("columnheader", { name: "Private Label" })).not.toBeInTheDocument();
   });
 
   it("?referenza con il nome di un prodotto cerca nella tabella; un id di referenza no", () => {

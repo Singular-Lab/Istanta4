@@ -68,7 +68,7 @@ const titoloVista = (vista: VistaConfronto | null, griglia: GrigliaVolantini): s
     case "base":
       return `In tutti i ${formatNumero(griglia.numeroKit)} volantini`;
     case "marchio":
-      return "A marchio del distributore";
+      return "Private Labels";
     case "fidelity":
       return "Con Prezzo Fidelity";
   }
@@ -76,14 +76,14 @@ const titoloVista = (vista: VistaConfronto | null, griglia: GrigliaVolantini): s
 
 /**
  * "Assortimento a confronto" (spec volantini-pop): i prodotti dei volantini mostrati per insegna e area.
- * In alto tre numeri da leggere senza scegliere nulla (base comune, percentuale a marchio del
- * distributore, percentuale con Prezzo Fidelity), poi in primo piano le schede dei prodotti in comune
+ * In alto tre numeri da leggere senza scegliere nulla (base comune, percentuale delle Private
+ * Labels, percentuale con Prezzo Fidelity), poi in primo piano le schede dei prodotti in comune
  * a tutti i volantini, con i loro filtri, infine l'elenco di tutti i prodotti, il dettaglio, in
  * un riquadro di altezza fissa che scorre da sé: ruolo, dove c'è a parole e a pallini, prezzi per
  * luogo, differenza, e per ogni prodotto prezzi e pagine per insegna e area, prima i prezzi diversi.
  * Scegliere un numero porta all'elenco. Vista, punto di vista, ricerca, reparto, ruoli e ordine
  * dell'elenco stanno nell'indirizzo. I numeri sono sui prodotti dei volantini mostrati, con la base
- * scritta: "il 27% dei 433 prodotti è a marchio del distributore".
+ * scritta: "il 27% dei 433 prodotti è delle Private Labels".
  */
 export function ConfrontoAssortimento({ referenze, kit, tinta, nomePromo }: ConfrontoAssortimentoProps) {
   const [parametri, aggiorna] = useParametriUrl();
@@ -253,11 +253,11 @@ function Quota({ valore, totale, testo }: { valore: number; totale: number; test
   );
 }
 
-/** Una riga delle linee: nome, barra in scala con le altre, percentuale sui prodotti a marchio e numero dei prodotti. */
+/** Una riga delle linee: nome, barra in scala con le altre, percentuale sui prodotti delle Private Labels e numero dei prodotti. */
 function RigaLinea({ nome, prodotti, massimo, aMarchio, altre = false }: { nome: string; prodotti: number; massimo: number; aMarchio: number; altre?: boolean }) {
   return (
     <li
-      aria-label={`${nome}: ${testoPercentuale(prodotti, aMarchio)} dei prodotti a marchio, ${plurale(prodotti, "prodotto", "prodotti")}`}
+      aria-label={`${nome}: ${testoPercentuale(prodotti, aMarchio)} dei prodotti delle Private Labels, ${plurale(prodotti, "prodotto", "prodotti")}`}
       className="grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)_auto] items-center gap-2 px-1.5 text-xs"
     >
       <span title={nome} className={twMerge("truncate", altre ? "italic text-slate-500 dark:text-slate-400" : "text-slate-700 dark:text-slate-200")}>
@@ -278,8 +278,8 @@ function RigaLinea({ nome, prodotti, massimo, aMarchio, altre = false }: { nome:
 }
 
 /**
- * Le linee del distributore dei prodotti a marchio: le LINEE_IN_VISTA con più prodotti, ciascuna con la
- * sua percentuale sui soli prodotti a marchio e il numero dei suoi prodotti, e le altre insieme.
+ * Le linee dei prodotti delle Private Labels: le LINEE_IN_VISTA con più prodotti, ciascuna con la
+ * sua percentuale sui soli prodotti delle Private Labels e il numero dei suoi prodotti, e le altre insieme.
  */
 function QuoteLinee({ linee, aMarchio }: { linee: SintesiConfronto["perLinea"]; aMarchio: number }) {
   if (linee.length === 0) return null;
@@ -287,8 +287,8 @@ function QuoteLinee({ linee, aMarchio }: { linee: SintesiConfronto["perLinea"]; 
   const massimo = Math.max(1, ...inVista.map(voce => voce.prodotti), altre?.prodotti ?? 0);
   return (
     <div className="mt-3 flex flex-col gap-1">
-      <p className="px-1.5 text-2xs font-medium text-slate-500 dark:text-slate-400">Linee, sui {plurale(aMarchio, "prodotto", "prodotti")} a marchio</p>
-      <ul aria-label="Prodotti a marchio per linea" className="flex flex-col gap-1">
+      <p className="px-1.5 text-2xs font-medium text-slate-500 dark:text-slate-400">Linee, sui {plurale(aMarchio, "prodotto", "prodotti")} delle Private Labels</p>
+      <ul aria-label="Prodotti delle Private Labels per linea" className="flex flex-col gap-1">
         {inVista.map(voce => (
           <RigaLinea key={voce.linea} nome={voce.linea} prodotti={voce.prodotti} massimo={massimo} aMarchio={aMarchio} />
         ))}
@@ -331,7 +331,7 @@ function FidelityEResto({ fidelity, totale }: { fidelity: number; totale: number
 
 /**
  * I tre numeri del confronto, sui prodotti diversi dei volantini mostrati, con la base scritta: la base
- * comune, "il 27% dei 433 prodotti è a marchio del distributore" con le sue linee e "il 59% dei 433
+ * comune, "il 27% dei 433 prodotti è delle Private Labels" con le sue linee e "il 59% dei 433
  * prodotti ha il Prezzo Fidelity" rispetto al resto. Ognuno apre i suoi prodotti nell'elenco.
  */
 function NumeriChiave({ sintesi, griglia, vista, onScegli, idElenco }: NumeriChiaveProps) {
@@ -353,10 +353,10 @@ function NumeriChiave({ sintesi, griglia, vista, onScegli, idElenco }: NumeriChi
         <Quota valore={sintesi.base} totale={totale} testo={`${testoPercentuale(sintesi.base, totale)} ${deiProdotti} dei volantini mostrati`} />
       </Riquadro>
       <Riquadro
-        etichetta="A marchio"
+        etichetta="Private Labels"
         icona="BadgeCheck"
         valore={testoPercentuale(sintesi.aMarchio, totale)}
-        frase={`${deiProdotti} è a marchio del distributore`}
+        frase={`${deiProdotti} è delle Private Labels`}
         vuoto={sintesi.aMarchio === 0}
         attivo={vista?.tipo === "marchio"}
         onScegli={comando => onScegli({ tipo: "marchio" }, comando)}
@@ -367,8 +367,8 @@ function NumeriChiave({ sintesi, griglia, vista, onScegli, idElenco }: NumeriChi
           totale={totale}
           testo={
             sintesi.aMarchio > 0
-              ? `${plurale(sintesi.aMarchio, "prodotto", "prodotti")} a marchio su ${formatNumero(totale)} · il resto ${formatPercentuale(100 - quotaMarchio)}`
-              : "Nessun prodotto a marchio del distributore"
+              ? `${plurale(sintesi.aMarchio, "prodotto", "prodotti")} delle Private Labels su ${formatNumero(totale)} · il resto ${formatPercentuale(100 - quotaMarchio)}`
+              : "Nessun prodotto delle Private Labels"
           }
         />
         <QuoteLinee linee={sintesi.perLinea} aMarchio={sintesi.aMarchio} />

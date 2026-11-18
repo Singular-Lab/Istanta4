@@ -264,7 +264,7 @@ function indicatoriSintesi(dati: DatiReportVolantino): IndicatoreReport[] {
       etichetta: 'Marche',
       valore: numero(sintesi.marche),
       dettaglio: marche.quotaDistributore
-        ? `${percento(marche.quotaDistributore.quotaSpazio)} dello spazio alle marche del distributore`
+        ? `${percento(marche.quotaDistributore.quotaSpazio)} dello spazio alle Private Labels`
         : 'marche diverse nel volantino',
       variazione: variazioneIndicatore(confronto?.marche, 'conteggio'),
     });
@@ -305,7 +305,7 @@ function fraseConfronto(dati: DatiReportVolantino): string | null {
 function fraseDistributore(dati: DatiReportVolantino): string | null {
   const distributore = dati.insight.marche.quotaDistributore;
   if (distributore && distributore.quotaSpazio > 0) {
-    return `Le marche del distributore occupano ${conArticolo(percento(distributore.quotaSpazio))} dello spazio.`;
+    return `Le Private Labels occupano ${conArticolo(percento(distributore.quotaSpazio))} dello spazio.`;
   }
   const fidelity = dati.insight.sintesi.quotaFidelity;
   return fidelity > 0 ? `${conArticolo(percento(fidelity), true)} dei box ha il prezzo Fidelity.` : null;
@@ -405,7 +405,7 @@ function graficoMarche(dati: DatiReportVolantino): GraficoSezione | null {
   return {
     titolo: 'Marche principali per spazio',
     nota: distributore && conDistributore
-      ? `Quota dello spazio del volantino. In evidenza le marche del distributore, che in tutto occupano ${conArticolo(percento(distributore.quotaSpazio))} dello spazio.`
+      ? `Quota dello spazio del volantino. In evidenza le Private Labels, che in tutto occupano ${conArticolo(percento(distributore.quotaSpazio))} dello spazio.`
       : 'Quota dello spazio del volantino.',
     grafico: {
       forma: 'barre',
@@ -524,7 +524,7 @@ function sezioniConfronto(dati: DatiReportVolantino): SezioneReport[] {
 function sezioneMetodo(dati: DatiReportVolantino): SezioneReport {
   const { sintesi } = dati.insight;
   const paragrafi = [
-    "I dati vengono dal volantino impaginato: posizione e dimensione di ogni box, prezzi, sconti, marca e meccanica delle referenze. Reparti e marche del distributore seguono la configurazione del cliente.",
+    "I dati vengono dal volantino impaginato: posizione e dimensione di ogni box, prezzi, sconti, marca e meccanica delle referenze. Reparti e Private Labels seguono la configurazione del cliente.",
     'Lo spazio di un box è la parte della pagina che occupa; le quote di spazio di reparti, meccaniche e marche sommano lo spazio dei loro box.',
   ];
   if (sintesi.box > 0) {
