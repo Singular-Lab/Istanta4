@@ -51,7 +51,7 @@ const ID_KIT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 function servizioFinto() {
   return {
-    analisi: vi.fn(async (idPuntoVendita: string, _idGdo: string | null, _periodo?: PeriodoAnalisi | null) => ({ idPuntoVendita } as never)),
+    analisi: vi.fn(async (idPuntoVendita: string, _idGdo: string | null, _periodo?: PeriodoAnalisi | null, _richiesta?: unknown) => ({ idPuntoVendita } as never)),
     volantino: vi.fn(async (_id: string, idKit: string, _idGdo: string | null) => ({ kit: { id: idKit, titolo: 'SS LI 45' } } as never)),
     referenza: vi.fn(async (_id: string, chiave: string, _idGdo: string | null) => ({ chiave } as never)),
     reteInsegne: vi.fn(async (_idGdo: string) => ({ anni: [], insegne: [] })),
@@ -136,7 +136,7 @@ describe('GET /api/punti-vendita/:id/analisi', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ idPuntoVendita: ID_PV });
     // Senza dal ne' al: tutta la storia
-    expect(analisi.analisi).toHaveBeenCalledWith(ID_PV, 'gdo-sessione', null);
+    expect(analisi.analisi).toHaveBeenCalledWith(ID_PV, 'gdo-sessione', null, expect.objectContaining({ params: expect.objectContaining({ id: ID_PV }) }));
   });
 
   it('il periodo da ?dal=&al=, primo e ultimo giorno; anche solo dal (senza fine) o solo al', async () => {
@@ -174,7 +174,7 @@ describe('GET /api/punti-vendita/:id/analisi', () => {
     const { app, analisi } = creaApp();
 
     expect((await request(app).get(`/api/punti-vendita/${ID_PV}/analisi`).query({ dal: '2025-06-01', al: '2025-06-01' })).status).toBe(200);
-    expect(analisi.analisi).toHaveBeenCalledWith(ID_PV, 'gdo-sessione', { dal: '2025-06-01', al: '2025-06-01' });
+    expect(analisi.analisi).toHaveBeenCalledWith(ID_PV, 'gdo-sessione', { dal: '2025-06-01', al: '2025-06-01' }, expect.objectContaining({ params: expect.objectContaining({ id: ID_PV }) }));
   });
 
   it('senza "gdo.visualizza" 403', async () => {
@@ -197,7 +197,7 @@ describe('GET /api/punti-vendita/:id/analisi', () => {
     anagrafica.idGdo = null;
     const superadmin = creaApp({ tipo: TIPO_UTENTI.SUPERADMIN });
     expect((await request(superadmin.app).get(`/api/punti-vendita/${ID_PV}/analisi`)).status).toBe(200);
-    expect(superadmin.analisi.analisi).toHaveBeenCalledWith(ID_PV, null, null);
+    expect(superadmin.analisi.analisi).toHaveBeenCalledWith(ID_PV, null, null, expect.objectContaining({ params: expect.objectContaining({ id: ID_PV }) }));
 
     const marketing = creaApp({ tipo: TIPO_UTENTI.MARKETING });
     expect((await request(marketing.app).get(`/api/punti-vendita/${ID_PV}/analisi`)).status).toBe(404);

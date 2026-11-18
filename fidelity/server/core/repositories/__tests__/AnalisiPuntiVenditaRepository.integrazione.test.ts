@@ -192,8 +192,13 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
       ],
       // "CONAD" e "Conad" sono la stessa marca: vale il nome stampato piu' spesso; i volantini in cui compare
       marche: [{ marca: 'CONAD', referenze: 4, volantini: 2 }, { marca: 'Barilla', referenze: 2, volantini: 1 }],
+      tutteLeMarche: [{ marca: 'CONAD', referenze: 4 }, { marca: 'Barilla', referenze: 2 }],
       referenzeConMarca: 6,
     });
+    // Tutte le marche anche oltre quelle in evidenza: servono alla quota delle linee del distributore
+    const conUna = await repository.statisticheProdotti(edizioni, { soglia: 1, ricorrenti: 10, minimoVolantini: 2, marche: 1 });
+    expect(conUna.marche.map(marca => marca.marca)).toEqual(['CONAD']);
+    expect(conUna.tutteLeMarche).toEqual([{ marca: 'CONAD', referenze: 4 }, { marca: 'Barilla', referenze: 2 }]);
     expect((await repository.statisticheProdotti(edizioni, { soglia: 1, ricorrenti: 1, minimoVolantini: 2, marche: 1 })).ricorrenti.map(voce => voce.chiave)).toEqual(['c-A']);
     // A parita' di volantini e di data, per chiave
     expect((await repository.statisticheProdotti([edizioni[0]], { soglia: 10, ricorrenti: 10, minimoVolantini: 1, marche: 8 })).ricorrenti.map(voce => voce.chiave)).toEqual(['c-A', 'c-B']);
@@ -203,7 +208,7 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
       ['c-B', [k3.idRuntime], null],
       ['c-C', [k3.idRuntime], null],
     ]);
-    expect(await repository.statisticheProdotti([], { soglia: 10, ricorrenti: 10, minimoVolantini: 2, marche: 8 })).toEqual({ prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], referenzeConMarca: 0 });
+    expect(await repository.statisticheProdotti([], { soglia: 10, ricorrenti: 10, minimoVolantini: 2, marche: 8 })).toEqual({ prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], tutteLeMarche: [], referenzeConMarca: 0 });
 
     const descrizioni = await repository.descrizioniProdotti([
       { idKit: k2.idRuntime, chiave: 'c-A' },

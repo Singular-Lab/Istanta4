@@ -6,6 +6,7 @@ import {
   type DettaglioVolantinoPv,
   edizioneNelPeriodo,
   type EdizioneTimeline,
+  type LineaDellaMarca,
   MECCANICHE,
   type MeccanicaReferenza,
   MINIMO_VOLANTINI_RICORRENTE,
@@ -19,6 +20,7 @@ import {
 } from '../../../lib/puntiVendita/analisi';
 import type { PromoStoria, RiferimentoStoria, TipoAbbinamento } from '../../../lib/puntiVendita/storia';
 import { AGGREGATI_VUOTI, type AggregatiKit, type BoxKit, type DescrizioneProdotto, type ProdottoNelKit } from './analisiKit';
+import type { RegoleLinee } from './lineeDistributore';
 import { DESCRIZIONE_ASSENTE, type ProdottoStampato } from './referenzaStampata';
 import { type ApparizioneStoria, ordinaApparizioni, type VolantinoSenzaPuntoVendita } from './storiaPuntoVendita';
 
@@ -139,13 +141,34 @@ export interface StatisticheProdotti {
    * in cui compaiono.
    */
   marche: Array<{ marca: string; referenze: number; volantini: number }>;
+  /** Tutte le marche con le loro referenze, per la quota delle linee del distributore. */
+  tutteLeMarche: Array<{ marca: string; referenze: number }>;
   /** Referenze con una marca, in tutti i volantini indicati. */
   referenzeConMarca: number;
 }
 
 export const STATISTICHE_VUOTE: StatisticheProdotti = Object.freeze({
-  prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], referenzeConMarca: 0,
+  prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], tutteLeMarche: [], referenzeConMarca: 0,
 }) as StatisticheProdotti;
+
+/**
+ * Riconosce la linea del distributore di una marca con le regole della libreria agenzia, le stesse
+ * dei box dello storico negli insight del volantino (lineaDaTesti), dalla sola marca stampata; il
+ * logo dal catalogo di Istanta (urlLogo). Null se la libreria non dichiara linee o non sa
+ * ricavarle dai testi: allora nessuna marca ha una linea e la quota delle linee non c'e'.
+ */
+export function riconosciLinea(
+  regole: RegoleLinee | null,
+  urlLogo: (sigla: string) => string | null,
+): ((marca: string) => LineaDellaMarca | null) | null {
+  const daTesti = regole?.lineaDaTesti;
+  if (!regole || !daTesti) return null;
+  return (marca) => {
+    const sigla = daTesti({ marca, descrizione: null, gusto: null });
+    const linea = sigla ? regole.linee.get(sigla.trim().toLowerCase()) : undefined;
+    return linea ? { nome: linea.nome, colore: linea.colore, logo: urlLogo(linea.sigla) } : null;
+  };
+}
 
 /** Le coppie kit-prodotto da cui leggere le descrizioni dei prodotti ricorrenti: l'ultimo kit e, se diverso, l'ultimo con la foto. */
 export function coppieDaDescrivere(ricorrenti: readonly ProdottoFrequente[]): Array<{ idKit: string; chiave: string }> {
@@ -223,6 +246,8 @@ export interface OpzioniSchedaPuntoVendita {
    * con le Impostazioni GDO il nome per il marketing, e i reparti con lo stesso nome si sommano.
    */
   nomeReparto?: (reparto: string) => string;
+  /** La linea del distributore di una marca (riconosciLinea); senza, le marche non hanno linea. */
+  lineaDellaMarca?: ((marca: string) => LineaDellaMarca | null) | null;
 }
 
 /**
@@ -242,6 +267,7 @@ export function calcolaAnalisiPuntoVendita(
 ): AnalisiPuntoVendita {
   const periodo = opzioni.periodo ?? null;
   const nomeReparto = opzioni.nomeReparto ?? (reparto => reparto);
+  const lineaDellaMarca = opzioni.lineaDellaMarca ?? null;
   const timeline = edizioni.map(edizione => edizioneTimeline(edizione, aggregatiDelKit(aggregati, edizione.idKit), oggi, nomeReparto));
   const anni = [...new Set(timeline.map(edizione => annoDi(edizione.dal)))].sort((a, b) => a - b);
 
@@ -309,7 +335,20 @@ export function calcolaAnalisiPuntoVendita(
     anni,
     marche: statistiche.marche
       .slice(0, MARCHE_IN_EVIDENZA)
-      .map(marca => ({ marca: marca.marca, quota: quota(marca.referenze, statistiche.referenzeConMarca), volantini: marca.volantini })),
+      .map(marca => ({
+        marca: marca.marca,
+        quota: quota(marca.referenze, statistiche.referenzeConMarca),
+        volantini: marca.volantini,
+        linea: lineaDellaMarca ? lineaDellaMarca(marca.marca) : null,
+      })),
+    lineeDistributore: lineaDellaMarca
+      ? {
+        quota: quota(
+          statistiche.tutteLeMarche.filter(marca => lineaDellaMarca(marca.marca) !== null).reduce((somma, marca) => somma + marca.referenze, 0),
+          statistiche.referenzeConMarca,
+        ),
+      }
+      : null,
     prodottiRicorrenti: ricorrenti,
     copertura: coperturaDi(copertura, referenze),
   };

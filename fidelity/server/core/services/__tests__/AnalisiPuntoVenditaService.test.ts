@@ -1,3 +1,4 @@
+import type { Request } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { STATO_PROMO } from '../../../../lib/enums';
 import { MECCANICHE, MINIMO_VOLANTINI_RICORRENTE } from '../../../../lib/puntiVendita/analisi';
@@ -159,6 +160,7 @@ function statisticheInMemoria(salvati: ReadonlyMap<string, RiepilogoKit>, edizio
         prezzoUltimo: prezzi[prezzi.length - 1] ?? null,
       })),
     marche: perMarca.slice(0, limiti.marche).map(({ marca, referenze, volantini }) => ({ marca, referenze, volantini })),
+    tutteLeMarche: perMarca.map(({ marca, referenze }) => ({ marca, referenze })),
     referenzeConMarca: perMarca.reduce((somma, voce) => somma + voce.referenze, 0),
   };
 }
@@ -190,6 +192,8 @@ function creaServizio(opzioni: {
   posizioni?: OpzioniAnalisiPuntoVendita['posizioni'];
   regole?: RegolaCollegamento[];
   assenze?: VolantinoSenzaPuntoVendita[];
+  lineeDistributore?: OpzioniAnalisiPuntoVendita['lineeDistributore'];
+  catalogoLoghi?: OpzioniAnalisiPuntoVendita['catalogoLoghi'];
 } = {}) {
   /** analisi_kit in memoria. */
   const salvati = new Map(opzioni.salvati ?? [[K1, RIEPILOGO_K1]]);
@@ -238,6 +242,8 @@ function creaServizio(opzioni: {
     configInsight: opzioni.configInsight,
     posizioni: opzioni.posizioni,
     collegamenti: { regoleCollegamento: vi.fn(async () => opzioni.regole ?? []) },
+    lineeDistributore: opzioni.lineeDistributore,
+    catalogoLoghi: opzioni.catalogoLoghi,
   });
   return { servizio, repository, storia, salvati };
 }
@@ -305,7 +311,8 @@ describe('riepiloghi dei kit e scheda del PV', () => {
       kit: [K1, K2, K3], prezzoMinimo: 1.1, prezzoMassimo: 1.5, prezzoUltimo: 1.5,
     }]);
     expect(analisi.numeri).toMatchObject({ prodotti: 3 });
-    expect(analisi.marche).toEqual([{ marca: 'Granarolo', quota: 100, volantini: 1 }]);
+    expect(analisi.marche).toEqual([{ marca: 'Granarolo', quota: 100, volantini: 1, linea: null }]);
+    expect(analisi.lineeDistributore).toBeNull();
     expect(analisi.periodo).toBeNull();
   });
 
@@ -375,6 +382,51 @@ describe('riepiloghi dei kit e scheda del PV', () => {
     expect(repository.referenzeDeiKit).not.toHaveBeenCalled();
     expect(repository.salvaRiepiloghi).not.toHaveBeenCalled();
     expect(repository.statisticheProdotti).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('marche con la linea del distributore nella scheda del PV', () => {
+  // Nel riepilogo di K1 la marca e' Granarolo: qui le regole la riconoscono come una linea
+  const lineeDistributore = {
+    linee: [{ sigla: 'GDO_granarolo', nome: 'Linea Granarolo', colore: '#1f4e79' }],
+    lineaDaTesti: ({ marca }: { marca: string | null }) => (/granarolo/i.test(marca ?? '') ? 'gdo_granarolo' : null),
+  };
+
+  it('logo dal catalogo letto con la richiesta dell\'utente, colore e quota delle linee', async () => {
+    const catalogo = vi.fn(async () => new Map([['gdo_granarolo', { sigla: 'GDO_granarolo', guidId: 'guid-logo', tipo: 3 }]]));
+    const richiesta = { headers: {} } as unknown as Request;
+    const { servizio } = creaServizio({ lineeDistributore, catalogoLoghi: { catalogo } });
+
+    const analisi = await servizio.analisi(PV, GDO, null, richiesta);
+
+    expect(catalogo).toHaveBeenCalledWith(richiesta);
+    expect(analisi.marche).toEqual([{
+      marca: 'Granarolo', quota: 100, volantini: 1,
+      linea: { nome: 'Linea Granarolo', colore: '#1f4e79', logo: expect.stringContaining('guid-logo') },
+    }]);
+    expect(analisi.lineeDistributore).toEqual({ quota: 100 });
+  });
+
+  it('se Istanta non risponde le linee restano, senza logo e senza errori', async () => {
+    const catalogo = vi.fn(async (): Promise<Map<string, never>> => {
+      throw new Error('Istanta non raggiungibile');
+    });
+    const { servizio } = creaServizio({ lineeDistributore, catalogoLoghi: { catalogo } });
+
+    const analisi = await servizio.analisi(PV, GDO);
+
+    expect(analisi.marche[0].linea).toEqual({ nome: 'Linea Granarolo', colore: '#1f4e79', logo: null });
+  });
+
+  it('senza linee dichiarate il catalogo non si legge e le marche non hanno linea', async () => {
+    const catalogo = vi.fn(async () => new Map());
+    const { servizio } = creaServizio({ catalogoLoghi: { catalogo } });
+
+    const analisi = await servizio.analisi(PV, GDO);
+
+    expect(catalogo).not.toHaveBeenCalled();
+    expect(analisi.marche[0].linea).toBeNull();
+    expect(analisi.lineeDistributore).toBeNull();
   });
 });
 

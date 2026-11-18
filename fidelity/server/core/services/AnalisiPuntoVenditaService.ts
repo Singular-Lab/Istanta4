@@ -16,13 +16,17 @@ import type {
 import { edizioneNelPeriodo, ESITI_VERIFICA, MINIMO_VOLANTINI_RICORRENTE } from '../../../lib/puntiVendita/analisi';
 import { DIMENSIONI_PAGINA_STORIA } from '../../../lib/puntiVendita/storia';
 import { BadRequestError, NotFoundError } from '../../../lib/errors';
+import type { Request } from 'express';
+import type { LineeDistributoreAgenzia } from '../agenzia_lib/types';
 import type { IAnalisiPuntoVenditaService } from '../interfaces/IAnalisiPuntoVenditaService';
+import type { ICatalogoLoghiService, LogoDelCatalogo } from '../interfaces/ICatalogoLoghiService';
 import type { IConfigService } from '../interfaces/IConfigService';
 import { log } from '../logger';
 import type { IAnalisiPuntiVenditaRepository } from '../repositories/AnalisiPuntiVenditaRepository';
 import type { EsitoRicercaPosizione, IPosizioniRigheRepository } from '../repositories/PosizioniRigheRepository';
 import type { IPuntiVenditaVolantinoRepository, PuntoVenditaDellaStoria } from '../repositories/PuntiVenditaVolantinoRepository';
 import { AGGREGATI_VUOTI, type AggregatiKit, boxDelKit, riassumiKit } from '../utils/analisiKit';
+import { regoleLinee, type RegoleLinee, urlImmagineLogo } from '../utils/lineeDistributore';
 import { AnalisiKitService, CHIAVE_PRODOTTO, leggiReferenzeKit as leggi } from './AnalisiKitService';
 import {
   calcolaAnalisiPuntoVendita,
@@ -39,6 +43,7 @@ import {
   MARCHE_IN_EVIDENZA,
   NUMERO_PRODOTTI_RICORRENTI,
   numeroPagine,
+  riconosciLinea,
   pagineDelVolantino,
   presenzeDelProdotto,
   rigaDelPuntoVendita,
@@ -97,6 +102,13 @@ export interface OpzioniAnalisiPuntoVendita {
   posizioni?: IPosizioniRigheRepository;
   /** I collegamenti fatti a mano, per la verifica; senza, nessun collegamento si può annullare dalla verifica. */
   collegamenti?: Pick<IPuntiVenditaVolantinoRepository, 'regoleCollegamento'>;
+  /**
+   * Le linee di marca del distributore dichiarate dalla libreria agenzia (le stesse degli insight del
+   * volantino): riconoscono la linea delle marche della scheda. Senza, le marche non hanno linea.
+   */
+  lineeDistributore?: LineeDistributoreAgenzia | null;
+  /** Il catalogo dei loghi e bolli di Istanta, per il logo delle linee; senza, le linee non hanno logo. */
+  catalogoLoghi?: Pick<ICatalogoLoghiService, 'catalogo'> | null;
 }
 
 /** Filtri della verifica dei collegamenti. */
@@ -133,6 +145,8 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
   private readonly configInsight: Pick<IConfigService, 'getFlyerInsightsConfig'> | null;
   private readonly posizioni: IPosizioniRigheRepository;
   private readonly collegamenti: Pick<IPuntiVenditaVolantinoRepository, 'regoleCollegamento'> | null;
+  private readonly lineeDistributore: RegoleLinee | null;
+  private readonly catalogoLoghi: Pick<ICatalogoLoghiService, 'catalogo'> | null;
 
   constructor(
     private readonly repository: IAnalisiPuntiVenditaRepository,
@@ -146,6 +160,8 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
     this.configInsight = opzioni.configInsight ?? null;
     this.posizioni = opzioni.posizioni ?? SENZA_POSIZIONI;
     this.collegamenti = opzioni.collegamenti ?? null;
+    this.lineeDistributore = regoleLinee(opzioni.lineeDistributore);
+    this.catalogoLoghi = opzioni.catalogoLoghi ?? null;
   }
 
   /**
@@ -214,7 +230,23 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
    * volantini, per la timeline; prodotti e marche dei soli volantini che iniziano nel periodo. Dei
    * ricorrenti si chiede il doppio dei candidati: quelli senza descrizione non si mostrano.
    */
-  async analisi(idPuntoVendita: string, idGdo: string | null, periodo: PeriodoAnalisi | null = null): Promise<AnalisiPuntoVendita> {
+  /**
+   * Il catalogo dei loghi, letto con il passaporto dell'utente della richiesta come negli insight del
+   * volantino; se Istanta non risponde, vuoto: le linee compaiono senza logo, mai un errore.
+   */
+  private async catalogo(richiesta?: Request): Promise<Map<string, LogoDelCatalogo>> {
+    if (!this.catalogoLoghi) return new Map();
+    try {
+      return await this.catalogoLoghi.catalogo(richiesta);
+    } catch (error) {
+      log.warn('Scheda del punto vendita: catalogo dei loghi non disponibile, linee senza logo', {
+        errore: error instanceof Error ? error.message : String(error),
+      });
+      return new Map();
+    }
+  }
+
+  async analisi(idPuntoVendita: string, idGdo: string | null, periodo: PeriodoAnalisi | null = null, richiesta?: Request): Promise<AnalisiPuntoVendita> {
     const puntoVendita = await this.puntoVenditaDellaGdo(idPuntoVendita, idGdo);
     const edizioni = await this.edizioni(puntoVendita.id);
     const aggregati = await this.aggregati(edizioni.map(edizione => edizione.idKit));
@@ -229,11 +261,18 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
         marche: MARCHE_IN_EVIDENZA,
       },
     );
-    const [trovate, reparti, assenze] = await Promise.all([
+    // Il catalogo serve solo se la libreria sa riconoscere le linee dalla marca
+    const conLinee = Boolean(this.lineeDistributore?.lineaDaTesti);
+    const [trovate, reparti, assenze, catalogo] = await Promise.all([
       this.repository.descrizioniProdotti(coppieDaDescrivere(statistiche.ricorrenti)),
       this.repartiDellaGdo(puntoVendita.idGdo),
       this.assenze(puntoVendita, edizioni),
+      conLinee ? this.catalogo(richiesta) : Promise.resolve(new Map<string, LogoDelCatalogo>()),
     ]);
+    const lineaDellaMarca = riconosciLinea(this.lineeDistributore, (sigla) => {
+      const voce = catalogo.get(sigla.trim().toLowerCase());
+      return voce ? urlImmagineLogo(voce.guidId) : null;
+    });
     return calcolaAnalisiPuntoVendita(
       puntoVendita.id,
       edizioni,
@@ -241,7 +280,7 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
       statistiche,
       descrizioniRicorrenti(statistiche.ricorrenti, trovate),
       this.oggi(),
-      { periodo, assenze, nomeReparto: reparto => reparti.nome(reparto) },
+      { periodo, assenze, nomeReparto: reparto => reparti.nome(reparto), lineaDellaMarca },
     );
   }
 

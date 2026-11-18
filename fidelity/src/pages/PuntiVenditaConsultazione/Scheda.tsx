@@ -334,8 +334,9 @@ function SchedaPuntoVendita() {
       <Fila className="items-start">
         {mostra("meccaniche") && <ComeSiPromuove analisi={analisi} contesto={contesto} />}
         {mostra("reparti") && <SpazioPerReparto analisi={analisi} contesto={contesto} />}
-        {mostra("marche") && <MarchePiuPresenti analisi={analisi} contesto={contesto} />}
       </Fila>
+      {/* Le marche a schede, come le linee negli insight del volantino: una riga intera */}
+      {mostra("marche") && <MarchePiuPresenti analisi={analisi} contesto={contesto} />}
       {mostra("prodotti") && <ProdottiCheTornano idPv={pv.id} analisi={analisi} contesto={contesto} />}
       <GraficiSenzaDati assenti={senzaGrafico} />
       {conCambiamenti && <Cambiamenti storia={storia} primo={timeline?.[0] ?? null} />}

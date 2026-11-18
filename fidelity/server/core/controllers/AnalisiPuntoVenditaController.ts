@@ -110,7 +110,7 @@ export class AnalisiPuntoVenditaController extends BaseController {
       // Il periodo prima del PV: una richiesta sbagliata e' 400 senza leggere nulla
       const periodo = periodoDallaRichiesta(req.query);
       const idGdo = await this.gdoDelPuntoVendita(req, res);
-      this.sendResponse(res, HttpStatusCode.OK, await this.analisi.analisi(req.params.id, idGdo, periodo));
+      this.sendResponse(res, HttpStatusCode.OK, await this.analisi.analisi(req.params.id, idGdo, periodo, req));
     } catch (error) {
       this.handleError(res, error);
     }
