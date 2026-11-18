@@ -975,3 +975,71 @@ test("I20-1235: una descrizione con il testo appoggiato al bordo destro della ce
     assert.deepStrictEqual(segnalazioni, []);
     assert.deepStrictEqual(CssFramework.boundsDelTesto(descrizione)[3], 100);
 });
+
+/* ---- I20-1244: CSF-009 non si segnala piu' ---- */
+
+//Un elemento piu' grande della griglia: gli spostamenti non bastano e si rimpicciolisce. resize
+//annota il fattore e scala attorno al centro, come CENTER_ANCHOR in InDesign.
+function elementoRimpicciolibile(label, bounds) {
+    const e = elemento(label, bounds);
+    e.ridimensionamenti = [];
+    e.resize = (spazio, ancora, metodo, [fx, fy]) => {
+        e.ridimensionamenti.push([fx, fy]);
+        const [y1, x1, y2, x2] = e.geometricBounds;
+        const cy = (y1 + y2) / 2, cx = (x1 + x2) / 2, h = (y2 - y1) * fy / 2, w = (x2 - x1) * fx / 2;
+        e.geometricBounds = [cy - h, cx - w, cy + h, cx + w];
+    };
+    return e;
+}
+
+function conCostantiResize(prova) {
+    const prima = { CoordinateSpaces: global.CoordinateSpaces, AnchorPoint: global.AnchorPoint, ResizeMethods: global.ResizeMethods };
+    global.CoordinateSpaces = { INNER_COORDINATES: "inner" };
+    global.AnchorPoint = { CENTER_ANCHOR: "center" };
+    global.ResizeMethods = { MULTIPLYING_CURRENT_DIMENSIONS_BY: "multiply" };
+    try {
+        prova();
+    }
+    finally {
+        Object.assign(global, prima);
+    }
+}
+
+test("I20-1244: la foto piu' grande della griglia si rimpicciolisce senza CSF-009", () => {
+    conCostantiResize(() => {
+        azzera();
+        CssFramework.etichetteSegnalate = [];
+        //come il minestrone del CY: la foto prodotto, prima del fix foto, sporge dalla cella
+        const foto = elementoRimpicciolibile("immagine$2421798", [-10, 10, 110, 40]);
+        const b = box("BOX41", [foto]);
+
+        CssFramework.fixOverflowFromBox(GRIGLIA, b);
+
+        assert.deepStrictEqual(foto.ridimensionamenti, [[100 / 120, 100 / 120]], "il rimpicciolimento resta");
+        assert.ok(messaggi.every(m => !/CSF-009/.test(m.testo)), "niente CSF-009 nella console di Utility");
+        assert.ok(segnalazioni.every(s => !/CSF-009/.test(s.testo)), "niente CSF-009 nel bollino");
+    });
+});
+
+test("I20-1244: anche un testo o un logo troppo grandi si rimpiccioliscono senza CSF-009, una volta sola", () => {
+    conCostantiResize(() => {
+        azzera();
+        CssFramework.etichetteSegnalate = [];
+        const logo = elementoRimpicciolibile("logo_conad", [10, -20, 30, 130]);
+        const b = box("BOX7", [logo]);
+
+        CssFramework.fixOverflowFromBox(GRIGLIA, b);
+        //un passaggio successivo dello stesso box non lo rimpicciolisce di nuovo
+        CssFramework.fixOverflowFromBox(GRIGLIA, b);
+
+        assert.strictEqual(logo.ridimensionamenti.length, 1);
+        assert.deepStrictEqual(messaggi, []);
+        assert.deepStrictEqual(segnalazioni, []);
+    });
+});
+
+test("I20-1244: il codice non scrive piu' la CSF-009 ne' nel bollino ne' nella console", () => {
+    const css = leggiFileDelPlugin("CssFramework.js");
+    assert.doesNotMatch(css, /addSegnalazione\([^;]*CSF-009/);
+    assert.doesNotMatch(css, /messaggioUtente\([^;]*CSF-009/);
+});

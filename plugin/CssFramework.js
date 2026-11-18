@@ -2936,7 +2936,7 @@ const CssFramework =
                 continue;
             }
             //I20-1026: un elemento invisibile non si segnala e non si rimpicciolisce: e' questo il
-            //passaggio che segnala CSF-009.
+            //passaggio che rimpicciolisce (la CSF-009, che dal I20-1244 non si segnala piu').
             if (pageItem.visible === false) {
                 continue;
             }
@@ -2947,8 +2947,12 @@ const CssFramework =
                 boundsControllo[2] > boxInGrigliaBounds[2] + 0.05 ||
                 boundsControllo[3] > boxInGrigliaBounds[3] + 0.05) {
                 if (!this.etichetteSegnalate.includes(Utility.parseLabel(pageItem.label))) {
-                    messaggioUtente("Code CSF-009: L'elemento con etichetta " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + ", post ridimensionamento eccede i limiti della griglia assegnata. L'elemento è stato rimpicciolito per permettere la corretta impaginazione.", "error");
-                    addSegnalazione("Code CSF-009: L'elemento con etichetta " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + ", post ridimensionamento eccede i limiti della griglia assegnata. L'elemento è stato rimpicciolito per permettere la corretta impaginazione.", "error", 1, true, ["CSF-009", "red"]);
+                    //I20-1244: il rimpicciolimento resta, la segnalazione CSF-009 no: il cliente non la
+                    //vuole piu' vedere, ne' nel bollino ne' nella console. Sulle foto era anche falsa:
+                    //nasce prima del fix foto, che poi le rimette a posto. Resta solo nella console
+                    //degli sviluppatori. etichetteSegnalate fa ancora da guardia: un elemento si
+                    //rimpicciolisce una volta sola per box.
+                    console.log("CSF-009 (non segnalata, I20-1244): " + (pageItem.label != "" ? Utility.parseLabel(pageItem.label) : "senza etichetta") + " nel box " + (box.label != "" ? box.label : "senza etichetta") + " eccede la griglia dopo il ridimensionamento, rimpicciolito.");
                     this.etichetteSegnalate.push(Utility.parseLabel(pageItem.label));
 
                     //Rimpiccioliamo l'elemento in modo proporzionale per farlo rientrare nei limiti della griglia
