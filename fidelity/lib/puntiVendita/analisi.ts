@@ -150,6 +150,18 @@ export interface VolantinoAssente {
   promo: { id: string; nome: string };
 }
 
+/**
+ * La linea di marca del distributore di una marca (Conad, Verso Natura…), come negli insight del
+ * volantino: nome e colore dalla libreria agenzia, logo dal catalogo dei loghi e bolli di Istanta.
+ */
+export interface LineaDellaMarca {
+  nome: string;
+  /** Colore della linea (#rrggbb); null se la libreria non lo indica. */
+  colore: string | null;
+  /** URL dell'immagine del logo (proxy /olimpo); null se il catalogo non l'ha o non risponde. */
+  logo: string | null;
+}
+
 export interface ProdottoRicorrente {
   /** Chiave stabile del prodotto, da usare in /referenze/:chiave (già sicura per un URL). */
   chiave: string;
@@ -179,8 +191,16 @@ export interface AnalisiPuntoVendita {
   assenze: VolantinoAssente[];
   /** Anni in cui inizia almeno un volantino della timeline, dal più vecchio. */
   anni: number[];
-  /** Le 8 marche con più referenze nel periodo: quota sulle referenze con marca e volantini in cui compare. */
-  marche: Array<{ marca: string; quota: number; volantini: number }>;
+  /**
+   * Le 8 marche con più referenze nel periodo: quota sulle referenze con marca, volantini in cui
+   * compare e, se le regole della libreria agenzia la riconoscono, la linea del distributore.
+   */
+  marche: Array<{ marca: string; quota: number; volantini: number; linea: LineaDellaMarca | null }>;
+  /**
+   * Quota (0–100) delle referenze con marca del periodo che sono di linee del distributore, su tutte
+   * le marche e non solo le 8 mostrate; null se la libreria agenzia non dichiara linee.
+   */
+  lineeDistributore: { quota: number } | null;
   /**
    * I 10 prodotti più presenti nel periodo, in almeno MINIMO_VOLANTINI_RICORRENTE volantini e con
    * una descrizione: per volantini, poi i più recenti.

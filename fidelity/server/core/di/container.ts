@@ -324,6 +324,9 @@ function bindServices() {
         // Verifica dei collegamenti: posizioni delle righe e collegamenti fatti a mano
         posizioni: new PosizioniRigheRepository(),
         collegamenti: context.get<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository),
+        // Le marche della scheda con la linea del distributore e il suo logo, come negli insight
+        lineeDistributore: context.get<IAgenziaLib>(TYPES.AgenziaLib).insightVolantino?.lineeDistributore ?? null,
+        catalogoLoghi: context.get<ICatalogoLoghiService>(TYPES.CatalogoLoghiService),
       }
     )
   );

@@ -1,3 +1,4 @@
+import type { Request } from 'express';
 import type {
   AnalisiPuntoVendita,
   DettaglioReferenzaPv,
@@ -21,7 +22,8 @@ import type { IndirizzoDaCercare } from '../services/PosizioniRigheJob';
  */
 export interface IAnalisiPuntoVenditaService {
   /** La scheda del PV; numeri, marche, prodotti e copertura del periodo (null o assente: tutta la storia). */
-  analisi(idPuntoVendita: string, idGdo: string | null, periodo?: PeriodoAnalisi | null): Promise<AnalisiPuntoVendita>;
+  /** `richiesta`: per leggere il catalogo dei loghi di Istanta con il passaporto dell'utente. */
+  analisi(idPuntoVendita: string, idGdo: string | null, periodo?: PeriodoAnalisi | null, richiesta?: Request): Promise<AnalisiPuntoVendita>;
   volantino(idPuntoVendita: string, idKit: string, idGdo: string | null): Promise<DettaglioVolantinoPv>;
   referenza(idPuntoVendita: string, chiave: string, idGdo: string | null): Promise<DettaglioReferenzaPv>;
   reteInsegne(idGdo: string): Promise<ReteInsegne>;

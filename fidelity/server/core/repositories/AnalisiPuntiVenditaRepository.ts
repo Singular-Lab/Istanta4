@@ -216,7 +216,7 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
   }
 
   async statisticheProdotti(edizioni: readonly EdizionePerStatistiche[], limiti: LimitiStatistiche): Promise<StatisticheProdotti> {
-    if (edizioni.length === 0) return { prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], referenzeConMarca: 0 };
+    if (edizioni.length === 0) return { prodotti: 0, frequenti: 0, ricorrenti: [], marche: [], tutteLeMarche: [], referenzeConMarca: 0 };
     const voci = edizioni.map(edizione => ({ id_kit: edizione.idKit, data: edizione.data }));
     // Un prodotto compare una volta per kit (riassumiKit): le righe di un prodotto sono i suoi volantini.
     // L'ultimo kit e' il massimo di "giorno|kit" (larghezza fissa, collation "C"): niente ordinamenti per
@@ -227,6 +227,7 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
       prodotti: number; frequenti: number; referenze_con_marca: number;
       ricorrenti: Array<Omit<ProdottoFrequente, PrezziProdotto> & Record<PrezziProdotto, number | string | null>>;
       marche: Array<{ marca: string; referenze: number; volantini: number }>;
+      tutte_le_marche: Array<{ marca: string; referenze: number }>;
     }>(
       `WITH e AS (
          SELECT * FROM jsonb_to_recordset(CAST(:edizioni AS jsonb)) AS e(id_kit uuid, data text)
@@ -297,7 +298,12 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
          COALESCE((
            SELECT jsonb_agg(jsonb_build_object('marca', pm.marca, 'referenze', pm.referenze, 'volantini', pm.volantini) ORDER BY pm.referenze DESC, pm.chiave COLLATE "C")
            FROM (SELECT * FROM per_marca ORDER BY referenze DESC, chiave COLLATE "C" LIMIT :marche) pm
-         ), '[]'::jsonb) AS marche
+         ), '[]'::jsonb) AS marche,
+         -- Tutte le marche, compatte: la quota delle linee del distributore si calcola su tutte
+         COALESCE((
+           SELECT jsonb_agg(jsonb_build_object('marca', pm.marca, 'referenze', pm.referenze) ORDER BY pm.referenze DESC, pm.chiave COLLATE "C")
+           FROM per_marca pm
+         ), '[]'::jsonb) AS tutte_le_marche
        FROM conteggi c`,
       {
         edizioni: JSON.stringify(voci),
@@ -318,6 +324,7 @@ export class AnalisiPuntiVenditaRepository implements IAnalisiPuntiVenditaReposi
         prezzoUltimo: prezzo(voce.prezzoUltimo),
       })),
       marche: riga?.marche ?? [],
+      tutteLeMarche: riga?.tutte_le_marche ?? [],
       referenzeConMarca: numero(riga?.referenze_con_marca),
     };
   }

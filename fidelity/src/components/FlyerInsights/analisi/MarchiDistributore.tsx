@@ -41,9 +41,9 @@ export const testoSuColore = (colore: string | null | undefined): "text-white" |
 
 /**
  * Il logo della linea o del bollo; senza logo, o se non si carica, un riquadro con le iniziali nel
- * colore della linea (o neutro).
+ * colore della linea (o neutro). Lo usa anche la scheda del punto vendita per le sue marche.
  */
-function Logo({ url, nome, sigla, colore, misura }: { url: string | null; nome: string; sigla: string; colore?: string | null; misura: "grande" | "piccola" }) {
+export function Logo({ url, nome, sigla, colore, misura }: { url: string | null; nome: string; sigla: string; colore?: string | null; misura: "grande" | "piccola" }) {
   const [rotto, setRotto] = useState(false);
   const classeMisura = misura === "grande" ? "h-11 w-11 text-sm" : "h-5 w-5 text-[0.5rem]";
   if (url && !rotto) {

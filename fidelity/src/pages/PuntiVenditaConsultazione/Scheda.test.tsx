@@ -197,7 +197,8 @@ const ANALISI: AnalisiPuntoVendita = {
   ],
   assenze: [{ idKit: "a1", dal: "2025-06-02", al: "2025-06-15", promo: { id: "pa1", nome: "Promo assente" } }],
   anni: [2025, 2026],
-  marche: [{ marca: "Barilla", quota: 3.2, volantini: 3 }, { marca: "Granarolo", quota: 2.5, volantini: 1 }],
+  marche: [{ marca: "Barilla", quota: 3.2, volantini: 3, linea: null }, { marca: "Granarolo", quota: 2.5, volantini: 1, linea: null }],
+  lineeDistributore: null,
   prodottiRicorrenti: [
     {
       chiave: "mozzarella-granarolo",
@@ -655,15 +656,46 @@ describe("Scheda del punto vendita", () => {
     expect(reparti).toHaveTextContent("+10 punti");
   });
 
-  it("Marche più presenti: quota e volantini in cui compaiono", () => {
+  it("Marche più presenti: una scheda per marca, dalla più presente, con quota, volantini del periodo e iniziali", () => {
     apri();
 
     const marche = sezione("Marche più presenti");
-    expect(within(marche).getByRole("img", { name: "Marche più presenti" })).toHaveTextContent("Barilla");
-    expect(marche).toHaveTextContent("3,2%");
-    expect(marche).toHaveTextContent("in 3 volantini");
-    expect(marche).toHaveTextContent("in 1 volantino");
-    expect(marche).toHaveTextContent("Quota delle referenze con la marca dal marzo 2025.");
+    const schede = within(within(marche).getByRole("list", { name: "Marche più presenti" })).getAllByRole("listitem");
+    expect(schede).toHaveLength(2);
+    expect(schede[0]).toHaveTextContent("Barilla");
+    expect(schede[0]).toHaveTextContent("3,2% delle referenze · in 3 su 3 volantini");
+    expect(schede[1]).toHaveTextContent("in 1 su 3 volantini");
+    // Senza linea: le iniziali, niente logo, niente "Linea"
+    expect(within(schede[0]).getByText("BA")).toBeInTheDocument();
+    expect(schede[0].querySelector("img")).toBeNull();
+    expect(schede[0]).not.toHaveTextContent("Linea");
+    // Senza linee dichiarate la quota delle linee del distributore non c'è
+    expect(within(marche).queryByRole("img", { name: /Linee del distributore/ })).not.toBeInTheDocument();
+    expect(marche).toHaveTextContent("Quota delle referenze con la marca dal marzo 2025, dalla marca più presente.");
+  });
+
+  it("Marche più presenti: le linee del distributore col logo o le iniziali nel loro colore, e la loro quota su tutte le marche", () => {
+    finti.analisi = caricato({
+      ...ANALISI,
+      marche: [
+        { marca: "CONAD Verso Natura Bio", quota: 15.1, volantini: 3, linea: { nome: "Verso Natura", colore: "#2e7d32", logo: "/olimpo/foto/getThumbNailOnDemand?guidId=vn" } },
+        { marca: "Conad Percorso Qualità", quota: 8, volantini: 2, linea: { nome: "Percorso Qualità", colore: "#1f4e79", logo: null } },
+        { marca: "Barilla", quota: 3.2, volantini: 3, linea: null },
+      ],
+      lineeDistributore: { quota: 34.5 },
+    });
+    apri();
+
+    const marche = sezione("Marche più presenti");
+    const schede = within(within(marche).getByRole("list", { name: "Marche più presenti" })).getAllByRole("listitem");
+    // Il nome intero, mai troncato
+    expect(schede[0]).toHaveTextContent("CONAD Verso Natura Bio");
+    expect(schede[0]).toHaveTextContent("Linea Verso Natura");
+    expect(schede[0].querySelector("img")).toHaveAttribute("src", "/olimpo/foto/getThumbNailOnDemand?guidId=vn");
+    // Senza logo nel catalogo: le iniziali della linea nel suo colore
+    const iniziali = within(schede[1]).getByText("PQ");
+    expect(iniziali).toHaveStyle({ backgroundColor: "#1f4e79" });
+    expect(within(marche).getByRole("img", { name: "Linee del distributore 34,5% delle referenze con marca, altre marche 65,5%" })).toBeInTheDocument();
   });
 
   it("Prodotti che tornano: presenza volantino per volantino, forbice del prezzo e ultima volta; ogni prodotto apre la sua referenza", () => {

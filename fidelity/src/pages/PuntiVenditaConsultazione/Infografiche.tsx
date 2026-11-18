@@ -2,8 +2,10 @@ import Lucide from "@/components/Base/Lucide";
 import Sezione from "@/components/Base/Sezione";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
-import { BarreOrizzontali, ForbicePrezzo, StrisciaNumeri, StrisciaPresenze, TINTA_NEUTRA, type NumeroStriscia } from "@/components/Grafici";
+import { Logo, testoSuColore } from "@/components/FlyerInsights/analisi/MarchiDistributore";
+import { BarreOrizzontali, ForbicePrezzo, Legenda, SERIE_PRINCIPALE, StrisciaNumeri, StrisciaPresenze, TINTA_NEUTRA, TINTA_PRINCIPALE, type NumeroStriscia } from "@/components/Grafici";
 import { formatData, formatNumero } from "@/utils/format";
+import { twMerge } from "@/utils/twMerge";
 import { Fragment } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ETICHETTA_MECCANICA, MECCANICHE, type AnalisiPuntoVendita } from "../../../lib/puntiVendita/analisi";
@@ -233,10 +235,82 @@ export function SpazioPerReparto({ analisi, contesto }: { analisi: Analisi; cont
   );
 }
 
-/** "Marche più presenti": le 8 marche con più referenze nel periodo, con i volantini in cui compaiono. */
+/** "in 18 su 26 volantini": i volantini del periodo in cui compare la marca. */
+const testoVolantiniMarca = (volantini: number, delPeriodo: number): string =>
+  `in ${formatNumero(volantini)} su ${formatNumero(delPeriodo)} ${delPeriodo === 1 ? "volantino" : "volantini"}`;
+
+/** Le linee del distributore contro le altre marche, in una barra sola, come negli insight del volantino. */
+function QuotaLineeDistributore({ quota }: { quota: number }) {
+  const linee = Math.max(0, Math.min(100, quota));
+  const altre = Math.round((100 - linee) * 10) / 10;
+  return (
+    <div className="space-y-2">
+      <p className="text-sm text-slate-700 dark:text-slate-200">
+        <b className="text-xl font-bold tabular-nums text-slate-800 dark:text-slate-100">{formatPercentuale(linee)}</b> delle referenze con marca sono
+        delle linee del distributore
+      </p>
+      <div
+        role="img"
+        aria-label={`Linee del distributore ${formatPercentuale(linee)} delle referenze con marca, altre marche ${formatPercentuale(altre)}`}
+        className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-darkmode-400"
+      >
+        <div className={twMerge("h-full", SERIE_PRINCIPALE.sfondo)} style={{ width: `${linee}%` }} />
+      </div>
+      <Legenda
+        voci={[
+          { id: "linee", etichetta: `Linee del distributore ${formatPercentuale(linee)}`, forma: "quadrato", tinta: TINTA_PRINCIPALE },
+          { id: "altre", etichetta: `Altre marche ${formatPercentuale(altre)}`, forma: "quadrato", tinta: TINTA_NEUTRA },
+        ]}
+      />
+    </div>
+  );
+}
+
+/**
+ * Una marca come le linee negli insight del volantino: il logo della linea del distributore o le
+ * iniziali (nel colore della linea, o neutre), il nome intero, la quota, i volantini e una barra
+ * rispetto alla marca più presente, nel colore della linea.
+ */
+function SchedaMarca({ marca, massimo, volantiniDelPeriodo }: { marca: AnalisiPuntoVendita["marche"][number]; massimo: number; volantiniDelPeriodo: number }) {
+  const larghezza = massimo > 0 ? Math.max(0, Math.min(100, (marca.quota / massimo) * 100)) : 0;
+  const coloreLinea = marca.linea && testoSuColore(marca.linea.colore) !== null ? marca.linea.colore : null;
+  return (
+    <li className="flex min-w-0 items-start gap-3 rounded-control border border-slate-200 bg-white p-3 dark:border-darkmode-400 dark:bg-darkmode-600">
+      <Logo
+        key={marca.linea?.logo ?? ""}
+        url={marca.linea?.logo ?? null}
+        nome={marca.linea?.nome ?? marca.marca}
+        sigla=""
+        colore={marca.linea?.colore}
+        misura="grande"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold leading-snug text-slate-800 [overflow-wrap:anywhere] dark:text-slate-100">{marca.marca}</p>
+        {marca.linea && <p className="text-xs text-slate-500 dark:text-slate-400">Linea {marca.linea.nome}</p>}
+        <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
+          <b className="font-semibold text-slate-700 dark:text-slate-200">{formatPercentuale(marca.quota)}</b> delle referenze ·{" "}
+          {testoVolantiniMarca(marca.volantini, volantiniDelPeriodo)}
+        </p>
+        {/* Rispetto alla marca più presente: le barre delle schede si confrontano fra loro */}
+        <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-darkmode-400">
+          <div
+            className={twMerge("h-full rounded-full", !coloreLinea && SERIE_PRINCIPALE.sfondo)}
+            style={{ width: `${larghezza}%`, ...(coloreLinea ? { backgroundColor: coloreLinea } : {}) }}
+          />
+        </div>
+      </div>
+    </li>
+  );
+}
+
+/**
+ * "Marche più presenti": le 8 marche con più referenze nel periodo come schede, come le linee del
+ * distributore negli insight del volantino; con le linee dichiarate dalla libreria agenzia, il loro
+ * logo e colore e la quota delle linee del distributore su tutte le marche.
+ */
 export function MarchePiuPresenti({ analisi, contesto }: { analisi: Analisi; contesto: ContestoPeriodo }) {
   return (
-    <Sezione titolo="Marche più presenti" descrizione={`Quota delle referenze con la marca ${contesto.nome}.`}>
+    <Sezione titolo="Marche più presenti" descrizione={`Quota delle referenze con la marca ${contesto.nome}, dalla marca più presente.`}>
       <StatoBox
         query={analisi}
         titoloErrore="Marche non caricate"
@@ -246,24 +320,23 @@ export function MarchePiuPresenti({ analisi, contesto }: { analisi: Analisi; con
           ) : null
         }
       >
-        {dati => (
-          <>
-            <BarreOrizzontali
-              voci={dati.marche.map(m => ({
-                id: m.marca,
-                etichetta: m.marca,
-                valore: m.quota,
-                nota: m.volantini === 1 ? "in 1 volantino" : `in ${formatNumero(m.volantini)} volantini`,
-              }))}
-              titolo="Marche più presenti"
-              descrizioneValore="Quota delle referenze"
-              formatta={v => formatPercentuale(v)}
-            />
-            {coperturaParziale(dati.copertura.conMarca) && (
-              <NotaDato>Dato parziale: la marca è nota per il {formatPercentuale(dati.copertura.conMarca, 0)} delle referenze.</NotaDato>
-            )}
-          </>
-        )}
+        {dati => {
+          const massimo = Math.max(0, ...dati.marche.map(marca => marca.quota));
+          const volantiniDelPeriodo = edizioniDelPeriodo(dati.timeline, contesto.giorni).length;
+          return (
+            <div className="space-y-5">
+              {dati.lineeDistributore && <QuotaLineeDistributore quota={dati.lineeDistributore.quota} />}
+              <ul aria-label="Marche più presenti" className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+                {dati.marche.map(marca => (
+                  <SchedaMarca key={marca.marca} marca={marca} massimo={massimo} volantiniDelPeriodo={volantiniDelPeriodo} />
+                ))}
+              </ul>
+              {coperturaParziale(dati.copertura.conMarca) && (
+                <NotaDato>Dato parziale: la marca è nota per il {formatPercentuale(dati.copertura.conMarca, 0)} delle referenze.</NotaDato>
+              )}
+            </div>
+          );
+        }}
       </StatoBox>
     </Sezione>
   );

@@ -22,9 +22,11 @@ import {
   rigaDelPuntoVendita,
   type RigaListaVolantino,
   spazioPerMeccanica,
+  riconosciLinea,
   STATISTICHE_VUOTE,
   type StatisticheProdotti,
 } from './analisiPuntoVendita';
+import { regoleLinee } from './lineeDistributore';
 import { DESCRIZIONE_ASSENTE, leggiReferenza, type RigaReferenza } from './referenzaStampata';
 import type { ApparizioneStoria } from './storiaPuntoVendita';
 
@@ -109,6 +111,7 @@ const STATISTICHE: StatisticheProdotti = {
     { chiave: 'c-B', volantini: 2, kit: ['k2', 'k1'], prezzoMinimo: 0.99, prezzoMassimo: 1.09, prezzoUltimo: 1.09, ultimoKit: 'k2', ultimoKitConFoto: 'k1' },
   ],
   marche: [{ marca: 'CONAD', referenze: 50, volantini: 3 }, { marca: 'Barilla', referenze: 40, volantini: 2 }],
+  tutteLeMarche: [{ marca: 'CONAD', referenze: 50 }, { marca: 'Barilla', referenze: 40 }],
   referenzeConMarca: 90,
 };
 
@@ -237,8 +240,28 @@ describe('calcolaAnalisiPuntoVendita', () => {
     ]);
   });
 
-  it('marche: quota sulle referenze con marca e volantini in cui compaiono', () => {
-    expect(analisi.marche).toEqual([{ marca: 'CONAD', quota: 55.6, volantini: 3 }, { marca: 'Barilla', quota: 44.4, volantini: 2 }]);
+  it('marche: quota sulle referenze con marca e volantini in cui compaiono; senza linee dichiarate niente linea ne\' quota', () => {
+    expect(analisi.marche).toEqual([
+      { marca: 'CONAD', quota: 55.6, volantini: 3, linea: null },
+      { marca: 'Barilla', quota: 44.4, volantini: 2, linea: null },
+    ]);
+    expect(analisi.lineeDistributore).toBeNull();
+  });
+
+  it('marche con la linea del distributore riconosciuta dalle regole, e la quota delle linee su tutte le marche', () => {
+    const conAltre: StatisticheProdotti = {
+      ...STATISTICHE,
+      tutteLeMarche: [...STATISTICHE.tutteLeMarche, { marca: 'Sapori & Dintorni CONAD', referenze: 10 }],
+      referenzeConMarca: 100,
+    };
+    const lineaDellaMarca = (marca: string) =>
+      /conad/i.test(marca) ? { nome: marca.includes('Sapori') ? 'Sapori & Dintorni' : 'Conad', colore: '#d52b1e', logo: null } : null;
+
+    const risultato = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, conAltre, DESCRIZIONI, '2022-10-25', { lineaDellaMarca });
+
+    expect(risultato.marche.map(marca => [marca.marca, marca.linea?.nome ?? null])).toEqual([['CONAD', 'Conad'], ['Barilla', null]]);
+    // CONAD 50 e Sapori & Dintorni 10, anche se non e' fra le marche mostrate, su 100 referenze con marca
+    expect(risultato.lineeDistributore).toEqual({ quota: 60 });
   });
 
   it('prodotti ricorrenti nell\'ordine dell\'SQL, con la descrizione, i kit nell\'ordine della timeline e l\'ultimo prezzo; senza descrizione no', () => {
@@ -278,6 +301,7 @@ describe('calcolaAnalisiPuntoVendita', () => {
         chiave: `c-${indice}`, volantini: 20 - indice, kit: ['k1', 'k2'], prezzoMinimo: 1, prezzoMassimo: 2, prezzoUltimo: 2, ultimoKit: 'k2', ultimoKitConFoto: null,
       })),
       marche: Array.from({ length: 9 }, (_, indice) => ({ marca: `Marca ${indice}`, referenze: 9 - indice, volantini: 2 })),
+      tutteLeMarche: Array.from({ length: 9 }, (_, indice) => ({ marca: `Marca ${indice}`, referenze: 9 - indice })),
       referenzeConMarca: 45,
     };
     // c-1 e c-3 senza descrizione: al loro posto c-10 e c-11
@@ -289,7 +313,7 @@ describe('calcolaAnalisiPuntoVendita', () => {
 
     expect(risultato.numeri).toMatchObject({ prodotti: 40, prodottiFrequenti: 12 });
     expect(risultato.marche).toHaveLength(8);
-    expect(risultato.marche[0]).toEqual({ marca: 'Marca 0', quota: 20, volantini: 2 });
+    expect(risultato.marche[0]).toEqual({ marca: 'Marca 0', quota: 20, volantini: 2, linea: null });
     expect(risultato.prodottiRicorrenti.map(voce => voce.chiave)).toEqual(['c-0', 'c-2', ...[4, 5, 6, 7, 8, 9, 10, 11].map(indice => `c-${indice}`)]);
   });
 
@@ -554,5 +578,30 @@ describe('calcolaReteInsegne', () => {
         { canale: { id: 'OLD', nome: 'Insegna chiusa' }, puntiVendita: 0, nelleListe: [{ anno: 2021, puntiVendita: 12 }, { anno: 2022, puntiVendita: 0 }] },
       ],
     });
+  });
+});
+
+describe('linea del distributore di una marca', () => {
+  const regole = regoleLinee({
+    linee: [{ sigla: 'conad_logo', nome: 'Conad', colore: '#d52b1e' }, { sigla: 'conad_VN', nome: 'Verso Natura', colore: '#2e7d32' }],
+    lineaDaTesti: ({ marca }) => (/verso natura/i.test(marca ?? '') ? 'conad_vn' : /conad/i.test(marca ?? '') ? 'conad_logo' : null),
+  });
+
+  it('dalla marca stampata, con nome, colore e il logo del catalogo (sigla senza maiuscole)', () => {
+    const linea = riconosciLinea(regole, sigla => (sigla.toLowerCase() === 'conad_vn' ? '/olimpo/foto/vn' : null))!;
+
+    expect(linea('CONAD Verso Natura Bio')).toEqual({ nome: 'Verso Natura', colore: '#2e7d32', logo: '/olimpo/foto/vn' });
+    expect(linea('Conad')).toEqual({ nome: 'Conad', colore: '#d52b1e', logo: null });
+    expect(linea('Barilla')).toBeNull();
+  });
+
+  it('una sigla che le linee dichiarate non hanno non e\' una linea', () => {
+    const altre = regoleLinee({ linee: [{ sigla: 'conad_logo', nome: 'Conad' }], lineaDaTesti: () => 'conad_sconosciuta' });
+    expect(riconosciLinea(altre, () => null)!('CONAD Qualcosa')).toBeNull();
+  });
+
+  it('senza linee dichiarate, o senza le regole sui testi, nessuna marca ha una linea', () => {
+    expect(riconosciLinea(null, () => null)).toBeNull();
+    expect(riconosciLinea(regoleLinee({ linee: [{ sigla: 'conad_logo', nome: 'Conad' }] }), () => null)).toBeNull();
   });
 });
