@@ -11,6 +11,9 @@
     // Correzioni aperte per pagina (note e timbri non ancora accettati): il pallino del pannello.
     Func<int, int> aperteDiPagina = idp =>
         co.Note.Count(n => n.IdPagina == idp && n.Stato == 0) + co.Timbri.Count(t => t.IdPagina == idp && t.Stato == 0);
+    // I20-1243: LEGENDA tolta per ora (il PDF non e' sul server, il clic non dava niente).
+    // Si rimette nei prossimi giorni: basta true qui e in Index.cshtml.
+    bool legendaAttiva = false;
 }
 <!DOCTYPE html>
 <html lang="it">
@@ -792,9 +795,10 @@
         <img class="postit" src="@img/post-it.png" alt="" title="APPUNTI">
     </div>
     <div class="destra">
-        @if (!User.IsInRole("Agenzia"))
+        @if (legendaAttiva && !User.IsInRole("Agenzia"))
         {
-            @* LEGENDA (j216): il manuale in PDF, accanto al nome. Solo Category e Marketing. *@
+            @* LEGENDA (j216): il manuale in PDF, accanto al nome. Solo Category e Marketing.
+               I20-1243: spenta con legendaAttiva, in cima alla pagina. *@
             <a class="legenda_btn" href="~/Legenda" target="_blank" rel="noopener" title="Legenda: il manuale di Correggo (PDF)">
                 <img src="@img/infoButton.png" alt="Legenda">
             </a>
