@@ -28,9 +28,6 @@ public sealed class HubVolantini
     /// <summary>URL del logo del cliente (config "Cliente:LogoUrl"). Vuoto = segnaposto.</summary>
     public string LogoCliente { get; set; } = "";
 
-    public bool MostraScadute { get; set; }
-    public int PromoScadute { get; set; }
-
     public List<PromoHub> Promo { get; set; } = new();
 }
 

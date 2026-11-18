@@ -36,8 +36,10 @@ public class NessunaPromoAttivaTests
         Assert.Contains(".bar[hidden],.main[hidden]{display:none}", html);
     }
 
+    // I20-1243: le promo non piu' valide non si mostrano piu' in home, nemmeno senza promo attive:
+    // il riquadro ha solo «Nessuna promo attiva» (prima c'era anche il link alle scadute).
     [Fact]
-    public void Il_link_alle_promo_non_piu_valide_resta_anche_senza_promo()
+    public void Senza_promo_non_c_e_il_link_alle_promo_non_piu_valide()
     {
         string html = Home();
         int inizio = html.IndexOf("<div class=\"nessuna-promo\">", StringComparison.Ordinal);
@@ -45,8 +47,9 @@ public class NessunaPromoAttivaTests
         Assert.True(inizio >= 0 && fine > inizio);
 
         string riquadro = html[inizio..fine];
-        Assert.Contains("Mostra anche le promo non più valide (@Model.PromoScadute)", riquadro);
-        Assert.Contains("Nascondi le promo non più valide", riquadro);
+        Assert.Contains("<b>Nessuna promo attiva</b>", riquadro);
+        Assert.DoesNotContain("promo non più valide", riquadro);
+        Assert.DoesNotContain("scadute=true", riquadro);
     }
 
     [Fact]

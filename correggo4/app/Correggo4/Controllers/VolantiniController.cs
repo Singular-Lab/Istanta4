@@ -55,7 +55,8 @@ public class VolantiniController : Controller
     /// Home: hub delle correzioni. Le promo sono le classificazioni; per ciascuna i PDF
     /// caricati (volantini) alla loro ultima versione, con correzioni aperte, commenti e blocco.
     /// </summary>
-    public async Task<IActionResult> Index(bool scadute = false)
+    // I20-1243: solo le promo valide; le scadute si consultano da «Consulta tutti i volantini».
+    public async Task<IActionResult> Index()
     {
         DateTime adesso = DateTime.UtcNow;
         DateTime oggi = adesso.Date;
@@ -198,9 +199,7 @@ public class VolantiniController : Controller
                 .Where(x => x.IdUtente == IdUtente).Select(x => (bool?)x.EmailNotifiche)
                 .FirstOrDefaultAsync() ?? true,
             LogoCliente = config["Cliente:LogoUrl"] ?? "",
-            MostraScadute = scadute,
-            PromoScadute = gruppi.Count - attive.Count,
-            Promo = (scadute ? gruppi : attive)
+            Promo = attive
                 .Select(g => new PromoHub
                 {
                     Classificazione = g.Key,
