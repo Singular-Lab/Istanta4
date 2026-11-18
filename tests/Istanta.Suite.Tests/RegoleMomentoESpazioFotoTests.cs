@@ -87,6 +87,23 @@ public class RegoleMomentoESpazioFotoTests
     }
 
     /// <summary>
+    /// I20-1240: lo spareggio sul vuoto deve arrivare al Plugin. Senza la proprieta' nel modello
+    /// spariva passando da Istanta, e il Plugin sceglieva fra le due disposizioni come prima.
+    /// </summary>
+    [Fact]
+    public void Lo_spareggio_sul_vuoto_non_si_perde_passando_dal_modello()
+    {
+        const string json = "{\"nomiBox\":[],\"sceltaSpazioFoto\":{\"modo\":\"centrato\","
+            + "\"tolleranzaArea\":0.7,\"asseCentratura\":\"xy\",\"spareggio\":\"vuotoMinore\"}}";
+
+        var box = JsonConvert.DeserializeObject<modificheCssBox>(json);
+        var riletto = JsonConvert.DeserializeObject<modificheCssBox>(JsonConvert.SerializeObject(box));
+
+        Assert.Equal("vuotoMinore", riletto!.sceltaSpazioFoto!.spareggio);
+        Assert.Null(JsonConvert.DeserializeObject<modificheCssBox>("{\"nomiBox\":[],\"sceltaSpazioFoto\":{\"modo\":\"centrato\"}}")!.sceltaSpazioFoto!.spareggio);
+    }
+
+    /// <summary>
     /// Nel BOX41 di Edro21 le foto stanno dentro le parentesi: se la regola non arrivasse
     /// al Plugin, una foto continuerebbe a finire di lato per guadagnare qualche millimetro.
     /// </summary>

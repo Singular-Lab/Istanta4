@@ -89,11 +89,48 @@ public class FixFotoTests
 
         Assert.Contains("*LOGO_filiera*", fix["eccezioniIgnorati"]!.Values<string>());
         Assert.Equal(new[] { 1.0, 1.0 }, fix["marginiFoto"]!.Values<double>());
-        Assert.Equal("LBL_Titolari", fix["agenzia"]!["descrizioneAllineataA"]!.Values<string>().Last());
+        //I20-1240: il fix che stava nel custom.js di Edro21 e' la sequenza del CssFramework.
+        var inBasso = fix["sequenza"]![0]!["varianti"]![1]!;
+        Assert.Equal("descrizioneInBasso", inBasso["passi"]![0]!["fase"]!.Value<string>());
+        Assert.Equal("descrizione", inBasso["scartaSe"]!["rientroInGriglia"]![0]!.Value<string>());
         Assert.Equal(JTokenType.Null, fix["distanziamento"]!.Last!["percDistFoto"]!.Last!["endRangeRatioCondition"]!.Type);
         var perBox = fix["perBox"]!.Children().ToList();
         Assert.Equal("nessuno", perBox.Single(p => p["nomiBox"]!.Values<string>().Contains("BOX40"))["modo"]!.Value<string>());
         Assert.Equal("semplice", perBox.Single(p => p["nomiBox"]!.Values<string>().Contains("BOX41"))["modo"]!.Value<string>());
+        Assert.Equal("gruppo_descrizione_BIS", perBox.Single(p => p["nomiBox"]!.Values<string>().Contains("BOX7"))["sequenza"]![0]!["varianti"]![1]!
+            ["listSetCondizioni"]![0]!["setCondizioni"]![0]!["elementiDaTrovare"]![0]!.Value<string>());
+    }
+
+    /// <summary>
+    /// I20-1240: le regole delle fasi della sequenza di Edro21 arrivano al Plugin intere: la fase, il
+    /// blocco unico, gli agganci ai prezzi sul testo e al piede, l'evita traccia.
+    /// </summary>
+    [Fact]
+    public void Le_regole_della_descrizione_in_basso_di_Edro21_arrivano_intere()
+    {
+        var root = JsonConvert.DeserializeObject<DbFrameworkCss>(File.ReadAllText(TrovaSorgente("Edro21")))!;
+        var servito = JObject.Parse(JsonConvert.SerializeObject(root.dbRidimensionamentiAllineamenti));
+
+        var regole = servito["modificheCssPerKit"]!.Children()
+            .SelectMany(k => k["operazioniPerBox"]!.Children())
+            .SelectMany(v => v["allineamenti"]!.Children())
+            .Where(a => a["nomeGruppo"]!.Value<string>() == "descrizioneInBasso")
+            .ToList();
+
+        Assert.NotEmpty(regole);
+        foreach (var regola in regole)
+        {
+            Assert.Equal("descrizioneInBasso", regola["fase"]!.Value<string>());
+            Assert.True(regola["bloccoUnico"]!.Value<bool>());
+            Assert.True(regola["evitaTracciaAllineamento"]!["evitaTracciaBase"]!.Value<bool>());
+            var ancore = regola["followAnchor"]!.Children().ToList();
+            Assert.Equal(3, ancore.Count);
+            Assert.True(ancore[0]["useTextBounds"]!.Value<bool>());
+            Assert.Equal(0, ancore[0]["xAnchor"]!["allineaAlLato"]!.Value<int>());
+            Assert.Equal(1, ancore[0]["xAnchor"]!["allineaLato"]!.Value<int>());
+            Assert.Equal("PIEDE_Titolari*", ancore[1]["nomiGruppiSeguiti"]![0]!.Value<string>());
+            Assert.Equal("PIEDE_Titolari*", ancore[2]["listSetCondizioni"]![0]!["setCondizioni"]![0]!["elementiDaNonTrovare"]![0]!.Value<string>());
+        }
     }
 
     [Theory]
@@ -155,6 +192,45 @@ public class FixFotoTests
         Assert.Equal(new[] { 1 }, regola["quando"]!["lavorazioni"]!.Values<int>());
         Assert.Equal("aTuttoBox", regola["modo"]!.Value<string>());
         Assert.Equal("larghezza", regola["adattamentoImmagine"]!.Value<string>());
+    }
+
+    /// <summary>
+    /// I20-1240: la sequenza del fix foto (passi fixFoto, fase e simulazioni con le varianti) passa
+    /// dal modello senza perdere niente, come la riceve il Plugin da scaricaAllineamenti.
+    /// </summary>
+    [Fact]
+    public void La_sequenza_del_fix_foto_arriva_al_Plugin_intera()
+    {
+        const string json = "{\"modificheCssPerKit\":[],\"fixFoto\":{\"sequenza\":["
+            + "{\"tipo\":\"simulazioni\",\"varianti\":["
+            + "{\"nome\":\"testiALato\",\"passi\":[]},"
+            + "{\"nome\":\"testiInBasso\",\"passi\":[{\"tipo\":\"fase\",\"fase\":\"descrizioneInBasso\"}],"
+            + "\"listSetCondizioni\":[{\"setCondizioni\":[{\"elementiDaNonTrovare\":[\"*LOGO_carneS_USOdiANTIBIOTICI*\"]}]}],"
+            + "\"scartaSe\":{\"overflow\":[\"descrizione\"],\"sovrapposizioni\":[{\"elementi\":[\"descrizione\"],\"con\":[\"foto_extra*\"]}],\"fuoriBase\":[\"descrizione\"],\"rientroInGriglia\":[\"descrizione\"]}}]},"
+            + "{\"tipo\":\"fase\",\"fase\":\"evitaTraccia\"},{\"tipo\":\"fixFoto\"}]}}";
+
+        var modello = JsonConvert.DeserializeObject<DbRidimensionamentiAllineamenti>(json)!;
+        var servito = JObject.Parse(JsonConvert.SerializeObject(modello))["fixFoto"]!["sequenza"]!;
+
+        Assert.Equal(new[] { "simulazioni", "fase", "fixFoto" }, servito.Children().Select(p => p["tipo"]!.Value<string>()));
+        Assert.Equal("evitaTraccia", servito[1]!["fase"]!.Value<string>());
+        var inBasso = servito[0]!["varianti"]![1]!;
+        Assert.Equal("testiInBasso", inBasso["nome"]!.Value<string>());
+        Assert.Equal("descrizioneInBasso", inBasso["passi"]![0]!["fase"]!.Value<string>());
+        Assert.Equal("*LOGO_carneS_USOdiANTIBIOTICI*", inBasso["listSetCondizioni"]![0]!["setCondizioni"]![0]!["elementiDaNonTrovare"]![0]!.Value<string>());
+        Assert.Equal("descrizione", inBasso["scartaSe"]!["overflow"]![0]!.Value<string>());
+        Assert.Equal("foto_extra*", inBasso["scartaSe"]!["sovrapposizioni"]![0]!["con"]![0]!.Value<string>());
+        Assert.Equal("descrizione", inBasso["scartaSe"]!["fuoriBase"]![0]!.Value<string>());
+        Assert.Equal("descrizione", inBasso["scartaSe"]!["rientroInGriglia"]![0]!.Value<string>());
+        Assert.Empty(servito[0]!["varianti"]![0]!["passi"]!.Children());
+    }
+
+    [Fact]
+    public void Senza_sequenza_il_fix_foto_resta_quello_di_sempre()
+    {
+        var fix = JsonConvert.DeserializeObject<DbRidimensionamentiAllineamenti>("{\"modificheCssPerKit\":[],\"fixFoto\":{\"modo\":\"automatico\"}}")!.fixFoto!;
+
+        Assert.Null(fix.sequenza);
     }
 
     private static string TrovaSorgente(string cliente)

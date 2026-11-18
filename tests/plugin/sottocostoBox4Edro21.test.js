@@ -12,6 +12,10 @@
  * custom.js fa require('indesign') e sotto Node non si carica: la funzione nuova, pura, si isola dal
  * sorgente, e il resto del fix foto si controlla sul sorgente.
  *
+ * I20-1240: il fix foto non sta piu' nel custom.js ma nella sequenza del fix foto del CssFramework di
+ * Edro21: il gruppo da spostare lo sceglie la regola della fase descrizioneInBasso, e la scelta la fa
+ * ancora CssFramework vero.
+ *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
 
@@ -70,7 +74,10 @@ test("nel kit SS/CN/CY il BOX4 ridimensiona SOTTOCOSTO insieme alla descrizione,
 test("nel kit SS/CN/CY il Campi_DX del BOX4 allinea il gruppo al posto della descrizione, come il BOX7 col BIS", () => {
     const generale = regoleDelBox(kitSsCnCy, null).allineamenti.find(a => a.nomeGruppo === "Campi_DX");
     const box4 = regoleDelBox(kitSsCnCy, "BOX4");
-    assert.deepStrictEqual(box4.allineamenti, [conGruppo(generale)]);
+    //I20-1240: le regole della fase descrizioneInBasso del fix foto stanno a parte (fixFoto.sequenza):
+    //fra le regole di sempre il BOX4 ha solo il suo Campi_DX.
+    assert.deepStrictEqual(box4.allineamenti.filter(a => !a.fase), [conGruppo(generale)]);
+    assert.ok(box4.allineamenti.filter(a => a.fase).every(a => a.fase === "descrizioneInBasso" && a.nomeGruppo === "descrizioneInBasso"));
     //Il resto del BOX4 resta quello generale: nessun'altra regola sua.
     for (const sezione of ["postRidimensionamenti", "segnalazioniConflitti", "duplicazioni", "ordiniZ", "disattiva"]) {
         assert.deepStrictEqual(box4[sezione], [], sezione);
@@ -110,61 +117,67 @@ test("nel kit SC il BOX4 non ha regole sue e niente si ridimensiona col SOTTOCOS
     assert.ok(!JSON.stringify(kitSc).includes("\"SOTTOCOSTO\""));
 });
 
-/* ---- il fix foto custom di Edro21 ---- */
+/* ---- il fix foto di Edro21 ---- */
 
-/// Il corpo di un membro dell'oggetto customAgenzia, isolato contando le graffe.
-function corpoFunzione(testo, intestazione) {
-    const inizio = testo.indexOf(intestazione);
-    assert.notStrictEqual(inizio, -1, intestazione + " non trovata: il test va aggiornato");
-    let livello = 0;
-    let aperta = false;
-    for (let i = inizio; i < testo.length; i++) {
-        if (testo[i] === "{") { livello++; aperta = true; }
-        else if (testo[i] === "}") { livello--; }
-        if (aperta && livello === 0) {
-            return testo.substring(inizio, i + 1);
-        }
-    }
-    assert.fail("corpo di " + intestazione + " non delimitato");
+//I20-1240: il fix foto di Edro21 non sta piu' nel custom (setCustomFixFoto, gruppoDellaDescrizione): la
+//sequenza del fix foto nel CssFramework prova la variante descrizioneInBasso, e la regola con quella fase
+//sposta il gruppo della descrizione dove c'e', altrimenti la descrizione.
+const cssSequenzaOperazioni = require("../../plugin/cssFramework/sequenzaOperazioni.js");
+
+/// Le etichette che la regola della fase descrizioneInBasso sposta in un box del kit, con gli elementi dati.
+function spostatiInBasso(kit, nomeBox, etichette) {
+    cssSequenzaOperazioni.registraFasiDelFile(cssEdro.dbRidimensionamentiAllineamenti);
+    const DB = cssSequenzaOperazioni.filtraDBPerMomento(kit.operazioniPerBox, "descrizioneInBasso");
+    const mappa = {};
+    (etichette || []).forEach(e => { mappa[e] = { item: {}, label: e, eliminato: false }; });
+    return (CssFramework.gruppiDiAllineamentoDelBox({ label: nomeBox }, mappa, null, DB, null) || [])
+        .map(regola => regola.gruppoEtichette);
 }
 
-const gruppoDellaDescrizione = new Function("return function " + corpoFunzione(customEdro, "gruppoDellaDescrizione(gruppo, etichette) {"))();
-const setCustomFixFoto = corpoFunzione(customEdro, "setCustomFixFoto(box){");
-
-//TASK-9bf94d47: i dati del fix foto di Edro21 dal CssFramework, come li legge il Plugin fuori dal
-//contesto: la sezione fixFoto generale delle regole scaricate.
+//TASK-9bf94d47: la configurazione del fix foto di Edro21 dal CssFramework, come la legge il Plugin fuori
+//dal contesto: la sezione fixFoto generale delle regole scaricate. I20-1240: con la sua sequenza.
 function datiFixFoto(etichettaBox) {
     CssFramework.regoleScaricate = cssEdro.dbRidimensionamentiAllineamenti;
     CssFramework.contestoCss = null;
-    return CssFramework.getConfigurazioneFixFoto({ label: etichettaBox }).agenzia;
+    return CssFramework.getConfigurazioneFixFoto({ label: etichettaBox });
+}
+
+function varianteInBasso(etichettaBox) {
+    return datiFixFoto(etichettaBox).sequenza.find(p => p.tipo === "simulazioni").varianti.find(v => v.nome === "descrizioneInBasso");
 }
 
 test("il fix foto sposta il gruppo della descrizione: quello del BIS nel BOX7, quello del sottocosto nel BOX4", () => {
-    //TASK-9bf94d47: quale gruppo ha il box lo dice il CssFramework, non piu' una mappa nel custom.
-    const gruppo = (etichettaBox, etichette) => gruppoDellaDescrizione(datiFixFoto(etichettaBox).gruppoDescrizione, etichette);
-    assert.strictEqual(gruppo("BOX4", ["base", "gruppo_descrizione_sottocosto", "descrizione", "SOTTOCOSTO", "prezzo_offerta"]), "gruppo_descrizione_sottocosto");
-    assert.strictEqual(gruppo("BOX7", ["gruppo_descrizione_BIS", "descrizione", "BIS"]), "gruppo_descrizione_BIS");
-    //Il BOX4 del canale SC non ha il gruppo: resta la descrizione.
-    assert.strictEqual(gruppo("BOX4", ["base", "descrizione", "prezzo_offerta"]), null);
-    //Gli altri box non hanno un gruppo della descrizione, anche se un'etichetta gli somiglia.
-    assert.strictEqual(gruppo("BOX1", ["gruppo_descrizione_sottocosto", "descrizione"]), null);
-    assert.strictEqual(gruppo("BOX7", ["gruppo_descrizione_sottocosto"]), null);
-    assert.strictEqual(gruppo("BOX4", null), null);
+    assert.deepStrictEqual(spostatiInBasso(kitSsCnCy, "BOX4", ["base", "gruppo_descrizione_sottocosto", "descrizione", "SOTTOCOSTO", "prezzo_offerta"]), [["gruppo_descrizione_sottocosto"]]);
+    for (const kit of [kitSsCnCy, kitSc]) {
+        assert.deepStrictEqual(spostatiInBasso(kit, "BOX7", ["gruppo_descrizione_BIS", "descrizione", "BIS"]), [["gruppo_descrizione_BIS"]]);
+    }
+    //Il BOX4 senza il gruppo, e quello del canale SC che non ce l'ha: resta la descrizione.
+    assert.deepStrictEqual(spostatiInBasso(kitSsCnCy, "BOX4", ["base", "descrizione", "prezzo_offerta"]), [["descrizione"]]);
+    assert.deepStrictEqual(spostatiInBasso(kitSc, "BOX4", ["base", "descrizione", "prezzo_offerta"]), [["descrizione"]]);
+    //Gli altri box spostano la descrizione, anche se un'etichetta somiglia a un gruppo.
+    assert.deepStrictEqual(spostatiInBasso(kitSsCnCy, "BOX1", ["gruppo_descrizione_sottocosto", "descrizione"]), [["descrizione"]]);
 });
 
-test("il fix foto custom usa il gruppo della descrizione per la scelta e per la descrizione da stringere", () => {
-    assert.match(setCustomFixFoto, /var gruppoDescrizione = this\.gruppoDellaDescrizione\(datiFix\.gruppoDescrizione, etichetteDelBox\);/);
-    assert.match(setCustomFixFoto, /if \(gruppoDescrizione != null\) \{\s*if \(etichetta == gruppoDescrizione\) \{\s*descrizione = item;/);
-    //Senza gruppo la descrizione, tranne nel BOX7 come prima: il BOX7 lo dichiara nel CssFramework.
-    assert.match(setCustomFixFoto, /else if \(etichetta == "descrizione" && datiFix\.spostaDescrizioneSenzaGruppo !== false\) \{\s*descrizione = item;/);
-    assert.strictEqual(datiFixFoto("BOX7").spostaDescrizioneSenzaGruppo, false);
-    assert.strictEqual(datiFixFoto("BOX4").spostaDescrizioneSenzaGruppo, undefined);
-    assert.strictEqual(datiFixFoto("BOX1").spostaDescrizioneSenzaGruppo, undefined);
-    //Dentro il gruppo si stringe la descrizione, con l'etichetta come la scrivono i modelli: minuscola.
-    assert.match(setCustomFixFoto, /if \(gruppoDescrizione != null && descrizione\.allPageItems != null\)/);
-    assert.match(setCustomFixFoto, /Utility\.parseLabel\(itemDescrizioneNelGruppo\.label\) == "descrizione"/);
-    assert.ok(!/== "Descrizione"/.test(setCustomFixFoto), "la descrizione nel gruppo si chiama descrizione, minuscola");
-    assert.ok(!/gruppo_descrizione_BIS" && box\.label == "BOX7"/.test(setCustomFixFoto));
+test("nel BOX7 la descrizione non si sposta da sola: la variante si prova solo col gruppo del BIS", () => {
+    const box7 = varianteInBasso("BOX7");
+    assert.deepStrictEqual(box7.listSetCondizioni[0].setCondizioni[0].elementiDaTrovare, ["gruppo_descrizione_BIS"]);
+    assert.deepStrictEqual(varianteInBasso("BOX4").listSetCondizioni[0].setCondizioni[0].elementiDaTrovare, ["descrizione"]);
+    assert.deepStrictEqual(varianteInBasso("BOX1").listSetCondizioni[0].setCondizioni[0].elementiDaTrovare, ["descrizione"]);
+    //Mai col logo antibiotici, in nessun box, come prima.
+    for (const box of ["BOX1", "BOX4", "BOX7"]) {
+        assert.deepStrictEqual(varianteInBasso(box).listSetCondizioni[0].setCondizioni[0].elementiDaNonTrovare, ["*LOGO_carneS_USOdiANTIBIOTICI*"], box);
+    }
+});
+
+test("la variante si scarta se il testo del gruppo o della descrizione trabocca o tocca un logo, con le etichette minuscole dei modelli", () => {
+    assert.deepStrictEqual(varianteInBasso("BOX7").scartaSe.overflow, ["gruppo_descrizione_BIS"]);
+    assert.deepStrictEqual(varianteInBasso("BOX4").scartaSe.overflow, ["descrizione", "gruppo_descrizione_sottocosto"]);
+    assert.deepStrictEqual(varianteInBasso("BOX1").scartaSe.overflow, ["descrizione"]);
+    assert.ok(!/"Descrizione"/.test(JSON.stringify(cssEdro.dbRidimensionamentiAllineamenti.fixFoto)), "la descrizione si chiama descrizione, minuscola");
+    //Un gruppo trabocca se trabocca una sua casella di testo: motivoScarto guarda dentro il gruppo.
+    const sistemazione = fs.readFileSync(path.join(radice, "plugin", "sistemazioneFoto", "sistemazioneFoto.js"), "utf8").replace(/\r/g, "");
+    assert.match(sistemazione, /var traboccano = conEtichette\(scartaSe\.overflow\)\.filter\(item => testiDi\(item\)\.some\(t => t\.overflows\)\);/);
+    assert.doesNotMatch(customEdro, /setCustomFixFoto\(box\)\{|gruppoDellaDescrizione\(gruppo, etichette\)/);
 });
 
 /* ---- I20-1180: il tag quantitativi non copre il testo della descrizione ---- */

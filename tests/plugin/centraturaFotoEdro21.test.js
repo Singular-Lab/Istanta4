@@ -130,13 +130,17 @@ test("la prova del fix foto restituisce area e distanza dal centro, o null senza
 /* ---- Edro21 ---- */
 
 test("il fix foto di Edro21 sceglie la disposizione con la preferenza del box, non solo con l'area", () => {
-    const custom = leggiFileDelPlugin("Agenzie/Edro21/custom.js").replace(/\r/g, "");
-    const fn = custom.substring(custom.indexOf("    setCustomFixFoto(box){"));
+    //I20-1240: le due disposizioni sono le varianti della sequenza nel CssFramework di Edro21 (prima
+    //stavano nel suo custom.js), e la scelta fra le varianti usa la preferenza del box.
+    const percorso = path.join(__dirname, "..", "..", "Istanta", "wwwroot", "external_source", "Edro21", "SourceFrameworkCss.json");
+    const fixFoto = JSON.parse(fs.readFileSync(percorso, "utf8")).dbRidimensionamentiAllineamenti.fixFoto;
+    const simulazioni = fixFoto.sequenza.find(p => p.tipo === "simulazioni");
+    assert.deepStrictEqual(simulazioni.varianti.map(v => v.nome), ["testiALato", "descrizioneInBasso"]);
 
-    assert.match(fn, /var prova1 = CssFramework\.proiezioneFixFoto\(box, res1\.candidate, res1\.obstacles\);/);
-    assert.match(fn, /var prova2 = CssFramework\.proiezioneFixFoto\(box, res2\.candidate, res2\.obstacles\);/);
-    assert.match(fn, /if \(CssFramework\.preferisciDisposizioneFoto\(box, prova1, prova2\) === "prima"\) \{\s*descrizione\.geometricBounds = oldBounds;/);
-    assert.doesNotMatch(fn.substring(0, fn.indexOf("\n    },\n")), /Math\.floor\(area1\)/);
+    const sorgente = leggiFileDelPlugin("sistemazioneFoto/sistemazioneFoto.js").replace(/\r/g, "");
+    assert.match(sorgente, /var vincente = sceltaSpazio\.migliorDisposizione\(esiti\.map\(e => e != null \? e\.prova : null\), css\.getSceltaSpazioFoto\(box\)\);/);
+    assert.match(sorgente, /var prova = this\.proiezioneFixFoto\(box, spazio\.candidate, spazio\.obstacles\);/);
+    assert.doesNotMatch(leggiFileDelPlugin("Agenzie/Edro21/custom.js"), /Math\.floor\(area1\)/);
 });
 
 test("nel volantino di Edro21 la voce di default dei kit centra le foto su xy, il BOX41 resta su x", () => {
@@ -147,7 +151,8 @@ test("nel volantino di Edro21 la voce di default dei kit centra le foto su xy, i
     assert.ok(volantino.length > 0);
     for (const kit of volantino) {
         const predefinita = kit.operazioniPerBox.find(op => op.nomiBox.length === 0);
-        assert.deepStrictEqual(predefinita.sceltaSpazioFoto, CENTRATO);
+        //I20-1240: con lo spareggio sul vuoto fra le due disposizioni del fix.
+        assert.deepStrictEqual(predefinita.sceltaSpazioFoto, Object.assign({}, CENTRATO, { spareggio: "vuotoMinore" }));
         const box41 = kit.operazioniPerBox.find(op => op.nomiBox.includes("BOX41"));
         assert.strictEqual(box41.sceltaSpazioFoto.asseCentratura, "x");
     }

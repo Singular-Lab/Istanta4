@@ -74,11 +74,12 @@ function configurazione(etichettaBox) {
 }
 
 //Il modo in cui l'impaginazione tratta il box, come lo decidono indexNew e reperimentoFoto.
-function decisione(cfg, tipoLavorazione, haFixDellAgenzia) {
+//I20-1240: non c'e' piu' il fix dell'agenzia: nel modo automatico la sequenza del box, se ne ha una.
+function decisione(cfg, tipoLavorazione) {
     if (!cfg.lavorazioni.includes(tipoLavorazione) || cfg.modo == "nessuno") {
         return "nessuno";
     }
-    return cfg.modo != "semplice" && haFixDellAgenzia ? "agenzia" : "plugin";
+    return cfg.modo != "semplice" && Array.isArray(cfg.sequenza) && cfg.sequenza.length > 0 ? "sequenza" : "plugin";
 }
 
 /* ---- la regola con cui si combinano le voci ---- */
@@ -96,6 +97,8 @@ test("senza voci valgono i default del Plugin", () => {
     assert.strictEqual(cfg.marginiBox, null);
     assert.deepStrictEqual(cfg.marginiFoto, [0, 0]);
     assert.deepStrictEqual(cfg.agenzia, {});
+    //I20-1240: senza sequenza il fix di sempre.
+    assert.strictEqual(cfg.sequenza, null);
 });
 
 test("ogni valore lo decide la prima voce che lo dice, anche i dati dell'agenzia chiave per chiave", () => {
@@ -238,8 +241,9 @@ for (const cliente of ["Coopfi", "Famila"]) {
             assert.deepStrictEqual(cfg.eccezioniIgnorati, [], dove);
             assert.deepStrictEqual(cfg.marginiFoto, [0, 0], dove);
             assert.strictEqual(cfg.marginiBox, null, dove);
-            //Senza un fix dell'agenzia: quello del Plugin, in volantino e PoP.
-            assert.strictEqual(decisione(cfg, lav.tipo, false), "plugin", dove);
+            //Senza una sequenza: il fix del Plugin, in volantino e PoP.
+            assert.strictEqual(cfg.sequenza, null, dove);
+            assert.strictEqual(decisione(cfg, lav.tipo), "plugin", dove);
         }
     });
 }
@@ -258,36 +262,48 @@ test("Edro21: in ogni canale, anche senza kit, il fix ha gli ostacoli, i margini
         assert.deepStrictEqual(cfg.marginiElementi.map(m => m.label), ["campo_offerta_KgL_sconto", "prezzo_offerta_gruppo", "descrizione"], canale);
         assert.deepStrictEqual(cfg.marginiBox, [0, 0, 0, 0], canale);
         assert.deepStrictEqual(cfg.marginiFoto, [1, 1], canale);
-        assert.deepStrictEqual(cfg.agenzia.descrizioneAllineataA,
-            ["sy_euro", "sy_-", "sy_%", "sconto_fid", "prezzo_offerta", "campo_offerta_KgL_sconto", "campo_offerta", "prezzo_offerta_etto", "rect_etto", "LBL_Titolari"], canale);
-        assert.deepStrictEqual(cfg.agenzia.elementiSottoDescrizione, ["PIEDE_Titolari*"], canale);
-        assert.deepStrictEqual(cfg.agenzia.elementiCheBloccanoDescrizione, ["*LOGO_carneS_USOdiANTIBIOTICI*"], canale);
+        //I20-1240: il fix di Edro21 e' la sequenza: le due disposizioni e il fix foto.
+        assert.deepStrictEqual(cfg.sequenza.map(p => p.tipo), ["simulazioni", "fixFoto"], canale);
+        assert.deepStrictEqual(cfg.sequenza[0].varianti.map(v => v.nome), ["testiALato", "descrizioneInBasso"], canale);
+        assert.deepStrictEqual(cfg.sequenza[0].varianti[1].passi, [{ tipo: "fase", fase: "descrizioneInBasso" }], canale);
+        assert.deepStrictEqual(cfg.sequenza[0].varianti[1].listSetCondizioni[0].setCondizioni[0].elementiDaNonTrovare, ["*LOGO_carneS_USOdiANTIBIOTICI*"], canale);
+        //come il custom: si scarta se la descrizione trabocca, tocca un logo o non sta nel box e il motore la deve rispingere dentro
+        assert.deepStrictEqual(cfg.sequenza[0].varianti[1].scartaSe.overflow, ["descrizione"], canale);
+        assert.strictEqual(cfg.sequenza[0].varianti[1].scartaSe.sovrapposizioni.length, 1, canale);
+        assert.deepStrictEqual(cfg.sequenza[0].varianti[1].scartaSe.rientroInGriglia, ["descrizione"], canale);
+        //la traccia la evitano gia' Campi_DX (testi a lato) e la regola stessa (in basso): niente fase in piu'
+        assert.deepStrictEqual(cfg.sequenza[1], { tipo: "fixFoto" }, canale);
+        //i dati del vecchio fix custom non ci sono piu'
+        assert.deepStrictEqual(cfg.agenzia, {}, canale);
     }
 });
 
 test("Edro21: il BOX40 senza fix, BOX14, BOX11 e BOX41 con quello del Plugin, gli altri con quello di Edro21, e il PoP senza fix", () => {
     for (const canale of ["SC", "SS", "SeD"]) {
         conRegole("Edro21", { area: "EM", canale, tipo: 1, formato: "F" });
-        assert.strictEqual(decisione(configurazione("BOX40"), 1, true), "nessuno", canale);
+        assert.strictEqual(decisione(configurazione("BOX40"), 1), "nessuno", canale);
         for (const box of ["BOX14", "BOX11", "BOX41"]) {
-            assert.strictEqual(decisione(configurazione(box), 1, true), "plugin", canale + " " + box);
+            assert.strictEqual(decisione(configurazione(box), 1), "plugin", canale + " " + box);
         }
+        //I20-1240: quello di Edro21 e' la sequenza del suo CssFramework, non piu' il custom.
         for (const box of ["BOX1", "BOX6", "BOX7", "BOX4", "BOX12"]) {
-            assert.strictEqual(decisione(configurazione(box), 1, true), "agenzia", canale + " " + box);
+            assert.strictEqual(decisione(configurazione(box), 1), "sequenza", canale + " " + box);
         }
     }
     conRegole("Edro21", { area: "EM", canale: "SC", tipo: 2, formato: "F" });
-    assert.strictEqual(decisione(configurazione("BOX1_PoP"), 2, true), "nessuno");
+    assert.strictEqual(decisione(configurazione("BOX1_PoP"), 2), "nessuno");
 });
 
 test("Edro21: il gruppo della descrizione nel BOX7 e nel BOX4, e nel BOX7 la descrizione non si sposta da sola", () => {
     conRegole("Edro21", { area: "EM", canale: "SC", tipo: 1, formato: "F" });
 
-    assert.deepStrictEqual(configurazione("BOX7").agenzia.gruppoDescrizione, "gruppo_descrizione_BIS");
-    assert.strictEqual(configurazione("BOX7").agenzia.spostaDescrizioneSenzaGruppo, false);
-    assert.deepStrictEqual(configurazione("BOX4").agenzia.gruppoDescrizione, "gruppo_descrizione_sottocosto");
-    assert.strictEqual(configurazione("BOX4").agenzia.spostaDescrizioneSenzaGruppo, undefined);
-    assert.strictEqual(configurazione("BOX1").agenzia.gruppoDescrizione, undefined);
+    //I20-1240: la variante descrizioneInBasso del box: nel BOX7 solo col gruppo del BIS, nel BOX4 col
+    //gruppo del sottocosto o con la descrizione, negli altri con la descrizione.
+    const inBasso = box => configurazione(box).sequenza[0].varianti[1];
+    assert.deepStrictEqual(inBasso("BOX7").listSetCondizioni[0].setCondizioni[0].elementiDaTrovare, ["gruppo_descrizione_BIS"]);
+    assert.deepStrictEqual(inBasso("BOX7").scartaSe.overflow, ["gruppo_descrizione_BIS"]);
+    assert.deepStrictEqual(inBasso("BOX4").scartaSe.overflow, ["descrizione", "gruppo_descrizione_sottocosto"]);
+    assert.deepStrictEqual(inBasso("BOX1").scartaSe.overflow, ["descrizione"]);
 });
 
 /* ---- i margini della foto al piazzamento ---- */
@@ -333,13 +349,15 @@ function corpoFunzione(testo, intestazione) {
 }
 
 test("il fix foto di Edro21 non scrive piu' nel codice box, gruppi ed elementi: li legge dalla configurazione", () => {
+    //I20-1240: il fix non sta piu' nel custom di Edro21; la sequenza che lo sostituisce, nel core, non
+    //conosce box, gruppi ed elementi di nessun cliente: li legge tutti dal CssFramework.
     const custom = senzaCommenti(fs.readFileSync(path.join(RADICE, "plugin", "Agenzie", "Edro21", "custom.js"), "utf8"));
-    const fix = ["setCustomFixFoto(box){", "gruppoDellaDescrizione(gruppo, etichette) {", "descrizioneTraLoghi(box, descrizione) {"]
-        .map(intestazione => corpoFunzione(custom, intestazione)).join("\n");
+    assert.doesNotMatch(custom, /setCustomFixFoto|gruppoDellaDescrizione|descrizioneTraLoghi/);
 
-    assert.doesNotMatch(fix, /"BOX\d+"|"gruppo_descrizione_|"PIEDE_Titolari"|LOGO_carneS_USOdiANTIBIOTICI|"LBL_Titolari"|"sy_euro"|getTipoLavorazioneCorrente/);
-    assert.match(fix, /var datiFix = CssFramework\.getConfigurazioneFixFoto\(box\)\.agenzia;/);
-    assert.match(fix, /CssFramework\.getConfigurazioneFixFoto\(box\)\.eccezioniIgnorati/);
+    const core = senzaCommenti(leggiFileDelPlugin("sistemazioneFoto/sistemazioneFoto.js"));
+    const fix = ["eseguiSequenza(box, sequenza) {", "eseguiPassi(box, passi) {", "eseguiSimulazioni(box, varianti) {", "motivoScarto(box, scartaSe, annotazioniPrima = null) {"]
+        .map(intestazione => corpoFunzione(core, intestazione)).join("\n");
+    assert.doesNotMatch(fix, /"BOX\d+"|"gruppo_descrizione_|"PIEDE_Titolari"|LOGO_carneS_USOdiANTIBIOTICI|"LBL_Titolari"|"sy_euro"|"descrizione"|getTipoLavorazioneCorrente/);
 });
 
 test("il core non legge piu' i dati del fix foto da customAgenzia", () => {
@@ -353,10 +371,13 @@ test("il core non legge piu' i dati del fix foto da customAgenzia", () => {
 
 test("all'impaginazione lavorazioni e modo del box decidono se e quale fix fare", () => {
     //TASK-99de57d1: la decisione sta in SistemazioneFoto.sistemaFotoAllImpaginazione (provata in
-    //fotoATuttoBox.test.js); i due punti dell'impaginazione le passano la referenza e il fix dell'agenzia.
+    //fotoATuttoBox.test.js); i due punti dell'impaginazione le passano la referenza. I20-1240: non piu'
+    //il fix dell'agenzia, che e' diventato la sequenza del CssFramework.
     const indexNew = senzaCommenti(leggiFileDelPlugin("indexNew.js"));
-    assert.match(indexNew, /boxImpaginato = SistemazioneFoto\.sistemaFotoAllImpaginazione\(boxImpaginato, itemRef, tipoLavorazione, fixFotoDellAgenzia\(\)\);/);
+    assert.match(indexNew, /boxImpaginato = SistemazioneFoto\.sistemaFotoAllImpaginazione\(boxImpaginato, itemRef, tipoLavorazione\);/);
     const reperimento = senzaCommenti(leggiFileDelPlugin("reperimentoFoto/reperimentoFoto.js"));
-    assert.match(reperimento, /var referenzaFixFoto = await referenzaDelBox\(boxImpaginato\);\s*boxImpaginato = SistemazioneFoto\.sistemaFotoAllImpaginazione\(boxImpaginato, referenzaFixFoto,\s*ficoProcess\.getTipoLavorazioneCorrente\(\), fixFotoDellAgenzia\(\)\);/);
-    assert.match(indexNew, /return customAgenzia\.setCustomFixFoto != null \? function \(box\) \{ return customAgenzia\.setCustomFixFoto\(box\); \} : null;/);
+    assert.match(reperimento, /var referenzaFixFoto = await referenzaDelBox\(boxImpaginato\);\s*boxImpaginato = SistemazioneFoto\.sistemaFotoAllImpaginazione\(boxImpaginato, referenzaFixFoto,\s*ficoProcess\.getTipoLavorazioneCorrente\(\)\);/);
+    for (const sorgente of [indexNew, reperimento]) {
+        assert.doesNotMatch(sorgente, /fixFotoDellAgenzia|setCustomFixFoto/);
+    }
 });

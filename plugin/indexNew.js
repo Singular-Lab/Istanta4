@@ -5353,10 +5353,8 @@ async function fixRefImpaginata(domandaGiaFatta = false) {
 /// nome che inganna: qui dentro `schedaRef` non e' la globale.
 ///
 /// DA SPOSTARE (task di divisione): in schedaRef.js, accanto alla funzione che avvolge.
-/// TASK-99de57d1: il fix foto dell'agenzia (customAgenzia.setCustomFixFoto) come funzione, o null.
-function fixFotoDellAgenzia() {
-    return customAgenzia.setCustomFixFoto != null ? function (box) { return customAgenzia.setCustomFixFoto(box); } : null;
-}
+/// I20-1240: qui c'era fixFotoDellAgenzia, il fix foto del custom.js dell'agenzia. Non c'e' piu': il fix
+/// lo dichiara il CssFramework (fixFoto.sequenza) e lo esegue SistemazioneFoto.
 
 /// TASK-99de57d1: il record della ref di un box, dal suo DNA: quello delle schede gia' scaricate
 /// se c'e', altrimenti lo si chiede a Istanta come fa fixRefImpaginata. Null se il box non ha DNA o
@@ -5583,7 +5581,7 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
     //TASK-99de57d1: con la referenza del box, per le regole che la guardano (FRESCHISSIMI di Coop).
     CssFramework.sospendiControlloSegnalazioniConflitti = true;
     try {
-        boxImpaginato = SistemazioneFoto.sistemaFotoAllImpaginazione(boxImpaginato, itemRef, tipoLavorazione, fixFotoDellAgenzia());
+        boxImpaginato = SistemazioneFoto.sistemaFotoAllImpaginazione(boxImpaginato, itemRef, tipoLavorazione);
     }
     finally {
         CssFramework.sospendiControlloSegnalazioniConflitti = false;
@@ -5612,6 +5610,7 @@ async function callAllOperationFixBox(boxImpaginato, bounds, itemRef, garbageKey
     CssFramework.controllaSegnalazioniConflittiPendenti(boxImpaginato);
     //I20-1042: gli spostamenti in griglia si segnalano solo ora, quando nessuno sposta piu' niente.
     CssFramework.controllaSpostamentiGrigliaPendenti(boxImpaginato);
+
 
     return boxImpaginato;
 }

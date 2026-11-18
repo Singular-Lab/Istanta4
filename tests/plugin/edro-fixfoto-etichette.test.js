@@ -12,6 +12,11 @@
  * eseguibile qui: si verifica la premessa della correzione sull'implementazione vera di
  * parseLabel, e che nella funzione non siano rimasti confronti sull'etichetta grezza.
  *
+ * I20-1240: setCustomFixFoto non c'e' piu'. La descrizione la porta in basso la regola
+ * descrizioneInBasso del CssFramework di Edro21, che segue i prezzi con il motore degli
+ * allineamenti: il motore cerca gli elementi nella mappa del box, le cui chiavi sono le etichette
+ * normalizzate. Si verifica quello, al posto della funzione.
+ *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
 
@@ -59,7 +64,16 @@ function corpoFunzione(testo, intestazione) {
     assert.fail(`corpo di ${intestazione} non delimitato`);
 }
 
-const setCustomFixFoto = corpoFunzione(customEdro, 'setCustomFixFoto(box){');
+//I20-1240: la regola del CssFramework di Edro21 che porta la descrizione a sinistra dei prezzi.
+const cssEdro = JSON.parse(fs.readFileSync(
+    path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', 'Edro21', 'SourceFrameworkCss.json'),
+    'utf8'));
+function regoleDescrizioneInBasso() {
+    return cssEdro.dbRidimensionamentiAllineamenti.modificheCssPerKit
+        .flatMap(kit => kit.operazioniPerBox)
+        .flatMap(voce => voce.allineamenti || [])
+        .filter(regola => regola.nomeGruppo === 'descrizioneInBasso');
+}
 
 test('l\'etichetta che porta il DNA si riduce al nome del campo', () => {
     //E' la premessa della correzione: se parseLabel smettesse di tagliare il DNA, il fix
@@ -85,13 +99,24 @@ test('il DNA viene appeso col separatore che parseLabel taglia', () => {
 
 test('il fix foto di Edro confronta l\'etichetta normalizzata, non quella grezza', () => {
     //La riga che ha causato la segnalazione: getElements.some(el => item.label == el).
-    assert.match(setCustomFixFoto, /getElements\.some\(el => etichetta == el\)/);
-    assert.match(setCustomFixFoto, /var etichetta = Utility\.parseLabel\(item\.label\)/);
+    //I20-1240: i prezzi da seguire li cerca il motore nella mappa del box, con le etichette normalizzate,
+    //e gli scarti delle varianti confrontano anche loro l'etichetta normalizzata.
+    const css = sorgente('CssFramework.js').replace(/\r/g, '');
+    const mappa = corpoFunzione(css, 'creaMappaturaBoxOriginale(box, prefissiDerivati) {');
+    assert.match(mappa, /: Utility\.parseLabel\(item\.label\);/);
+    assert.match(mappa, /mappaElementi\[chiaveElemento\] = \{/);
 
-    //Nessun confronto esatto sull'etichetta grezza deve sopravvivere nella funzione:
+    const sistemazione = sorgente(path.join('sistemazioneFoto', 'sistemazioneFoto.js')).replace(/\r/g, '');
+    const scarto = corpoFunzione(sistemazione, 'motivoScarto(box, scartaSe, annotazioniPrima = null) {');
+    //l'etichetta si normalizza una volta per elemento, e i confronti usano quella
+    assert.match(scarto, /letti\.push\(\{ item: item, etichetta: Utility\.parseLabel\(label\), visibile: null \}\);/);
+    assert.match(scarto, /regole\.some\(r => r\.test\(l\.etichetta\)\)/);
+
+    //Nessun confronto esatto sull'etichetta grezza deve sopravvivere negli scarti:
     //ognuno di quelli e' un campo che sparisce quando gli capita addosso il DNA.
-    const confrontiGrezzi = setCustomFixFoto.match(/item\.label\s*[=!]=\s*"/g) || [];
+    const confrontiGrezzi = scarto.match(/item\.label\s*[=!]=\s*"/g) || [];
     assert.deepStrictEqual(confrontiGrezzi, []);
+    assert.doesNotMatch(customEdro, /setCustomFixFoto\(box\)\{/);
 });
 
 test('i campi che possono portare il DNA sono quelli cercati dal fix foto', () => {
@@ -108,13 +133,11 @@ test('i campi che possono portare il DNA sono quelli cercati dal fix foto', () =
     assert.ok(campiDNA.includes('descrizione'), 'descrizione non e\' piu\' candidata DNA');
 
     //I campi del fix foto che sono anche candidati DNA: sono quelli che il difetto colpiva.
-    //TASK-9bf94d47: getElements viene dalla configurazione del fix foto, la sezione fixFoto
-    //generale del CssFramework di Edro21 (agenzia.descrizioneAllineataA).
-    assert.match(setCustomFixFoto, /const getElements = Array\.isArray\(datiFix\.descrizioneAllineataA\) \? datiFix\.descrizioneAllineataA : \[\];/);
-    const cssEdro = JSON.parse(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', 'Edro21', 'SourceFrameworkCss.json'),
-        'utf8'));
-    const getElements = cssEdro.dbRidimensionamentiAllineamenti.fixFoto.agenzia.descrizioneAllineataA;
+    //I20-1240: sono gli elementi che la regola descrizioneInBasso segue sull'asse x, in ogni box.
+    const regole = regoleDescrizioneInBasso();
+    assert.ok(regole.length > 0, 'nessuna regola descrizioneInBasso nel CssFramework di Edro21');
+    const getElements = regole[0].followAnchor.find(a => a.xAnchor != null).nomiGruppiSeguiti;
+    regole.forEach(regola => assert.deepStrictEqual(regola.followAnchor.find(a => a.xAnchor != null).nomiGruppiSeguiti, getElements));
 
     const esposti = getElements.filter(campo => campiDNA.includes(campo));
     assert.ok(esposti.length > 0, 'nessun campo in comune: il test non sta piu\' verificando nulla');

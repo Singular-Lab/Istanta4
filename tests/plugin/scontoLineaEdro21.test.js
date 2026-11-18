@@ -161,7 +161,8 @@ test("la sovrastruttura Sconto linea c'e' nei due kit volantino, con le condizio
         const colonna = allineamentiDiDefault(k).find(a => a.nomeGruppo === "Campi_DX_sconto_linea");
         assert.deepStrictEqual(s.listSetCondizioni, colonna.listSetCondizioni);
         //cambia solo la scelta dello spazio delle foto
-        assert.deepStrictEqual(s.operazioni.sceltaSpazioFoto, { modo: "centrato", tolleranzaArea: 0.7, asseCentratura: "x" });
+        //I20-1240: con lo spareggio sul vuoto, come le altre preferenze delle foto di Edro21.
+        assert.deepStrictEqual(s.operazioni.sceltaSpazioFoto, { modo: "centrato", tolleranzaArea: 0.7, asseCentratura: "x", spareggio: "vuotoMinore" });
         for (const chiave of ["ridimensionamenti", "postRidimensionamenti", "allineamenti", "segnalazioniConflitti",
             "duplicazioni", "ordiniZ", "disattiva"]) {
             assert.deepStrictEqual(s.operazioni[chiave], [], chiave);
@@ -174,7 +175,8 @@ test("la sovrastruttura Sconto linea c'e' nei due kit volantino, con le condizio
 
 test("con la regola di sempre il nofoto finiva nello spazio stretto a destra, per 0,3 mm di centratura", () => {
     const diSempre = kitVolantino[0].operazioniPerBox.find(op => op.nomiBox.length === 0).sceltaSpazioFoto;
-    assert.deepStrictEqual(diSempre, { modo: "centrato", tolleranzaArea: 0.7, asseCentratura: "xy" });
+    //I20-1240: con lo spareggio sul vuoto, come le altre preferenze delle foto di Edro21.
+    assert.deepStrictEqual(diSempre, { modo: "centrato", tolleranzaArea: 0.7, asseCentratura: "xy", spareggio: "vuotoMinore" });
     assert.strictEqual(scelto(NOFOTO, diSempre), 1);
 });
 

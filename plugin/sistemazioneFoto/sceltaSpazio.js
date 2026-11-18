@@ -28,6 +28,21 @@ const sceltaSpazio = {
     //Usata quando la regola non dice altro: lo scarto d'area accettato per centrarsi.
     tolleranzaPredefinita: 0.7,
 
+    //I20-1240: lo spareggio fra due disposizioni del box a parita' di foto (sceltaSpazioFoto.spareggio).
+    vuotoMinore: "vuotoMinore",
+
+    //I20-1240: due disposizioni hanno foto pari quando le aree differiscono al piu' di questa quota
+    //della piu' grande: sotto, la differenza e' rumore delle misure e non deve decidere.
+    tolleranzaAreaPari: 0.02,
+
+    //I20-1240: due vuoti piu' grandi che differiscono al piu' di questa quota della base valgono
+    //uguali, e decide la meta' bassa. I 2 punti del documento della issue, da tarare sui volantini.
+    scartoVuoto: 0.02,
+
+    //I20-1240: sotto questa differenza la meta' bassa e' occupata uguale. Evita che una
+    //reimpaginazione sposti la descrizione per pochi decimi.
+    scartoMetaBassa: 0.01,
+
     /// La preferenza del cliente messa in sicurezza: modo sconosciuto vale areaMassima, e una
     /// tolleranza fuori scala torna nei limiti. Sopra 1 nessun candidato sarebbe ammesso e le
     /// foto non si muoverebbero piu': un refuso in configurazione fermerebbe il fixFoto in silenzio.
@@ -51,7 +66,12 @@ const sceltaSpazio = {
             asse = "xy";
         }
 
-        return { modo: modo, tolleranzaArea: tolleranza, asseCentratura: asse };
+        //I20-1240: lo spareggio sul vuoto vale solo se il cliente lo chiede; altro testo non vale niente.
+        const spareggio = String(opzioni.spareggio || "").toLowerCase() === sceltaSpazio.vuotoMinore.toLowerCase()
+            ? sceltaSpazio.vuotoMinore
+            : null;
+
+        return { modo: modo, tolleranzaArea: tolleranza, asseCentratura: asse, spareggio: spareggio };
     },
 
     /*
@@ -286,6 +306,12 @@ const sceltaSpazio = {
      * dentro la tolleranza rispetto alla piu' grande vince la piu' centrata; a pari centratura
      * (entro scartoCentratura) decide di nuovo l'area. Una disposizione senza posto per le foto
      * non vince mai, se l'altra ce l'ha.
+     *
+     * I20-1240: se la preferenza chiede lo spareggio vuotoMinore e le due prove portano il loro
+     * vuoto (vuotoMaggiore), a parita' di foto - aree entro tolleranzaAreaPari e, col criterio
+     * centrato, stessa centratura - decide il vuoto: vince la disposizione il cui vuoto piu'
+     * grande e' piu' piccolo (spareggioSulVuoto). Quando le foto non sono pari, o lo spareggio
+     * non decide, la scelta resta quella di sempre.
      */
     preferisciDisposizione(prima, seconda, preferenza) {
         const valida = function (prova) {
@@ -303,8 +329,19 @@ const sceltaSpazio = {
         const perArea = areaSeconda > areaPrima ? "seconda" : "prima";
 
         const opzioni = sceltaSpazio.normalizzaPreferenza(preferenza);
-        if (opzioni.modo !== sceltaSpazio.centrato) {
+        //I20-1240: qui si arriva solo con le foto pari per centratura (o senza criterio centrato).
+        const perAreaOVuoto = function () {
+            if (opzioni.spareggio === sceltaSpazio.vuotoMinore && sceltaSpazio.areePari(prima.area, seconda.area)) {
+                const perVuoto = sceltaSpazio.spareggioSulVuoto(prima.vuoto, seconda.vuoto);
+                if (perVuoto != null) {
+                    return perVuoto;
+                }
+            }
             return perArea;
+        };
+
+        if (opzioni.modo !== sceltaSpazio.centrato) {
+            return perAreaOVuoto();
         }
 
         const soglia = Math.max(areaPrima, areaSeconda) * opzioni.tolleranzaArea;
@@ -320,7 +357,7 @@ const sceltaSpazio = {
         const distanzaPrima = Number(prima.distanzaDalCentro);
         const distanzaSeconda = Number(seconda.distanzaDalCentro);
         if (!isFinite(distanzaPrima) || !isFinite(distanzaSeconda)) {
-            return perArea;
+            return perAreaOVuoto();
         }
         if (distanzaSeconda < distanzaPrima - sceltaSpazio.scartoCentratura) {
             return "seconda";
@@ -328,7 +365,183 @@ const sceltaSpazio = {
         if (distanzaPrima < distanzaSeconda - sceltaSpazio.scartoCentratura) {
             return "prima";
         }
-        return perArea;
+        return perAreaOVuoto();
+    },
+
+    /*
+     * I20-1240: se due rettangoli [alto, sinistra, basso, destra] si sovrappongono. Toccarsi solo
+     * sul bordo non conta, nemmeno con il centesimo di millimetro degli arrotondamenti di InDesign:
+     * un testo allineato al bordo di un altro non lo tocca. Un rettangolo non valido non tocca niente.
+     */
+    rettangoliSiToccano(a, b) {
+        const valido = r => Array.isArray(r) && r.length >= 4 && r.slice(0, 4).every(v => isFinite(Number(v)));
+        if (!valido(a) || !valido(b)) {
+            return false;
+        }
+        const t = 0.01;
+        return a[0] < b[2] - t && a[2] > b[0] + t && a[1] < b[3] - t && a[3] > b[1] + t;
+    },
+
+    /*
+     * I20-1240: se il rettangolo interno [alto, sinistra, basso, destra] sta dentro il contenitore,
+     * con un centesimo di millimetro di tolleranza per gli arrotondamenti di InDesign.
+     */
+    rettangoloDentro(interno, contenitore) {
+        const valido = r => Array.isArray(r) && r.length >= 4 && r.slice(0, 4).every(v => isFinite(Number(v)));
+        if (!valido(interno) || !valido(contenitore)) {
+            return true;
+        }
+        const t = 0.01;
+        return interno[0] >= contenitore[0] - t && interno[1] >= contenitore[1] - t
+            && interno[2] <= contenitore[2] + t && interno[3] <= contenitore[3] + t;
+    },
+
+    /*
+     * I20-1240: fra le prove delle varianti di una simulazione del fix foto (fixFoto.sequenza),
+     * l'indice di quella da tenere, o -1 se nessuna ha posto per le foto. Una prova null e' una
+     * variante non provata o scartata. Le varianti si confrontano in ordine con
+     * preferisciDisposizione: la migliore finora resta finche' una successiva non la batte, quindi
+     * a parita' vince quella che viene prima, come fra due disposizioni.
+     */
+    migliorDisposizione(prove, preferenza) {
+        const valida = function (prova) {
+            return prova != null && isFinite(Number(prova.area)) && Number(prova.area) > 0;
+        };
+        let migliore = -1;
+        (Array.isArray(prove) ? prove : []).forEach(function (prova, i) {
+            if (!valida(prova)) {
+                return;
+            }
+            if (migliore < 0 || sceltaSpazio.preferisciDisposizione(prove[migliore], prova, preferenza) === "seconda") {
+                migliore = i;
+            }
+        });
+        return migliore;
+    },
+
+    /// I20-1240: se le aree delle foto di due disposizioni sono pari: differiscono al piu' di
+    /// tolleranzaAreaPari della piu' grande.
+    areePari(areaPrima, areaSeconda) {
+        const a = Number(areaPrima);
+        const b = Number(areaSeconda);
+        if (!isFinite(a) || !isFinite(b)) {
+            return false;
+        }
+        return Math.abs(a - b) <= Math.max(a, b) * sceltaSpazio.tolleranzaAreaPari;
+    },
+
+    /*
+     * I20-1240: fra due disposizioni con le foto pari, quale tenere guardando il vuoto, o null se
+     * il vuoto non decide. vuotoPrima e vuotoSeconda sono gli esiti di vuotoMaggiore.
+     * Vince il vuoto piu' grande piu' piccolo: l'occhio vede il singolo vuoto, non la somma, e
+     * un blocco vuoto grande si legge come un contenuto mancante. Entro scartoVuoto vince la meta'
+     * bassa piu' occupata; entro scartoMetaBassa il vuoto non decide.
+     */
+    spareggioSulVuoto(vuotoPrima, vuotoSeconda) {
+        const valido = function (v) {
+            return v != null && isFinite(Number(v.quota)) && isFinite(Number(v.metaBassaOccupata));
+        };
+        if (!valido(vuotoPrima) || !valido(vuotoSeconda)) {
+            return null;
+        }
+
+        const differenzaVuoto = Number(vuotoPrima.quota) - Number(vuotoSeconda.quota);
+        if (Math.abs(differenzaVuoto) > sceltaSpazio.scartoVuoto) {
+            return differenzaVuoto > 0 ? "seconda" : "prima";
+        }
+
+        const differenzaBassa = Number(vuotoSeconda.metaBassaOccupata) - Number(vuotoPrima.metaBassaOccupata);
+        if (Math.abs(differenzaBassa) > sceltaSpazio.scartoMetaBassa) {
+            return differenzaBassa > 0 ? "seconda" : "prima";
+        }
+        return null;
+    },
+
+    /*
+     * I20-1240: il vuoto della base di un box con gli elementi dove sono.
+     * rettangoli: gli ingombri occupati { x, y, width, height }, relativi alla base come i
+     * candidati; quello che esce dalla base non conta. Restituisce, o null senza una base:
+     *  - quota: il rettangolo vuoto piu' grande, in quota dell'area della base;
+     *  - rettangolo: quel rettangolo { x, y, width, height };
+     *  - metaBassaOccupata: la quota occupata della meta' inferiore della base.
+     *
+     * La base si divide in una griglia sui bordi degli ingombri (e sulla meta' altezza); le celle
+     * coperte da un ingombro sono occupate, e il rettangolo vuoto piu' grande e' la piu' grande
+     * unione rettangolare di celle libere. Le somme progressive delle celle occupate dicono in un
+     * passo se un rettangolo di celle e' tutto libero.
+     */
+    vuotoMaggiore(larghezzaBase, altezzaBase, rettangoli) {
+        const L = Number(larghezzaBase);
+        const H = Number(altezzaBase);
+        if (!isFinite(L) || !isFinite(H) || L <= 0 || H <= 0) {
+            return null;
+        }
+
+        const occupati = [];
+        (Array.isArray(rettangoli) ? rettangoli : []).forEach(function (r) {
+            if (r == null) {
+                return;
+            }
+            const x1 = Math.max(0, Number(r.x));
+            const y1 = Math.max(0, Number(r.y));
+            const x2 = Math.min(L, Number(r.x) + Number(r.width));
+            const y2 = Math.min(H, Number(r.y) + Number(r.height));
+            if ([x1, y1, x2, y2].every(isFinite) && x2 > x1 && y2 > y1) {
+                occupati.push({ x1: x1, y1: y1, x2: x2, y2: y2 });
+            }
+        });
+
+        const meta = H / 2;
+        const ordinati = function (valori) {
+            return valori.filter(function (v, i) { return valori.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+        };
+        const xs = ordinati(occupati.reduce(function (acc, o) { return acc.concat([o.x1, o.x2]); }, [0, L]));
+        const ys = ordinati(occupati.reduce(function (acc, o) { return acc.concat([o.y1, o.y2]); }, [0, H, meta]));
+        const nx = xs.length - 1;
+        const ny = ys.length - 1;
+
+        //somme[j][i]: celle occupate nelle righe < j e colonne < i.
+        const somme = [];
+        for (let j = 0; j <= ny; j++) {
+            somme.push(new Array(nx + 1).fill(0));
+        }
+        let liberoBasso = 0;
+        for (let j = 0; j < ny; j++) {
+            for (let i = 0; i < nx; i++) {
+                const cx = (xs[i] + xs[i + 1]) / 2;
+                const cy = (ys[j] + ys[j + 1]) / 2;
+                const occupata = occupati.some(function (o) { return cx > o.x1 && cx < o.x2 && cy > o.y1 && cy < o.y2; });
+                somme[j + 1][i + 1] = somme[j][i + 1] + somme[j + 1][i] - somme[j][i] + (occupata ? 1 : 0);
+                if (!occupata && ys[j] >= meta) {
+                    liberoBasso += (xs[i + 1] - xs[i]) * (ys[j + 1] - ys[j]);
+                }
+            }
+        }
+        const occupateFra = function (i1, j1, i2, j2) {
+            return somme[j2 + 1][i2 + 1] - somme[j1][i2 + 1] - somme[j2 + 1][i1] + somme[j1][i1];
+        };
+
+        let migliore = null;
+        let areaMigliore = 0;
+        for (let j1 = 0; j1 < ny; j1++) {
+            for (let i1 = 0; i1 < nx; i1++) {
+                for (let i2 = i1; i2 < nx && occupateFra(i1, j1, i2, j1) === 0; i2++) {
+                    for (let j2 = j1; j2 < ny && occupateFra(i1, j1, i2, j2) === 0; j2++) {
+                        const area = (xs[i2 + 1] - xs[i1]) * (ys[j2 + 1] - ys[j1]);
+                        if (area > areaMigliore) {
+                            areaMigliore = area;
+                            migliore = { x: xs[i1], y: ys[j1], width: xs[i2 + 1] - xs[i1], height: ys[j2 + 1] - ys[j1] };
+                        }
+                    }
+                }
+            }
+        }
+
+        return {
+            quota: areaMigliore / (L * H),
+            rettangolo: migliore,
+            metaBassaOccupata: 1 - liberoBasso / (L * H / 2)
+        };
     },
 
     /*
