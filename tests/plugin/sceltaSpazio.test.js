@@ -324,3 +324,177 @@ test("il fix foto normalizza prima di disporre le foto", () => {
     assert.ok(normalizza < raggruppa,
         "normalizzare dopo aver raggruppato non servirebbe: le proporzioni sono gia' state usate");
 });
+
+/*
+ * I20-1240: fra le due disposizioni del box di Edro21 (descrizione sopra il prezzo, oppure a
+ * sinistra del prezzo in basso), a parita' di foto, vince quella col vuoto piu' grande piu' piccolo.
+ * Le misure sono quelle del documento della issue ("Scelta del layout del modulo"), in pixel dello
+ * screenshot, relative al modulo: base 1673 x 1666.
+ */
+const BASE_L = 1673;
+const BASE_H = 1666;
+//Immagine al centro, descrizione e prezzo sul fondo: la disposizione da scegliere.
+const TESTI_IN_BASSO = [
+    { x: 0, y: 320, width: 1673, height: 568 },   //immagine
+    { x: 357, y: 1025, width: 820, height: 641 }, //descrizione
+    { x: 904, y: 1190, width: 769, height: 380 }, //prezzo
+    { x: 853, y: 1570, width: 820, height: 96 }   //prezzo al kg
+];
+//Immagine in alto, descrizione sopra il prezzo nella colonna destra: lascia il blocco vuoto in basso a sinistra.
+const TESTI_A_LATO = [
+    { x: 0, y: 79, width: 1673, height: 567 },
+    { x: 853, y: 550, width: 820, height: 640 },
+    { x: 904, y: 1190, width: 769, height: 380 },
+    { x: 853, y: 1570, width: 820, height: 96 }
+];
+const SPAREGGIO = { modo: 'centrato', tolleranzaArea: 0.7, asseCentratura: 'x', spareggio: 'vuotoMinore' };
+
+test('I20-1240: il vuoto piu\' grande e la meta\' bassa occupata, sulle misure del documento', () => {
+    const inBasso = sceltaSpazio.vuotoMaggiore(BASE_L, BASE_H, TESTI_IN_BASSO);
+    const aLato = sceltaSpazio.vuotoMaggiore(BASE_L, BASE_H, TESTI_A_LATO);
+
+    //La fascia sopra l'immagine, 1673 x 320: il 19,2%.
+    assert.deepStrictEqual(inBasso.rettangolo, { x: 0, y: 0, width: 1673, height: 320 });
+    assert.strictEqual(inBasso.quota.toFixed(3), '0.192');
+    assert.strictEqual(inBasso.metaBassaOccupata.toFixed(3), '0.613');
+
+    //Il blocco in basso a sinistra, 853 x 1020: il 31,2%.
+    assert.deepStrictEqual(aLato.rettangolo, { x: 0, y: 646, width: 853, height: 1020 });
+    assert.strictEqual(aLato.quota.toFixed(3), '0.312');
+    assert.strictEqual(aLato.metaBassaOccupata.toFixed(3), '0.476');
+});
+
+test('I20-1240: gli ingombri fuori dalla base non contano, e una base vuota e\' tutta vuota', () => {
+    const vuota = sceltaSpazio.vuotoMaggiore(100, 50, []);
+    assert.strictEqual(vuota.quota, 1);
+    assert.strictEqual(vuota.metaBassaOccupata, 0);
+
+    //Un ingombro che sborda a destra conta solo per la parte dentro.
+    const sborda = sceltaSpazio.vuotoMaggiore(100, 50, [{ x: 80, y: 0, width: 40, height: 50 }]);
+    assert.deepStrictEqual(sborda.rettangolo, { x: 0, y: 0, width: 80, height: 50 });
+
+    assert.strictEqual(sceltaSpazio.vuotoMaggiore(0, 50, []), null);
+});
+
+test('I20-1240: a parita\' di foto vince la disposizione col vuoto piu\' piccolo (box della pancetta)', () => {
+    //Stessa foto e stessa centratura nelle due disposizioni: oggi restava la prima.
+    const prima = { area: 950000, distanzaDalCentro: 0, vuoto: sceltaSpazio.vuotoMaggiore(BASE_L, BASE_H, TESTI_A_LATO) };
+    const seconda = { area: 950000, distanzaDalCentro: 0, vuoto: sceltaSpazio.vuotoMaggiore(BASE_L, BASE_H, TESTI_IN_BASSO) };
+
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(prima, seconda, SPAREGGIO), 'seconda');
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(seconda, prima, SPAREGGIO), 'prima');
+    //Foto che differiscono entro il 2% valgono pari.
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(prima, Object.assign({}, seconda, { area: 935000 }), SPAREGGIO), 'seconda');
+});
+
+test('I20-1240: se le foto non sono pari decide la foto, come prima', () => {
+    const vuotoGrande = sceltaSpazio.vuotoMaggiore(BASE_L, BASE_H, TESTI_A_LATO);
+    const vuotoPiccolo = sceltaSpazio.vuotoMaggiore(BASE_L, BASE_H, TESTI_IN_BASSO);
+
+    //Con la descrizione spostata la foto e' piu' piccola del 10%: resta la prima, foto piu' grande.
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(
+        { area: 1000, distanzaDalCentro: 0, vuoto: vuotoGrande },
+        { area: 900, distanzaDalCentro: 0, vuoto: vuotoPiccolo }, SPAREGGIO), 'prima');
+
+    //La seconda e' piu' centrata: vince lei anche se lascia piu' vuoto.
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(
+        { area: 1000, distanzaDalCentro: 5, vuoto: vuotoPiccolo },
+        { area: 1000, distanzaDalCentro: 1, vuoto: vuotoGrande }, SPAREGGIO), 'seconda');
+});
+
+test('I20-1240: con vuoti quasi uguali decide la meta\' bassa piu\' occupata', () => {
+    const prima = { area: 1000, distanzaDalCentro: 0, vuoto: { quota: 0.200, metaBassaOccupata: 0.50 } };
+    const seconda = { area: 1000, distanzaDalCentro: 0, vuoto: { quota: 0.215, metaBassaOccupata: 0.60 } };
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(prima, seconda, SPAREGGIO), 'seconda');
+
+    //Pari anche la meta' bassa: decide la foto come sempre, a pari area resta la prima.
+    const pari = { area: 1000, distanzaDalCentro: 0, vuoto: { quota: 0.21, metaBassaOccupata: 0.505 } };
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(prima, pari, SPAREGGIO), 'prima');
+});
+
+test('I20-1240: senza lo spareggio, o senza le misure del vuoto, la scelta e\' quella di sempre', () => {
+    const prima = { area: 1000, distanzaDalCentro: 0, vuoto: sceltaSpazio.vuotoMaggiore(BASE_L, BASE_H, TESTI_A_LATO) };
+    const seconda = { area: 1000, distanzaDalCentro: 0, vuoto: sceltaSpazio.vuotoMaggiore(BASE_L, BASE_H, TESTI_IN_BASSO) };
+
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(prima, seconda, { modo: 'centrato', tolleranzaArea: 0.7, asseCentratura: 'x' }), 'prima');
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione(prima, seconda, null), 'prima');
+    assert.strictEqual(sceltaSpazio.preferisciDisposizione({ area: 1000, distanzaDalCentro: 0 }, { area: 1000, distanzaDalCentro: 0 }, SPAREGGIO), 'prima');
+    assert.strictEqual(sceltaSpazio.normalizzaPreferenza({ spareggio: 'altro' }).spareggio, null);
+    assert.strictEqual(sceltaSpazio.normalizzaPreferenza({ spareggio: 'VUOTOMINORE' }).spareggio, 'vuotoMinore');
+});
+
+test('I20-1240: il CssFramework di Edro21 chiede lo spareggio sul vuoto in ogni preferenza delle foto', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const css = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'Istanta', 'wwwroot', 'external_source', 'Edro21', 'SourceFrameworkCss.json'), 'utf8').replace(/^﻿/, ''));
+
+    const preferenze = [];
+    (function cerca(nodo) {
+        if (Array.isArray(nodo)) { nodo.forEach(cerca); return; }
+        if (nodo == null || typeof nodo !== 'object') { return; }
+        if (nodo.sceltaSpazioFoto != null) { preferenze.push(nodo.sceltaSpazioFoto); }
+        Object.values(nodo).forEach(cerca);
+    })(css);
+
+    assert.ok(preferenze.length > 0);
+    preferenze.forEach(p => assert.strictEqual(sceltaSpazio.normalizzaPreferenza(p).spareggio, 'vuotoMinore'));
+});
+
+test('I20-1240: la prova del fix misura il vuoto solo se il box chiede lo spareggio', () => {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const sorgente = fs.readFileSync(path.join(__dirname, '..', '..', 'plugin', 'sistemazioneFoto', 'sistemazioneFoto.js'), 'utf8');
+    assert.match(sorgente, /if \(sceltaSpazio\.normalizzaPreferenza\(preferenzaSpazio\)\.spareggio === sceltaSpazio\.vuotoMinore\) \{\s*this\.ultimaProiezione\.vuoto = this\.vuotoDellaDisposizione\(larghezzaBase, altezzaBase, obstacles, absoluteBounds\);/);
+});
+
+/* ---- I20-1240: la scelta fra le varianti delle simulazioni del fix foto ---- */
+
+test('I20-1240: fra piu\' varianti vince la migliore con le regole di sempre', () => {
+    const centrato = { modo: 'centrato', tolleranzaArea: 0.7, asseCentratura: 'xy' };
+    const prove = [
+        { area: 1000, distanzaDalCentro: 12 },
+        { area: 900, distanzaDalCentro: 6 },
+        { area: 850, distanzaDalCentro: 1 }
+    ];
+
+    assert.strictEqual(sceltaSpazio.migliorDisposizione(prove, centrato), 2);
+    //con l'area massima vince la piu' grande
+    assert.strictEqual(sceltaSpazio.migliorDisposizione(prove, null), 0);
+});
+
+test('I20-1240: a parita\' vince la variante che viene prima', () => {
+    const prove = [{ area: 500 }, { area: 500.4 }, { area: 500 }];
+
+    assert.strictEqual(sceltaSpazio.migliorDisposizione(prove, null), 0);
+});
+
+test('I20-1240: le varianti scartate o senza posto per le foto non vincono', () => {
+    assert.strictEqual(sceltaSpazio.migliorDisposizione([null, { area: 0 }, { area: 300 }], null), 2);
+    assert.strictEqual(sceltaSpazio.migliorDisposizione([null, null], null), -1);
+    assert.strictEqual(sceltaSpazio.migliorDisposizione([], null), -1);
+    assert.strictEqual(sceltaSpazio.migliorDisposizione(null, null), -1);
+});
+
+test('I20-1240: con due varianti la scelta e\' quella fra due disposizioni, spareggio compreso', () => {
+    const preferenza = { modo: 'centrato', tolleranzaArea: 0.7, asseCentratura: 'xy', spareggio: 'vuotoMinore' };
+    const lato = { area: 1000, distanzaDalCentro: 3, vuoto: { quota: 0.312, metaBassaOccupata: 0.476 } };
+    const basso = { area: 1000, distanzaDalCentro: 3, vuoto: { quota: 0.192, metaBassaOccupata: 0.613 } };
+
+    assert.strictEqual(sceltaSpazio.migliorDisposizione([lato, basso], preferenza),
+        sceltaSpazio.preferisciDisposizione(lato, basso, preferenza) === 'seconda' ? 1 : 0);
+    assert.strictEqual(sceltaSpazio.migliorDisposizione([lato, basso], preferenza), 1);
+});
+
+test('I20-1240: due rettangoli si toccano solo se si sovrappongono, non sul bordo', () => {
+    assert.strictEqual(sceltaSpazio.rettangoliSiToccano([0, 0, 10, 10], [5, 5, 15, 15]), true);
+    assert.strictEqual(sceltaSpazio.rettangoliSiToccano([0, 0, 10, 10], [10, 0, 20, 10]), false);
+    assert.strictEqual(sceltaSpazio.rettangoliSiToccano([0, 0, 10, 10], [20, 20, 30, 30]), false);
+    assert.strictEqual(sceltaSpazio.rettangoliSiToccano(null, [0, 0, 1, 1]), false);
+});
+
+
+test('I20-1240: un elemento sta dentro la base anche col centesimo di millimetro di InDesign', () => {
+    assert.strictEqual(sceltaSpazio.rettangoloDentro([1, 1, 9, 9], [0, 0, 10, 10]), true);
+    assert.strictEqual(sceltaSpazio.rettangoloDentro([-0.005, 0, 10.005, 10], [0, 0, 10, 10]), true);
+    assert.strictEqual(sceltaSpazio.rettangoloDentro([0, -2, 10, 8], [0, 0, 10, 10]), false);
+});

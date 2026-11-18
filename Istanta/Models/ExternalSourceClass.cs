@@ -3179,8 +3179,9 @@ namespace Istanta.Models
         /// Tipi di lavorazione in cui il fix si applica all'impaginazione: 1 volantino, 2 PoP.
         public List<int>? lavorazioni { get; set; }
 
-        /// All'impaginazione: "automatico" (quello dell'agenzia, se ne ha uno, altrimenti quello
-        /// del Plugin), "semplice" (solo quello del Plugin), "nessuno" (le foto restano dove sono).
+        /// All'impaginazione: "automatico" (la sequenza, se il box ne dichiara una, altrimenti il
+        /// fix del Plugin; I20-1240: prima era il fix del custom.js dell'agenzia), "semplice" (solo
+        /// il fix del Plugin), "nessuno" (le foto restano dove sono).
         /// TASK-99de57d1: "aTuttoBox", la cornice della foto primaria prende misure e posizione
         /// della base, senza ostacoli, e l'immagine si adatta come dice adattamentoImmagine.
         public string? modo { get; set; }
@@ -3213,9 +3214,62 @@ namespace Istanta.Models
         /// Margine in mm attorno alle foto: [alto e basso, sinistra e destra].
         public List<double>? marginiFoto { get; set; }
 
-        /// I dati che usa solo il fix foto dell'agenzia (setCustomFixFoto nel suo custom.js), come
-        /// li vuole lei: il Plugin li passa senza leggerli, chiave per chiave.
+        /// I dati che usava solo il fix foto dell'agenzia (setCustomFixFoto nel suo custom.js), come
+        /// li voleva lei: il Plugin li passa senza leggerli, chiave per chiave. I20-1240: nessun
+        /// custom.js ha piu' quel fix (Edro21 usa la sequenza); resta per non perdere i dati di un file.
         public JObject? agenzia { get; set; }
+
+        /// I20-1240: l'ordine delle operazioni del fix foto all'impaginazione, al Fix referenza e al
+        /// ricollegamento delle foto, al posto del fix dell'agenzia: passi "fixFoto", "fase" (le
+        /// regole con quella fase) e "simulazioni" (il box provato in piu' varianti, si tiene la
+        /// migliore). Null: il fix di sempre. Non vale nei modi semplice, nessuno e aTuttoBox.
+        public List<PassoFixFotoObj>? sequenza { get; set; }
+    }
+
+    /// I20-1240: un passo della sequenza del fix foto. tipo: "fixFoto", "fase" o "simulazioni".
+    public class PassoFixFotoObj
+    {
+        public string tipo { get; set; } = "";
+
+        /// Nel passo "fase": il nome della fase, lo stesso scritto nel campo fase delle regole.
+        public string? fase { get; set; }
+
+        /// Nel passo "simulazioni": le varianti da provare, nell'ordine; a parita' vince la prima.
+        public List<VarianteFixFotoObj>? varianti { get; set; }
+    }
+
+    /// I20-1240: una variante delle simulazioni del fix foto: i passi ("fixFoto" e "fase") che la
+    /// fanno, le condizioni perche' la si provi e quando scartarla.
+    public class VarianteFixFotoObj
+    {
+        public string nome { get; set; } = "";
+        public List<PassoFixFotoObj> passi { get; set; } = new();
+        public List<SetCondizioni>? listSetCondizioni { get; set; }
+        public ScartaSeFixFotoObj? scartaSe { get; set; }
+    }
+
+    /// I20-1240: quando una variante si scarta. Etichette, anche con l'asterisco.
+    public class ScartaSeFixFotoObj
+    {
+        /// Testi che non devono traboccare.
+        public List<string>? overflow { get; set; }
+
+        /// Elementi che non devono toccarne altri.
+        public List<SovrapposizioneFixFotoObj>? sovrapposizioni { get; set; }
+
+        /// Elementi che devono restare dentro la base del box.
+        public List<string>? fuoriBase { get; set; }
+
+        /// Elementi che il motore, durante la variante, ha dovuto riportare dentro la griglia del box
+        /// (lo spostamento che annota per la CSF-008), come la descrizione che non ci sta nemmeno stretta.
+        public List<string>? rientroInGriglia { get; set; }
+    }
+
+    /// I20-1240: gli elementi (i testi misurati sulle righe) che non devono toccare quelli di con.
+    public class SovrapposizioneFixFotoObj
+    {
+        public List<string> elementi { get; set; } = new();
+        public List<string> con { get; set; } = new();
     }
 
     /// TASK-99de57d1: una regola condizionale del fix foto: i suoi valori valgono quando la
@@ -3317,6 +3371,10 @@ namespace Istanta.Models
 
         /// Su quale asse si misura la centratura: "x", "y" oppure "xy" (predefinito).
         public string asseCentratura { get; set; } = "xy";
+
+        /// I20-1240: "vuotoMinore": a parita' di foto fra due disposizioni del box vince quella che
+        /// lascia il vuoto piu' grande piu' piccolo. Null: nessuno spareggio.
+        public string? spareggio { get; set; }
     }
 
     /// Duplica un elemento del box una volta per ogni bersaglio, dando a ogni copia

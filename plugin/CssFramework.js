@@ -85,6 +85,7 @@ const CssFramework =
                         var allineamentiDB = objResult;
                         //TASK-9bf94d47: il fix foto legge da qui la sua configurazione fuori dal contesto.
                         me.regoleScaricate = allineamentiDB;
+                        cssSequenzaOperazioni.registraFasiDelFile(allineamentiDB);
                         fs.writeFileSync(Utility.percorsoDati("allineamenti.json"), JSON.stringify(allineamentiDB));
                         callback(null, allineamentiDB); // Passiamo `null` come primo argomento per indicare che non c'è errore
                     }catch(e){
@@ -200,26 +201,38 @@ const CssFramework =
         }
 
         try {
-            for (var i = 0; i < box.allPageItems.length; i++) {
-                var item = box.allPageItems[i];
-                if (item == null || !item.isValid || !item.label) {
+            //I20-1240: l'elenco, l'etichetta e le misure si chiedono a InDesign una volta: nella
+            //condizione del for l'elenco tornava intero a ogni giro (come in getFieldByLabel, I20-995).
+            var elementi = box.allPageItems;
+            var misureBox = null;
+            for (var i = 0; i < elementi.length; i++) {
+                var item = elementi[i];
+                if (item == null || !item.isValid) {
+                    continue;
+                }
+                var label = item.label;
+                if (!label) {
                     continue;
                 }
 
-                var chiaveElemento = cssComposizioneBox.etichettaDerivata(item.label, prefissiDerivati)
-                    ? item.label
-                    : Utility.parseLabel(item.label);
+                var chiaveElemento = cssComposizioneBox.etichettaDerivata(label, prefissiDerivati)
+                    ? label
+                    : Utility.parseLabel(label);
 
                 var gia = mappaBoxOriginale[chiaveElemento];
                 if (gia != null && gia.item != null && gia.item.isValid) {
                     continue;
                 }
 
+                var misure = item.geometricBounds;
+                if (misureBox == null) {
+                    misureBox = box.geometricBounds;
+                }
                 var relativeBounds = [
-                    item.geometricBounds[0] - box.geometricBounds[0],
-                    item.geometricBounds[1] - box.geometricBounds[1],
-                    item.geometricBounds[2] - box.geometricBounds[0],
-                    item.geometricBounds[3] - box.geometricBounds[1]
+                    misure[0] - misureBox[0],
+                    misure[1] - misureBox[1],
+                    misure[2] - misureBox[0],
+                    misure[3] - misureBox[1]
                 ];
 
                 mappaBoxOriginale[chiaveElemento] = {
@@ -504,6 +517,7 @@ const CssFramework =
                 return null;
             }
             this.regoleScaricate = file;
+            cssSequenzaOperazioni.registraFasiDelFile(file);
         }
         return this.regoleScaricate;
     },
@@ -725,6 +739,9 @@ const CssFramework =
     memorizzaContestoCss(box, boundsBoxImpaginato, mappaBoxOriginale, itemRef, DBallineamenti, DBDefault) {
         this.contestoCss = {
             etichettaBox: box != null ? box.label : null,
+            //I20-1240: l'etichetta non basta a riconoscere il box (ci sono tanti BOX1): le fasi della
+            //sequenza del fix foto usano questo contesto solo se e' proprio di quel box.
+            idBox: box != null ? box.id : null,
             boundsBoxImpaginato: boundsBoxImpaginato,
             mappaBoxOriginale: mappaBoxOriginale,
             itemRef: itemRef,
@@ -1957,6 +1974,8 @@ const CssFramework =
                         }
                     }
 
+                    //I20-1240: le fasi delle sequenze del fix foto di questo file non sono del momento standard.
+                    cssSequenzaOperazioni.registraFasiDelFile(file);
                     var ficoArea = ficoProcess.getAreaLavorazioneCorrente();
                     if(ficoArea==null){
                         messaggioUtente("Code CSF-003: Non è stata trovata l'area di lavorazione corrente. Impossibile procedere con il ridimensionamento CSS.", "error");
@@ -2121,6 +2140,8 @@ const CssFramework =
                     };
                 }
 
+                //I20-1240: le fasi delle sequenze del fix foto di questo file non sono del momento standard.
+                cssSequenzaOperazioni.registraFasiDelFile(file);
                 var ficoArea = ficoProcess.getAreaLavorazioneCorrente();
                 if(ficoArea==null){
                     messaggioUtente("Code CSF-003: Non è stata trovata l'area di lavorazione corrente. Impossibile procedere con il ridimensionamento CSS.", "error");
@@ -2911,12 +2932,22 @@ const CssFramework =
     fixOverflowFromBox(boxInGrigliaBounds, box, mappaBoxOriginale = null, gruppiAllineamento = null, stringiCaselle = true, annota = true){
         //controlliamo per ogni pageItem di box se esce dai bounds di boxInGrigliaBounds
         //se esce lo riportiamo dentro
-        for (var i = 0; i < box.pageItems.length; i++) {
+        //I20-1240: il numero degli elementi si chiede una volta (gira dopo ogni regola di allineamento).
+        var quantiElementi = box.pageItems.length;
+        for (var i = 0; i < quantiElementi; i++) {
             var pageItem = box.pageItems.item(i);
             //I20-1026: un elemento nascosto, per esempio dal noRender dell'operatore,
             //non va costretto dentro il box: non si vede, e rimpicciolirlo lo rovinerebbe per quando
             //tornera' visibile.
             if (pageItem.visible === false) {
+                continue;
+            }
+            //I20-1240: chi sta dentro la griglia su tutti e quattro i lati non ha niente da riportare:
+            //le sue misure si leggono una volta invece che una per lato (fuoriDalLato).
+            var misureElemento = pageItem.geometricBounds;
+            if (!this.latiGriglia.some(lato => lato.minimo
+                ? misureElemento[lato.indice] < boxInGrigliaBounds[lato.indice] - 0.05
+                : misureElemento[lato.indice] > boxInGrigliaBounds[lato.indice] + 0.05)) {
                 continue;
             }
             //I20-1042: i quattro lati facevano la stessa cosa in quattro copie, e due copie su
@@ -5110,6 +5141,8 @@ const CssFramework =
                         }
                     }
 
+                    //I20-1240: le fasi delle sequenze del fix foto di questo file non sono del momento standard.
+                    cssSequenzaOperazioni.registraFasiDelFile(file);
                     var ficoArea = ficoProcess.getAreaLavorazioneCorrente();
                     if(ficoArea==null){
                         messaggioUtente("Code CSF-03: Non è stata trovata l'area di lavorazione corrente. Impossibile procedere con il ridimensionamento CSS.", "error");
@@ -5217,6 +5250,8 @@ const CssFramework =
                     return;
                 }
 
+                //I20-1240: le fasi delle sequenze del fix foto di questo file non sono del momento standard.
+                cssSequenzaOperazioni.registraFasiDelFile(file);
                 var ficoArea = ficoProcess.getAreaLavorazioneCorrente();
                 if (ficoArea == null) {
                     messaggioUtente("Code CSF-03: Non è stata trovata l'area di lavorazione corrente. Impossibile procedere con il ridimensionamento CSS.", "error");
@@ -6285,25 +6320,8 @@ const CssFramework =
 
         try {
             if (contesto != null) {
-                var momento = cssSequenzaOperazioni.dopoFixFoto;
-
-                if (cssSequenzaOperazioni.esistonoRegole(contesto.DBallineamenti, momento) ||
-                    cssSequenzaOperazioni.esistonoRegole(contesto.DBDefault, momento)) {
-
-                    var bounds = boundsBoxImpaginato != null ? boundsBoxImpaginato : contesto.boundsBoxImpaginato;
-                    this.boundsFormaCorrente = bounds;
-
-                    //Le copie sono nate dopo la mappa: senza questo passaggio non esisterebbero
-                    //per le regole che stanno per essere eseguite.
-                    var mappa = this.aggiungiNuoviElementiAllaMappa(box, this.updateMap(contesto.mappaBoxOriginale), contesto.prefissiDerivati);
-
-                    var DB = cssSequenzaOperazioni.filtraDBPerMomento(contesto.DBallineamenti, momento);
-                    var DBDefault = cssSequenzaOperazioni.filtraDBPerMomento(contesto.DBDefault, momento);
-
-                    this.applicaRidimensionamento(box, bounds, mappa, contesto.itemRef, DB, DBDefault);
-                    this.applicaPostRidimensionamento(box, mappa, contesto.itemRef, DB, DBDefault);
-                    box = this.allineamenti(box, bounds, mappa, contesto.itemRef, DB, DBDefault);
-                }
+                box = this.eseguiRegoleDelMomento(box, contesto, cssSequenzaOperazioni.dopoFixFoto,
+                    boundsBoxImpaginato != null ? boundsBoxImpaginato : contesto.boundsBoxImpaginato);
             }
         }
         catch (error) {
@@ -6312,6 +6330,156 @@ const CssFramework =
         }
 
         return this.riapplicaComposizioneBox(box);
+    },
+
+    /// I20-1240: ridimensionamenti, post ridimensionamenti e allineamenti di un momento (dopoFixFoto,
+    /// o una fase della sequenza del fix foto), sul contesto dato. Se il momento non ha regole non
+    /// tocca niente. Non ricompone il box: lo fa chi chiama, quando le posizioni sono definitive.
+    /// soloRegolePresenti: salta i ridimensionamenti, i post ridimensionamenti o gli allineamenti se il
+    /// momento non ne ha. Lo chiedono le fasi della sequenza: applicaRidimensionamento legge le misure di
+    /// ogni elemento del box anche senza regole, e la sequenza puo' passare piu' volte per box.
+    eseguiRegoleDelMomento(box, contesto, momento, bounds, soloRegolePresenti = false) {
+        if (!cssSequenzaOperazioni.esistonoRegole(contesto.DBallineamenti, momento) &&
+            !cssSequenzaOperazioni.esistonoRegole(contesto.DBDefault, momento)) {
+            return box;
+        }
+        var ha = chiave => !soloRegolePresenti
+            || cssSequenzaOperazioni.esistonoRegole(contesto.DBallineamenti, momento, [chiave])
+            || cssSequenzaOperazioni.esistonoRegole(contesto.DBDefault, momento, [chiave]);
+
+        this.boundsFormaCorrente = bounds;
+
+        //Le copie sono nate dopo la mappa: senza questo passaggio non esisterebbero
+        //per le regole che stanno per essere eseguite.
+        var mappa = this.aggiungiNuoviElementiAllaMappa(box, this.updateMap(contesto.mappaBoxOriginale), contesto.prefissiDerivati);
+
+        var DB = cssSequenzaOperazioni.filtraDBPerMomento(contesto.DBallineamenti, momento);
+        var DBDefault = cssSequenzaOperazioni.filtraDBPerMomento(contesto.DBDefault, momento);
+
+        if (ha("ridimensionamenti")) {
+            this.applicaRidimensionamento(box, bounds, mappa, contesto.itemRef, DB, DBDefault);
+        }
+        if (ha("postRidimensionamenti")) {
+            this.applicaPostRidimensionamento(box, mappa, contesto.itemRef, DB, DBDefault);
+        }
+        return ha("allineamenti") ? this.allineamenti(box, bounds, mappa, contesto.itemRef, DB, DBDefault) : box;
+    },
+
+    /// I20-1240: il contesto CSS del box per la sequenza del fix foto. All'impaginazione e al Fix
+    /// referenza e' quello appena memorizzato dall'applicazione del CSS, se e' proprio di questo box
+    /// (stesso id). Fuori, come al ricollegamento delle foto, si costruisce dalle regole scaricate
+    /// e dal kit della lavorazione, con le sovrastrutture della referenza e la mappa del box com'e'
+    /// ora, e diventa il contesto corrente. Null se le regole o il kit non ci sono.
+    contestoDelBox(box, referenza) {
+        if (box == null || !box.isValid) {
+            return null;
+        }
+        var contesto = this.contestoCss;
+        if (contesto != null && contesto.idBox != null && contesto.idBox === box.id) {
+            return contesto;
+        }
+
+        var regole = this.regoleDallaCopia();
+        if (regole == null || typeof ficoProcess === "undefined") {
+            return null;
+        }
+        var kit = this.kitDelleRegole(regole);
+        if (kit == null || kit.fileModifiche == null) {
+            return null;
+        }
+        var bounds = box.geometricBounds;
+        this.boundsFormaCorrente = bounds;
+        var DB = this.applicaSovrastrutture(kit.fileModifiche.operazioniPerBox, kit.fileModifiche, box, referenza);
+        var DBDef = kit.fileModificheDef == null ? null
+            : (kit.fileModificheDef === kit.fileModifiche ? DB : this.applicaSovrastrutture(kit.fileModificheDef.operazioniPerBox, kit.fileModificheDef, box, referenza));
+        var mappa = this.creaMappaturaBoxOriginale(box, this.getPrefissiDerivati(box, DB, DBDef));
+        return this.memorizzaContestoCss(box, bounds, mappa, referenza, DB, DBDef);
+    },
+
+    /// I20-1240: il passo "fase" della sequenza del fix foto: le regole del CssFramework con quella
+    /// fase, eseguite sul box adesso (eseguiRegoleDelMomento). Se il contesto non c'e' o qualcosa va
+    /// storto il box resta com'e', con un errore in console. Torna il box.
+    applicaFase(box, fase, referenza) {
+        try {
+            //Una fase che il file non dichiara varrebbe come standard: rieseguirebbe tutte le regole di sempre.
+            if (cssSequenzaOperazioni.normalizzaMomento(fase) === cssSequenzaOperazioni.standard) {
+                console.warn("Code CSF-33: fase " + fase + " del fix foto non eseguita sul box " + (box != null ? box.label : "") + ": non e' una fase delle sequenze del CssFramework");
+                return box;
+            }
+            var contesto = this.contestoDelBox(box, referenza);
+            if (contesto == null) {
+                console.warn("Code CSF-33: fase " + fase + " del fix foto non eseguita sul box " + (box != null ? box.label : "") + ": regole del CssFramework non disponibili");
+                return box;
+            }
+            return this.eseguiRegoleDelMomento(box, contesto, fase, contesto.boundsBoxImpaginato, true);
+        }
+        catch (error) {
+            console.error("Code CSF-33: errore nella fase " + fase + " del fix foto del box " + (box != null ? box.label : ""));
+            console.error(error);
+            return box;
+        }
+    },
+
+    /// I20-1240: se le condizioni di una variante delle simulazioni del fix foto sono vere per il
+    /// box, con le stesse regole delle condizioni del CssFramework (checkAllConditions). Senza
+    /// condizioni la variante vale sempre; senza contesto non si possono verificare e non vale.
+    condizioniVere(box, listSetCondizioni, referenza) {
+        if (!Array.isArray(listSetCondizioni) || listSetCondizioni.length === 0) {
+            return true;
+        }
+        try {
+            var contesto = this.contestoDelBox(box, referenza);
+            if (contesto == null) {
+                return false;
+            }
+            this.boundsFormaCorrente = contesto.boundsBoxImpaginato;
+            var mappa = this.aggiungiNuoviElementiAllaMappa(box, this.updateMap(contesto.mappaBoxOriginale), contesto.prefissiDerivati);
+            return this.checkAllConditions(mappa, contesto.itemRef, listSetCondizioni, box);
+        }
+        catch (error) {
+            console.error("Code CSF-33: condizioni di una variante del fix foto non verificate sul box " + (box != null ? box.label : "") + ": " + error);
+            return false;
+        }
+    },
+
+    /// I20-1240: lo stato del motore che una prova delle simulazioni del fix foto cambia, da rimettere
+    /// insieme alle posizioni: le segnalazioni del box ancora in sospeso (spostamenti in griglia,
+    /// CSF-009 gia' gestite) e le misure della mappa del contesto, che il rientro in griglia aggiorna.
+    /// Una variante che non vince non deve lasciare tracce.
+    salvaStatoMotore() {
+        var pendente = this.spostamentiGrigliaPendenti;
+        var mappa = this.contestoCss != null ? this.contestoCss.mappaBoxOriginale : null;
+        var misure = [];
+        if (mappa != null) {
+            Object.keys(mappa).forEach(chiave => {
+                var voce = mappa[chiave];
+                if (voce != null) {
+                    misure.push({ voce: voce, bounds: Array.isArray(voce.bounds) ? voce.bounds.slice() : voce.bounds, eliminato: voce.eliminato });
+                }
+            });
+        }
+        return {
+            spostamenti: pendente != null ? Object.assign({}, pendente, { spostamenti: (pendente.spostamenti || []).slice() }) : null,
+            etichetteSegnalate: Array.isArray(this.etichetteSegnalate) ? this.etichetteSegnalate.slice() : [],
+            mappa: mappa,
+            misure: misure
+        };
+    },
+
+    /// I20-1240: rimette lo stato del motore salvato da salvaStatoMotore.
+    ripristinaStatoMotore(salvato) {
+        if (salvato == null) {
+            return;
+        }
+        this.spostamentiGrigliaPendenti = salvato.spostamenti != null
+            ? Object.assign({}, salvato.spostamenti, { spostamenti: salvato.spostamenti.spostamenti.slice() }) : null;
+        this.etichetteSegnalate = salvato.etichetteSegnalate.slice();
+        if (salvato.mappa != null && this.contestoCss != null && this.contestoCss.mappaBoxOriginale === salvato.mappa) {
+            salvato.misure.forEach(m => {
+                m.voce.bounds = Array.isArray(m.bounds) ? m.bounds.slice() : m.bounds;
+                m.voce.eliminato = m.eliminato;
+            });
+        }
     },
 
     /// Trasforma il nome di un gruppo in una regex: "sy_ombra*" diventa /^sy_ombra.*$/.
@@ -7830,6 +7998,21 @@ const CssFramework =
     followGroup(gruppoSeguito, gruppoAllineamento, anchor, direction = "x", useTextBounds = false, isItemLinkGruppo = false) {
         try {
             let me = this;
+            //I20-1240: la misura del testo di un elemento (getRealBounds: adatta la casella, legge le righe, la
+            //rimette) si fa una volta sola per chiamata: prima si ripeteva a ogni confronto. Gli elementi si
+            //spostano solo alla fine, quindi le misure restano buone; si restituisce una copia.
+            var misureTesto = {};
+            var misuraTesto = function (item) {
+                var chiave = item != null && item.id != null ? String(item.id) : null;
+                if (chiave == null) {
+                    return me.getRealBounds(item);
+                }
+                if (!Object.prototype.hasOwnProperty.call(misureTesto, chiave)) {
+                    misureTesto[chiave] = me.getRealBounds(item);
+                }
+                var misura = misureTesto[chiave];
+                return Array.isArray(misura) ? misura.slice() : misura;
+            };
             if (!anchor) {
                 return false;
             }
@@ -7861,7 +8044,7 @@ const CssFramework =
                 var boundsList = [];
                 for (var i = 0; i < gruppoSeguito.length; i++) {
                     var el = gruppoSeguito[i];
-                    boundsList.push(me.getRealBounds(el.item));
+                    boundsList.push(misuraTesto(el.item));
                 }
                 gruppoBounds = [
                     Math.min(...boundsList.map(b => b[0])),
@@ -7911,10 +8094,10 @@ const CssFramework =
                             var target = getTargetItem(el);
                             if (!target) continue;
 
-                            var valoreLato = useTextBounds ? me.getRealBounds(target)[1] : target.geometricBounds[1];
+                            var valoreLato = useTextBounds ? misuraTesto(target)[1] : target.geometricBounds[1];
                             if (valoreLato < minValore) {
                                 minValore = valoreLato;
-                                if (!elemento || valoreLato < (useTextBounds ? me.getRealBounds(getTargetItem(elemento))[1] : getTargetItem(elemento).geometricBounds[1])) {
+                                if (!elemento || valoreLato < (useTextBounds ? misuraTesto(getTargetItem(elemento))[1] : getTargetItem(elemento).geometricBounds[1])) {
                                     elemento = el;
                                 }
                             }
@@ -7930,10 +8113,10 @@ const CssFramework =
                             var target = getTargetItem(el);
                             if (!target) continue;
 
-                            var valoreLato = useTextBounds ? me.getRealBounds(target)[3] : target.geometricBounds[3];
+                            var valoreLato = useTextBounds ? misuraTesto(target)[3] : target.geometricBounds[3];
                             if (valoreLato > maxValore) {
                                 maxValore = valoreLato;
-                                if (!elemento || valoreLato > (useTextBounds ? me.getRealBounds(getTargetItem(elemento))[3] : getTargetItem(elemento).geometricBounds[3])) {
+                                if (!elemento || valoreLato > (useTextBounds ? misuraTesto(getTargetItem(elemento))[3] : getTargetItem(elemento).geometricBounds[3])) {
                                     elemento = el;
                                 }
                             }
@@ -7950,12 +8133,12 @@ const CssFramework =
                             var target = getTargetItem(el);
                             if (!target) continue;
 
-                            var valoreLato = useTextBounds ? me.getRealBounds(target) : target.geometricBounds;
+                            var valoreLato = useTextBounds ? misuraTesto(target) : target.geometricBounds;
                             var centroElemento = (valoreLato[1] + valoreLato[3]) / 2;
                             var diff = Math.abs(centroElemento - centroGruppo);
                             if (diff < minDiff) {
                                 minDiff = diff;
-                                if (!elemento || diff < Math.abs(((useTextBounds ? (me.getRealBounds(getTargetItem(elemento))[1] + me.getRealBounds(getTargetItem(elemento))[3]) : (getTargetItem(elemento).geometricBounds[1] + getTargetItem(elemento).geometricBounds[3])) / 2) - centroGruppo)) {
+                                if (!elemento || diff < Math.abs(((useTextBounds ? (misuraTesto(getTargetItem(elemento))[1] + misuraTesto(getTargetItem(elemento))[3]) : (getTargetItem(elemento).geometricBounds[1] + getTargetItem(elemento).geometricBounds[3])) / 2) - centroGruppo)) {
                                     elemento = el;
                                 }
                             }
@@ -7972,10 +8155,10 @@ const CssFramework =
                             var target = getTargetItem(el);
                             if (!target) continue;
 
-                            var valoreLato = useTextBounds ? me.getRealBounds(target)[1] : target.geometricBounds[1];
+                            var valoreLato = useTextBounds ? misuraTesto(target)[1] : target.geometricBounds[1];
                             if (valoreLato < minValore) {
                                 minValore = valoreLato;
-                                if (!elemento || valoreLato < (useTextBounds ? me.getRealBounds(getTargetItem(elemento))[1] : getTargetItem(elemento).geometricBounds[1])) {
+                                if (!elemento || valoreLato < (useTextBounds ? misuraTesto(getTargetItem(elemento))[1] : getTargetItem(elemento).geometricBounds[1])) {
                                     elemento = el;
                                 }
                             }
@@ -7994,10 +8177,10 @@ const CssFramework =
                             var target = getTargetItem(el);
                             if (!target) continue;
 
-                            var valoreLato = useTextBounds ? me.getRealBounds(target)[0] : target.geometricBounds[0];
+                            var valoreLato = useTextBounds ? misuraTesto(target)[0] : target.geometricBounds[0];
                             if (valoreLato < minValore) {
                                 minValore = valoreLato;
-                                if (!elemento || valoreLato < (useTextBounds ? me.getRealBounds(getTargetItem(elemento))[0] : getTargetItem(elemento).geometricBounds[0])) {
+                                if (!elemento || valoreLato < (useTextBounds ? misuraTesto(getTargetItem(elemento))[0] : getTargetItem(elemento).geometricBounds[0])) {
                                     elemento = el;
                                 }
                             }
@@ -8013,10 +8196,10 @@ const CssFramework =
                             var target = getTargetItem(el);
                             if (!target) continue;
 
-                            var valoreLato = useTextBounds ? me.getRealBounds(target)[2] : target.geometricBounds[2];
+                            var valoreLato = useTextBounds ? misuraTesto(target)[2] : target.geometricBounds[2];
                             if (valoreLato > maxValore) {
                                 maxValore = valoreLato;
-                                if (!elemento || valoreLato > (useTextBounds ? me.getRealBounds(getTargetItem(elemento))[2] : getTargetItem(elemento).geometricBounds[2])) {
+                                if (!elemento || valoreLato > (useTextBounds ? misuraTesto(getTargetItem(elemento))[2] : getTargetItem(elemento).geometricBounds[2])) {
                                     elemento = el;
                                 }
                             }
@@ -8033,12 +8216,12 @@ const CssFramework =
                             var target = getTargetItem(el);
                             if (!target) continue;
 
-                            var valoreLato = useTextBounds ? me.getRealBounds(target) : target.geometricBounds;
+                            var valoreLato = useTextBounds ? misuraTesto(target) : target.geometricBounds;
                             var centroElemento = (valoreLato[0] + valoreLato[2]) / 2;
                             var diff = Math.abs(centroElemento - centroGruppo);
                             if (diff < minDiff) {
                                 minDiff = diff;
-                                if (!elemento || diff < Math.abs(((useTextBounds ? (me.getRealBounds(getTargetItem(elemento))[0] + me.getRealBounds(getTargetItem(elemento))[2]) : (getTargetItem(elemento).geometricBounds[0] + getTargetItem(elemento).geometricBounds[2])) / 2) - centroGruppo)) {
+                                if (!elemento || diff < Math.abs(((useTextBounds ? (misuraTesto(getTargetItem(elemento))[0] + misuraTesto(getTargetItem(elemento))[2]) : (getTargetItem(elemento).geometricBounds[0] + getTargetItem(elemento).geometricBounds[2])) / 2) - centroGruppo)) {
                                     elemento = el;
                                 }
                             }
@@ -8055,10 +8238,10 @@ const CssFramework =
                             var target = getTargetItem(el);
                             if (!target) continue;
 
-                            var valoreLato = useTextBounds ? me.getRealBounds(target)[0] : target.geometricBounds[0];
+                            var valoreLato = useTextBounds ? misuraTesto(target)[0] : target.geometricBounds[0];
                             if (valoreLato < minValore) {
                                 minValore = valoreLato;
-                                if (!elemento || valoreLato < (useTextBounds ? me.getRealBounds(getTargetItem(elemento))[0] : getTargetItem(elemento).geometricBounds[0])) {
+                                if (!elemento || valoreLato < (useTextBounds ? misuraTesto(getTargetItem(elemento))[0] : getTargetItem(elemento).geometricBounds[0])) {
                                     elemento = el;
                                 }
                             }
@@ -8196,7 +8379,7 @@ const CssFramework =
 
             // bounds per collisioni: qui usiamo SEMPRE il targetItem
             var listBoundsGruppoSeguito = gruppoSeguito.map(el => {
-                return me.getRealBounds(el.item);
+                return misuraTesto(el.item);
             });
 
             var listBoundsGruppoAllineamento = [];
@@ -8226,7 +8409,7 @@ const CssFramework =
                     ];
 
                     if (useTextBounds) {
-                        var boundsEl = this.getRealBounds(target);
+                        var boundsEl = misuraTesto(target);
                         boundsPostSpostamento = [
                             boundsEl[0] + spostamentoDaApplicare[1],
                             boundsEl[1] + spostamentoDaApplicare[0],

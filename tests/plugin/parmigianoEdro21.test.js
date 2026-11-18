@@ -346,68 +346,99 @@ test("payoff, testi e caratteristiche fanno da ostacolo al fix foto di Edro21", 
 /* ---- il collaudo: la descrizione e i loghi ---- */
 
 //Il fix foto di Edro21 spostava la descrizione in basso a sinistra, addosso al payoff.
-function descrizioneTraLoghi(ostacoli = ["*Parmigiano_payoff*", "*parmigiano_testo_2mod_*", "*Logo_SDB*"]) {
-    const custom = leggi("plugin/Agenzie/Edro21/custom.js");
-    const inizio = custom.indexOf("    descrizioneTraLoghi(box, descrizione) {");
-    assert.ok(inizio > 0);
-    let livello = 0;
-    let fine = custom.indexOf("{", inizio);
-    for (; fine < custom.length; fine++) {
-        if (custom[fine] === "{") livello++;
-        else if (custom[fine] === "}" && --livello === 0) break;
-    }
-    //TASK-9bf94d47: gli ostacoli il custom li chiede alla configurazione del fix foto del box.
-    const CssFrameworkFinto = {
-        getRealBounds: item => item.testo || item.geometricBounds,
-        makeRegexFromGroupName: regex,
-        getConfigurazioneFixFoto: () => ({ eccezioniIgnorati: ostacoli })
+//I20-1240: il fix non sta piu' nel custom: la variante "descrizioneInBasso" della sequenza del fix foto
+//nel CssFramework si scarta se la descrizione tocca un logo (scartaSe.sovrapposizioni), e lo controlla
+//SistemazioneFoto.motivoScarto. Qui la si prova con lo scartaSe vero del cliente e un box finto.
+function motivoScarto(eccezioni = null) {
+    const Module = require("node:module");
+    const originale = Module._load;
+    Module._load = function (richiesta) {
+        return richiesta === "indesign" ? {} : originale.apply(this, arguments);
     };
-    const UtilityFinta = { parseLabel: l => (l.indexOf("foto_extra") === 0 ? l : l.split("$")[0]) };
-    const oggetto = new Function("CssFramework", "Utility",
-        "return {\n" + custom.substring(inizio + 4, fine + 1) + "};")(CssFrameworkFinto, UtilityFinta);
-    return oggetto;
+    let SistemazioneFoto, CssFramework;
+    try {
+        SistemazioneFoto = require("../../plugin/sistemazioneFoto/sistemazioneFoto.js");
+        CssFramework = require("../../plugin/CssFramework.js");
+    }
+    finally {
+        Module._load = originale;
+    }
+    const cssSequenzaOperazioni = require("../../plugin/cssFramework/sequenzaOperazioni.js");
+    const fixFoto = regole.dbRidimensionamentiAllineamenti.fixFoto;
+    const variante = cssSequenzaOperazioni.normalizzaSequenza(fixFoto.sequenza)
+        .find(p => p.tipo === "simulazioni").varianti.find(v => v.nome === "descrizioneInBasso");
+    const scartaSe = eccezioni == null ? variante.scartaSe : Object.assign({}, variante.scartaSe, {
+        sovrapposizioni: [{ elementi: ["descrizione"], con: eccezioni.map(e => "foto_extra" + e) }]
+    });
+
+    return function (box) {
+        const realBounds = CssFramework.getRealBounds;
+        const utility = global.Utility;
+        CssFramework.getRealBounds = item => item.testo || item.geometricBounds;
+        global.Utility = { parseLabel: l => (l.indexOf("foto_extra") === 0 ? l : l.split("$")[0]) };
+        try {
+            return SistemazioneFoto.motivoScarto(box, scartaSe);
+        }
+        finally {
+            CssFramework.getRealBounds = realBounds;
+            global.Utility = utility;
+        }
+    };
 }
 
 function boxCon(descrizione, altri) {
-    return { allPageItems: [descrizione].concat(altri) };
+    const elementi = [Object.assign({ id: 1, constructorName: "TextFrame", overflows: false }, descrizione)]
+        .concat(altri.map((a, i) => Object.assign({ id: i + 2 }, a)))
+        .map(e => Object.assign({ isValid: true }, e));
+    return { allPageItems: elementi };
 }
 
 test("la descrizione che tocca il payoff con il testo e' in conflitto", () => {
-    const custom = descrizioneTraLoghi();
+    const scarto = motivoScarto();
     const descrizione = { label: "descrizione", visible: true, geometricBounds: [50, 0, 90, 60], testo: [70, 0, 90, 40] };
     const payoff = { label: label(SIGLA.payoff), visible: true, geometricBounds: [80, 10, 95, 50] };
 
-    assert.strictEqual(custom.descrizioneTraLoghi(boxCon(descrizione, [payoff]), descrizione), true);
+    assert.match(scarto(boxCon(descrizione, [payoff])), /descrizione tocca foto_extra\$Parmigiano_payoff/);
 });
 
 test("la descrizione che tocca le caratteristiche con il testo e' in conflitto, con gli ostacoli veri del cliente", () => {
     //I20-1131: le caratteristiche in alto a sinistra fanno da ostacolo anche per la descrizione.
-    const custom = descrizioneTraLoghi(ostacoliFixFoto());
+    const scarto = motivoScarto(ostacoliFixFoto());
     const descrizione = { label: "descrizione", visible: true, geometricBounds: [0, 20, 30, 80], testo: [0, 20, 20, 60] };
     const caratteristiche = { label: label(SIGLA.caratteristiche), visible: true, geometricBounds: [1, 1, 40, 30] };
-    assert.strictEqual(custom.descrizioneTraLoghi(boxCon(descrizione, [caratteristiche]), descrizione), true);
+    assert.notStrictEqual(scarto(boxCon(descrizione, [caratteristiche])), null);
 
     //Il testo sta a destra delle caratteristiche: niente conflitto.
     const lontana = { label: "descrizione", visible: true, geometricBounds: [0, 20, 30, 80], testo: [0, 40, 20, 80] };
-    assert.strictEqual(custom.descrizioneTraLoghi(boxCon(lontana, [caratteristiche]), lontana), false);
+    assert.strictEqual(scarto(boxCon(lontana, [caratteristiche])), null);
 });
 
 test("conta il testo, non il riquadro; e un logo nascosto o che non fa da ostacolo non conta", () => {
-    const custom = descrizioneTraLoghi();
+    const scarto = motivoScarto();
     //Il riquadro tocca il payoff, il testo no.
     const descrizione = { label: "descrizione", visible: true, geometricBounds: [50, 0, 95, 60], testo: [50, 0, 70, 40] };
     const payoff = { label: label(SIGLA.payoff), visible: true, geometricBounds: [80, 10, 95, 50] };
-    assert.strictEqual(custom.descrizioneTraLoghi(boxCon(descrizione, [payoff]), descrizione), false);
+    assert.strictEqual(scarto(boxCon(descrizione, [payoff])), null);
 
     const sopra = { label: "descrizione", visible: true, geometricBounds: [80, 10, 95, 50], testo: [80, 10, 95, 50] };
     const nascosto = { label: label(SIGLA.verticale), visible: false, geometricBounds: [80, 10, 95, 50] };
     const nonOstacolo = { label: label("Parmigiano_24M"), visible: true, geometricBounds: [80, 10, 95, 50] };
-    assert.strictEqual(custom.descrizioneTraLoghi(boxCon(sopra, [nascosto, nonOstacolo]), sopra), false);
+    assert.strictEqual(scarto(boxCon(sopra, [nascosto, nonOstacolo])), null);
 });
 
 test("il fix foto di Edro21 rimette la descrizione dov'era se tocca un logo", () => {
-    const custom = leggi("plugin/Agenzie/Edro21/custom.js");
-    assert.match(custom, /if \(this\.descrizioneTraLoghi\(box, descrizione\)\) \{\s*if \(descrizioneFuoriBox && descrizioneDaRidurre != null\) \{\s*descrizioneDaRidurre\.geometricBounds = oldBoundsOverflow;\s*\}\s*descrizione\.geometricBounds = oldBounds;\s*CssFramework\.fixFoto\(box, res1\.candidate, res1\.obstacles\);\s*return box;/);
+    //I20-1240: gli ostacoli della variante sono le foto extra fra le eccezioni degli ostacoli del fix
+    //foto, come li guardava il custom; la variante scartata non vince e il box torna com'era.
+    const fixFoto = regole.dbRidimensionamentiAllineamenti.fixFoto;
+    const varianti = fixFoto.sequenza.find(p => p.tipo === "simulazioni").varianti;
+    const con = varianti.find(v => v.nome === "descrizioneInBasso").scartaSe.sovrapposizioni.flatMap(r => r.con);
+    for (const ostacolo of fixFoto.eccezioniIgnorati) {
+        assert.ok(con.includes("foto_extra" + ostacolo), ostacolo);
+    }
+    const sistemazione = leggi("plugin/sistemazioneFoto/sistemazioneFoto.js").replace(/\r/g, "");
+    assert.match(sistemazione, /var motivo = this\.motivoScarto\(box, variante\.scartaSe, statoPrima\);\s*if \(motivo != null\) \{[^}]*esiti\.push\(null\);/);
+    //prima della variante successiva, o se non vince, il box torna com'era
+    assert.match(sistemazione, /var tornaAllaBase = \(\) => \{\s*if \(corrente >= 0 && base != null\) \{\s*this\.ripristinaPosizioni\(base\.posizioni\);/);
 });
 
 /* ---- riapertura: sfondo nascosto e campi principali sulla traccia ---- */

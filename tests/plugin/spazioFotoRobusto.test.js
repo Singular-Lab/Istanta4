@@ -226,6 +226,18 @@ test("un testo senza label prende il fit ma non e' un ostacolo: torna subito com
     assert.deepStrictEqual(anonimo.geometricBounds, [10, 10, 30, 40]);
 });
 
+test("I20-1240: un testo che fa da ostacolo prende il fit una volta sola, e torna com'era", () => {
+    const prezzo = testo("prezzo", [10, 10, 30, 40]);
+    const scatola = box([base(), prezzo]);
+
+    const ostacoli = SistemazioneFoto.getObstacles(scatola);
+
+    assert.strictEqual(prezzo.fitFatti, 1, "il secondo ciclo non lo adatta di nuovo");
+    assert.deepStrictEqual(ostacoli.map(o => o.label), ["prezzo"]);
+    SistemazioneFoto.ripristinaOstacoli(ostacoli);
+    assert.deepStrictEqual(prezzo.geometricBounds, [10, 10, 30, 40]);
+});
+
 test("due elementi con la stessa label tornano ciascuno alle proprie misure", () => {
     const primo = testo("prezzo", [10, 10, 30, 40]);
     const secondo = testo("prezzo", [45, 50, 70, 95]);

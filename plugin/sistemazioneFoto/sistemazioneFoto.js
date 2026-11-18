@@ -36,6 +36,8 @@ const selezioneFoto = require('./selezioneFoto');
 const etichettaSegnalazioni = require('../segnalazioni/etichetta');
 //TASK-99de57d1: le condizioni sui campi della referenza, le stesse del CssFramework.
 const condizioniRef = require('../cssFramework/sovrastrutture');
+//I20-1240: la sequenza del fix foto (fixFoto.sequenza), letta e validata li'.
+const cssSequenzaOperazioni = require('../cssFramework/sequenzaOperazioni');
 
 /// CssFramework, chiesto quando serve: vedi l'intestazione.
 function cssFramework() {
@@ -107,6 +109,8 @@ const SistemazioneFoto = {
             marginiBox: null,
             marginiFoto: [0, 0],
             adattamentoImmagine: null,
+            //I20-1240: la sequenza del fix foto; null: il fix di sempre.
+            sequenza: null,
             agenzia: {}
         };
     },
@@ -187,6 +191,9 @@ const SistemazioneFoto = {
             });
         });
 
+        //I20-1240: solo i passi validi; null se non ce n'e' nessuno.
+        esito.sequenza = cssSequenzaOperazioni.normalizzaSequenza(esito.sequenza);
+
         esito.distanziamento = (Array.isArray(esito.distanziamento) ? esito.distanziamento : []).map(d => Object.assign({}, d, {
             percDistFoto: (Array.isArray(d.percDistFoto) ? d.percDistFoto : []).map(intervallo => Object.assign({}, intervallo, {
                 endRangeRatioCondition: intervallo.endRangeRatioCondition == null ? Infinity : intervallo.endRangeRatioCondition
@@ -235,9 +242,11 @@ const SistemazioneFoto = {
 
     /// TASK-99de57d1: la sistemazione delle foto all'impaginazione, come la decide la configurazione
     /// del box per la sua referenza: niente fuori dalle lavorazioni previste o nel modo nessuno; la
-    /// foto a tutto box nel modo aTuttoBox; il fix dell'agenzia (fixDellAgenzia, se c'e') nel modo
-    /// automatico; altrimenti quello del Plugin. Torna il box, quello che torna il fix dell'agenzia.
-    sistemaFotoAllImpaginazione(box, referenza, tipoLavorazione, fixDellAgenzia) {
+    /// foto a tutto box nel modo aTuttoBox; nel modo automatico la sequenza del fix foto, se il box ne
+    /// dichiara una (eseguiSequenza); altrimenti quello del Plugin. Torna il box.
+    /// I20-1240: il fix dell'agenzia (setCustomFixFoto nel custom.js, solo Edro21) non c'e' piu': la sua
+    /// logica e' diventata la sequenza del CssFramework.
+    sistemaFotoAllImpaginazione(box, referenza, tipoLavorazione) {
         var me = this;
         return this.conReferenza(referenza, function () {
             var configurazione = me.configurazione(box);
@@ -247,13 +256,305 @@ const SistemazioneFoto = {
             if (configurazione.modo == "aTuttoBox") {
                 return me.fotoATuttoBox(box, configurazione);
             }
-            if (configurazione.modo != "semplice" && typeof fixDellAgenzia === "function") {
-                return fixDellAgenzia(box);
+            if (configurazione.modo != "semplice" && Array.isArray(configurazione.sequenza) && configurazione.sequenza.length > 0) {
+                return me.eseguiSequenza(box, configurazione.sequenza);
             }
             var spazio = me.getSpazioImpaginazione(box);
             me.fixFoto(box, spazio.candidate, spazio.obstacles);
             return box;
         });
+    },
+
+    /// I20-1240: la sequenza del fix foto del box (fixFoto.sequenza, gia' normalizzata), passo per
+    /// passo: "fixFoto" sistema le foto, "fase" esegue le regole del CssFramework con quella fase,
+    /// "simulazioni" prova il box nelle sue varianti e tiene la migliore (eseguiSimulazioni). Il
+    /// controllo dei conflitti si fa una volta, a sequenza finita, se nessuno l'ha sospeso: le
+    /// posizioni intermedie non contano. Torna il box.
+    eseguiSequenza(box, sequenza) {
+        var css = cssFramework();
+        var giaSospeso = css.sospendiControlloSegnalazioniConflitti;
+        css.sospendiControlloSegnalazioniConflitti = true;
+        this.spazioPronto = null;
+        try {
+            (Array.isArray(sequenza) ? sequenza : []).forEach(passo => {
+                if (passo.tipo === cssSequenzaOperazioni.passoSimulazioni) {
+                    box = this.eseguiSimulazioni(box, passo.varianti);
+                }
+                else {
+                    box = this.eseguiPassi(box, [passo]);
+                }
+            });
+        }
+        finally {
+            css.sospendiControlloSegnalazioniConflitti = giaSospeso;
+            this.spazioPronto = null;
+        }
+        if (!giaSospeso) {
+            css.controllaSegnalazioniConflittiPendenti(box);
+        }
+        return box;
+    },
+
+    /// I20-1240: i passi semplici di una sequenza o di una variante: "fixFoto" e "fase". Torna il box.
+    /// Il fix foto usa lo spazio libero gia' calcolato dalla prova della variante vincente
+    /// (spazioPronto), se e' del box e nessun passo e' venuto in mezzo, come faceva il fix di Edro21:
+    /// ricalcolarlo costa quanto la prova.
+    eseguiPassi(box, passi) {
+        (Array.isArray(passi) ? passi : []).forEach(passo => {
+            if (passo.tipo === cssSequenzaOperazioni.passoFixFoto) {
+                var pronto = this.spazioPronto;
+                var spazio = pronto != null && box != null && pronto.idBox === box.id ? pronto.spazio : this.getSpazioImpaginazione(box);
+                this.spazioPronto = null;
+                this.fixFoto(box, spazio.candidate, spazio.obstacles);
+            }
+            else if (passo.tipo === cssSequenzaOperazioni.passoFase) {
+                this.spazioPronto = null;
+                box = cssFramework().applicaFase(box, passo.fase, this.referenzaInCorso);
+            }
+        });
+        return box;
+    },
+
+    /// I20-1240: lo spazio libero calcolato dalla prova della variante vincente, { idBox, spazio }, per
+    /// il passo fixFoto che la segue subito. Qualunque altro passo lo butta.
+    spazioPronto: null,
+
+    /// I20-1240: il passo "simulazioni", il fix di Edro21 reso generale. Ogni variante si prova sul
+    /// box: se le sue condizioni sono vere se ne eseguono i passi, si scarta se cade in scartaSe,
+    /// altrimenti si misura il fix foto che ne verrebbe (proiezioneFixFoto: area, centratura e, se
+    /// il box lo chiede, vuoto). Prima della variante successiva il box torna com'era, posizioni e
+    /// stato del motore (segnalazioni in sospeso, mappa). Vince la variante migliore per la
+    /// preferenza del box sullo spazio delle foto (sceltaSpazio.migliorDisposizione, a parita' la
+    /// prima): il box resta, o torna, com'era alla fine della sua prova, senza rieseguirne i passi.
+    /// Se nessuna ha posto per le foto il box resta com'era. Le foto le sistema il passo successivo.
+    eseguiSimulazioni(box, varianti) {
+        var css = cssFramework();
+        var esiti = [];
+        var etichetta = box != null && box.label ? box.label : "";
+        var elenco = Array.isArray(varianti) ? varianti : [];
+        //base: il box prima delle prove; corrente: la variante i cui passi sono ora sul box (-1 nessuna)
+        var base = null;
+        var corrente = -1;
+        var tornaAllaBase = () => {
+            if (corrente >= 0 && base != null) {
+                this.ripristinaPosizioni(base.posizioni);
+                css.ripristinaStatoMotore(base.stato);
+            }
+            corrente = -1;
+        };
+        elenco.forEach((variante, i) => {
+            if (!css.condizioniVere(box, variante.listSetCondizioni, this.referenzaInCorso)) {
+                console.log("fixFoto simulazioni " + etichetta + ": variante " + variante.nome + " non provata, condizioni false");
+                esiti.push(null);
+                return;
+            }
+            tornaAllaBase();
+            var conPassi = variante.passi.length > 0;
+            if (conPassi && base == null) {
+                base = { posizioni: this.salvaPosizioni(box), stato: css.salvaStatoMotore() };
+            }
+            //le annotazioni prima dei passi, per riconoscere i rientri in griglia della variante
+            var statoPrima = base != null ? base.stato : css.salvaStatoMotore();
+            try {
+                if (conPassi) {
+                    corrente = i;
+                    box = this.eseguiPassi(box, variante.passi);
+                }
+                var motivo = this.motivoScarto(box, variante.scartaSe, statoPrima);
+                if (motivo != null) {
+                    console.log("fixFoto simulazioni " + etichetta + ": variante " + variante.nome + " scartata, " + motivo);
+                    esiti.push(null);
+                    return;
+                }
+                var spazio = this.getSpazioImpaginazione(box);
+                var prova = this.proiezioneFixFoto(box, spazio.candidate, spazio.obstacles);
+                console.log("fixFoto simulazioni " + etichetta + ": variante " + variante.nome + " " + JSON.stringify(prova));
+                //se dopo questa ne vengono altre, il box andra' rimesso com'e' adesso nel caso vincesse lei
+                var altre = elenco.length > i + 1;
+                esiti.push({
+                    prova: prova,
+                    spazio: spazio,
+                    dopo: conPassi && altre ? { posizioni: this.salvaPosizioni(box), stato: css.salvaStatoMotore() } : null
+                });
+            }
+            catch (e) {
+                console.error("Code CSF-33: variante " + variante.nome + " del fix foto non provata sul box " + etichetta + ": " + e);
+                esiti.push(null);
+                tornaAllaBase();
+            }
+        });
+
+        var vincente = sceltaSpazio.migliorDisposizione(esiti.map(e => e != null ? e.prova : null), css.getSceltaSpazioFoto(box));
+        if (vincente < 0) {
+            tornaAllaBase();
+            console.log("fixFoto simulazioni " + etichetta + ": nessuna variante con posto per le foto, il box resta com'e'");
+            return box;
+        }
+        console.log("fixFoto simulazioni " + etichetta + ": vince " + elenco[vincente].nome);
+        if (vincente !== corrente) {
+            tornaAllaBase();
+            var dopo = esiti[vincente].dopo;
+            if (dopo != null) {
+                this.ripristinaPosizioni(dopo.posizioni);
+                css.ripristinaStatoMotore(dopo.stato);
+            }
+        }
+        this.spazioPronto = { idBox: box != null ? box.id : null, spazio: esiti[vincente].spazio };
+        return box;
+    },
+
+    /// I20-1240: la posizione di ogni elemento del box, per rimetterlo dov'era dopo una prova. I gruppi
+    /// no: le loro misure seguono quelle degli elementi. Le immagini si, dopo la loro cornice.
+    salvaPosizioni(box) {
+        var posizioni = [];
+        var elementi = box != null && box.allPageItems != null ? box.allPageItems : [];
+        for (var i = 0; i < elementi.length; i++) {
+            var item = elementi[i];
+            try {
+                if (item == null || !item.isValid || item.constructorName == "Group" || item.constructor.name == "Group") {
+                    continue;
+                }
+                posizioni.push({ item: item, bounds: item.geometricBounds.slice() });
+            }
+            catch (e) {
+                //un elemento che non dice le sue misure non si puo' spostare: resta com'e'
+            }
+        }
+        return posizioni;
+    },
+
+    /// I20-1240: rimette gli elementi dove li ha trovati salvaPosizioni. Scrive solo quelli che si sono
+    /// mossi: in InDesign scrivere una misura costa molto piu' che leggerla.
+    ripristinaPosizioni(posizioni) {
+        (Array.isArray(posizioni) ? posizioni : []).forEach(p => {
+            try {
+                if (p.item != null && p.item.isValid) {
+                    var ora = p.item.geometricBounds;
+                    var uguale = Array.isArray(ora) && ora.length === p.bounds.length && ora.every((v, k) => Math.abs(v - p.bounds[k]) < 0.0001);
+                    if (!uguale) {
+                        p.item.geometricBounds = p.bounds;
+                    }
+                }
+            }
+            catch (e) {
+                console.error("Code CSF-33: elemento non rimesso al suo posto dopo una prova del fix foto: " + e);
+            }
+        });
+    },
+
+    /// I20-1240: perche' scartare una variante (scartaSe gia' normalizzato), o null se va bene:
+    /// un testo di overflow che trabocca, un elemento di sovrapposizioni.elementi che tocca uno dei
+    /// suoi "con" (i testi misurati sulle righe), un elemento di fuoriBase che esce dalla base, un
+    /// elemento di rientroInGriglia che il motore ha riportato dentro la griglia durante la variante.
+    /// Contano solo gli elementi visibili. annotazioniPrima: le annotazioni in sospeso prima della
+    /// variante (CssFramework.salvaStatoMotore), per riconoscere i rientri nuovi.
+    motivoScarto(box, scartaSe, annotazioniPrima = null) {
+        if (scartaSe == null) {
+            return null;
+        }
+        var css = cssFramework();
+
+        //Il rientro in griglia non si ricalcola: e' quello che il motore annota gia' per la CSF-008
+        //(annotaSpostamentoGriglia). Conta se dopo i passi della variante c'e' un'annotazione che prima
+        //non c'era, o che e' cambiata, per uno degli elementi elencati. E' il caso che il custom di
+        //Edro21 scartava: la descrizione che non sta nel box nemmeno stretta.
+        if (Array.isArray(scartaSe.rientroInGriglia) && scartaSe.rientroInGriglia.length > 0) {
+            var chiave = s => s.itemKey + "|" + s.direzione + "|" + JSON.stringify(s.bounds);
+            var spostamentiPrima = annotazioniPrima != null && annotazioniPrima.spostamenti != null && Array.isArray(annotazioniPrima.spostamenti.spostamenti)
+                ? annotazioniPrima.spostamenti.spostamenti.map(chiave) : [];
+            var pendente = css.spostamentiGrigliaPendenti;
+            var regoleRientro = scartaSe.rientroInGriglia.map(e => css.makeRegexFromGroupName(e));
+            var rientrato = (pendente != null && Array.isArray(pendente.spostamenti) ? pendente.spostamenti : [])
+                .find(s => spostamentiPrima.indexOf(chiave(s)) < 0 && regoleRientro.some(r => r.test(s.label)));
+            if (rientrato != null) {
+                return "riportato nella griglia: " + rientrato.label + " " + rientrato.direzione;
+            }
+        }
+        //Le etichette si leggono una volta per elemento; validita' e visibilita' solo di quelli che una
+        //regola nomina: ogni lettura e' una chiamata a InDesign.
+        var letti = [];
+        var elementi = box.allPageItems;
+        for (var i = 0; i < elementi.length; i++) {
+            var item = elementi[i];
+            var label = item != null ? item.label : null;
+            if (label) {
+                letti.push({ item: item, etichetta: Utility.parseLabel(label), visibile: null });
+            }
+        }
+        var conEtichette = function (etichette) {
+            var regole = etichette.map(e => css.makeRegexFromGroupName(e));
+            return letti.filter(l => regole.some(r => r.test(l.etichetta))).filter(l => {
+                if (l.visibile == null) {
+                    l.visibile = l.item.isValid && l.item.visible !== false;
+                }
+                return l.visibile;
+            }).map(l => l.item);
+        };
+        var eTesto = item => item.constructorName == "TextFrame" || (item.constructor != null && item.constructor.name == "TextFrame");
+        var testiDi = function (item) {
+            if (eTesto(item)) {
+                return [item];
+            }
+            var figli = item.allPageItems != null ? item.allPageItems : [];
+            var testi = [];
+            for (var f = 0; f < figli.length; f++) {
+                if (eTesto(figli[f])) {
+                    testi.push(figli[f]);
+                }
+            }
+            return testi;
+        };
+
+        //un testo, o un gruppo di testi, si misura sulle sue righe, come lo vede l'occhio: una casella
+        //larga ma con il testo allineato a destra non tocca quello che sta nella sua parte vuota.
+        //Il resto, come i loghi, sul suo ingombro.
+        var eGruppo = item => item.constructorName == "Group" || (item.constructor != null && item.constructor.name == "Group");
+        var ingombroVisto = function (item) {
+            if (eTesto(item) || eGruppo(item)) {
+                var bounds = css.getRealBounds(item);
+                if (Array.isArray(bounds) && bounds.length >= 4 && bounds[0] !== -1) {
+                    return bounds;
+                }
+            }
+            return item.geometricBounds;
+        };
+
+        var traboccano = conEtichette(scartaSe.overflow).filter(item => testiDi(item).some(t => t.overflows));
+        if (traboccano.length > 0) {
+            return "testo che trabocca: " + Utility.parseLabel(traboccano[0].label);
+        }
+
+        for (var s = 0; s < scartaSe.sovrapposizioni.length; s++) {
+            var regola = scartaSe.sovrapposizioni[s];
+            var altri = conEtichette(regola.con);
+            var daControllare = conEtichette(regola.elementi);
+            for (var a = 0; a < daControllare.length; a++) {
+                var elemento = daControllare[a];
+                var ingombro = ingombroVisto(elemento);
+                //gli oggetti di InDesign si confrontano per id: due letture dello stesso elemento sono oggetti diversi
+                var interni = (elemento.allPageItems != null ? Array.from(elemento.allPageItems) : []).map(i => i.id);
+                for (var b = 0; b < altri.length; b++) {
+                    var altro = altri[b];
+                    if (altro.id === elemento.id || interni.indexOf(altro.id) >= 0) {
+                        continue;
+                    }
+                    if (sceltaSpazio.rettangoliSiToccano(ingombro, ingombroVisto(altro))) {
+                        return Utility.parseLabel(elemento.label) + " tocca " + Utility.parseLabel(altro.label);
+                    }
+                }
+            }
+        }
+
+        if (scartaSe.fuoriBase.length > 0) {
+            var base = this.trovaBase(box);
+            if (base != null) {
+                var fuori = conEtichette(scartaSe.fuoriBase).filter(item => !sceltaSpazio.rettangoloDentro(item.geometricBounds, base.geometricBounds));
+                if (fuori.length > 0) {
+                    return "fuori dalla base: " + Utility.parseLabel(fuori[0].label);
+                }
+            }
+        }
+        return null;
     },
 
     /// TASK-99de57d1: il modo a tutto box. La cornice della foto primaria prende misure e posizione
@@ -398,8 +699,11 @@ const SistemazioneFoto = {
     /// La base del box: il primo elemento la cui label comincia per "base". E' lo spazio
     /// dentro cui si cerca lo spazio per le foto. Null se non c'e'.
     trovaBase(box) {
-        for (var i = 0; i < box.allPageItems.length; i++) {
-            var el = box.allPageItems[i];
+        //I20-1240: l'elenco degli elementi si chiede a InDesign una volta, come in getFieldByLabel
+        //(I20-995): nella condizione del for tornava a chiederlo intero a ogni giro.
+        var elementi = box.allPageItems;
+        for (var i = 0; i < elementi.length; i++) {
+            var el = elementi[i];
             if (Utility.parseLabel(el.label).startsWith("base")) {
                 return el;
             }
@@ -483,7 +787,6 @@ const SistemazioneFoto = {
             this.segnalaBaseMancante(box);
             return [];
         }
-
         //scorriamo tutti gli elementi tranne quelli elencati nella variabile ignoreElements
         //Gli elementi ignorati del cliente si aggiungono a questi; le eccezioni fanno da ostacolo
         //anche se sono fra gli ignorati.
@@ -491,84 +794,91 @@ const SistemazioneFoto = {
         let ignoreElements = ["base*", "immagine*", "foto_secondaria*", "etichetta*", "foto_extra*", "sfondo*"].concat(configurazione.elementiIgnorati);
         let exception = configurazione.eccezioniIgnorati;
         let customPadding = configurazione.marginiElementi; //[{label: "string", padding: [top, left, bottom, right]}]
+        //I20-1240: ogni lettura di un elemento (l'elenco del box, l'etichetta, le misure) e' una chiamata
+        //a InDesign. Prima si richiedeva l'elenco intero a ogni giro dei due cicli, l'etichetta una volta
+        //per ogni modello di confronto (con Edro21 una trentina) e le misure una dozzina di volte per
+        //elemento: era quasi tutto il tempo dello spazio libero. Ora l'elenco si legge una volta, le
+        //espressioni si preparano una volta, etichetta e tipo una volta per elemento, le misure una volta
+        //dopo il fit. Il risultato e' lo stesso: stessi ostacoli, stessi fit, stesse misure.
+        let css = cssFramework();
+        let regoleIgnorati = ignoreElements.map(e => css.makeRegexFromGroupName(e));
+        let regoleEccezioni = exception.map(e => css.makeRegexFromGroupName(e));
+        let regolePadding = customPadding.map(p => ({ regex: css.makeRegexFromGroupName(p.label), padding: p.padding }));
+        let eOstacolo = (label, etichetta) =>
+            !regoleIgnorati.some(r => label && r.test(etichetta)) || regoleEccezioni.some(r => label && r.test(etichetta));
         let obstacles = [];
-
-
         //scorriamo tutti gli elementi del box
         let listObjFitted = [];
         let fitApplicati = [];
         try {
-            for (let i = 0; i < box.allPageItems.length; i++) {
-                const item = box.allPageItems[i];
-                if (etichettaSegnalazioni.eDiSegnalazioni(item.label)) {
+            const elementi = box.allPageItems;
+            const letti = [];
+            for (let i = 0; i < elementi.length; i++) {
+                const item = elementi[i];
+                const label = item.label;
+                if (etichettaSegnalazioni.eDiSegnalazioni(label)) {
                     continue;
                 }
+                const voce = { item: item, label: label, etichetta: label ? Utility.parseLabel(label) : label, id: null, tipo: null };
+                letti.push(voce);
                 //controlliamo se l'elemento è valido e non è uno degli elementi da ignorare (se la label inizia con uno degli ignoreElements)
                 //se però è presente in exception non lo ignoriamo
-                if (
-                    !ignoreElements.some(ignore => item.label && cssFramework().makeRegexFromGroupName(ignore).test(Utility.parseLabel(item.label))) ||
-                    exception.some(exc => item.label && cssFramework().makeRegexFromGroupName(exc).test(Utility.parseLabel(item.label)))
-                ){
+                if (eOstacolo(voce.label, voce.etichetta)) {
+                    voce.id = item.id;
+                    voce.tipo = item.constructorName;
+                    const misure = item.geometricBounds;
                     var obj = {
-                        id: item.id,
-                        originalBounds: item.geometricBounds,
-                        originalWidth: item.geometricBounds[3] - item.geometricBounds[1],
-                        originalHeight: item.geometricBounds[2] - item.geometricBounds[0],
-                        label: Utility.parseLabel(item.label),
+                        id: voce.id,
+                        originalBounds: misure,
+                        originalWidth: misure[3] - misure[1],
+                        originalHeight: misure[2] - misure[0],
+                        label: voce.etichetta,
                     }
-
                     //controlliamo se è un textFrame
-                    if (item.constructorName === "TextFrame") {
+                    if (voce.tipo === "TextFrame") {
                         //applichiamo il fit al contenuto, ricordando com'era prima
                         fitApplicati.push({ object: item, originalBounds: obj.originalBounds });
                         this.safeFitToContent(item);
                     }
-
                     listObjFitted.push(obj);
                 }
-
             }
-        
-            for (let i = 0; i < box.allPageItems.length; i++) {
-                const item = box.allPageItems[i];
-                if (etichettaSegnalazioni.eDiSegnalazioni(item.label)) {
-                    continue;
-                }
+            //la base non prende fit: le sue misure si leggono una volta
+            const misureBase = base.geometricBounds;
+            for (let i = 0; i < letti.length; i++) {
+                const voce = letti[i];
+                const item = voce.item;
                 //controlliamo se l'elemento è valido e non è uno degli elementi da ignorare (se la label inizia con uno degli ignoreElements)
-                if (item.isValid && item.label != "" && (!ignoreElements.some(ignore => item.label && cssFramework().makeRegexFromGroupName(ignore).test(Utility.parseLabel(item.label))) || exception.some(exc => item.label && cssFramework().makeRegexFromGroupName(exc).test(Utility.parseLabel(item.label))))) {
+                if (item.isValid && voce.label != "" && eOstacolo(voce.label, voce.etichetta)) {
                     //aggiungiamo l'elemento come ostacolo
                     //controlliamo se l'elemento ha un padding personalizzato
                     let padding = [0, 0, 0, 0]; // [top, left, bottom, right]
-                    if (customPadding.length > 0) {
-                        let customPad = customPadding.find(p => item.label && cssFramework().makeRegexFromGroupName(p.label).test(Utility.parseLabel(item.label)));
+                    if (regolePadding.length > 0) {
+                        let customPad = regolePadding.find(p => voce.label && p.regex.test(voce.etichetta));
                         if (customPad) {
                             padding = customPad.padding;
                         }
                     }
-
                     //I20-1010: per id, non per label. Con due elementi della stessa label il secondo
                     //prendeva le misure del primo, e al ripristino gli finiva sopra.
-                    var obj = listObjFitted.find(o => o.id == item.id);
-
-                    //controlliamo se è un textFrame
-                    if (item.constructorName === "TextFrame") {
-                        //applichiamo il fit al contenuto
-                        this.safeFitToContent(item);
-                    }
-
+                    var obj = listObjFitted.find(o => o.id == voce.id);
+                    //I20-1240: il fit qui non si rifa': il testo l'ha gia' preso nel primo ciclo. Rifarlo
+                    //costava quasi meta' del tempo dello spazio libero, e allargava la casella ancora del 3%
+                    //dei suoi margini interni e rientri (safeFitToContent): centesimi di millimetro.
+                    const g = item.geometricBounds;
+                    const b = misureBase;
                     obj = {
-                        x: (item.geometricBounds[1] > base.geometricBounds[1] ? item.geometricBounds[1] : base.geometricBounds[1]) - base.geometricBounds[1] - padding[1],
-                        y: (item.geometricBounds[0] > base.geometricBounds[0] ? item.geometricBounds[0] : base.geometricBounds[0]) - base.geometricBounds[0] - padding[0],
-                        width: (item.geometricBounds[3] - item.geometricBounds[1] <= base.geometricBounds[3] - base.geometricBounds[1] ? item.geometricBounds[3] - item.geometricBounds[1] : box.geometricBounds[3] - box.geometricBounds[1]) + padding[1] + padding[3],
-                        height: (item.geometricBounds[2] - item.geometricBounds[0] <= base.geometricBounds[2] - base.geometricBounds[0] ? item.geometricBounds[2] - item.geometricBounds[0] : box.geometricBounds[2] - box.geometricBounds[0]) + padding[0] + padding[2],
-                        label: Utility.parseLabel(item.label),
-                        constructor: item.constructorName,
+                        x: (g[1] > b[1] ? g[1] : b[1]) - b[1] - padding[1],
+                        y: (g[0] > b[0] ? g[0] : b[0]) - b[0] - padding[0],
+                        width: (g[3] - g[1] <= b[3] - b[1] ? g[3] - g[1] : box.geometricBounds[3] - box.geometricBounds[1]) + padding[1] + padding[3],
+                        height: (g[2] - g[0] <= b[2] - b[0] ? g[2] - g[0] : box.geometricBounds[2] - box.geometricBounds[0]) + padding[0] + padding[2],
+                        label: voce.etichetta,
+                        constructor: voce.tipo,
                         object: item,
                         originalBounds: obj.originalBounds,
                         originalWidth: obj.originalWidth,
                         originalHeight: obj.originalHeight,
                     }
-
                     //Se width e height sono positivi, aggiungiamo l'ostacolo
                     if (obj.width > 0 && obj.height > 0) {
                         obstacles.push(obj);
@@ -580,11 +890,9 @@ const SistemazioneFoto = {
             this.ripristinaFit(fitApplicati);
             throw e;
         }
-
         //Chi ha preso il fit ma non e' un ostacolo non lo rimettera' nessuno: lo si fa adesso.
         let idOstacoli = obstacles.map(o => o.object.id);
         this.ripristinaFit(fitApplicati.filter(f => !idOstacoli.includes(f.object.id)));
-
         return obstacles;
     },
 
@@ -1020,10 +1328,26 @@ const SistemazioneFoto = {
             area: areaFinale,
             distanzaDalCentro: sceltaSpazio.distanzaDalCentro(bestCandidate, larghezzaBase, altezzaBase, sceltaSpazio.normalizzaPreferenza(preferenzaSpazio).asseCentratura)
         };
+        //I20-1240: se il box chiede lo spareggio sul vuoto, la prova dice anche quanto vuoto lascia:
+        //gli ostacoli come li ha misurati il fix (testi adattati al contenuto) e le foto dove andrebbero.
+        if (sceltaSpazio.normalizzaPreferenza(preferenzaSpazio).spareggio === sceltaSpazio.vuotoMinore) {
+            this.ultimaProiezione.vuoto = this.vuotoDellaDisposizione(larghezzaBase, altezzaBase, obstacles, absoluteBounds);
+        }
         if (!projection && !cssFramework().sospendiControlloSegnalazioniConflitti) {
             cssFramework().controllaSegnalazioniConflittiPendenti(box);
         }
         return areaFinale;
+    },
+
+    /// I20-1240: il vuoto della base con gli ostacoli del fix ({ x, y, width, height }, relativi alla
+    /// base) e il gruppo delle foto in boundsFoto ([y1, x1, y2, x2], relativi alla base): l'esito di
+    /// sceltaSpazio.vuotoMaggiore, o null se non si misura.
+    vuotoDellaDisposizione(larghezzaBase, altezzaBase, ostacoli, boundsFoto) {
+        var rettangoli = (Array.isArray(ostacoli) ? ostacoli : []).map(o => ({ x: o.x, y: o.y, width: o.width, height: o.height }));
+        if (Array.isArray(boundsFoto) && boundsFoto.length === 4) {
+            rettangoli.push({ x: boundsFoto[1], y: boundsFoto[0], width: boundsFoto[3] - boundsFoto[1], height: boundsFoto[2] - boundsFoto[0] });
+        }
+        return sceltaSpazio.vuotoMaggiore(larghezzaBase, altezzaBase, rettangoli);
     },
 
     /// I20-1236: le foto ambientate visibili del box (foto_extra$<sigla>$tipo_4), nel loro ordine.

@@ -192,15 +192,18 @@ function decisioneVera(cfg, tipo) {
         configurazione: SistemazioneFoto.configurazione,
         fotoATuttoBox: SistemazioneFoto.fotoATuttoBox,
         getSpazioImpaginazione: SistemazioneFoto.getSpazioImpaginazione,
-        fixFoto: SistemazioneFoto.fixFoto
+        fixFoto: SistemazioneFoto.fixFoto,
+        eseguiSequenza: SistemazioneFoto.eseguiSequenza
     };
     let referenzaVista;
     SistemazioneFoto.configurazione = function () { referenzaVista = this.referenzaInCorso; return Object.assign(SistemazioneFoto.configurazionePredefinita(), cfg); };
     SistemazioneFoto.fotoATuttoBox = () => { chiamate.push("aTuttoBox"); };
     SistemazioneFoto.getSpazioImpaginazione = () => ({ candidate: [], obstacles: [] });
     SistemazioneFoto.fixFoto = () => { chiamate.push("plugin"); };
+    //I20-1240: al posto del fix dell'agenzia, la sequenza del CssFramework.
+    SistemazioneFoto.eseguiSequenza = () => { chiamate.push("sequenza"); };
     try {
-        SistemazioneFoto.sistemaFotoAllImpaginazione({ label: "BOX_STD" }, FRESCHISSIMA, tipo, () => { chiamate.push("agenzia"); });
+        SistemazioneFoto.sistemaFotoAllImpaginazione({ label: "BOX_STD" }, FRESCHISSIMA, tipo);
     }
     finally {
         Object.assign(SistemazioneFoto, veri);
@@ -217,8 +220,11 @@ test("all'impaginazione il modo aTuttoBox mette la foto a tutto box, con la refe
 });
 
 test("all'impaginazione gli altri modi fanno come prima", () => {
-    assert.deepStrictEqual(decisioneVera({ modo: "automatico", lavorazioni: [1] }, 1).chiamate, ["agenzia"]);
-    assert.deepStrictEqual(decisioneVera({ modo: "semplice", lavorazioni: [1] }, 1).chiamate, ["plugin"]);
+    const sequenza = [{ tipo: "fixFoto" }];
+    assert.deepStrictEqual(decisioneVera({ modo: "automatico", lavorazioni: [1], sequenza }, 1).chiamate, ["sequenza"]);
+    assert.deepStrictEqual(decisioneVera({ modo: "automatico", lavorazioni: [1] }, 1).chiamate, ["plugin"]);
+    assert.deepStrictEqual(decisioneVera({ modo: "semplice", lavorazioni: [1], sequenza }, 1).chiamate, ["plugin"]);
+    assert.deepStrictEqual(decisioneVera({ modo: "aTuttoBox", lavorazioni: [1], sequenza }, 1).chiamate, ["aTuttoBox"]);
     assert.deepStrictEqual(decisioneVera({ modo: "nessuno", lavorazioni: [1] }, 1).chiamate, []);
     assert.deepStrictEqual(decisioneVera({ modo: "aTuttoBox", lavorazioni: [1] }, 2).chiamate, []);
 });

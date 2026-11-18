@@ -1164,8 +1164,9 @@ const ReperimentoFoto = {
                         //TASK-9bf94d47: come all'impaginazione, lo dice la sezione fixFoto del CssFramework.
                         //TASK-99de57d1: con la referenza del box, ricavata dal suo DNA.
                         var referenzaFixFoto = await referenzaDelBox(boxImpaginato);
+                        //I20-1240: con la sequenza del fix foto del CssFramework, se il box ne dichiara una.
                         boxImpaginato = SistemazioneFoto.sistemaFotoAllImpaginazione(boxImpaginato, referenzaFixFoto,
-                            ficoProcess.getTipoLavorazioneCorrente(), fixFotoDellAgenzia());
+                            ficoProcess.getTipoLavorazioneCorrente());
                     }
 
                     //creiamo il file di esito
