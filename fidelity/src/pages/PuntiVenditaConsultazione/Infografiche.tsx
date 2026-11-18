@@ -239,7 +239,7 @@ export function SpazioPerReparto({ analisi, contesto }: { analisi: Analisi; cont
 const testoVolantiniMarca = (volantini: number, delPeriodo: number): string =>
   `in ${formatNumero(volantini)} su ${formatNumero(delPeriodo)} ${delPeriodo === 1 ? "volantino" : "volantini"}`;
 
-/** Le linee del distributore contro le altre marche, in una barra sola, come negli insight del volantino. */
+/** Le Private Labels (linee del distributore) contro le altre marche, in una barra sola, come negli insight del volantino. */
 function QuotaLineeDistributore({ quota }: { quota: number }) {
   const linee = Math.max(0, Math.min(100, quota));
   const altre = Math.round((100 - linee) * 10) / 10;
@@ -247,18 +247,18 @@ function QuotaLineeDistributore({ quota }: { quota: number }) {
     <div className="space-y-2">
       <p className="text-sm text-slate-700 dark:text-slate-200">
         <b className="text-xl font-bold tabular-nums text-slate-800 dark:text-slate-100">{formatPercentuale(linee)}</b> delle referenze con marca sono
-        delle linee del distributore
+        delle Private Labels
       </p>
       <div
         role="img"
-        aria-label={`Linee del distributore ${formatPercentuale(linee)} delle referenze con marca, altre marche ${formatPercentuale(altre)}`}
+        aria-label={`Private Labels ${formatPercentuale(linee)} delle referenze con marca, altre marche ${formatPercentuale(altre)}`}
         className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-darkmode-400"
       >
         <div className={twMerge("h-full", SERIE_PRINCIPALE.sfondo)} style={{ width: `${linee}%` }} />
       </div>
       <Legenda
         voci={[
-          { id: "linee", etichetta: `Linee del distributore ${formatPercentuale(linee)}`, forma: "quadrato", tinta: TINTA_PRINCIPALE },
+          { id: "linee", etichetta: `Private Labels ${formatPercentuale(linee)}`, forma: "quadrato", tinta: TINTA_PRINCIPALE },
           { id: "altre", etichetta: `Altre marche ${formatPercentuale(altre)}`, forma: "quadrato", tinta: TINTA_NEUTRA },
         ]}
       />
@@ -286,7 +286,7 @@ function SchedaMarca({ marca, massimo, volantiniDelPeriodo }: { marca: AnalisiPu
       />
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold leading-snug text-slate-800 [overflow-wrap:anywhere] dark:text-slate-100">{marca.marca}</p>
-        {marca.linea && <p className="text-xs text-slate-500 dark:text-slate-400">Linea {marca.linea.nome}</p>}
+        {marca.linea && <p className="text-xs text-slate-500 dark:text-slate-400">Private Label {marca.linea.nome}</p>}
         <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
           <b className="font-semibold text-slate-700 dark:text-slate-200">{formatPercentuale(marca.quota)}</b> delle referenze ·{" "}
           {testoVolantiniMarca(marca.volantini, volantiniDelPeriodo)}
