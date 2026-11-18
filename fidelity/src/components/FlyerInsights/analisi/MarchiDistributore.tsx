@@ -7,7 +7,7 @@ import type { BolloInsight, LineaInsight, LineeDistributore } from "../../../../
 import { Blocco } from "./comuni";
 
 /**
- * "Marchi del distributore": quanto spazio del volantino va alle linee di marca del distributore
+ * "Private Labels": quanto spazio del volantino va alle linee di marca del distributore
  * (Sapori & Dintorni, Verso Natura...), linea per linea con il suo logo, e i bolli stampati (DOP,
  * Filiera controllata...). Le linee e i bolli li dichiara la libreria agenzia del cliente, i loghi
  * vengono dal catalogo di Istanta (EstensioneInsight.lineeDistributore).
@@ -88,14 +88,14 @@ function QuotaDistributore({ linee }: { linee: LineeDistributore }) {
       </p>
       <div
         role="img"
-        aria-label={`Marchi del distributore ${formatPercentuale(quota)} dello spazio, altre marche ${formatPercentuale(resto)}`}
+        aria-label={`Private Labels ${formatPercentuale(quota)} dello spazio, altre marche ${formatPercentuale(resto)}`}
         className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-darkmode-400"
       >
         <div className={twMerge("h-full", SERIE_PRINCIPALE.sfondo)} style={{ width: `${quota}%` }} />
       </div>
       <Legenda
         voci={[
-          { id: "distributore", etichetta: `Marchi del distributore ${formatPercentuale(quota)}`, forma: "quadrato", tinta: TINTA_PRINCIPALE },
+          { id: "distributore", etichetta: `Private Labels ${formatPercentuale(quota)}`, forma: "quadrato", tinta: TINTA_PRINCIPALE },
           { id: "altre", etichetta: `Altre marche ${formatPercentuale(resto)}`, forma: "quadrato", tinta: TINTA_NEUTRA },
         ]}
       />
@@ -146,9 +146,9 @@ export function MarchiDistributore({ linee }: MarchiDistributoreProps) {
 
       <Blocco titolo="Linee nel volantino" descrizione="Box e spazio di ogni linea, nell'ordine dichiarato dal distributore.">
         {linee.linee.length === 0 ? (
-          <p className="text-sm text-slate-500 dark:text-slate-400">Nessun prodotto delle linee del distributore in questo volantino.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Nessun prodotto delle Private Labels in questo volantino.</p>
         ) : (
-          <ul aria-label="Linee del distributore" className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">
+          <ul aria-label="Private Labels" className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-3">
             {linee.linee.map(linea => (
               <SchedaLinea key={linea.sigla || linea.nome} linea={linea} massimo={massimo} />
             ))}

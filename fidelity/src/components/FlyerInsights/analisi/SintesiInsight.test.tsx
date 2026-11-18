@@ -67,20 +67,22 @@ describe("SintesiInsight", () => {
     expect(riquadro("Prezzo Fidelity")).toHaveTextContent("2 box");
   });
 
-  it("con le linee del distributore aggiunge il riquadro in evidenza dei suoi marchi e il dettaglio delle marche", () => {
+  // TASK-7b68e012: le linee del distributore si chiamano Private Labels
+  it("con le linee del distributore aggiunge il riquadro in evidenza Private Labels e il dettaglio delle marche", () => {
     render(<SintesiInsight sintesi={sintesi()} lineeDistributore={LINEE} />);
 
-    const marchi = riquadro("Marchi del distributore");
+    const marchi = riquadro("Private Labels");
     expect(marchi).toHaveAttribute("data-evidenza", "true");
     expect(marchi).toHaveTextContent("18,4%");
     expect(marchi).toHaveTextContent("dello spazio, 12 box");
-    expect(riquadro("Marche")).toHaveTextContent("di cui 2 linee del distributore");
+    expect(riquadro("Marche")).toHaveTextContent("di cui 2 Private Labels");
+    expect(screen.queryByText(/Marchi del distributore|linee del distributore/)).not.toBeInTheDocument();
   });
 
   it("senza linee del distributore il riquadro dei marchi non c'è", () => {
     render(<SintesiInsight sintesi={sintesi()} lineeDistributore={null} />);
 
-    expect(screen.queryByText("Marchi del distributore")).not.toBeInTheDocument();
+    expect(screen.queryByText("Private Labels")).not.toBeInTheDocument();
     expect(riquadro("Marche")).not.toHaveTextContent("di cui");
   });
 
@@ -127,7 +129,7 @@ describe("numeriSintesi e testoCoperturaParziale", () => {
     expect(numero("referenze").sottotitolo).toBe("1 box");
     expect(numero("scontoMedio").sottotitolo).toBe("1 box scontato");
     expect(numero("distributore").sottotitolo).toBe("dello spazio, 1 box");
-    expect(numero("marche").sottotitolo).toBe("di cui 1 linea del distributore");
+    expect(numero("marche").sottotitolo).toBe("di cui 1 Private Label");
   });
 
   it("solo i dati sotto il 60% entrano nella nota", () => {

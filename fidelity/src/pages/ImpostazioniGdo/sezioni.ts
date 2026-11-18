@@ -6,7 +6,7 @@ export const SEZIONI_IMPOSTAZIONI_GDO = [
   { id: "identita", etichetta: "Identità della GDO", icona: "Fingerprint" },
   { id: "loghi-insegne", etichetta: "Loghi delle insegne", icona: "Image" },
   { id: "reparti", etichetta: "Reparti", icona: "Tags" },
-  { id: "marchi-distributore", etichetta: "Marchi del distributore", icona: "BadgeCheck" },
+  { id: "marchi-distributore", etichetta: "Private Labels", icona: "BadgeCheck" },
   { id: "campi-referenze", etichetta: "Campi delle referenze", icona: "ArrowLeftRight" },
   { id: "insight-volantino", etichetta: "Insight del volantino", icona: "FileJson" },
   { id: "aspetto-sito-web", etichetta: "Aspetto del sito web", icona: "Palette" },

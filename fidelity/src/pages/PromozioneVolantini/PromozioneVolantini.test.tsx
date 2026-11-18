@@ -496,15 +496,17 @@ describe("Consultazione di una promozione", () => {
 
       expect(riquadro("1 in tutti i 3 volantini")).toHaveTextContent("20% dei 5 prodotti dei volantini mostrati");
       expect(riquadro("1 in tutti i 3 volantini")).not.toHaveTextContent("della promozione");
-      // A marchio: olio (Conad) e latte (Sapori & Dintorni), 2 prodotti su 5, con la base scritta
-      const marchio = riquadro("40% dei 5 prodotti è a marchio del distributore");
-      expect(marchio).toHaveTextContent("2 prodotti a marchio su 5 · il resto 60%");
-      // Le linee sono sui soli prodotti a marchio, con il numero dei prodotti
-      expect(marchio).toHaveTextContent("Linee, sui 2 prodotti a marchio");
-      const linee = within(within(marchio).getByRole("list", { name: "Prodotti a marchio per linea" })).getAllByRole("listitem");
+      // Private Labels (TASK-7b68e012): olio (Conad) e latte (Sapori & Dintorni), 2 prodotti su 5, con la base scritta
+      const marchio = riquadro("40% dei 5 prodotti è delle Private Labels");
+      expect(marchio).toHaveTextContent("Private Labels");
+      expect(marchio).toHaveTextContent("2 prodotti delle Private Labels su 5 · il resto 60%");
+      expect(screen.queryByText(/a marchio/i)).not.toBeInTheDocument();
+      // Le linee sono sui soli prodotti delle Private Labels, con il numero dei prodotti
+      expect(marchio).toHaveTextContent("Linee, sui 2 prodotti delle Private Labels");
+      const linee = within(within(marchio).getByRole("list", { name: "Prodotti delle Private Labels per linea" })).getAllByRole("listitem");
       expect(linee.map(linea => linea.getAttribute("aria-label"))).toEqual([
-        "Conad: 50% dei prodotti a marchio, 1 prodotto",
-        "Sapori & Dintorni: 50% dei prodotti a marchio, 1 prodotto",
+        "Conad: 50% dei prodotti delle Private Labels, 1 prodotto",
+        "Sapori & Dintorni: 50% dei prodotti delle Private Labels, 1 prodotto",
       ]);
       // Fidelity: pasta e latte, contro il resto
       const fidelity = riquadro("40% dei 5 prodotti ha il Prezzo Fidelity");
@@ -524,7 +526,7 @@ describe("Consultazione di una promozione", () => {
       expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
     });
 
-    it("le linee del distributore: le quattro con più prodotti sui soli prodotti a marchio, le altre insieme, nessuna a 0%", async () => {
+    it("le linee del distributore: le quattro con più prodotti sui soli prodotti delle Private Labels, le altre insieme, nessuna a 0%", async () => {
       const linee = ["Conad", "Sapori & Dintorni", "Verso Natura", "Conad Percorso Qualità", "Piacersi", "Essentiae"];
       const marchio = linee.flatMap((linea, i) =>
         Array.from({ length: [40, 30, 20, 10, 4, 1][i] ?? 1 }, (_, n) => prodotto(`${linea}-${n}`, `${linea} ${n}`, [presenza("k1")], { linea }))
@@ -534,14 +536,14 @@ describe("Consultazione di una promozione", () => {
       await apri();
 
       // 105 prodotti a marchio su 405
-      const riquadroMarchio = riquadro("26% dei 405 prodotti è a marchio del distributore");
-      const voci = within(within(riquadroMarchio).getByRole("list", { name: "Prodotti a marchio per linea" })).getAllByRole("listitem");
+      const riquadroMarchio = riquadro("26% dei 405 prodotti è delle Private Labels");
+      const voci = within(within(riquadroMarchio).getByRole("list", { name: "Prodotti delle Private Labels per linea" })).getAllByRole("listitem");
       expect(voci.map(voce => voce.getAttribute("aria-label"))).toEqual([
-        "Conad: 38% dei prodotti a marchio, 40 prodotti",
-        "Sapori & Dintorni: 29% dei prodotti a marchio, 30 prodotti",
-        "Verso Natura: 19% dei prodotti a marchio, 20 prodotti",
-        "Conad Percorso Qualità: 10% dei prodotti a marchio, 10 prodotti",
-        "altre 2 linee: 5% dei prodotti a marchio, 5 prodotti",
+        "Conad: 38% dei prodotti delle Private Labels, 40 prodotti",
+        "Sapori & Dintorni: 29% dei prodotti delle Private Labels, 30 prodotti",
+        "Verso Natura: 19% dei prodotti delle Private Labels, 20 prodotti",
+        "Conad Percorso Qualità: 10% dei prodotti delle Private Labels, 10 prodotti",
+        "altre 2 linee: 5% dei prodotti delle Private Labels, 5 prodotti",
       ]);
       expect(riquadroMarchio).not.toHaveTextContent(/\b0%/);
     });
@@ -722,25 +724,25 @@ describe("Consultazione di una promozione", () => {
       });
     });
 
-    it("a marchio e Fidelity aprono i loro prodotti nell'elenco e stanno nell'indirizzo", async () => {
+    it("Private Labels e Fidelity aprono i loro prodotti nell'elenco e stanno nell'indirizzo", async () => {
       const router = await apri();
 
-      fireEvent.click(within(riquadro("40% dei 5 prodotti è a marchio del distributore")).getByRole("button", { name: /Vedi i prodotti/ }));
+      fireEvent.click(within(riquadro("40% dei 5 prodotti è delle Private Labels")).getByRole("button", { name: /Vedi i prodotti/ }));
       expect(router.state.location.search).toBe("?vista=marchio");
-      expect(nomiDi("A marchio del distributore").sort()).toEqual(["Latte intero", "Olio extravergine"]);
+      expect(nomiDi("Private Labels").sort()).toEqual(["Latte intero", "Olio extravergine"]);
 
       fireEvent.click(within(riquadro("40% dei 5 prodotti ha il Prezzo Fidelity")).getByRole("button", { name: /Vedi i prodotti/ }));
       expect(router.state.location.search).toBe("?vista=fidelity");
       expect(nomiDi("Con Prezzo Fidelity").sort()).toEqual(["Latte intero", "Pasta di semola"]);
     });
 
-    it("senza prodotti a marchio né Fidelity i numeri sono a zero e non aprono l'elenco", async () => {
+    it("senza prodotti delle Private Labels né Fidelity i numeri sono a zero e non aprono l'elenco", async () => {
       const senza = REFERENZE.map(r => ({ ...r, linea: null, meccaniche: [] }));
       finti.risultato = caricato(dettaglio({ assortimento: { ...dettaglio().assortimento, referenze: senza } }));
       await apri();
 
-      const marchio = riquadro("0% dei 5 prodotti è a marchio del distributore");
-      expect(marchio).toHaveTextContent("Nessun prodotto a marchio del distributore");
+      const marchio = riquadro("0% dei 5 prodotti è delle Private Labels");
+      expect(marchio).toHaveTextContent("Nessun prodotto delle Private Labels");
       expect(within(marchio).getByRole("button", { name: /Vedi i prodotti/ })).toBeDisabled();
       expect(within(riquadro("0% dei 5 prodotti ha il Prezzo Fidelity")).getByRole("button", { name: /Vedi i prodotti/ })).toBeDisabled();
     });
@@ -841,10 +843,10 @@ describe("Consultazione di una promozione", () => {
       try {
         await apri();
 
-        const marchio = () => riquadro("40% dei 5 prodotti è a marchio del distributore");
+        const marchio = () => riquadro("40% dei 5 prodotti è delle Private Labels");
         fireEvent.click(within(marchio()).getByRole("button", { name: /Vedi i prodotti/ }));
         expect(scorri).toHaveBeenCalledTimes(1);
-        expect(scorri.mock.contexts[0]).toContainElement(elenco("A marchio del distributore"));
+        expect(scorri.mock.contexts[0]).toContainElement(elenco("Private Labels"));
 
         fireEvent.click(within(marchio()).getByRole("button", { name: /Mostra tutti i prodotti/ }));
         expect(scorri).toHaveBeenCalledTimes(1);
@@ -866,10 +868,10 @@ describe("Consultazione di una promozione", () => {
       fireEvent.click(within(riquadro("1 in tutti i 3 volantini")).getByRole("button", { name: /Mostra tutti i prodotti/ }));
       expect(router.state.location.search).toBe("");
 
-      const marchio = () => riquadro("40% dei 5 prodotti è a marchio del distributore");
+      const marchio = () => riquadro("40% dei 5 prodotti è delle Private Labels");
       fireEvent.click(within(marchio()).getByRole("button", { name: /Vedi i prodotti/ }));
       expect(router.state.location.search).toBe("?vista=marchio");
-      expect(nomiDi("A marchio del distributore").sort()).toEqual(["Latte intero", "Olio extravergine"]);
+      expect(nomiDi("Private Labels").sort()).toEqual(["Latte intero", "Olio extravergine"]);
       fireEvent.click(screen.getAllByRole("button", { name: /Mostra tutti i prodotti/ })[0] as HTMLElement);
       expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
     });

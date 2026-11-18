@@ -124,13 +124,15 @@ describe("ReferenzeVolantino", () => {
     expect(within(latte).getByText("€ 1,29")).not.toHaveAttribute("title");
   });
 
-  it("la colonna Linea c'è solo con le linee del distributore: pastiglia, Industria o trattino", () => {
+  // TASK-7b68e012: la colonna della linea del distributore si chiama Private Label
+  it("la colonna Private Label c'è solo con le linee del distributore: pastiglia, Industria o trattino", () => {
     const { unmount } = render(<ReferenzeVolantino box={[LATTE, PASTA]} onApriBox={() => {}} />);
-    expect(within(tabella()).queryByRole("columnheader", { name: "Linea" })).not.toBeInTheDocument();
+    expect(within(tabella()).queryByRole("columnheader", { name: "Private Label" })).not.toBeInTheDocument();
     unmount();
 
     disegna({ lineeDistributore: LINEE, box: [LATTE, PASTA, box("senza", { nome: "Senza marca", pagina: 4 })] });
-    expect(within(tabella()).getByRole("columnheader", { name: "Linea" })).toBeInTheDocument();
+    expect(within(tabella()).getByRole("columnheader", { name: "Private Label" })).toBeInTheDocument();
+    expect(within(tabella()).queryByRole("columnheader", { name: "Linea" })).not.toBeInTheDocument();
     const riga = (nome: RegExp) => within(tabella()).getByRole("rowheader", { name: nome }).closest("tr")!;
     expect(riga(/Spaghetti/)).toHaveTextContent("Sapori & Dintorni");
     expect(riga(/Latte intero/)).toHaveTextContent("Industria");
@@ -154,11 +156,11 @@ describe("ReferenzeVolantino", () => {
     expect(prodotti()).toHaveLength(3);
   });
 
-  it("i filtri rapidi: linee del distributore, Prezzo Fidelity e sottocosto, con i conteggi", () => {
+  it("i filtri rapidi: Private Labels, Prezzo Fidelity e sottocosto, con i conteggi", () => {
     disegna({ lineeDistributore: LINEE });
 
     const filtri = screen.getByRole("radiogroup", { name: "Mostra" });
-    expect(within(filtri).getAllByRole("radio").map(r => r.textContent)).toEqual(["Tutte 3", "Linee del distributore 1", "Prezzo Fidelity 1", "Sottocosto 1"]);
+    expect(within(filtri).getAllByRole("radio").map(r => r.textContent)).toEqual(["Tutte 3", "Private Labels 1", "Prezzo Fidelity 1", "Sottocosto 1"]);
 
     fireEvent.click(within(filtri).getByRole("radio", { name: /Sottocosto/ }));
     expect(prodotti()).toEqual(["Olio extravergine"]);
@@ -169,7 +171,7 @@ describe("ReferenzeVolantino", () => {
   it("senza linee del distributore il filtro rapido delle linee non c'è", () => {
     disegna();
 
-    expect(within(screen.getByRole("radiogroup", { name: "Mostra" })).queryByRole("radio", { name: /Linee/ })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("radiogroup", { name: "Mostra" })).queryByRole("radio", { name: /Private Labels/ })).not.toBeInTheDocument();
   });
 
   it("filtra per reparto, meccanica e pagina", () => {

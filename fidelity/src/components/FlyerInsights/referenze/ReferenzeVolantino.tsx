@@ -45,7 +45,7 @@ export interface ReferenzeVolantinoProps {
   box: readonly BoxInsight[];
   /** Le referenze di sempre, per i prodotti dei box che ne hanno più di uno. */
   referenze?: readonly ReferenzaPosizione[];
-  /** Le linee del distributore: aggiungono la colonna Linea e il filtro; null o assenti, niente colonna. */
+  /** Le linee del distributore: aggiungono la colonna Private Label e il filtro; null o assenti, niente colonna. */
   lineeDistributore?: LineeDistributore | null;
   /** Le referenze del volantino, per il titolo; predefinita la somma dei prodotti dei box. */
   totaleReferenze?: number;
@@ -187,7 +187,7 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
 
   const opzioniRapide: Array<{ valore: FiltroRapido; etichetta: string; conteggio: number }> = [
     { valore: "tutte", etichetta: "Tutte", conteggio: conti.tutte },
-    ...(conLinee ? [{ valore: "distributore" as const, etichetta: "Linee del distributore", conteggio: conti.distributore }] : []),
+    ...(conLinee ? [{ valore: "distributore" as const, etichetta: "Private Labels", conteggio: conti.distributore }] : []),
     { valore: "fidelity", etichetta: "Prezzo Fidelity", conteggio: conti.fidelity },
     { valore: "sottocosto", etichetta: "Sottocosto", conteggio: conti.sottocosto },
   ];
@@ -391,7 +391,7 @@ export function ReferenzeVolantino({ box, referenze, lineeDistributore, totaleRe
                   </th>
                   {conLinee && (
                     <th scope="col" className={CLASSI_TH}>
-                      Linea
+                      Private Label
                     </th>
                   )}
                   <th scope="col" className={CLASSI_TH}>

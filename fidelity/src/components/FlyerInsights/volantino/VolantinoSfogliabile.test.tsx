@@ -569,12 +569,14 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     expect(onCambiaPagina).toHaveBeenLastCalledWith(3);
   });
 
-  it("la scheda mostra la linea del distributore quando il box ne ha una", async () => {
+  // TASK-7b68e012: nella scheda la linea del distributore si chiama Private Label
+  it("la scheda mostra la linea del distributore, come Private Label, quando il box ne ha una", async () => {
     disegna({ box: [{ ...MOZZARELLA, linea: { sigla: "SD", nome: "Sapori & Dintorni" } }] });
 
     fireEvent.click(screen.getByTestId("box-a"));
     const dati = await screen.findByLabelText("Dati del box");
-    expect(within(dati).getByText("Linea")).toBeInTheDocument();
+    expect(within(dati).getByText("Private Label")).toBeInTheDocument();
+    expect(within(dati).queryByText("Linea")).not.toBeInTheDocument();
     expect(within(dati).getByText("Sapori & Dintorni")).toBeInTheDocument();
   });
 
@@ -657,7 +659,7 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     disegna({ box: [MOZZARELLA] });
 
     fireEvent.click(screen.getByTestId("box-a"));
-    expect(within(await screen.findByLabelText("Dati del box")).queryByText("Linea")).not.toBeInTheDocument();
+    expect(within(await screen.findByLabelText("Dati del box")).queryByText("Private Label")).not.toBeInTheDocument();
   });
 
   it("con il PDF la scheda mostra il box com'è stampato, ritagliato dalla stessa immagine della pagina", async () => {

@@ -115,7 +115,7 @@ describe("Impostazioni GDO", () => {
       "Identità della GDO",
       "Loghi delle insegne",
       "Reparti",
-      "Marchi del distributore",
+      "Private Labels",
       "Campi delle referenze",
       "Insight del volantino",
       "Aspetto del sito web",
@@ -126,7 +126,10 @@ describe("Impostazioni GDO", () => {
     expect(within(indice).getByRole("link", { name: /Reparti/ })).toHaveTextContent("1 da nominare");
     expect(await within(indice).findByText("1 da sincronizzare")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Nome" })).toHaveValue("Conad Nord Ovest");
-    expect(within(screen.getByRole("list", { name: "Linee del distributore" })).getByText("Verso Natura")).toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Private Labels" })).getByText("Verso Natura")).toBeInTheDocument();
+    // TASK-7b68e012: la sezione delle linee del distributore si chiama Private Labels
+    expect(screen.queryByRole("region", { name: "Marchi del distributore" })).not.toBeInTheDocument();
+    expect(within(indice).getByRole("link", { name: /Private Labels/ })).toBeInTheDocument();
     expect(screen.getByText(/Salvata per la GDO il 09\/11\/2026 alle 16:42 da Mario Rossi/)).toBeInTheDocument();
   });
 

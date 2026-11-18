@@ -223,7 +223,7 @@ describe('sezioniStandard: sintesi', () => {
       ['Sconto medio', '24%', 'sui 40 box con sconto'],
       ['Quota Fidelity', '18%', 'dei box con il prezzo Fidelity'],
       ['Sottocosto', '2', 'box in sottocosto'],
-      ['Marche', '12', '15% dello spazio alle marche del distributore'],
+      ['Marche', '12', '15% dello spazio alle Private Labels'],
     ]);
     expect(indicatori.every(indicatore => indicatore.variazione === null)).toBe(true);
 
@@ -246,11 +246,11 @@ describe('sezioniStandard: sintesi', () => {
     expect(perEtichetta.has('Vendite')).toBe(false);
   });
 
-  it('frasi chiave dai dati: spazio, sconto e marche del distributore', () => {
+  it('frasi chiave dai dati: spazio, sconto e Private Labels', () => {
     expect(frasiChiave(dati())).toEqual([
       'Il 42% dello spazio va al reparto Drogheria alimentare, che porta il 31% delle referenze.',
       'Lo sconto medio è del 24% sui 40 box con sconto; 12 superano il 30%.',
-      'Le marche del distributore occupano il 15% dello spazio.',
+      'Le Private Labels occupano il 15% dello spazio.',
     ]);
   });
 
@@ -259,7 +259,7 @@ describe('sezioniStandard: sintesi', () => {
       'Il 42% dello spazio va al reparto Drogheria alimentare, che porta il 31% delle referenze.',
       'Lo sconto medio è del 24% sui 40 box con sconto; 12 superano il 30%.',
       "Rispetto all'edizione precedente entra un prodotto e ne escono 2.",
-      'Le marche del distributore occupano il 15% dello spazio.',
+      'Le Private Labels occupano il 15% dello spazio.',
     ]);
   });
 });
@@ -289,7 +289,7 @@ describe('sezioniStandard: grafici', () => {
     });
   });
 
-  it('sconti e marche: fasce in quota sui box con sconto; marche del distributore con l\'accento del cliente', () => {
+  it('sconti e marche: fasce in quota sui box con sconto; Private Labels con l\'accento del cliente', () => {
     const palette = { ...PALETTE_REPORT_STANDARD, accento: '#abcdef', categorie: ['#111111', '#222222'] };
     const sezioni = sezioniStandard(dati({ palette }));
     const { grafici } = sezioneDi<'grafici'>(sezioni, 'prezziMarche');
@@ -308,7 +308,7 @@ describe('sezioniStandard: grafici', () => {
       { etichetta: 'Alfa', valore: 20, testo: '20%', colore: null },
       { etichetta: 'Insegna', valore: 15, testo: '15%', colore: '#abcdef' },
     ]);
-    expect(grafici[1].nota).toContain('In evidenza le marche del distributore');
+    expect(grafici[1].nota).toContain('In evidenza le Private Labels');
     const meccaniche = sezioneDi<'grafici'>(sezioni, 'assortimento').grafici[1].grafico;
     expect(meccaniche.forma === 'ciambella' && meccaniche.voci.map(voce => voce.colore)).toEqual(['#111111', '#222222', PALETTE_REPORT_STANDARD.linee]);
   });

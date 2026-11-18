@@ -23,20 +23,21 @@ const LINEE: LineeDistributore = {
 };
 
 describe("MarchiDistributore", () => {
-  it("dice la quota dello spazio dei marchi del distributore contro le altre marche", () => {
+  it("dice la quota dello spazio delle Private Labels contro le altre marche", () => {
     render(<MarchiDistributore linee={LINEE} />);
 
     expect(screen.getByText(/dello spazio del volantino, 12 box \(15% dei box\)/)).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: "Marchi del distributore 18,4% dello spazio, altre marche 81,6%" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Private Labels 18,4% dello spazio, altre marche 81,6%" })).toBeInTheDocument();
     const legenda = screen.getByRole("list", { name: "Legenda" });
-    expect(within(legenda).getByText("Marchi del distributore 18,4%")).toBeInTheDocument();
+    expect(within(legenda).getByText("Private Labels 18,4%")).toBeInTheDocument();
+    expect(screen.queryByText(/Marchi del distributore/)).not.toBeInTheDocument();
     expect(within(legenda).getByText("Altre marche 81,6%")).toBeInTheDocument();
   });
 
   it("una scheda per linea con logo, box e spazio; senza logo le iniziali nel colore della linea", () => {
     const { container } = render(<MarchiDistributore linee={LINEE} />);
 
-    const linee = within(screen.getByRole("list", { name: "Linee del distributore" })).getAllByRole("listitem");
+    const linee = within(screen.getByRole("list", { name: "Private Labels" })).getAllByRole("listitem");
     expect(linee).toHaveLength(2);
     expect(linee[0]).toHaveTextContent("Sapori & Dintorni");
     expect(linee[0]).toHaveTextContent("7 box · 11,2% dello spazio");
@@ -50,7 +51,7 @@ describe("MarchiDistributore", () => {
   it("un logo che non si carica lascia il posto alle iniziali", () => {
     render(<MarchiDistributore linee={LINEE} />);
 
-    const prima = within(screen.getByRole("list", { name: "Linee del distributore" })).getAllByRole("listitem")[0];
+    const prima = within(screen.getByRole("list", { name: "Private Labels" })).getAllByRole("listitem")[0];
     fireEvent.error(prima.querySelector("img")!);
     expect(prima.querySelector("img")).toBeNull();
     const monogramma = prima.querySelector("[data-monogramma]") as HTMLElement;
@@ -69,7 +70,7 @@ describe("MarchiDistributore", () => {
     render(<MarchiDistributore linee={{ ...LINEE, quotaSpazio: 0, quotaBox: 0, box: 0, linee: [], bolli: [] }} />);
 
     expect(screen.queryByRole("list", { name: "Bolli nel volantino" })).not.toBeInTheDocument();
-    expect(screen.getByText("Nessun prodotto delle linee del distributore in questo volantino.")).toBeInTheDocument();
+    expect(screen.getByText("Nessun prodotto delle Private Labels in questo volantino.")).toBeInTheDocument();
   });
 });
 

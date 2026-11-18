@@ -524,7 +524,7 @@ export function SchedaBox({
           <Dato etichetta="Meccanica">{box.meccanica ? ETICHETTA_MECCANICA[box.meccanica] : VALORE_ASSENTE}</Dato>
           <Dato etichetta="Reparto">{reparto ?? VALORE_ASSENTE}</Dato>
           {/* La linea del distributore c'è solo se il cliente dichiara linee e il prodotto ne fa parte */}
-          {box.linea && <Dato etichetta="Linea">{box.linea.nome || box.linea.sigla}</Dato>}
+          {box.linea && <Dato etichetta="Private Label">{box.linea.nome || box.linea.sigla}</Dato>}
           <Dato etichetta="Prodotti nel box">{formatNumero(box.prodotti)}</Dato>
         </Gruppo>
         <Gruppo titolo="Nel volantino">

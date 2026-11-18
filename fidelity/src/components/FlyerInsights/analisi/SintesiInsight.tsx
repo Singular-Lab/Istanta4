@@ -71,7 +71,7 @@ export const numeriSintesi = (
   if (lineeDistributore) {
     numeri.push({
       id: "distributore",
-      etichetta: "Marchi del distributore",
+      etichetta: "Private Labels",
       icona: "BadgeCheck",
       valore: formatPercentuale(lineeDistributore.quotaSpazio),
       sottotitolo: `dello spazio, ${contaBox(lineeDistributore.box)}`,
@@ -84,7 +84,7 @@ export const numeriSintesi = (
     etichetta: "Marche",
     icona: "Award",
     valore: formatNumero(sintesi.marche),
-    sottotitolo: lineeDistributore ? `di cui ${linee === 1 ? "1 linea" : `${formatNumero(linee)} linee`} del distributore` : undefined,
+    sottotitolo: lineeDistributore ? `di cui ${linee === 1 ? "1 Private Label" : `${formatNumero(linee)} Private Labels`}` : undefined,
   });
   return numeri;
 };
