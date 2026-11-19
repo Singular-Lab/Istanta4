@@ -1519,8 +1519,9 @@ test("I20-1211: il controllo dei bollini conta le segnalazioni dei filtri, e il 
 
 test("I20-1211: il tondino si vede solo col segnalino, segnalazioni attive e segnalazioni dei filtri", () => {
     const visibile = { visibile: true };
-    assert.deepStrictEqual(SchermataSegnalazioni.statoTondino(2, visibile, false, FILTRI_EDRO21), { visibile: true, suggerimento: "2 segnalazioni in Solo foto" });
-    assert.deepStrictEqual(SchermataSegnalazioni.statoTondino(1, visibile, false, FILTRI_EDRO21), { visibile: true, suggerimento: "1 segnalazione in Solo foto" });
+    //I20-1248: Edro21 ha anche il filtro Note category, e il suggerimento nomina tutti i filtri.
+    assert.deepStrictEqual(SchermataSegnalazioni.statoTondino(2, visibile, false, FILTRI_EDRO21), { visibile: true, suggerimento: "2 segnalazioni in Solo foto, Note category" });
+    assert.deepStrictEqual(SchermataSegnalazioni.statoTondino(1, visibile, false, FILTRI_EDRO21), { visibile: true, suggerimento: "1 segnalazione in Solo foto, Note category" });
     assert.strictEqual(SchermataSegnalazioni.statoTondino(0, visibile, false, FILTRI_EDRO21).visibile, false);
     assert.strictEqual(SchermataSegnalazioni.statoTondino(2, { visibile: false }, false, FILTRI_EDRO21).visibile, false);
     assert.strictEqual(SchermataSegnalazioni.statoTondino(2, visibile, true, FILTRI_EDRO21).visibile, false);
@@ -1538,7 +1539,7 @@ test("I20-1211: il tondino viola compare accanto al segnalino con le segnalazion
         SchermataSegnalazioni.aggiornaIcona();
         assert.strictEqual(el["#testoSegnalinoSegnalazioni"].testo, "2 segnalazioni");
         assert.strictEqual(tondino.stile.display, "inline-block");
-        assert.strictEqual(tondino.attributi.title, "1 segnalazione in Solo foto");
+        assert.strictEqual(tondino.attributi.title, "1 segnalazione in Solo foto, Note category");
 
         SchermataSegnalazioni.registraControllo("id:7", [{ pagina: "3", box: {}, voci: [VOCE_TESTI] }], ["3"]);
         SchermataSegnalazioni.aggiornaIcona();
@@ -1609,7 +1610,8 @@ test("I20-1211: la scelta del filtro c'e' solo se il cliente ne ha; scelto Solo 
             conFiltri(FILTRI_EDRO21, () => {
                 global.$ = (html) => elementoFinto(html);
                 let { elenco, conteggio } = disegna();
-                assert.deepStrictEqual(testi(elenco.figli[0]), ["Mostra:", "Tutte", "Solo foto", "Disattiva segnalazioni"]);
+                //I20-1248: dopo Solo foto, Note category.
+                assert.deepStrictEqual(testi(elenco.figli[0]), ["Mostra:", "Tutte", "Solo foto", "Note category", "Disattiva segnalazioni"]);
                 assert.deepStrictEqual(disegnati, [{ box: "A", voci: 2, filtro: null }, { box: "B", voci: 1, filtro: null }]);
                 assert.strictEqual(conteggio.testo, "3 segnalazioni in 2 box");
 

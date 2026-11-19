@@ -52,12 +52,35 @@ public class SegnalazioniPersonalizzateTests
     {
         var agenzia = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(File.ReadAllText(TrovaSorgenteEdro21()));
 
-        var regola = Assert.Single(agenzia!.segnalazioniPersonalizzate);
-        Assert.Equal("nomeFoto", regola.campo);
+        var regola = Assert.Single(agenzia!.segnalazioniPersonalizzate, r => r.campo == "nomeFoto");
         Assert.Equal(".psd", regola.deveContenere);
         Assert.Equal("warning", regola.gravita);
         Assert.Equal("PSD-01", regola.codice);
         Assert.Contains("{valore}", regola.testo);
+        Assert.Equal("", regola.quando);
+    }
+
+    /// I20-1248: Edro21 segnala la note category compilata del primario, con il suo valore, come avviso.
+    [Fact]
+    public void Edro21_segnala_la_note_category_compilata()
+    {
+        var agenzia = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(File.ReadAllText(TrovaSorgenteEdro21()));
+
+        var regola = Assert.Single(agenzia!.segnalazioniPersonalizzate, r => r.campo == "note_category");
+        Assert.Equal("compilato", regola.quando);
+        Assert.Equal("warning", regola.gravita);
+        Assert.Equal("NCT-01", regola.codice);
+        Assert.Equal("Ci sono note category: {valore}", regola.testo);
+        Assert.Equal(2, agenzia.segnalazioniPersonalizzate.Count);
+    }
+
+    [Fact]
+    public void Quando_si_legge_e_sopravvive_al_salvataggio_e_senza_vale_come_prima()
+    {
+        var agenzia = JsonConvert.DeserializeObject<AgenziaCustomPlugin>("{\"segnalazioniPersonalizzate\":[{\"campo\":\"note_category\",\"quando\":\"compilato\",\"testo\":\"x\"},{\"campo\":\"nomeFoto\",\"deveContenere\":\".psd\",\"testo\":\"y\"}]}");
+        var riletto = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(JsonConvert.SerializeObject(agenzia));
+
+        Assert.Equal(new[] { "compilato", "" }, riletto!.segnalazioniPersonalizzate.Select(r => r.quando));
     }
 
     private static string TrovaSorgenteEdro21()

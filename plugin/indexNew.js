@@ -5461,6 +5461,24 @@ function segnalazioniPersonalizzateFoto(nomeFoto) {
     }
 }
 
+/// I20-1248: le segnalazioni personalizzate del cliente sui campi del record del primario del box
+/// (tutte le regole tranne quelle su nomeFoto; Edro21: la note category compilata, NCT-01). Come
+/// quella delle foto non lancia: il box e' gia' impaginato.
+function segnalazioniPersonalizzateDelRecord(itemRef) {
+    try {
+        if (itemRef == null) {
+            return;
+        }
+        const campi = [...new Set(pluginMiddleware.getSegnalazioniPersonalizzate().map(r => r.campo).filter(c => c !== "nomeFoto"))];
+        campi.forEach(campo => {
+            pluginMiddleware.segnalazioniPersonalizzate(campo, itemRef[campo]).forEach(s => addSegnalazione(s.testo, s.gravita, 2, true));
+        });
+    }
+    catch (e) {
+        console.error("Code IDX-205 Segnalazioni personalizzate sul record non valutate: " + e);
+    }
+}
+
 /// Chiude le segnalazioni raccolte per un box: le ordina per gravita', ne fa un unico
 /// messaggio nel report, scrive nel bollino del box tutte le segnalazioni, e svuota la lista
 /// per il box successivo.
@@ -6457,6 +6475,9 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
                     lastBoxImpaginatoInPagina = boxImpaginato;
                     lastItemRefImpaginato = itemRef;
                     trovato = true;
+
+                    //I20-1248: le segnalazioni del cliente sul record (Edro21: la note category).
+                    segnalazioniPersonalizzateDelRecord(itemRef);
 
                     boxImpaginato =finalizzaSegnalazioni(reportImpaginazioneObj, itemRef["Scatto.CodiceGruppo"], boxImpaginato);
                     break;

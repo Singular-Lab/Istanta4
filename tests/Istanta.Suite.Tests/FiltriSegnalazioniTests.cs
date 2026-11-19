@@ -42,11 +42,22 @@ public class FiltriSegnalazioniTests
     {
         var agenzia = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/wwwroot/external_source/Edro21/SourceCustomPlugin.json")));
 
-        var filtro = Assert.Single(agenzia!.filtriSegnalazioni);
-        Assert.Equal("Solo foto", filtro.nome);
+        var filtro = Assert.Single(agenzia!.filtriSegnalazioni, f => f.nome == "Solo foto");
         Assert.Equal(new[] { "PSD-01", "CSF-12", "CSF-27", "CSF-19", "CSF-013", "CSF-008" }, filtro.condizioni.Select(c => c.codice));
         // CSF-013 e CSF-008 solo quando nominano una foto.
         Assert.Equal("foto", filtro.condizioni.Single(c => c.codice == "CSF-013").testoContiene);
         Assert.Equal("foto", filtro.condizioni.Single(c => c.codice == "CSF-008").testoContiene);
+    }
+
+    /// I20-1248: il filtro delle note category, dopo Solo foto.
+    [Fact]
+    public void Edro21_ha_il_filtro_Note_category()
+    {
+        var agenzia = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/wwwroot/external_source/Edro21/SourceCustomPlugin.json")));
+
+        Assert.Equal(new[] { "Solo foto", "Note category" }, agenzia!.filtriSegnalazioni.Select(f => f.nome));
+        var condizione = Assert.Single(agenzia.filtriSegnalazioni[1].condizioni);
+        Assert.Equal("NCT-01", condizione.codice);
+        Assert.Equal("", condizione.testoContiene);
     }
 }

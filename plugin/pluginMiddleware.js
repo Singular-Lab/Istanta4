@@ -828,7 +828,8 @@ const pluginMiddleware = {
     /// I20-1200: le segnalazioni di impaginazione decise dal cliente
     /// (AgenziaCustomPlugin_SegnalazionePersonalizzata). Senza la chiave, o se non e' una lista,
     /// nessuna. Una regola senza campo, deveContenere o testo non vale; la gravita' e' "error" solo
-    /// se lo dice, altrimenti "warning".
+    /// se lo dice, altrimenti "warning". I20-1248: quando "compilato" scatta con qualunque valore
+    /// non vuoto, e allora deveContenere non serve; ogni altro quando vale "non contiene".
     getSegnalazioniPersonalizzate() {
         let me = this;
 
@@ -846,9 +847,10 @@ const pluginMiddleware = {
                 deveContenere: testo(r.deveContenere),
                 gravita: testo(r.gravita).toLowerCase() === "error" ? "error" : "warning",
                 codice: testo(r.codice),
-                testo: testo(r.testo)
+                testo: testo(r.testo),
+                quando: testo(r.quando).toLowerCase() === "compilato" ? "compilato" : ""
             }))
-            .filter(r => r.campo !== "" && r.deveContenere !== "" && r.testo !== "");
+            .filter(r => r.campo !== "" && r.testo !== "" && (r.quando === "compilato" || r.deveContenere !== ""));
     },
 
     /// I20-1200: le segnalazioni personalizzate che il valore di un campo fa scattare, come
@@ -860,7 +862,7 @@ const pluginMiddleware = {
         }
         const valoreTesto = String(valore);
         return this.getSegnalazioniPersonalizzate()
-            .filter(r => r.campo === campo && !valoreTesto.toLowerCase().includes(r.deveContenere.toLowerCase()))
+            .filter(r => r.campo === campo && (r.quando === "compilato" || !valoreTesto.toLowerCase().includes(r.deveContenere.toLowerCase())))
             .map(r => ({
                 testo: (r.codice !== "" ? "Code " + r.codice + " " : "") + r.testo.split("{valore}").join(valoreTesto),
                 gravita: r.gravita

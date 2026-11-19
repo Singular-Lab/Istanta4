@@ -98,6 +98,53 @@ test("impaginaBox valuta le segnalazioni sulla primaria e su ogni secondaria, se
     assert.match(indice, /FotoPlacer\.applicaNoRender\(field, membroPrimaria != null && membroPrimaria\.noRender\);\n\s*segnalazioniPersonalizzateFoto\(nomeFoto\);/);
 });
 
+/* ---- I20-1248: segnalazioni sui campi del record compilati ---- */
+
+test("I20-1248: Edro21 segnala la note category compilata, con il valore, come avviso", () => {
+    assert.deepStrictEqual(edro21.segnalazioniPersonalizzate("note_category", "NO FOTO AMBIENTATA"), [
+        { testo: "Code NCT-01 Ci sono note category: NO FOTO AMBIENTATA", gravita: "warning" }
+    ]);
+    assert.deepStrictEqual(edro21.segnalazioniPersonalizzate("note_category", ""), []);
+    assert.deepStrictEqual(edro21.segnalazioniPersonalizzate("note_category", "   "), []);
+    assert.deepStrictEqual(edro21.segnalazioniPersonalizzate("note_category", null), []);
+    assert.deepStrictEqual(edro21.segnalazioniPersonalizzate("note_category", undefined), []);
+    //La regola delle foto resta com'era.
+    assert.strictEqual(edro21.segnalazioniPersonalizzate("nomeFoto", "6149843_1_T5.jpg").length, 1);
+});
+
+test("I20-1248: quando compilato non vuole deveContenere; ogni altro quando vale non contiene", () => {
+    const me = middleware({
+        segnalazioniPersonalizzate: [
+            { campo: "note", quando: "COMPILATO", testo: "nota {valore}" },
+            { campo: "note", quando: "compilato" },
+            { campo: "note", quando: "boh", testo: "senza condizione" },
+            { campo: "note", quando: "boh", deveContenere: "ok", testo: "non ok" }
+        ]
+    });
+    assert.deepStrictEqual(me.getSegnalazioniPersonalizzate().map(r => r.quando), ["compilato", ""]);
+    assert.deepStrictEqual(me.segnalazioniPersonalizzate("note", "da vedere"), [
+        { testo: "nota da vedere", gravita: "warning" },
+        { testo: "non ok", gravita: "warning" }
+    ]);
+    assert.deepStrictEqual(me.segnalazioniPersonalizzate("note", "ok"), [{ testo: "nota ok", gravita: "warning" }]);
+});
+
+test("I20-1248: impaginaBox valuta i campi del record del primario prima di chiudere le segnalazioni, senza le foto", () => {
+    const indice = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const aiuto = indice.substring(indice.indexOf("function segnalazioniPersonalizzateDelRecord(itemRef) {"),
+                                   indice.indexOf("function finalizzaSegnalazioni("));
+    assert.match(aiuto, /\.filter\(c => c !== "nomeFoto"\)/);
+    assert.match(aiuto, /pluginMiddleware\.segnalazioniPersonalizzate\(campo, itemRef\[campo\]\)\.forEach\(s => addSegnalazione\(s\.testo, s\.gravita, 2, true\)\)/);
+    assert.match(aiuto, /catch \(e\) \{\s*console\.error\("Code IDX-205 /);
+    assert.match(indice, /segnalazioniPersonalizzateDelRecord\(itemRef\);\s*boxImpaginato =finalizzaSegnalazioni\(reportImpaginazioneObj, itemRef\["Scatto\.CodiceGruppo"\], boxImpaginato\);/);
+});
+
+test("I20-1248: Edro21 dichiara il filtro Note category con NCT-01", () => {
+    const filtri = middlewareFiltri(customEdro21).getFiltriSegnalazioni();
+    assert.strictEqual(filtri[1].nome, "Note category");
+    assert.deepStrictEqual(filtri[1].condizioni, [{ codice: "NCT-01", testoContiene: "" }]);
+});
+
 /* ---- I20-1211: i filtri della schermata delle segnalazioni decisi dal cliente ---- */
 
 /// Un middleware finto con il solo getFiltriSegnalazioni vero.
@@ -112,7 +159,8 @@ function middlewareFiltri(configurazione, custom = null) {
 test("I20-1211: Edro21 dichiara il filtro Solo foto, con CSF-013 e CSF-008 solo sulle foto", () => {
     const filtri = middlewareFiltri(customEdro21).getFiltriSegnalazioni();
 
-    assert.strictEqual(filtri.length, 1);
+    //I20-1248: dopo Solo foto c'e' Note category.
+    assert.strictEqual(filtri.length, 2);
     assert.strictEqual(filtri[0].nome, "Solo foto");
     assert.deepStrictEqual(filtri[0].condizioni, [
         { codice: "PSD-01", testoContiene: "" },
