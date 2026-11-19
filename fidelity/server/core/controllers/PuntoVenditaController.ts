@@ -5,7 +5,6 @@ import { ExternalApiError } from '../../../lib/errors';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import { BaseController } from '../base/BaseController';
 import { uploadSpreadsheet } from '../config/multerConfig';
-import { sequelize } from '../db/SequelizeConnector';
 import type { CreatePuntoVenditaDTO, IndirizzoTrovatoDTO, StatoImportPuntiVenditaDTO } from '../dto';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
@@ -28,6 +27,7 @@ import { roomUtente } from '../utils/socketRooms';
 import { emitToClients } from '../../ws-server';
 import { cercaIndirizzi } from '../utils/geocodifica';
 import { scriviSuIstanta } from '../utils/istanta';
+import { combinazioneConProxy } from '../services/areeCanaliProxy';
 
 /** Il body del form Punti Vendita (salvaPV e modificaPV), e delle chiamate interne. */
 type FormPuntoVendita = {
@@ -71,17 +71,6 @@ function datiDaForm(body: FormPuntoVendita, idGdo: string): CreatePuntoVenditaDT
 const queryIndirizzo = (dati: Pick<CreatePuntoVenditaDTO, 'indirizzo' | 'cap' | 'citta' | 'provincia'>) =>
   [dati.indirizzo, [dati.cap, dati.citta].filter(Boolean).join(' '), dati.provincia].filter(Boolean).join(', ');
 
-/** Dopo un import la view delle combinazioni conta i nuovi PV; se non riesce i PV restano comunque. */
-async function aggiornaVistaCombinazioni(): Promise<void> {
-  try {
-    await sequelize.query('SELECT refresh_mv_combinazioni()');
-  } catch (error) {
-    log.warn('Punti vendita importati, ma aggiornamento della view combinazioni non riuscito', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
 export class PuntoVenditaController extends BaseController {
   constructor(
     private puntoVenditaService: IPuntoVenditaService,
@@ -89,7 +78,6 @@ export class PuntoVenditaController extends BaseController {
     private agenziaLib: IAgenziaLib,
     private importJobs: GestoreImportPuntiVendita = importPuntiVenditaJobs,
     private emetti: (evento: string, dati: unknown, room: string) => void = emitToClients,
-    private aggiornaVista: () => Promise<void> = aggiornaVistaCombinazioni,
     private cerca: (query: string, limite?: number) => Promise<IndirizzoTrovatoDTO[]> = cercaIndirizzi
   ) {
     super('/api');
@@ -285,6 +273,14 @@ export class PuntoVenditaController extends BaseController {
         return;
       }
 
+      // Un canale o un'area proxy raccoglie altre voci: il PV sta sempre su una combinazione vera
+      if (!interna && await combinazioneConProxy(body.guidIDCombinazione)) {
+        this.sendResponse(res, HttpStatusCode.BAD_REQUEST, {
+          message: "Un punto vendita non può stare su un canale o un'area proxy: scegli la combinazione di un canale e di un'area normali.",
+        });
+        return;
+      }
+
       const isUpdate = Boolean(body.guidID);
       const id = body.guidID || randomUUID();
       const dati = datiDaForm(body, idGdo);
@@ -417,7 +413,6 @@ export class PuntoVenditaController extends BaseController {
           return trovato && { lat: trovato.lat, lon: trovato.lon };
         },
         notifica: (evento, statoJob) => this.emetti(eventoImportPuntiVendita(statoJob.jobId, evento), statoJob, roomUtente(idUtente)),
-        alTermine: () => this.aggiornaVista(),
       });
       log.info('importaPV - avviato', { idGdo, jobId: stato.jobId, righe: esiti.length });
       this.sendResponse(res, HttpStatusCode.ACCEPTED, { jobId: stato.jobId, stato });

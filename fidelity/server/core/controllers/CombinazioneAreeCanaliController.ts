@@ -45,7 +45,13 @@ export class CombinazioneAreeCanaliController extends BaseController {
 
   private async setCombinazione(req: Request, res: Response): Promise<void> {
     try {
-      const data = req.body as { guidID: string, guidIDCanale: string, guidIDArea: string, enabled: boolean, idGDO: string };
+      const corpo = req.body as { guidID: string, guidIDCanale: string, guidIDArea: string, enabled: unknown, idGDO: string };
+      // La pagina mandava "true"/"false" come testo e "false" valeva attiva: un testo si legge, il resto come prima
+      const enabled = typeof corpo.enabled === 'string'
+        ? ['true', '1'].includes(corpo.enabled.trim().toLowerCase())
+        : Boolean(corpo.enabled);
+      const data = { ...corpo, enabled };
+      const nuova = !data.guidID;
 
       if (!data.guidID) {
         data.guidID = uuidv4();
@@ -88,19 +94,22 @@ export class CombinazioneAreeCanaliController extends BaseController {
         return;
       }
 
+      // Anche una combinazione con un canale o un'area proxy va a Istanta, come le altre
       await scriviSuIstanta(req, '/ACPV/setCombinazione', 'PUT', dataPerIstanta);
 
       const resultCombinazione = await this.combinazioneService.createCombinazione(data);
 
-      // Determina se è una creazione o un aggiornamento
-      const isUpdate = data.guidID && data.guidID !== '';
+      const isUpdate = !nuova;
       const statusCode = isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED;
       const message = isUpdate ? 'Combinazione aggiornata con successo' : 'Combinazione creata con successo';
 
       res.status(statusCode).json({
         ...resultCombinazione,
+        esito: true,
+        error: "",
         message,
-        isUpdate
+        isUpdate,
+        data: resultCombinazione
       });
 
     } catch (error) {

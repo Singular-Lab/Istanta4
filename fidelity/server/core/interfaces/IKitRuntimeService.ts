@@ -20,7 +20,7 @@ export interface IKitRuntimeService {
   getKitRuntimeByIdPerWebhook(id: string): Promise<any>;
   getAllKitRuntimeByIdPromo(idPromo: string): Promise<RUNTIME_KIT[]>;
   getAllKitByAreaCanalePV(data: {
-    idArea?: string; idCanale?: string; idPv?: string;
+    idArea?: string | string[]; idCanale?: string | string[]; idPv?: string;
     idPromo?: string; idFormato?: string; id?: string;
     promoContext?: { nome_field: string; user_value: string; }[];
     tags?: string[];
@@ -28,9 +28,9 @@ export interface IKitRuntimeService {
   }, traccia?: Record<string, unknown>): Promise<any>;
 
   /** Mutations */
-  createKitRunTime(data: RUNTIME_KIT): Promise<any>;
+  createKitRunTime(data: RUNTIME_KIT, opzioni?: { perCombinazione?: boolean }): Promise<any>;
   creaKitRuntimeManuale(idPromo: string, data: any): Promise<any>;
-  bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]>;
+  bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string; pezzo?: boolean })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]>;
   mettiInStatoDiEliminazione(id: string): Promise<any>;
   eliminaKitRuntime(id: string): Promise<any>;
   eliminaFileKitRuntime(id: string): Promise<any>;

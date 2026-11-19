@@ -1,4 +1,5 @@
 import { Op } from 'sequelize';
+import { eProxy } from '../../../lib/areeCanali/proxy';
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO } from '../../../lib/enums';
 import { DatabaseError, NotFoundError } from '../../../lib/errors';
 import { CombinazioneCanaleAreaAttributes, PuntiVenditaAttributes } from '../../../lib/types';
@@ -742,10 +743,15 @@ export class PuntoVenditaService implements IPuntoVenditaService {
     ]);
     const codiceCanale = new Map(canali.map(c => [c.id_canali, c.codice_canali]));
     const codiceArea = new Map(aree.map(a => [a.id_aree, a.codice_aree]));
+    // I proxy (lib/areeCanali/proxy.ts) non hanno punti vendita: l'import non li riconosce
+    const canaliProxy = new Set(canali.filter(c => eProxy(c.membri_canali)).map(c => c.id_canali));
+    const areeProxy = new Set(aree.filter(a => eProxy(a.membri_aree)).map(a => a.id_aree));
     return {
-      canali: canali.map(c => ({ id: c.id_canali, codice: c.codice_canali, nome: c.nome_canali })),
-      aree: aree.map(a => ({ id: a.id_aree, codice: a.codice_aree, nome: a.nome_aree })),
-      combinazioni: combinazioni.map(c => ({
+      canali: canali.filter(c => !canaliProxy.has(c.id_canali)).map(c => ({ id: c.id_canali, codice: c.codice_canali, nome: c.nome_canali })),
+      aree: aree.filter(a => !areeProxy.has(a.id_aree)).map(a => ({ id: a.id_aree, codice: a.codice_aree, nome: a.nome_aree })),
+      combinazioni: combinazioni.filter(c =>
+        !canaliProxy.has(c.id_canale_combinazione_canale_area) && !areeProxy.has(c.id_area_combinazione_canale_area)
+      ).map(c => ({
         id: c.id_combinazione_canale_area,
         idCanale: c.id_canale_combinazione_canale_area,
         idArea: c.id_area_combinazione_canale_area,

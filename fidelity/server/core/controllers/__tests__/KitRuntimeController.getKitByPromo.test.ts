@@ -1,14 +1,20 @@
 import express from 'express';
 import request from 'supertest';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { log } from '../../logger';
 import { Promo } from '../../models/promo';
 import { ServerUtils } from '../../utils/ServerUtils';
+import { idPezzo, MESSAGGIO_AVVIO_PROXY, type KitConfrontabile, type ProxyNoti } from '../../../../lib/areeCanali/proxy';
+import { NESSUN_PEZZO, type ContestoPezzi } from '../../services/areeCanaliProxy';
+
+/** Un kit come arriva nella risposta JSON. */
+type Kit = Record<string, unknown>;
 import { KitRuntimeController } from '../KitRuntimeController';
 
 vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: (_req: any, _res: any, next: any) => next(),
-  integrationAuthMiddleware: (_req: any, res: any, next: any) => { res.locals.authVia = 'internal'; next(); },
+  // Istanta chiama con il bearer di Olympus: i test lo dicono con l'header x-test-auth
+  integrationAuthMiddleware: (req: any, res: any, next: any) => { res.locals.authVia = req.headers['x-test-auth'] ?? 'internal'; next(); },
 }));
 
 vi.mock('../../middleware/permissionGuard', () => ({
@@ -18,6 +24,26 @@ vi.mock('../../middleware/permissionGuard', () => ({
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+
+// Proxy di canali e aree (lib/areeCanali/proxy.ts): le letture dal database sono finte, la divisione
+// in pezzi (pezziPerIstanta) e' quella vera
+const proxyDb = vi.hoisted(() => ({
+  caricaProxy: vi.fn(async (): Promise<ProxyNoti> => ({ canali: new Map(), aree: new Map() })),
+  contestoPezzi: vi.fn(async (): Promise<ContestoPezzi | undefined> => undefined),
+  kitDellaPromo: vi.fn(async (_idPromo: string): Promise<Array<KitConfrontabile & { guidIdDesign: string | null }>> => []),
+  trovaPezzo: vi.fn(async (_id: string): Promise<{ idDesign: string; idCanale: string; idArea: string } | null> => null),
+}));
+vi.mock('../../services/areeCanaliProxy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../services/areeCanaliProxy')>()),
+  ...proxyDb,
+}));
+
+beforeEach(() => {
+  proxyDb.contestoPezzi.mockResolvedValue(NESSUN_PEZZO);
+  proxyDb.caricaProxy.mockResolvedValue({ canali: new Map(), aree: new Map() });
+  proxyDb.kitDellaPromo.mockResolvedValue([]);
+  proxyDb.trovaPezzo.mockResolvedValue(null);
+});
 
 // getKitByPromo deve lasciare nei log ogni passaggio, con la stessa richiesta su tutte le righe
 
@@ -157,5 +183,128 @@ describe('PUT /api/getKitByPromo, ramo combinazioni', () => {
     expect((bulkCreateRuntime.mock.calls[0] as any[])[1]).toMatchObject({ context: 'getKitByPromo' });
     expect(riga('Attivita di creazione non registrata: chiamata senza utente')).toBeDefined();
     expect(riga('Risposta inviata')).toMatchObject({ esito: 'runtime', runtime: 1 });
+  });
+});
+
+// Il canale proxy SSCNCY (Superstore, Conad, City) e' noto a Istanta come un canale qualsiasi.
+// Chiedendolo, Istanta riceve i kit dei membri e il design RIL diviso in un pezzo per combinazione
+// membro attiva: SS·LA, CN·LA, CY·LA. Ogni pezzo si avvia con il suo id e ha il suo runtime.
+describe('PUT /api/getKitByPromo da Istanta, con canali proxy', () => {
+  const PROXY = { canali: new Map([['sscncy', ['ss', 'cn', 'cy']]]), aree: new Map() };
+  const CONTESTO = {
+    proxy: PROXY,
+    attive: new Set(['ss|la', 'cn|la', 'cy|la']),
+    canali: new Map([['ss', { codice: 'SS', nome: 'Superstore' }], ['cn', { codice: 'CN', nome: 'Conad' }], ['cy', { codice: 'CY', nome: 'City' }]]),
+    aree: new Map([['la', { codice: 'LA', nome: 'Lazio' }]]),
+  };
+  const ril = { guidId: 'd-ril', titolo: 'RIL SSCNCY LA', guidCanale: 'sscncy', guidArea: 'la', guidFormato: 'f1', guidIdRaccoglitore: 'r1', tipiDiExportInKit: [], filtroContesto: [] };
+  const vol = { guidId: 'd-ss', titolo: 'VOL SS LA', guidCanale: 'ss', guidArea: 'la', guidFormato: 'f1', guidIdRaccoglitore: 'r1', tipiDiExportInKit: [], filtroContesto: [] };
+  const designPerId = { getCombinazioneDesignById: vi.fn(async (id: string) => (id === 'd-ril' ? { ...ril } : undefined)) };
+  const PEZZO_CN = idPezzo('d-ril', 'cn', 'la');
+
+  beforeEach(() => {
+    proxyDb.contestoPezzi.mockResolvedValue(CONTESTO);
+    proxyDb.caricaProxy.mockResolvedValue(PROXY);
+    proxyDb.trovaPezzo.mockImplementation(async (id: string) => (id === PEZZO_CN ? { idDesign: 'd-ril', idCanale: 'cn', idArea: 'la' } : null));
+  });
+
+  it('Istanta chiede SSCNCY·LA: riceve i kit dei membri e il RIL diviso in SS·LA, CN·LA e CY·LA', async () => {
+    const volAltroFormato = { ...vol, guidFormato: 'f2' };
+    const getAllKitByAreaCanalePV = vi.fn(async (_dati: unknown) => [{ ...ril }, volAltroFormato]);
+    const app = createApp({ getAllKitByAreaCanalePV });
+
+    const res = await request(app).put('/api/getKitByPromo').set('x-test-auth', 'bearer').send({ idCanale: 'sscncy', idArea: 'la', lettura: true });
+
+    expect(res.status).toBe(200);
+    expect(getAllKitByAreaCanalePV.mock.calls[0][0]).toMatchObject({ idCanale: ['sscncy', 'ss', 'cn', 'cy'], idArea: ['la'] });
+    expect((res.body.content as Kit[]).map(k => [k.guidId, k.guidCanale, k.guidArea])).toEqual([
+      [idPezzo('d-ril', 'ss', 'la'), 'ss', 'la'],
+      [PEZZO_CN, 'cn', 'la'],
+      [idPezzo('d-ril', 'cy', 'la'), 'cy', 'la'],
+      ['d-ss', 'ss', 'la'],
+    ]);
+    expect(res.body.content[1]).toMatchObject({ guidIdDesign: 'd-ril', titolo: 'RIL SSCNCY LA', nomeCanale: 'Conad', codiceCanale: 'CN', nomeArea: 'Lazio' });
+  });
+
+  it('Istanta chiede Superstore: solo i kit di Superstore, nessun pezzo del RIL', async () => {
+    const getAllKitByAreaCanalePV = vi.fn(async (_dati: unknown) => [{ ...vol }]);
+    const app = createApp({ getAllKitByAreaCanalePV });
+
+    const res = await request(app).put('/api/getKitByPromo').set('x-test-auth', 'bearer').send({ idCanale: 'ss', idArea: 'la', lettura: true });
+
+    expect(getAllKitByAreaCanalePV.mock.calls[0][0]).toMatchObject({ idCanale: ['ss'], idArea: ['la'] });
+    expect(res.body.content).toEqual([vol]);
+  });
+
+  it('un pezzo e un kit della stessa combinazione, stesso raccoglitore e formato: 409 con il motivo, nulla creato', async () => {
+    const bulkCreateRuntime = vi.fn(async () => []);
+    const app = createApp({ getAllKitByAreaCanalePV: vi.fn(async () => [{ ...ril }, { ...vol }]), bulkCreateRuntime });
+
+    const res = await request(app).put('/api/getKitByPromo').set('x-test-auth', 'bearer').send({ idCanale: 'sscncy', idPromo: 'p1', lettura: false });
+
+    expect(res.status).toBe(409);
+    expect(res.body.esito).toBe(false);
+    expect(res.body.error).toContain('"RIL SSCNCY LA" e "VOL SS LA"');
+    expect(bulkCreateRuntime).not.toHaveBeenCalled();
+  });
+
+  it('avvio di un pezzo: il runtime nasce sul canale e l\'area del membro, legato al design proxy', async () => {
+    const createKitRunTime = vi.fn(async (dati: Kit, _opzioni?: unknown) => ({ ...dati }));
+    const app = createApp({ getAllKitRuntimeByIdPromo: vi.fn(async () => []), createKitRunTime }, designPerId);
+
+    const res = await request(app).put('/api/getKitByPromo').set('x-test-auth', 'bearer').send({ id: PEZZO_CN, idPromo: 'p1', lettura: false });
+
+    expect(res.status).toBe(200);
+    expect(createKitRunTime).toHaveBeenCalledTimes(1);
+    const [dati, opzioni] = createKitRunTime.mock.calls[0];
+    expect(dati).toMatchObject({ guidIdDesign: 'd-ril', guidCanale: 'cn', guidArea: 'la', nomeCanale: 'Conad', idPromo: 'p1' });
+    // Un runtime per pezzo: quello esistente si cerca anche per canale e area
+    expect(opzioni).toEqual({ perCombinazione: true });
+    expect(res.body.content[0]).toMatchObject({ guidIdDesign: 'd-ril', guidCanale: 'cn', guidArea: 'la' });
+  });
+
+  it('avvio di un pezzo in una promo con un kit della stessa combinazione: 409, nessun runtime', async () => {
+    proxyDb.kitDellaPromo.mockResolvedValue([{ ...vol, guidId: 'rt-cn', guidIdDesign: 'd-cn', guidCanale: 'cn', pezzo: false }]);
+    const createKitRunTime = vi.fn(async (dati: Kit) => dati);
+    const app = createApp({ getAllKitRuntimeByIdPromo: vi.fn(async () => []), createKitRunTime }, designPerId);
+
+    const res = await request(app).put('/api/getKitByPromo').set('x-test-auth', 'bearer').send({ id: PEZZO_CN, idPromo: 'p1', lettura: false });
+
+    expect(res.status).toBe(409);
+    expect(proxyDb.kitDellaPromo).toHaveBeenCalledWith('p1');
+    expect(createKitRunTime).not.toHaveBeenCalled();
+  });
+
+  it('un design proxy non si avvia intero, ne\' da Istanta ne\' da FP: 400', async () => {
+    const createKitRunTime = vi.fn(async (dati: Kit) => dati);
+    const app = createApp({ getAllKitRuntimeByIdPromo: vi.fn(async () => []), createKitRunTime }, designPerId);
+
+    const daIstanta = await request(app).put('/api/getKitByPromo').set('x-test-auth', 'bearer').send({ id: 'd-ril', idPromo: 'p1', lettura: false });
+    const daFp = await request(app).put('/api/getKitByPromo').send({ id: 'd-ril', idPromo: 'p1', lettura: false });
+
+    expect(daIstanta.status).toBe(400);
+    expect(daIstanta.body.error).toBe(MESSAGGIO_AVVIO_PROXY);
+    expect(daFp.status).toBe(400);
+    expect(createKitRunTime).not.toHaveBeenCalled();
+  });
+
+  it('Istanta che legge per id un design proxy lo riceve diviso in pezzi', async () => {
+    const app = createApp({}, designPerId);
+
+    const res = await request(app).put('/api/getKitByPromo').set('x-test-auth', 'bearer').send({ id: 'd-ril', lettura: true });
+
+    expect((res.body.content as Kit[]).map(k => k.guidCanale)).toEqual(['ss', 'cn', 'cy']);
+  });
+
+  it('le chiamate di FP e del plugin vedono i kit come sono, senza leggere i proxy', async () => {
+    const getAllKitByAreaCanalePV = vi.fn(async (_dati: unknown) => [{ ...ril }]);
+    const app = createApp({ getAllKitByAreaCanalePV });
+
+    const res = await request(app).put('/api/getKitByPromo').send({ idCanale: 'sscncy', lettura: true });
+
+    expect(getAllKitByAreaCanalePV.mock.calls[0][0]).toMatchObject({ idCanale: 'sscncy' });
+    expect(res.body.content).toEqual([ril]);
+    expect(proxyDb.contestoPezzi).not.toHaveBeenCalled();
+    expect(proxyDb.caricaProxy).not.toHaveBeenCalled();
   });
 });

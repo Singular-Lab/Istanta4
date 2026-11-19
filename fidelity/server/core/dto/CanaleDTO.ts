@@ -24,6 +24,8 @@ export interface CanaleResponseDTO {
   codice: string;
   nome: string;
   id_gdo: string;
+  /** Canali membri, se il canale e' un proxy; vuoto o assente altrimenti. */
+  membri?: string[];
   createdat?: Date;
   updatedat: Date;
 }

@@ -3,6 +3,10 @@ import 'express-session';
 import _ from "lodash";
 import { v4 as uuidv4 } from "uuid";
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_PROMO, TIPO_ATTIVITA } from '../../../lib/enums';
+import {
+  chiaveCoppia, eSuProxy, kitConfusiDaIstanta, messaggioKitConfusi, MESSAGGIO_AVVIO_PROXY, NESSUN_PROXY, vociRichieste,
+  type KitConfrontabile,
+} from '../../../lib/areeCanali/proxy';
 import { DESIGN_KIT } from '../../../lib/types';
 import { BaseController } from '../base/BaseController';
 import { IDesignKitService } from '../interfaces/IDesignKitService';
@@ -12,6 +16,7 @@ import { authMiddleware, integrationAuthMiddleware } from '../middleware/authMid
 import { routeDeprecata } from '../middleware/routeDeprecata';
 import { permissionGuard } from '../middleware/permissionGuard';
 import { Promo } from '../models/promo';
+import { caricaProxy, contestoPezzi, kitDellaPromo, NESSUN_PEZZO, pezziPerIstanta, trovaPezzo } from '../services/areeCanaliProxy';
 import { ServerUtils } from '../utils/ServerUtils';
 
 /** I dati del design che dicono cosa si sta avviando, senza scrivere nel log tutto l'oggetto. */
@@ -134,19 +139,60 @@ export class KitRuntimeController extends BaseController {
         tipoUtente: req.session?.tipo_utente,
         ...parametri,
       });
+      // Istanta (bearer) conosce i proxy come voci normali: chiedendo un proxy riceve anche i kit dei
+      // membri, e i design proxy gli arrivano divisi in pezzi, uno per combinazione membro attiva;
+      // ogni pezzo ha un id suo e si avvia come un kit (lib/areeCanali/proxy.ts)
+      const perIstanta = res.locals.authVia === 'bearer';
+      const contesto = perIstanta ? await contestoPezzi() : NESSUN_PEZZO;
+      const conProxy = contesto !== NESSUN_PEZZO;
+      const rifiutaKitConfusi = (coppie: Array<[KitConfrontabile, KitConfrontabile]>) => {
+        const motivo = messaggioKitConfusi(coppie);
+        log.warn('Kit che Istanta unirebbe: risposta 409', { ...traccia, coppie: coppie.map(([a, b]) => [a.guidId, b.guidId]), ...durata() });
+        res.status(HttpStatusCode.CONFLICT).json({ esito: false, content: null, error: motivo });
+      };
+      const rifiutaAvvioProxy = (titoli: Array<string | undefined>) => {
+        log.warn('Avvio di un design proxy intero: risposta 400', { ...traccia, titoli, ...durata() });
+        res.status(HttpStatusCode.BAD_REQUEST).json({ esito: false, content: null, error: MESSAGGIO_AVVIO_PROXY });
+      };
+
       if (data.id != undefined) {
-        const resultDesignKit = await this.designKitService.getCombinazioneDesignById(data.id) as DESIGN_KIT
+        let resultDesignKit = await this.designKitService.getCombinazioneDesignById(data.id) as DESIGN_KIT | undefined;
+        // Un id che non e' un design puo' essere quello di un pezzo: il design proxy sul canale e l'area del membro
+        let pezzo = false;
+        if (resultDesignKit == undefined) {
+          const trovato = await trovaPezzo(data.id);
+          const design = trovato ? await this.designKitService.getCombinazioneDesignById(trovato.idDesign) as DESIGN_KIT | undefined : undefined;
+          if (trovato && design) {
+            const perPezzo = { ...(conProxy ? contesto : await contestoPezzi()), attive: new Set([chiaveCoppia(trovato.idCanale, trovato.idArea)]) };
+            resultDesignKit = pezziPerIstanta([design], perPezzo)[0] as unknown as DESIGN_KIT;
+            pezzo = true;
+          }
+        }
         if (resultDesignKit == undefined) {
           log.warn('Design non trovato: risposta 404', { ...traccia, id: data.id, ...durata() });
           res.status(HttpStatusCode.NOT_FOUND).json({ esito: false, content: null, error: "Kit runtime non trovato" });
           return;
         }
-        log.info('Design trovato', { ...traccia, ...riassuntoDesign(resultDesignKit) });
+        const idDesign = pezzo ? (resultDesignKit as DESIGN_KIT & { guidIdDesign: string }).guidIdDesign : resultDesignKit.guidId;
+        log.info(pezzo ? 'Pezzo di un design proxy trovato' : 'Design trovato', { ...traccia, ...riassuntoDesign(resultDesignKit), ...(pezzo ? { idDesign } : {}) });
         if (data.lettura == false) {
           if (data.idPromo == undefined) {
             log.warn('idPromo mancante: risposta 400', { ...traccia, ...durata() });
             res.status(HttpStatusCode.BAD_REQUEST).json({ esito: false, content: null, error: "Id promo mancante" });
             return;
+          }
+          if (!pezzo && eSuProxy(resultDesignKit, conProxy ? contesto.proxy : await caricaProxy())) {
+            rifiutaAvvioProxy([resultDesignKit.titolo]);
+            return;
+          }
+          if (conProxy) {
+            const nuovo: KitConfrontabile = { ...resultDesignKit, guidId: `nuovo:${resultDesignKit.guidId}`, pezzo };
+            const altri = (await kitDellaPromo(data.idPromo)).filter(k => k.guidIdDesign !== idDesign);
+            const coppie = kitConfusiDaIstanta([nuovo, ...altri]).filter(([a, b]) => a === nuovo || b === nuovo);
+            if (coppie.length > 0) {
+              rifiutaKitConfusi(coppie);
+              return;
+            }
           }
           const kitPerPromo = await this.kitRuntimeService.getAllKitRuntimeByIdPromo(data.idPromo)
           // getAllKitRuntimeByIdPromo conta solo i runtime con formato di tipo lavorazione 2
@@ -156,55 +202,46 @@ export class KitRuntimeController extends BaseController {
             ...resultDesignKit,
             guidId: guidIdNuovo,
             idPromo: data.idPromo as string,
-            guidIdDesign: resultDesignKit.guidId,
+            guidIdDesign: idDesign,
             stato_lavorazione: STATO_LAVORAZIONE_KIT_RUNTIME.IN_LAVORAZIONE,
             filtroContesto: resultDesignKit.filtroContesto || [],
             inizioLavorazione: new Date(),
             createdAt: new Date(),
             updatedAt: new Date()
-          });
-          // createKitRunTime restituisce il runtime gia esistente per design e promo, se c'e
+          }, { perCombinazione: pezzo });
+          // createKitRunTime restituisce il runtime gia esistente per design e promo (per un pezzo: anche canale e area), se c'e
           log.info(resultInizioLavorazionePerIstanta.guidId === guidIdNuovo ? 'Runtime creato' : 'Runtime gia esistente per design e promo: restituito quello', {
             ...traccia,
             idRuntime: resultInizioLavorazionePerIstanta.guidId,
-            idDesign: resultDesignKit.guidId,
+            idDesign,
             idPromo: data.idPromo,
             statoLavorazione: resultInizioLavorazionePerIstanta.stato_lavorazione,
           });
           log.info('Attivita di creazione registrata', { ...traccia, autore: req.session.id_utente ?? 'sistema' });
+          const datiAttivita = {
+            titolo: resultDesignKit.titolo,
+            guidId: idDesign,
+            guidIdFormato: resultDesignKit.guidFormato,
+            guidIdCanale: resultDesignKit.guidCanale,
+            guidIdArea: resultDesignKit.guidArea,
+            guidIdPv: resultDesignKit.guidPv ?? "",
+            quantita: resultDesignKit.quantitaCopie,
+            tipo: resultDesignKit.tipo,
+            idPromo: data.idPromo as string
+          };
           if (req.session.id_utente != undefined) {
             ServerUtils.CREA_ATTIVITA(
               req.session.id_utente as string,
               TIPO_ATTIVITA.CREAZIONE_RUNTIME_KIT_AUTOMATICO,
               CATEGORIA_ATTIVITA.PRODUZIONE,
-              {
-                titolo: resultDesignKit.titolo,
-                guidId: resultDesignKit.guidId,
-                guidIdFormato: resultDesignKit.guidFormato,
-                guidIdCanale: resultDesignKit.guidCanale,
-                guidIdArea: resultDesignKit.guidArea,
-                guidIdPv: resultDesignKit.guidPv ?? "",
-                quantita: resultDesignKit.quantitaCopie,
-                tipo: resultDesignKit.tipo,
-                idPromo: data.idPromo as string
-              }).catch(error => log.warn('Attivita di creazione runtime non registrata', { ...traccia, error }))
+              datiAttivita).catch(error => log.warn('Attivita di creazione runtime non registrata', { ...traccia, error }))
           } else {
             //FIXME attenzione cambiato da "System" a null perché il DB crashava
             ServerUtils.CREA_ATTIVITA(
               null,
               TIPO_ATTIVITA.CREAZIONE_RUNTIME_KIT_AUTOMATICO,
               CATEGORIA_ATTIVITA.PRODUZIONE,
-              {
-                titolo: resultDesignKit.titolo,
-                guidId: resultDesignKit.guidId,
-                guidIdFormato: resultDesignKit.guidFormato,
-                guidIdCanale: resultDesignKit.guidCanale,
-                guidIdArea: resultDesignKit.guidArea,
-                guidIdPv: resultDesignKit.guidPv ?? "",
-                quantita: resultDesignKit.quantitaCopie,
-                tipo: resultDesignKit.tipo,
-                idPromo: data.idPromo as string
-              }).catch(error => log.warn('Attivita di creazione runtime non registrata', { ...traccia, error }))
+              datiAttivita).catch(error => log.warn('Attivita di creazione runtime non registrata', { ...traccia, error }))
           }
           delete resultInizioLavorazionePerIstanta._id;
           if (kitPerPromo.length == 0) {
@@ -222,21 +259,52 @@ export class KitRuntimeController extends BaseController {
           res.status(HttpStatusCode.OK).json({ esito: true, content: [resultInizioLavorazionePerIstanta], error: "" });
           return;
         } else {
-          log.info('Sola lettura: restituito il design', { ...traccia, ...durata() });
-          res.status(HttpStatusCode.OK).json({ esito: true, content: [resultDesignKit], error: "" });
+          // Istanta che legge un design proxy per id lo riceve diviso in pezzi
+          const content = conProxy && !pezzo ? pezziPerIstanta([resultDesignKit], contesto) : [resultDesignKit];
+          log.info('Sola lettura: restituito il design', { ...traccia, pezzi: pezzo ? 1 : content.length, ...durata() });
+          res.status(HttpStatusCode.OK).json({ esito: true, content, error: "" });
           return;
         }
       }
-      const dataPerQuery = _.omit(data, ["lettura"]);
-      const result = await this.kitRuntimeService.getAllKitByAreaCanalePV(dataPerQuery, traccia);
+      const dataPerQuery = {
+        ..._.omit(data, ["lettura"]),
+        ...(conProxy && data.idCanale ? { idCanale: vociRichieste(data.idCanale, contesto.proxy.canali) } : {}),
+        ...(conProxy && data.idArea ? { idArea: vociRichieste(data.idArea, contesto.proxy.aree) } : {}),
+      };
+      const trovati = await this.kitRuntimeService.getAllKitByAreaCanalePV(dataPerQuery, traccia);
+      const result = conProxy ? pezziPerIstanta(trovati as DESIGN_KIT[], contesto) as Array<DESIGN_KIT & { guidIdDesign?: string; pezzo?: true }> : trovati;
+      if (conProxy) {
+        // Con la creazione contano anche i kit gia' nella promo, salvo quelli degli stessi design
+        const design = new Set(result.map((k: DESIGN_KIT & { guidIdDesign?: string }) => k.guidIdDesign ?? k.guidId));
+        const giaNellaPromo = data.lettura == false && data.idPromo
+          ? (await kitDellaPromo(data.idPromo)).filter(k => !design.has(k.guidIdDesign ?? ''))
+          : [];
+        const coppie = kitConfusiDaIstanta([...(result as KitConfrontabile[]), ...giaNellaPromo]);
+        if (coppie.length > 0) {
+          rifiutaKitConfusi(coppie);
+          return;
+        }
+      }
       if (data.lettura == false) {
         if (data.idPromo == undefined) {
           log.warn('idPromo mancante: i runtime vengono cercati e creati senza promo', traccia);
         }
+        // Fuori da Istanta un design proxy non si avvia intero
+        const proxyNoti = conProxy ? NESSUN_PROXY : await caricaProxy();
+        const interi = result.filter((k: DESIGN_KIT) => eSuProxy(k, proxyNoti));
+        if (interi.length > 0) {
+          rifiutaAvvioProxy(interi.map((k: DESIGN_KIT) => k.titolo));
+          return;
+        }
         for (const singleKit of result) {
           singleKit.idPromo = data.idPromo;
         }
-        const resultInizioLavorazionePerIstanta = await this.kitRuntimeService.bulkCreateRuntime(result.map((singleKit: DESIGN_KIT) => ({ ...singleKit, idPromo: data.idPromo })) as (DESIGN_KIT & { idPromo: string; })[], traccia)
+        // Per bulkCreateRuntime guidId e' il design: per un pezzo quello del design proxy
+        const resultInizioLavorazionePerIstanta = await this.kitRuntimeService.bulkCreateRuntime(result.map((singleKit: DESIGN_KIT & { guidIdDesign?: string }) => ({
+          ...singleKit,
+          guidId: singleKit.guidIdDesign ?? singleKit.guidId,
+          idPromo: data.idPromo,
+        })) as (DESIGN_KIT & { idPromo: string; pezzo?: boolean })[], traccia)
 
         if (req.session.id_utente) {
           await ServerUtils.CREA_ATTIVITA(

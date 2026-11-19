@@ -17,6 +17,10 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+// Il controllo dei proxy legge il database: qui una combinazione e' proxy solo se il test lo dice
+const proxy = vi.hoisted(() => ({ combinazioneConProxy: vi.fn(async (_id?: string) => false) }));
+vi.mock('../../services/areeCanaliProxy', () => proxy);
+
 // Proposta anagrafica-punti-vendita, "Creazione e modifica dall'anagrafica", e configurazioni-condivise
 
 const OK = { data: { esito: true, errorCode: 0, error: '' }, status: 200 };
@@ -55,9 +59,24 @@ const form = {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  proxy.combinazioneConProxy.mockReset();
+  proxy.combinazioneConProxy.mockResolvedValue(false);
 });
 
 describe('PUT /api/ACPV/salvaPV', () => {
+  it('un PV su una combinazione con canale o area proxy si rifiuta, senza scrivere in Istanta né in FP', async () => {
+    const { app, puntoVenditaService, istanta } = createApp(OK);
+    proxy.combinazioneConProxy.mockResolvedValue(true);
+
+    const res = await request(app).put('/api/ACPV/salvaPV').send({ ...form, guidID: '' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('proxy');
+    expect(proxy.combinazioneConProxy).toHaveBeenCalledWith('comb1');
+    expect(istanta).not.toHaveBeenCalled();
+    expect(puntoVenditaService.createPuntoVendita).not.toHaveBeenCalled();
+  });
+
   it('crea il PV in Istanta e in FP con lo stesso GUID generato da FP e tutti i campi del form', async () => {
     const { app, puntoVenditaService, istanta } = createApp(OK);
 

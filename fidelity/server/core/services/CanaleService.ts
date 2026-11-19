@@ -2,7 +2,6 @@ import { Request } from 'express';
 import { DatabaseError, ExternalApiError, wrapDatabaseError } from '../../../lib/errors';
 import { CanaliAttributes } from '../../../lib/types';
 import config from '../config';
-import { sequelize } from '../db';
 import { CanaleResponseDTO } from '../dto';
 import { ICanaleService } from '../interfaces/ICanaleService';
 import { log } from '../logger';
@@ -22,6 +21,7 @@ export class CanaleService implements ICanaleService {
       codice: canale.codice_canali ?? '',
       nome: canale.nome_canali ?? '',
       id_gdo: canale.id_gdo_canali ?? '',
+      membri: canale.membri_canali ?? [],
       createdat: canale.createdat,
       updatedat: canale.updatedat
     };
@@ -98,9 +98,14 @@ export class CanaleService implements ICanaleService {
   async getAllCanaliForGDO(idGDO: string): Promise<CanaleResponseDTO[]> {
     return this.getCanaliByGDOId(idGDO);
   }
+  /**
+   * Crea o aggiorna il canale. `membri` (canali di un proxy) si scrive solo se e' indicato: le
+   * scritture che arrivano da Istanta non lo conoscono e non lo toccano.
+   */
   async createCanale(
-    data: { nome: string; sigla: string; id?: string; idGDO: string },
+    data: { nome: string; sigla: string; id?: string; idGDO: string; membri?: string[] },
   ): Promise<CanaliAttributes> {
+    const membri = data.membri ? { membri_canali: data.membri } : {};
     try {
       let canale: CanaliAttributes | null = null;
       if (data.id) {
@@ -112,7 +117,8 @@ export class CanaleService implements ICanaleService {
           const updatedCanale = await this.canaleRepository.update(data.id, {
             nome_canali: data.nome,
             codice_canali: data.sigla,
-            id_gdo_canali: data.idGDO
+            id_gdo_canali: data.idGDO,
+            ...membri
           });
           canale = updatedCanale as unknown as CanaliAttributes;
         } else {
@@ -121,7 +127,8 @@ export class CanaleService implements ICanaleService {
             nome_canali: data.nome,
             codice_canali: data.sigla,
             id_canali: data.id,
-            id_gdo_canali: data.idGDO
+            id_gdo_canali: data.idGDO,
+            ...membri
           })) as unknown as CanaliAttributes;
         }
       } else {
@@ -129,7 +136,8 @@ export class CanaleService implements ICanaleService {
         canale = (await this.canaleRepository.create({
           nome_canali: data.nome,
           codice_canali: data.sigla,
-          id_gdo_canali: data.idGDO
+          id_gdo_canali: data.idGDO,
+          ...membri
         })) as unknown as CanaliAttributes;
       }
 
@@ -141,7 +149,6 @@ export class CanaleService implements ICanaleService {
           details: { data }
         });
       }
-      await sequelize.query('SELECT refresh_mv_canali()');
       return canale;
     } catch (error) {
       log.error('Impossibile creare il canale', error, { data });
@@ -165,7 +172,6 @@ export class CanaleService implements ICanaleService {
 
       const deleted = await this.canaleRepository.delete(guidID);
       if (deleted) {
-        await sequelize.query('SELECT refresh_mv_canali()');
         return true;
       }
       return false;
@@ -179,61 +185,6 @@ export class CanaleService implements ICanaleService {
         operation: 'delete',
         entity: 'Canale',
         details: { guidID },
-      });
-    }
-  }
-
-  // Materialized View Operations
-  async getAllCanaliFromMaterializedView(): Promise<CanaleResponseDTO[]> {
-    try {
-      const [results] = await sequelize.query(`
-        SELECT
-          id,
-          codice,
-          nome,
-          id_gdo,
-          createdat,
-          updatedat
-        FROM mv_canali_ottimizzata
-        ORDER BY nome
-      `);
-
-      return results as CanaleResponseDTO[];
-    } catch (error) {
-      log.error('Impossibile recuperare i canali dalla materialized view', error);
-      throw wrapDatabaseError(error, {
-        message: 'Error getting canali from materialized view',
-        operation: 'materialized_view_query',
-        entity: 'Canale',
-      });
-    }
-  }
-
-  async getCanaliByGDOIdFromMaterializedView(idGDO: string): Promise<CanaleResponseDTO[]> {
-    try {
-      const [results] = await sequelize.query(`
-        SELECT
-          id,
-          codice,
-          nome,
-          id_gdo,
-          createdat,
-          updatedat
-        FROM mv_canali_ottimizzata
-        WHERE id_gdo = :idGDO
-        ORDER BY nome
-      `, {
-        replacements: { idGDO }
-      });
-
-      return results as CanaleResponseDTO[];
-    } catch (error) {
-      log.error('Impossibile recuperare i canali per GDO dalla materialized view', error, { idGDO });
-      throw wrapDatabaseError(error, {
-        message: `Error getting canali for GDO ${idGDO} from materialized view`,
-        operation: 'materialized_view_query',
-        entity: 'Canale',
-        details: { idGDO },
       });
     }
   }

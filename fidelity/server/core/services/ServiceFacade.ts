@@ -1,4 +1,6 @@
 import { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, FormatiResponseDTO, GDOResponseDTO, PuntoVenditaResponseDTO, TipiDiExportResponseDTO } from '../dto';
+import type { AnagraficaAreeCanali } from '../../../lib/areeCanali/anagrafica';
+import type { AmbitoGdo } from '../accessi/contestoAccesso';
 import { IAreaService } from '../interfaces/IAreaService';
 import { ICanaleService } from '../interfaces/ICanaleService';
 import { ICombinazioneAreeCanaliService } from '../interfaces/ICombinazioneAreeCanaliService';
@@ -7,6 +9,7 @@ import { IFormatoService } from '../interfaces/IFormatoService';
 import { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
 import { IServiceFacade } from '../interfaces/IServiceFacade';
 import { ITipoExportService } from '../interfaces/ITipoExportService';
+import { anagraficaAreeCanali } from './areeCanaliProxy';
 
 /**
  * Implementazione del pattern Facade per aggregare i vari servizi
@@ -73,22 +76,9 @@ export class ServiceFacade implements IServiceFacade {
     return this.combinazioneAreeCanaliService.getAllCombinazioniForGDO(idGDO);
   }
 
-  async getAllAreeCanaliECombinazioni(): Promise<{
-    aree: AreaResponseDTO[];
-    canali: CanaleResponseDTO[];
-    combinazioni: CombinazioneCanaleAreaResponseDTO[];
-  }> {
-    // Utilizza le materialized views per ottimizzare le query
-    const [aree, canali, combinazioni] = await Promise.all([
-      this.areaService.getAllAreasFromMaterializedView(),
-      this.canaleService.getAllCanaliFromMaterializedView(),
-      this.combinazioneAreeCanaliService.getAllCombinazioniFromMaterializedView()
-    ]);
-
-    return {
-      aree,
-      canali,
-      combinazioni
-    };
+  /** Aree, canali e combinazioni della GDO, letti dalle tabelle (vedi lib/areeCanali/anagrafica.ts). */
+  async getAllAreeCanaliECombinazioni(ambito: AmbitoGdo): Promise<AnagraficaAreeCanali> {
+    return anagraficaAreeCanali(ambito);
   }
+
 }

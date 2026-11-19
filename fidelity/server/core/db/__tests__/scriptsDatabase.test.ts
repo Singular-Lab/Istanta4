@@ -225,10 +225,11 @@ describe('migrazioni SQL', () => {
 });
 
 describe('oggetti derivati', () => {
-  it('sono una view e tre materialized view, in file ordinati per dipendenza', () => {
+  // Le materialized view di aree, canali e combinazioni non ci sono piu' (migrazione 0023): la pagina
+  // Aree e canali legge le tabelle
+  it('sono una view e una materialized view, in file ordinati per dipendenza', () => {
     expect(sqlIn(cartellaDerivati)).toEqual([
       '010_v_attivita.sql',
-      '020_materialized_views.sql',
       '030_mv_utenti_completi.sql',
     ]);
 
@@ -243,9 +244,6 @@ describe('oggetti derivati', () => {
       }
     }
     expect([...creati].sort()).toEqual([
-      'MATERIALIZED VIEW mv_aree_ottimizzata',
-      'MATERIALIZED VIEW mv_canali_ottimizzata',
-      'MATERIALIZED VIEW mv_combinazioni_ottimizzata',
       'MATERIALIZED VIEW mv_utenti_completi',
       'VIEW v_attivita',
     ]);
@@ -289,9 +287,6 @@ describe('oggetti derivati', () => {
   it('mantengono le funzioni chiamate dai servizi', () => {
     const tutto = sqlIn(cartellaDerivati).map(file => leggi(cartellaDerivati, file)).join('\n');
     for (const funzione of [
-      'public.refresh_mv_aree()',
-      'public.refresh_mv_canali()',
-      'public.refresh_mv_combinazioni()',
       'public.refresh_mv_utenti_completi()',
       'public.get_utenti_completi_filtered(',
       'public.get_attivita_for_user(',
@@ -300,5 +295,17 @@ describe('oggetti derivati', () => {
     ]) {
       expect(tutto, funzione).toContain(`CREATE OR REPLACE FUNCTION ${funzione}`);
     }
+  });
+
+  it('le materialized view di aree, canali e combinazioni si tolgono una volta per tutte (0023)', () => {
+    const migrazione = leggi(cartellaMigrazioni, '0023_togli_viste_aree_canali.sql');
+    for (const vista of ['mv_aree_ottimizzata', 'mv_canali_ottimizzata', 'mv_combinazioni_ottimizzata']) {
+      expect(migrazione).toContain(`DROP MATERIALIZED VIEW IF EXISTS public.${vista} CASCADE;`);
+    }
+    for (const funzione of ['refresh_mv_aree', 'refresh_mv_canali', 'refresh_mv_combinazioni']) {
+      expect(migrazione).toContain(`DROP FUNCTION IF EXISTS public.${funzione}();`);
+    }
+    const tutto = sqlIn(cartellaDerivati).map(file => leggi(cartellaDerivati, file)).join('\n');
+    expect(tutto).not.toMatch(/mv_(aree|canali|combinazioni)_ottimizzata|refresh_mv_(aree|canali|combinazioni)\(/);
   });
 });

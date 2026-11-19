@@ -232,10 +232,12 @@ fi
 # 6. Materialized view. Fidelity le ricrea a ogni avvio dagli script di
 #    server/core/db/scripts, quando le tabelle seminate qui erano ancora vuote:
 #    senza un refresh la gestione utenti non mostrerebbe l'amministratore.
+#    Aree, canali e combinazioni non hanno piu' materialized view: la pagina
+#    legge le tabelle (migrazione 0023).
 echo
 echo "Materialized view"
 viste_mancanti=0
-for v in mv_utenti_completi mv_aree_ottimizzata mv_canali_ottimizzata mv_combinazioni_ottimizzata; do
+for v in mv_utenti_completi; do
     if [ "$(psql_fidelity -tAc "select to_regclass('public.$v') is not null")" != t ]; then
         rosso "  assente   $v"
         viste_mancanti=$((viste_mancanti + 1))
@@ -258,7 +260,7 @@ psql_fidelity -c "select
 
 if [ "$viste_mancanti" -gt 0 ]; then
     echo
-    rosso "Fidelity non ha creato tutte le materialized view: la gestione utenti, aree e canali non funzionera'."
+    rosso "Fidelity non ha creato tutte le materialized view: la gestione utenti non funzionera'."
     echo "Controlla l'avvio: docker logs $fidelity_c 2>&1 | grep -i 'errore script'"
     exit 1
 fi

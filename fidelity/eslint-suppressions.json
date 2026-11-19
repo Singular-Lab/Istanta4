@@ -228,7 +228,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 2
+      "count": 1
     }
   },
   "server/core/controllers/CombinazioneAreeCanaliController.ts": {
@@ -1385,11 +1385,6 @@
       "count": 2
     }
   },
-  "server/core/services/CombinazioneAreeCanaliService.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    }
-  },
   "server/core/services/ConfigService.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 41
@@ -2479,11 +2474,6 @@
   "src/pages/AreeCanali/AreeCanali.test.tsx": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    }
-  },
-  "src/pages/AreeCanali/index.tsx": {
-    "no-console": {
-      "count": 3
     }
   },
   "src/pages/Auth/index.tsx": {

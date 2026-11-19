@@ -6,6 +6,8 @@ export interface CreateAreaDTO {
   codice: string;
   nome: string;
   id_gdo?: string;
+  /** Aree membri, se l'area e' un proxy (lib/areeCanali/proxy.ts); la prima e' quella delle liste. */
+  membri?: string[];
 }
 
 /**
@@ -26,6 +28,8 @@ export interface AreaResponseDTO {
   codice: string;
   nome: string;
   id_gdo: string;
+  /** Aree membri, se l'area e' un proxy; vuoto o assente altrimenti. */
+  membri?: string[];
   createdat?: Date;
   updatedat: Date;
 }

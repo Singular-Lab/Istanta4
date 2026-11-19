@@ -27,7 +27,9 @@ export const TABELLA_IMPRONTE = 'oggetti_derivati_schema';
  * migrazione 0001 li elimina comunque una volta per tutte.
  */
 const OBSOLETI = {
-  materializzate: ['mv_aree_canali_combinazioni'],
+  // Le mv_*_ottimizzata di aree, canali e combinazioni: dal task TASK-8f8cae8c la pagina Aree e
+  // canali legge le tabelle e nessuno le usava piu' (migrazione 0023)
+  materializzate: ['mv_aree_canali_combinazioni', 'mv_aree_ottimizzata', 'mv_canali_ottimizzata', 'mv_combinazioni_ottimizzata'],
   viste: [
     'v_utenti_completi_filtered',
     'v_combinazioni_canale_area_stats',
@@ -37,7 +39,10 @@ const OBSOLETI = {
     'v_tracciati_completi',
     'v_webhook_statistiche',
   ],
-  funzioni: ['refresh_all_materialized_views', 'refresh_mv_aree_canali_combinazioni', 'sp_report_promozione'],
+  funzioni: [
+    'refresh_all_materialized_views', 'refresh_mv_aree_canali_combinazioni', 'sp_report_promozione',
+    'refresh_mv_aree', 'refresh_mv_canali', 'refresh_mv_combinazioni',
+  ],
 };
 
 export interface OggettoDerivato {

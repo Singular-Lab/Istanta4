@@ -51,9 +51,6 @@ export interface EsitoPasso {
 /** Le materialized view create dagli script SQL all'avvio, da riallineare ai dati appena inseriti. */
 export const VISTE_DA_AGGIORNARE = [
   'mv_utenti_completi',
-  'mv_aree_ottimizzata',
-  'mv_canali_ottimizzata',
-  'mv_combinazioni_ottimizzata',
 ] as const;
 
 /**
