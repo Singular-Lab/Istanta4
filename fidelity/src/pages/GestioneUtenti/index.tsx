@@ -35,92 +35,27 @@ import { CanaliInterazioneAttributes } from "../../../lib/types";
 import { GDOResponseDTO, PuntoVenditaResponseDTO, RuoloUtenteGDOResponseDTO, UtenteResponseDTO } from "../../../server/core/dto";
 import { useUser } from "../../context/UserContext";
 import { useNotification } from "../../context/NotificationContext";
+import { ETICHETTE_TIPO_UTENTE } from "../../../lib/accessi/tipiUtenteCreabili";
+import { regolaDataDiNascita, regolaEmail, regolaNome, regolaResidenza, regolaTelefono } from "./campiUtente";
+import NuovoUtenteDialog from "./NuovoUtenteDialog";
 const filterSchema = yup.object().shape({
   canaleInterazione: yup.string().required(),
   tipoUtente: yup.string().required(),
 });
 
-// Schema di validazione per la creazione dell'utente
-const userCreationSchema = yup.object().shape({
-  nome: yup.string()
-    .required("Il nome è obbligatorio")
-    .min(2, "Il nome deve contenere almeno 2 caratteri")
-    .max(50, "Il nome non può superare i 50 caratteri"),
-  cognome: yup.string()
-    .required("Il cognome è obbligatorio")
-    .min(2, "Il cognome deve contenere almeno 2 caratteri")
-    .max(50, "Il cognome non può superare i 50 caratteri"),
-  email: yup.string()
-    .required("L'email è obbligatoria")
-    .email("Inserisci un'email valida"),
-  password: yup.string()
-    .required("La password è obbligatoria")
-    .min(8, "La password deve contenere almeno 8 caratteri")
-    .matches(
-      /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
-      "La password deve contenere almeno una lettera maiuscola, una minuscola, un numero e un carattere speciale"
-    ),
-  dataDiNascita: yup.string()
-    .required("La data di nascita è obbligatoria")
-    .test("is-valid-date", "Data di nascita non valida", function (value) {
-      if (!value) return false;
-      const date = new Date(value);
-      return !isNaN(date.getTime()) && date <= new Date();
-    }),
-  residenza: yup.string()
-    .required("La residenza è obbligatoria"),
-  tipoUtente: yup.string()
-    .required("Il tipo di utente è obbligatorio"),
-  statoUtente: yup.string()
-    .required("Lo stato dell'utente è obbligatorio"),
-  telefono: yup.string()
-    .notRequired()
-    .matches(/^[0-9]{10}$/, "Il numero di telefono deve contenere 10 cifre"),
-  idPuntoVendita: yup.string()
-    .when("tipoUtente", {
-      is: TIPO_UTENTI.PUNTOVENDITA,
-      then: schema => schema.required("Il punto vendita è obbligatorio per gli utenti Punto Vendita"),
-      otherwise: schema => schema.notRequired(),
-    }),
-  gdoScelta: yup.string()
-    .when("tipoUtente", {
-      is: (val: string) => val !== TIPO_UTENTI.SUPERADMIN && val !== '',
-      then: schema => schema.required("La selezione della GDO è obbligatoria"),
-      otherwise: schema => schema.notRequired(),
-    }),
-  ruolo_gdo: yup.string().notRequired(),
-  sesso: yup.string().notRequired(),
-})
-
 // Schema di validazione per la modifica dell'utente (senza password)
+// Data di nascita, residenza e telefono sono facoltativi, come nella creazione (campiUtente)
 const userEditSchema = yup.object().shape({
-  nome: yup.string()
-    .required("Il nome è obbligatorio")
-    .min(2, "Il nome deve contenere almeno 2 caratteri")
-    .max(50, "Il nome non può superare i 50 caratteri"),
-  cognome: yup.string()
-    .required("Il cognome è obbligatorio")
-    .min(2, "Il cognome deve contenere almeno 2 caratteri")
-    .max(50, "Il cognome non può superare i 50 caratteri"),
-  email: yup.string()
-    .required("L'email è obbligatoria")
-    .email("Inserisci un'email valida"),
-  dataDiNascita: yup.string()
-    .required("La data di nascita è obbligatoria")
-    .test("is-valid-date", "Data di nascita non valida", function (value) {
-      if (!value) return false;
-      const date = new Date(value);
-      return !isNaN(date.getTime()) && date <= new Date();
-    }),
-  residenza: yup.string()
-    .required("La residenza è obbligatoria"),
+  nome: regolaNome("nome"),
+  cognome: regolaNome("cognome"),
+  email: regolaEmail(),
+  dataDiNascita: regolaDataDiNascita(),
+  residenza: regolaResidenza(),
   tipoUtente: yup.string()
     .required("Il tipo di utente è obbligatorio"),
   statoUtente: yup.string()
     .required("Lo stato dell'utente è obbligatorio"),
-  telefono: yup.string()
-    .notRequired()
-    .matches(/^[0-9]{10}$/, "Il numero di telefono deve contenere 10 cifre"),
+  telefono: regolaTelefono(),
   idPuntoVendita: yup.string()
     .when("tipoUtente", {
       is: TIPO_UTENTI.PUNTOVENDITA,
@@ -162,18 +97,7 @@ const ETICHETTE_CANALE: Record<string, string> = {
   SMS: "SMS",
 };
 
-const ETICHETTE_TIPO: Record<string, string> = {
-  [TIPO_UTENTI.SUPERADMIN]: "Superadmin",
-  [TIPO_UTENTI.AGENZIA]: "Agenzia",
-  [TIPO_UTENTI.PUNTOVENDITA]: "Punto Vendita",
-  [TIPO_UTENTI.GUEST]: "Guest",
-  [TIPO_UTENTI.GDO]: "GDO",
-  [TIPO_UTENTI.CATEGORY]: "Category",
-  [TIPO_UTENTI.MARKETING]: "Marketing",
-  [TIPO_UTENTI.IT]: "IT",
-};
-
-const etichettaTipo = (tipo?: string | null) => (tipo && ETICHETTE_TIPO[tipo]) || "Unknown";
+const etichettaTipo = (tipo?: string | null) => (tipo && ETICHETTE_TIPO_UTENTE[tipo as TIPO_UTENTI]) || "Unknown";
 
 /** Canale da cui è arrivato l'utente: icona ed etichetta ("Interno" se non ce n'è uno). */
 const CanaleArrivo = ({ tipo }: { tipo?: string | null }) => (
@@ -208,25 +132,6 @@ const GestioneUtenti: React.FC = () => {
   const { showNotification } = useNotification();
   const { data: allRuoliGDO } = useFetchAllRuoliGDO();
   const { data: allGDO } = useFetchAllGDO();
-  // Form per la creazione utente
-  const { register, handleSubmit, formState: { errors }, reset, setValue, watch } = useForm({
-    resolver: yupResolver(userCreationSchema),
-    defaultValues: {
-      nome: "",
-      cognome: "",
-      email: "",
-      password: "",
-      dataDiNascita: "",
-      residenza: "",
-      tipoUtente: TIPO_UTENTI.GUEST,
-      statoUtente: STATO_UTENTI.ATTIVO,
-      telefono: "",
-      gdoScelta: "",
-      ruolo_gdo: "",
-      sesso: ""
-    }
-  });
-
   // Form separato per la modifica utente (senza password)
   const {
     register: registerEdit,
@@ -308,7 +213,6 @@ const GestioneUtenti: React.FC = () => {
   const tipoUtente = filters.tipoUtente || "";
   const stato = filters.stato || "";
   const sesso = filters.sesso || "";
-  const idPuntoVendita = watch("idPuntoVendita");
 
   const exportData = async (type: string) => {
     if (!dataUtentiPaginated) {
@@ -420,67 +324,6 @@ const GestioneUtenti: React.FC = () => {
     }
   });
 
-  const registerUtenteMutation = useMutation({
-    mutationKey: ["registerUtente"],
-    mutationFn: async (data: {
-      email: string;
-      nome: string;
-      cognome: string;
-      password: string;
-      tipo: TIPO_UTENTI;
-      stato: STATO_UTENTI;
-      residenza: string;
-      dataDiNascita: string;
-      telefono?: string;
-      idPuntoVendita?: string;
-      gdoScelta?: string;
-      ruoloGDO?: string;
-      sesso?: string;
-    }) => {
-      const payload: any = {
-        email: data.email,
-        nome: data.nome,
-        cognome: data.cognome,
-        password: data.password,
-        tipo: data.tipo,
-        stato: data.stato,
-        residenza: data.residenza,
-        dataDiNascita: data.dataDiNascita,
-        telefono: data.telefono,
-        sesso: data.sesso || undefined,
-      };
-
-      // Aggiungi campi condizionali solo se presenti e necessari
-      if (data.tipo === TIPO_UTENTI.PUNTOVENDITA && data.idPuntoVendita) {
-        payload.idPuntoVendita = data.idPuntoVendita;
-      }
-      if (data.tipo !== TIPO_UTENTI.SUPERADMIN && data.gdoScelta) {
-        payload.gdoScelta = data.gdoScelta;
-      }
-      if (data.tipo !== TIPO_UTENTI.SUPERADMIN && data.ruoloGDO) {
-        payload.ruoloGDO = data.ruoloGDO;
-      }
-
-      await ServerCall.post("/register-user", payload);
-    },
-    onSuccess: () => {
-      showNotification("Utente creato con successo", { variant: "success" });
-      // Vai alla prima pagina per vedere il nuovo utente
-      setCurrentPage(1);
-      dataUtentiPaginated.refetch();
-      setDialogUserCreationOpen(false);
-      reset(); // Reset del form dopo la creazione
-    },
-    onError: (error: any) => {
-      if (error.error === "REGISTRATION_RATE_LIMIT_EXCEEDED") {
-        setRateLimitDialogOpen(true);
-      } else {
-        showNotification(error?.message || "Errore durante la creazione dell'utente", { variant: "error" });
-      }
-      dataUtentiPaginated.refetch();
-    }
-  });
-
   const updateUtenteMutation = useMutation({
     mutationKey: ["updateUtente"],
     mutationFn: async (data: {
@@ -512,43 +355,6 @@ const GestioneUtenti: React.FC = () => {
       dataUtentiPaginated.refetch();
     }
   });
-
-  const onSubmitUserForm = (data: any) => {
-    const payload: any = {
-      email: data.email,
-      nome: data.nome,
-      cognome: data.cognome,
-      password: data.password,
-      tipo: data.tipoUtente,
-      stato: data.statoUtente,
-      residenza: data.residenza,
-      dataDiNascita: data.dataDiNascita,
-      telefono: data.telefono,
-      sesso: data.sesso || undefined,
-    };
-
-    // Aggiungi campi condizionali solo se necessari
-    if (data.tipoUtente === TIPO_UTENTI.PUNTOVENDITA && data.idPuntoVendita) {
-      payload.idPuntoVendita = data.idPuntoVendita;
-    }
-
-    if (data.tipoUtente !== TIPO_UTENTI.SUPERADMIN && data.gdoScelta) {
-      payload.gdoScelta = data.gdoScelta;
-    }
-
-    if (data.tipoUtente !== TIPO_UTENTI.SUPERADMIN && data.ruolo_gdo) {
-      payload.ruoloGDO = data.ruolo_gdo;
-    }
-
-    registerUtenteMutation.mutate(payload);
-  };
-
-  // Resetta il form quando si apre la finestra di dialogo
-  useEffect(() => {
-    if (dialogUserCreationOpen) {
-      reset();
-    }
-  }, [dialogUserCreationOpen, reset]);
 
   // Resetta il form edit quando si apre il dialog di modifica
   useEffect(() => {
@@ -675,18 +481,18 @@ const GestioneUtenti: React.FC = () => {
                   <FormInput
                     {...registerEdit("telefono")}
                     type="tel"
-                    placeholder="Inserisci il telefono"
+                    placeholder="+39 055 123 4567"
                     className={clsx(errorsEdit.telefono && "border-danger")}
                   />
                 </FormField>
-                <FormField etichetta="Data di Nascita" obbligatorio errore={errorsEdit.dataDiNascita?.message}>
+                <FormField etichetta="Data di Nascita" errore={errorsEdit.dataDiNascita?.message}>
                   <FormInput
                     {...registerEdit("dataDiNascita")}
                     type="date"
                     className={clsx(errorsEdit.dataDiNascita && "border-danger")}
                   />
                 </FormField>
-                <FormField etichetta="Residenza" obbligatorio errore={errorsEdit.residenza?.message}>
+                <FormField etichetta="Residenza" errore={errorsEdit.residenza?.message}>
                   <FormInput
                     {...registerEdit("residenza")}
                     type="text"
@@ -818,186 +624,16 @@ const GestioneUtenti: React.FC = () => {
         </Dialog.Panel>
       </Dialog>
 
-      <Dialog size="xl" open={dialogUserCreationOpen} onClose={() => {
-        setDialogUserCreationOpen(false);
-      }}>
-        <Dialog.Panel>
-          <Dialog.Title>Crea nuovo utente</Dialog.Title>
-          <form onSubmit={handleSubmit(onSubmitUserForm)}>
-            <Dialog.Description>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField etichetta="Nome" obbligatorio errore={errors.nome?.message}>
-                  <FormInput
-                    {...register("nome")}
-                    type="text"
-                    placeholder="Inserisci il nome"
-                    className={clsx(errors.nome && "border-danger")}
-                  />
-                </FormField>
-                <FormField etichetta="Cognome" obbligatorio errore={errors.cognome?.message}>
-                  <FormInput
-                    {...register("cognome")}
-                    type="text"
-                    placeholder="Inserisci il cognome"
-                    className={clsx(errors.cognome && "border-danger")}
-                  />
-                </FormField>
-                <FormField etichetta="Email" obbligatorio errore={errors.email?.message}>
-                  <FormInput
-                    {...register("email")}
-                    type="email"
-                    autoComplete="email webauthn"
-                    placeholder="Inserisci l'email"
-                    className={clsx(errors.email && "border-danger")}
-                  />
-                </FormField>
-                <FormField etichetta="Password" obbligatorio errore={errors.password?.message}>
-                  <FormInput
-                    {...register("password")}
-                    type="password"
-                    placeholder="Inserisci la password"
-                    className={clsx(errors.password && "border-danger")}
-                  />
-                </FormField>
-                <FormField etichetta="Data di Nascita" obbligatorio errore={errors.dataDiNascita?.message}>
-                  <FormInput
-                    {...register("dataDiNascita")}
-                    type="date"
-                    className={clsx(errors.dataDiNascita && "border-danger")}
-                  />
-                </FormField>
-                <FormField etichetta="Residenza" obbligatorio errore={errors.residenza?.message}>
-                  <FormInput
-                    {...register("residenza")}
-                    type="text"
-                    placeholder="Inserisci la residenza"
-                    className={clsx(errors.residenza && "border-danger")}
-                  />
-                </FormField>
-                <FormField className="col-span-1 sm:col-span-2" etichetta="Tipo Utente" obbligatorio errore={errors.tipoUtente?.message}>
-                  <FormSelect
-                    {...register("tipoUtente")}
-                    className={clsx(errors.tipoUtente && "border-danger")}
-                  >
-                    {(() => {
-                      // Precalcola le opzioni disponibili in base al tipo utente loggato
-                      let allowedTypes: string[] = [];
-                      if (user?.tipo === TIPO_UTENTI.GDO) {
-                        // Un utente GDO non può creare altri GDO o Superadmin
-                        allowedTypes = Object.values(TIPO_UTENTI).filter(
-                          (v) => v !== TIPO_UTENTI.GDO && v !== TIPO_UTENTI.SUPERADMIN
-                        );
-                      } else if (user?.tipo === TIPO_UTENTI.PUNTOVENDITA) {
-                        // Un PuntoVendita non può creare GDO, Superadmin o Guest
-                        allowedTypes = Object.values(TIPO_UTENTI).filter(
-                          (v) => v !== TIPO_UTENTI.GDO && v !== TIPO_UTENTI.SUPERADMIN && v !== TIPO_UTENTI.GUEST
-                        );
-                      } else {
-                        allowedTypes = Object.values(TIPO_UTENTI);
-                      }
-                      return allowedTypes.map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ));
-                    })()}
-                  </FormSelect>
-                </FormField>
-
-                {/* Campo Ruolo - mostrato per tutti tranne SUPERADMIN */}
-
-                {watch("tipoUtente") === TIPO_UTENTI.PUNTOVENDITA && (
-                  <FormField className="col-span-1 sm:col-span-2" etichetta="Punto Vendita da collegare" obbligatorio errore={errors.idPuntoVendita?.message}>
-                    <FormSelect
-                      {...register("idPuntoVendita")}
-                      className={clsx(errors.idPuntoVendita && "border-danger")}
-                    >
-                      <option value="">Seleziona un punto vendita</option>
-                      {puntiVendita?.data?.map((punto: PuntoVenditaResponseDTO) => (
-                        <option key={punto.id} value={punto.id}>
-                          {punto.nome}
-                        </option>
-                      ))}
-                    </FormSelect>
-                  </FormField>
-                )}
-                {watch("tipoUtente") && watch("tipoUtente") !== TIPO_UTENTI.SUPERADMIN && (
-                  <FormField className="col-span-1 sm:col-span-2" etichetta="GDO da associare" obbligatorio errore={errors.gdoScelta?.message}>
-                    <FormSelect
-                      {...register("gdoScelta")}
-                      className={clsx(errors.gdoScelta && "border-danger")}
-                    >
-                      <option value="">Seleziona una GDO</option>
-                      {allGDO?.map((gdo: GDOResponseDTO) => (
-                        <option key={gdo.id} value={gdo.id}>
-                          {gdo.nome} {gdo.ragione_sociale ? `(${gdo.ragione_sociale})` : ''}
-                        </option>
-                      ))}
-                    </FormSelect>
-                  </FormField>
-                )}
-                {watch("tipoUtente") && watch("tipoUtente") !== TIPO_UTENTI.SUPERADMIN && (
-                  <FormField className="col-span-1 sm:col-span-2" etichetta="Ruolo (opzionale)" errore={errors.ruolo_gdo?.message}>
-                    <FormSelect
-                      {...register("ruolo_gdo")}
-                      className={clsx(errors.ruolo_gdo && "border-danger")}
-                    >
-                      <option value="">Seleziona un ruolo (opzionale)</option>
-                      {allRuoliGDO?.map((ruolo: RuoloUtenteGDOResponseDTO) => (
-                        <option key={ruolo.id} value={ruolo.id}>
-                          {ruolo.ruolo.replace("_", " ")}
-                        </option>
-                      ))}
-                    </FormSelect>
-                  </FormField>
-                )}
-                <FormField etichetta="Sesso" errore={errors.sesso?.message}>
-                  <FormSelect
-                    {...register("sesso")}
-                  >
-                    <option value="">Non specificato</option>
-                    {Object.entries(UTENTE_GENERE).map(([key, value]) => (
-                      <option key={key} value={value}>{value}</option>
-                    ))}
-                  </FormSelect>
-                </FormField>
-                <FormField etichetta="Stato Utente" obbligatorio errore={errors.statoUtente?.message}>
-                  <FormSelect
-                    {...register("statoUtente")}
-                    className={clsx(errors.statoUtente && "border-danger")}
-                  >
-                    {Object.keys(STATO_UTENTI).map((key) => (
-                      <option key={key} value={STATO_UTENTI[key as keyof typeof STATO_UTENTI]}>
-                        {STATO_UTENTI[key as keyof typeof STATO_UTENTI]}
-                      </option>
-                    ))}
-                  </FormSelect>
-                </FormField>
-                <FormField etichetta="Telefono" errore={errors.telefono?.message}>
-                  <FormInput
-                    {...register("telefono")}
-                    type="text"
-                    placeholder="Inserisci il numero di telefono"
-                    className={clsx(errors.telefono && "border-danger")}
-                  />
-                </FormField>
-              </div>
-            </Dialog.Description>
-            <Dialog.Footer>
-              <Button
-                variant="outline-secondary"
-                onClick={() => {
-                  setDialogUserCreationOpen(false);
-                }}
-                type="button"
-              >
-                Annulla
-              </Button>
-              <Button variant="primary" type="submit" loading={registerUtenteMutation.isPending}>Crea</Button>
-            </Dialog.Footer>
-          </form>
-        </Dialog.Panel>
-      </Dialog>
+      <NuovoUtenteDialog
+        open={dialogUserCreationOpen}
+        onClose={() => setDialogUserCreationOpen(false)}
+        onCreato={() => {
+          // Prima pagina per vedere il nuovo utente
+          setCurrentPage(1);
+          dataUtentiPaginated.refetch();
+        }}
+        onLimiteSuperato={() => setRateLimitDialogOpen(true)}
+      />
       <Pagina
         titolo="Gestione Utenti"
         descrizione="Gestisci e amministra tutti gli utenti del sistema con controllo completo su ruoli, permessi e stati account"

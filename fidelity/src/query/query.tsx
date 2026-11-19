@@ -528,6 +528,20 @@ export const useFetchPuntiVenditaFromIdGDO = () => {
   });
 };
 
+/**
+ * Punti vendita di una GDO, per il modulo di un nuovo utente. Superadmin e Agenzia ricevono quelli
+ * della GDO indicata; per gli altri il server risponde con la GDO della sessione.
+ */
+export const useFetchPuntiVenditaDellaGdo = (idGdo: string, enabled = true) => {
+  return useQuery({
+    queryKey: ["dataPuntiVendita", "gdo", idGdo],
+    queryFn: () => ServerCall.get<PuntoVenditaResponseDTO[]>(
+      idGdo ? `/getAllPV?IdGDO=${encodeURIComponent(idGdo)}` : "/getAllPV"
+    ),
+    enabled,
+  });
+};
+
 export const useFetchVolantiniAttiviPuntoVendita = (idPv: string) => {
   return useQuery({
     queryKey: ["volantiniAttiviPuntoVendita", idPv],

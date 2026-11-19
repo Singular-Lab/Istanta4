@@ -1262,8 +1262,8 @@ export class UserService implements IUserService {
     password?: string;
     tipo: TIPO_UTENTI;
     stato: string;
-    residenza: string;
-    dataDiNascita: string;
+    residenza?: string;
+    dataDiNascita?: string;
     gdoScelta?: string;
     idPuntoVendita?: string;
     id_ruolo_utente_gdo?: string;
@@ -1280,9 +1280,9 @@ export class UserService implements IUserService {
       // Dati personali (email, nome, residenza, telefono...) mai nei log: solo tipo e identificativi
       log.debug('registerUserWithTransaction - Start', { tipo: userData.tipo, currentUserId });
 
-      // Validazione campi obbligatori
+      // Validazione campi obbligatori: data di nascita e residenza sono facoltative
       if (!userData.email || !userData.nome || !userData.cognome ||
-        !userData.tipo || !userData.stato || !userData.residenza || !userData.dataDiNascita) {
+        !userData.tipo || !userData.stato) {
         log.debug('registerUserWithTransaction - Missing required fields');
         throw new ValidationError({
           message: 'Dati non validi',
@@ -1369,8 +1369,8 @@ export class UserService implements IUserService {
         cognome_utenti: userData.cognome,
         tipo_utenti: userData.tipo,
         stato_utenti: userData.stato as STATO_UTENTI,
-        residenza_utenti: userData.residenza,
-        datadinascita_utenti: new Date(userData.dataDiNascita),
+        residenza_utenti: userData.residenza || null,
+        datadinascita_utenti: userData.dataDiNascita ? new Date(userData.dataDiNascita) : null,
         outsider_utenti: false,
         telefono_utenti: userData.telefono || null,
         sesso_utenti: userData.sesso || null,

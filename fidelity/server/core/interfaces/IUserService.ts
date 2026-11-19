@@ -76,8 +76,8 @@ export interface IUserService {
     password?: string;
     tipo: TIPO_UTENTI;
     stato: string;
-    residenza: string;
-    dataDiNascita: string;
+    residenza?: string;
+    dataDiNascita?: string;
     gdoScelta?: string;
     idPuntoVendita?: string;
     id_ruolo_utente_gdo?: string;
