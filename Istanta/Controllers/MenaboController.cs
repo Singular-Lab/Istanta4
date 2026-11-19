@@ -8031,6 +8031,12 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 List<RevisioneSelezioneFotoFromIndd> ps = (string.IsNullOrWhiteSpace(dato.ps) ? null : MetaPromoLavorazioni.leggiSelezioniFoto(dato.ps))
                     ?? throw new ErroreIstanta("lettura della richiesta", $"le primarie e secondarie del gruppo {dato.CodiceGruppo} non si leggono.");
 
+                //TASK-0ba7d005: un gruppo salvato senza una sola primaria fermerebbe l'impaginazione, qui
+                //e nelle lavorazioni che lo ereditano. Si rifiuta prima di registrare qualunque cosa.
+                string? erroreSelezioni = MetaPromoLavorazioni.erroreDelleSelezioniFoto(ps, dato.CodiceGruppo);
+                if (erroreSelezioni != null)
+                    throw new ErroreIstanta("controllo delle primarie", erroreSelezioni);
+
                 PromoLavorazioniRecord? plrItem = trovaRecordDellaLavorazione(
                     dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
 

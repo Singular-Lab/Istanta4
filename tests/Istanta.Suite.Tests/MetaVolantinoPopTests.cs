@@ -257,7 +257,8 @@ public class MetaVolantinoPopTests
         int corrispettivo = lettura.IndexOf("if (corrispettivo != null)", StringComparison.Ordinal);
         Assert.True(corrispettivo > 0);
         Assert.True(corrispettivo < lettura.IndexOf("else if (promoLavorazione != null && promoLavorazione.Meta != null)", StringComparison.Ordinal));
-        Assert.Contains("storeField = new RevisioneMetaPromoLavorazioni { ps = ereditati.ps, foto = ereditati.foto };", lettura);
+        //TASK-0ba7d005: le primarie passano dal controllo della primaria (PrimarieEreditateTests).
+        Assert.Contains("storeField = new RevisioneMetaPromoLavorazioni { ps = MetaPromoLavorazioni.selezioniDaEreditare(ereditati.ps), foto = ereditati.foto };", lettura);
 
         // Il noRender non si eredita piu' dalle lavorazioni passate.
         Assert.DoesNotContain("recPassato.noRender", lettura);
