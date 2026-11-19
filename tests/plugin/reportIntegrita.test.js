@@ -16,6 +16,8 @@ const Module = require("node:module");
 const { fileDelPlugin, leggiFileDelPlugin } = require("./fileDelPlugin");
 
 const MOTORE = ["confrontoBox", "confrontoBoxCompiledFieldPreAnalisi", "mappaturaImpaginato",
+    //TASK-a6f5fa47: il testo del box nuovo, con la formattazione, nel box vecchio dopo un'azione sul box.
+    "copiaTestoDelCampo", "misureDelNuovoSeInOverflow",
     "semplificazioneMappaImpaginato", "decodeSpecialCharacters",
     //TASK-19c18841: le pagine di un intervallo, lette allo stesso modo dalla mappa e dallo svuotamento.
     "pagineDellIntervallo",

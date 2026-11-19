@@ -3,6 +3,9 @@
 ///
 ///   confrontoBox                         due box a confronto: porta nel box nuovo quello che
 ///                                        l'operatore aveva cambiato a mano in quello vecchio
+///   copiaTestoDelCampo                   il testo di una casella del box nuovo, con la sua
+///                                        formattazione, nella casella del box vecchio
+///   misureDelNuovoSeInOverflow           la casella in overflow prende le misure del box nuovo
 ///   confrontoBoxCompiledFieldPreAnalisi  un box e i suoi record: cosa non corrisponde piu'
 ///   pagineDellIntervallo                 le pagine di un intervallo come "1,3-5", o perche' non vale
 ///   mappaturaImpaginato                  la mappa di cio' che e' impaginato, pagina per pagina
@@ -148,21 +151,14 @@ const confronti = {
                     //controlliamo il costruttore per decidere come agire, quelli che ci interessano sono textFrames e rectangles
                     if (campo.constructorName == "TextFrame") {
                         if (campo.contents != campoBox2.contents) {
-                            campo.contents = "";
-                            campo.contents = campoBox2.contents;
+                            //TASK-a6f5fa47: il testo del box nuovo con tutta la sua formattazione. Prima si
+                            //scriveva contents e si copiavano gli stili di carattere dei soli caratteri visibili:
+                            //quelli in overflow restavano con lo stile sbagliato.
+                            confronti.copiaTestoDelCampo(campo, campoBox2);
 
-                            for (let c=0; c<campo.characters.length; c++){
-                                campo.characters.item(c).appliedCharacterStyle = campoBox2.characters.item(c).appliedCharacterStyle;
-                            }
-                            
                             if(listCampiConDifferenze.find(c => c == Utility.parseLabel(campo.label)) == null){
                                 listCampiConDifferenze.push(Utility.parseLabel(campo.label));
                             }
-                        }
-
-                        //facciamo un controllo se il testo del box1 è ora in overflow, se lo è cambiamo i geometric bound di modo che sia uguale a quelli del box2
-                        if (campo.overflows) {
-                            campo.geometricBounds = campoBox2.geometricBounds;
                         }
 
                         //controlliamo lo stile di paragrafo, se è diverso lo cambiamo
@@ -178,6 +174,11 @@ const confronti = {
                                 listCampiConDifferenze.push(Utility.parseLabel(campo.label));
                             }
                         }
+
+                        //se il testo del box1 è ora in overflow prende le misure del box2. TASK-a6f5fa47: dopo lo
+                        //stile di paragrafo, che cambia la misura del testo (il reparto forzato di Edro21 cambia lo
+                        //stile della descrizione): prima si guardava prima, e l'ultima riga usciva.
+                        confronti.misureDelNuovoSeInOverflow(campo, campoBox2);
                     }
                     else if (campo.constructorName == "Rectangle") {
                         //controlliamo se ci sono immagini, se ci sono controlliamo che abbiano lo stesso path
@@ -373,6 +374,53 @@ const confronti = {
             console.error(error);
             return { boxFinale: null };
         }
+    },
+
+    /// TASK-a6f5fa47: porta nella casella del box vecchio il testo della casella del box nuovo, con la
+    /// sua formattazione: stili di paragrafo, stili di carattere e override locali, anche dei caratteri
+    /// che non stanno nel riquadro. Si lavora sulla storia, perche' i caratteri di un riquadro sono
+    /// solo quelli visibili. Se duplicare il testo non riesce si copiano testo e stili di ogni
+    /// paragrafo e di ogni carattere. inizio e' LocationOptions.AT_BEGINNING (iniettabile nei test).
+    /// Restituisce true se il testo e' stato duplicato, false se si e' ripiegato sugli stili.
+    copiaTestoDelCampo(campo, campoNuovo, inizio = null) {
+        const storia = campo.parentStory;
+        const storiaNuova = campoNuovo.parentStory;
+        try {
+            const posizione = inizio != null ? inizio : require('indesign').LocationOptions.AT_BEGINNING;
+            storia.contents = "";
+            storiaNuova.texts.item(0).duplicate(posizione, storia);
+            //L'ultimo paragrafo non ha un a capo che porti il suo stile: lo si allinea.
+            const ultimo = storia.paragraphs.length - 1;
+            const ultimoNuovo = storiaNuova.paragraphs.length - 1;
+            if (ultimo >= 0 && ultimoNuovo >= 0
+                && storia.paragraphs.item(ultimo).appliedParagraphStyle.name != storiaNuova.paragraphs.item(ultimoNuovo).appliedParagraphStyle.name) {
+                storia.paragraphs.item(ultimo).appliedParagraphStyle = storiaNuova.paragraphs.item(ultimoNuovo).appliedParagraphStyle;
+            }
+            return true;
+        }
+        catch (e) {
+            console.error("Code CNF-002 Il testo di " + campo.label + " non si e' copiato con la sua formattazione: copio testo e stili. " + e);
+            storia.contents = storiaNuova.contents;
+            const paragrafi = Math.min(storia.paragraphs.length, storiaNuova.paragraphs.length);
+            for (let p = 0; p < paragrafi; p++) {
+                storia.paragraphs.item(p).appliedParagraphStyle = storiaNuova.paragraphs.item(p).appliedParagraphStyle;
+            }
+            const caratteri = Math.min(storia.characters.length, storiaNuova.characters.length);
+            for (let c = 0; c < caratteri; c++) {
+                storia.characters.item(c).appliedCharacterStyle = storiaNuova.characters.item(c).appliedCharacterStyle;
+            }
+            return false;
+        }
+    },
+
+    /// TASK-a6f5fa47: una casella del box vecchio che con il testo nuovo e' in overflow prende le misure
+    /// della casella del box nuovo, dove il testo stava. Si chiama quando testo e stile sono definitivi.
+    misureDelNuovoSeInOverflow(campo, campoNuovo) {
+        if (campo.overflows) {
+            campo.geometricBounds = campoNuovo.geometricBounds;
+            return true;
+        }
+        return false;
     },
 
     //elementiNoRender: elenco degli elementi che l'operatore ha messo in noRender (I20-968).
