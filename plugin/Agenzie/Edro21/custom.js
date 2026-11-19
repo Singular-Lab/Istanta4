@@ -121,6 +121,12 @@ const customAgenzia={
         //Come gli stili vicini della base, non vale per i box focus, che hanno uno stile loro.
         //Si calcola una volta qui, perche' serve a piu' elementi del ciclo: la base e lo sfondo.
         var formatoParmigiano = meccanica.indexOf("focus") < 0 && sovrastrutture.refConditionVera(objItem, [{ campo: "Descrizioni.Descrizione1", contiene: "parmigiano reggiano" }]);
+        //TASK-2e79b332: una ref con l'etichetta PARMIGIANO TIPICO (distintivita' esattamente TIPICO) in un
+        //box del format tipico resta nel tipico, con la base BDP: come il server, che non le da' i loghi
+        //del formato ma solo il bollo dei mesi. Se il tipico non scatta, resta il formato Parmigiano.
+        if (formatoParmigiano && this.formatTipicoDelParmigiano(objItem.allEtichette, meccanica)) {
+            formatoParmigiano = false;
+        }
         //I20-1046: Artisti della Qualita', con lo stesso criterio del server, che per la stessa ref
         //aggiunge i loghi Logo_ADQnaz e Margherita_ADQnaz. Neanche lui vale per i box focus.
         var formatoArtistiQualita = meccanica.indexOf("focus") < 0 && this.artistiDellaQualita(objItem);
@@ -1108,6 +1114,15 @@ const customAgenzia={
             valore = objItem.recordInTracciato.art_qual;
         }
         return typeof valore === "string" && valore !== "";
+    },
+
+    /// TASK-2e79b332: se una ref Parmigiano Reggiano resta nel format tipico invece del formato Parmigiano:
+    /// ha l'etichetta PARMIGIANO TIPICO (distintivita' esattamente TIPICO, descrizione1 revisionata) e il box
+    /// esce davvero nel format tipico (la meccanica ha _bdp). Lo stesso criterio del server
+    /// (FormatoParmigianoEdro21.FormatTipico).
+    formatTipicoDelParmigiano(etichette, meccanica) {
+        return Array.isArray(etichette) && etichette.includes("PARMIGIANO TIPICO")
+            && String(meccanica == null ? "" : meccanica).toLowerCase().indexOf("_bdp") >= 0;
     },
 
     /// I20-1046: se un elemento del box e' il logo o lo sfondo del Buono del Paese, come li mette il

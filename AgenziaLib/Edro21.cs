@@ -243,6 +243,20 @@ namespace AgenziaLib
             return "Parmigiano_" + mesi + "M";
         }
 
+        /// TASK-2e79b332: l'etichetta (SourceEtichetteRef di Edro21) di una ref Parmigiano Reggiano, per la
+        /// descrizione1 revisionata, con distintivita' esattamente TIPICO; TIPICO_ seguito da un brand non la da'.
+        public const string EtichettaTipico = "PARMIGIANO TIPICO";
+
+        /// TASK-2e79b332: se al posto del formato Parmigiano vale il format tipico: la ref ha l'etichetta
+        /// PARMIGIANO TIPICO e il box esce davvero nel format tipico (la combinazione ha _bdp). Altrimenti,
+        /// anche per una ref TIPICO in un box dove il tipico non scatta, resta il formato Parmigiano. Il
+        /// bollo dei mesi esce in tutti e due i casi.
+        public static bool FormatTipico(IEnumerable<string> etichette, string combinazione)
+        {
+            return etichette != null && etichette.Contains(EtichettaTipico)
+                && (combinazione ?? "").ToLower().Contains("_bdp");
+        }
+
         /// Il testo in minuscolo, con <br>, a capo e spazi ripetuti ridotti a uno spazio.
         private static string NormalizzaSpazi(string testo)
         {
@@ -11999,9 +12013,17 @@ Descrizione3.EndsWith("\r\n");
                 //PARMIGIANO_mesiNN che si scrivevano non esistono nella source.
                 if (tipo_lavorazione == 1 && FormatoParmigianoEdro21.EParmigianoReggiano(desc1))
                 {
-                    foreach (var logo in FormatoParmigianoEdro21.LoghiDelFormato)
+                    //TASK-2e79b332: con l'etichetta PARMIGIANO TIPICO in un box del format tipico niente loghi del
+                    //formato: resta il tipico, con il solo bollo dei mesi qui sotto.
+                    bool formatTipico = FormatoParmigianoEdro21.FormatTipico(
+                        oItem != null && oItem.ContainsKey(Campi.AllEtichette) ? oItem[Campi.AllEtichette] as IEnumerable<string> : null,
+                        oItem != null && oItem.ContainsKey(key_combinazioneAssegnata) ? oItem[key_combinazioneAssegnata]?.ToString() : null);
+                    if (!formatTipico)
                     {
-                        loghi_e_bolli.Add(logo.Key, logo.Value);
+                        foreach (var logo in FormatoParmigianoEdro21.LoghiDelFormato)
+                        {
+                            loghi_e_bolli.Add(logo.Key, logo.Value);
+                        }
                     }
 
                     var mesi = FormatoParmigianoEdro21.MesiDiStagionatura(gusto);

@@ -643,3 +643,56 @@ test("nel motore la lettura 2 mette ogni livello sopra il precedente, la 3 sotto
         assert.strictEqual(generale.allineamenti.find(a => a.nomeGruppo === "Campi_DX").letturaLivelli, LETTURA_LIVELLO_1_IN_BASSO);
     }
 });
+
+/* ---- TASK-2e79b332: Parmigiano con distintivita' TIPICO ---- */
+
+/// Il criterio del custom, preso dal sorgente: il custom fa require('indesign') e sotto Node non si carica.
+function formatTipicoDelParmigiano() {
+    const custom = leggi("plugin/Agenzie/Edro21/custom.js").replace(/\r/g, "");
+    const inizio = custom.indexOf("    formatTipicoDelParmigiano(etichette, meccanica) {");
+    assert.notStrictEqual(inizio, -1, "formatTipicoDelParmigiano non trovata");
+    const fine = custom.indexOf("\n    },\n", inizio);
+    return new Function("etichette", "meccanica", custom.substring(custom.indexOf("{", inizio) + 1, fine));
+}
+
+test("il custom tiene il format tipico solo con l'etichetta PARMIGIANO TIPICO in un box _bdp, come il server", () => {
+    const tipico = formatTipicoDelParmigiano();
+    assert.strictEqual(tipico(["DIS.TIPICO", "PARMIGIANO TIPICO"], "PREZZO_MM_bdp"), true);
+    assert.strictEqual(tipico(["PARMIGIANO TIPICO"], "percento_mm_BDP"), true);
+    //Il tipico non scatta: resta il Parmigiano.
+    assert.strictEqual(tipico(["PARMIGIANO TIPICO"], "PREZZO_MM_sottocosto"), false);
+    //TIPICO_ con un brand non ha l'etichetta.
+    assert.strictEqual(tipico(["DIS.TIPICO", "DIS.TIPICO_BRAND"], "PREZZO_MM_bdp"), false);
+    assert.strictEqual(tipico(undefined, "PREZZO_MM_bdp"), false);
+    assert.strictEqual(tipico(["PARMIGIANO TIPICO"], null), false);
+
+    //L'etichetta e' la stessa del server, e il custom spegne il formato dopo averlo calcolato.
+    assert.strictEqual(costante("EtichettaTipico"), "PARMIGIANO TIPICO");
+    const custom = leggi("plugin/Agenzie/Edro21/custom.js").replace(/\r/g, "");
+    const calcolo = custom.indexOf('var formatoParmigiano = meccanica.indexOf("focus") < 0');
+    const spegne = custom.indexOf("if (formatoParmigiano && this.formatTipicoDelParmigiano(objItem.allEtichette, meccanica)) {\n            formatoParmigiano = false;");
+    assert.ok(calcolo > 0 && spegne > calcolo);
+    assert.ok(spegne < custom.indexOf("base_P_Parmigiano"), "prima di scegliere la base");
+});
+
+test("i prezzi seguono il payoff solo se il payoff c'e': con il format tipico non c'e'", () => {
+    for (const k of kitVolantino) {
+        const gruppo = sovrastrutturaParmigiano(k).operazioni.allineamenti.find(a => a.nomeGruppo === "Parmigiano_Prezzi_Payoff");
+        assert.ok(gruppo, "Parmigiano_Prezzi_Payoff");
+        for (const lista of gruppo.listSetCondizioni) {
+            for (const condizione of lista.setCondizioni) {
+                assert.deepStrictEqual(condizione.elementiDaTrovare, ["*Parmigiano_payoff*"]);
+                //La condizione sulla forma resta.
+                assert.deepStrictEqual(condizione.formaBoxCondition.map(f => f.forme), [["alto"]]);
+            }
+        }
+    }
+});
+
+test("il bollo dei mesi resta nella sovrastruttura legata alla descrizione: lo posiziona anche con il tipico", () => {
+    for (const k of kitVolantino) {
+        const s = sovrastrutturaParmigiano(k);
+        assert.ok(s.operazioni.allineamenti.some(a => a.nomeGruppo === "Parmigiano_BolloMesi"));
+        assert.deepStrictEqual(s.listSetCondizioni.map(l => l.setCondizioni.map(c => c.elementiDaTrovare)), [[[]]]);
+    }
+});
