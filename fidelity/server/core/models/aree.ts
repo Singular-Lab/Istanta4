@@ -12,6 +12,7 @@ class Area extends Model<AreeAttributes, AreeCreationAttributes> implements Aree
   declare codice_aree: string;
   declare nome_aree: string;
   declare id_gdo_aree: string;
+  declare membri_aree: string[];
   declare createdat?: Date;
   declare updatedat: Date;
 }
@@ -34,6 +35,12 @@ const Aree = sequelize.define<Area>("aree", {
   id_gdo_aree: {
     type: DataTypes.UUID,
     allowNull: false
+  },
+  // Membri di un proxy (canali o aree della stessa GDO), vuoto per le voci normali: vedi lib/areeCanali/proxy.ts
+  membri_aree: {
+    type: DataTypes.ARRAY(DataTypes.UUID),
+    allowNull: false,
+    defaultValue: []
   },
   createdat: {
     type: DataTypes.DATE,

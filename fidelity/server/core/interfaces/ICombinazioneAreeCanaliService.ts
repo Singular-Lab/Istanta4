@@ -25,6 +25,4 @@ export interface ICombinazioneAreeCanaliService {
   deleteCombinazione(guidID: string): Promise<boolean>;
 
   // Materialized View Operations
-  getAllCombinazioniFromMaterializedView(): Promise<CombinazioneCanaleAreaResponseDTO[]>;
-  getCombinazioniByGDOIdFromMaterializedView(idGDO: string): Promise<CombinazioneCanaleAreaResponseDTO[]>;
 }

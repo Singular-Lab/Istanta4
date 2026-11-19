@@ -252,7 +252,7 @@ describe('oggetti derivati', () => {
 
       const esito = await preparaOggettiDerivati(db.sequelize, { forza: true });
 
-      expect(esito.ricreati).toEqual(['010_v_attivita.sql', '020_materialized_views.sql', '030_mv_utenti_completi.sql']);
+      expect(esito.ricreati).toEqual(['010_v_attivita.sql', '030_mv_utenti_completi.sql']);
     });
 
     it('la rimozione comprende ogni view e materialized view che i file creano', async () => {
@@ -263,6 +263,7 @@ describe('oggetti derivati', () => {
       const [{ sql }] = db.eseguiti;
       for (const voce of [
         'MATERIALIZED VIEW IF EXISTS public.mv_utenti_completi',
+        // Non piu' create dai file (migrazione 0023), si tolgono come obsolete
         'MATERIALIZED VIEW IF EXISTS public.mv_aree_ottimizzata',
         'MATERIALIZED VIEW IF EXISTS public.mv_canali_ottimizzata',
         'MATERIALIZED VIEW IF EXISTS public.mv_combinazioni_ottimizzata',

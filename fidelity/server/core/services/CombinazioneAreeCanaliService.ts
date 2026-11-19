@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
+import { eProxy } from '../../../lib/areeCanali/proxy';
 import { DatabaseError, NotFoundError, wrapDatabaseError } from '../../../lib/errors';
-import { sequelize } from '../db';
 import { CombinazioneCanaleAreaResponseDTO } from '../dto';
 import { ICombinazioneAreeCanaliService } from '../interfaces/ICombinazioneAreeCanaliService';
 import { log } from '../logger';
@@ -82,7 +82,11 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
       ]);
       const canaleMap = new Map(canali.map(c => [c.id_canali, c]));
       const areaMap = new Map(aree.map(a => [a.id_aree, a]));
-      return combinazioni.map(combinazione => {
+      // Solo combinazioni a cui si puo' dare un punto vendita: niente canali o aree proxy (lib/areeCanali/proxy.ts)
+      const conProxy = (c: (typeof combinazioni)[number]) =>
+        eProxy(canaleMap.get(c.id_canale_combinazione_canale_area)?.membri_canali)
+        || eProxy(areaMap.get(c.id_area_combinazione_canale_area ?? '')?.membri_aree);
+      return combinazioni.filter(c => !conProxy(c)).map(combinazione => {
         const canale = canaleMap.get(combinazione.id_canale_combinazione_canale_area);
         const area = areaMap.get(combinazione.id_area_combinazione_canale_area ?? '');
         return {
@@ -162,7 +166,6 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
       log.info(`Combination ${isUpdate ? 'updated' : 'created'} successfully: ${data.guidID}`);
       const canale = await this.canaleRepository.findById(data.guidIDCanale);
       const area = await this.areaRepository.findById(data.guidIDArea);
-      await sequelize.query('SELECT refresh_mv_combinazioni()');
       return {
         id: data.guidID,
         id_gdo: data.idGDO,
@@ -191,7 +194,6 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
     try {
       const deleted = await this.combinazioneRepository.delete(guidID);
       if (deleted) {
-        await sequelize.query('SELECT refresh_mv_combinazioni()');
         return true;
       }
       return false;
@@ -202,83 +204,6 @@ export class CombinazioneAreeCanaliService implements ICombinazioneAreeCanaliSer
         operation: 'delete',
         entity: 'CombinazioneCanaleArea',
         details: { guidID },
-      });
-    }
-  }
-
-  // Materialized View Operations
-  async getAllCombinazioniFromMaterializedView(): Promise<CombinazioneCanaleAreaResponseDTO[]> {
-    try {
-      const { sequelize } = await import('../db/SequelizeConnector');
-      const queryStr = `
-      SELECT
-          id,
-          id_gdo,
-          id_canale,
-          id_area,
-          stato,
-          canale_codice,
-          canale_nome,
-          area_codice,
-          area_nome,
-          createdat,
-          updatedat
-        FROM mv_combinazioni_ottimizzata
-        ORDER BY createdat DESC
-      `;
-      let [results] = await sequelize.query(queryStr);
-      if (results.length === 0) {
-        //Provo ad aggiornare la materialized view
-        await sequelize.query('REFRESH MATERIALIZED VIEW mv_combinazioni_ottimizzata;');
-      }
-      results = await sequelize.query(queryStr).then(([res]) => res);
-      const newResults = results.map((result: any) => ({
-        ...result,
-        sigla: `${result.canale_codice}_${result.area_codice}`
-      }));
-      return newResults as CombinazioneCanaleAreaResponseDTO[];
-    } catch (error) {
-      log.error('Error getting combinazioni from materialized view:', error);
-      throw wrapDatabaseError(error, {
-        message: 'Error getting combinazioni from materialized view',
-        operation: 'materialized_view_query',
-        entity: 'CombinazioneCanaleArea',
-      });
-    }
-  }
-
-  async getCombinazioniByGDOIdFromMaterializedView(idGDO: string): Promise<CombinazioneCanaleAreaResponseDTO[]> {
-    try {
-      const { sequelize } = await import('../db/SequelizeConnector');
-      const [results] = await sequelize.query(`
-        SELECT
-          id,
-          id_gdo,
-          id_canale,
-          id_area,
-          stato,
-          canale_codice,
-          canale_nome,
-          area_codice,
-          area_nome,
-          sigla,
-          createdat,
-          updatedat
-        FROM mv_combinazioni_ottimizzata
-        WHERE id_gdo = :idGDO
-        ORDER BY createdat DESC
-      `, {
-        replacements: { idGDO }
-      });
-
-      return results as CombinazioneCanaleAreaResponseDTO[];
-    } catch (error) {
-      log.error('Error getting combinazioni by GDO from materialized view:', error);
-      throw wrapDatabaseError(error, {
-        message: `Error getting combinazioni for GDO ${idGDO} from materialized view`,
-        operation: 'materialized_view_query',
-        entity: 'CombinazioneCanaleArea',
-        details: { idGDO },
       });
     }
   }

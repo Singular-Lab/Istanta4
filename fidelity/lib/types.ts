@@ -792,6 +792,8 @@ export type CanaliAttributes = {
   codice_canali: string;
   nome_canali: string;
   id_gdo_canali: string;
+  /** Canali membri se e' un proxy (vedi lib/areeCanali/proxy.ts), vuoto altrimenti; il primo e' quello delle liste. */
+  membri_canali?: string[];
   createdat?: Date;
   updatedat?: Date;
 };
@@ -802,6 +804,8 @@ export type AreeAttributes = {
   codice_aree: string;
   nome_aree: string;
   id_gdo_aree: string;
+  /** Aree membri se e' un proxy (vedi lib/areeCanali/proxy.ts), vuoto altrimenti; la prima e' quella delle liste. */
+  membri_aree?: string[];
   createdat?: Date;
   updatedat?: Date;
 };

@@ -145,6 +145,8 @@ describe('inizializzazione di un database vuoto', () => {
 
     for (const vista of VISTE_DA_AGGIORNARE)
       expect(stato.query).toContain(`REFRESH MATERIALIZED VIEW public.${vista}`);
+    // Aree, canali e combinazioni non hanno piu' materialized view (migrazione 0023)
+    expect(stato.query.join('\n')).not.toMatch(/mv_(aree|canali|combinazioni)_ottimizzata/);
   });
 });
 

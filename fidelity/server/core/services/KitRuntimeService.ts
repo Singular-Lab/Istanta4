@@ -26,6 +26,8 @@ import { RuntimeKit } from '../models/runtime_kit';
 import { TipiDiExport } from '../models/tipi_di_export';
 import { Utente } from '../models/utenti';
 import { origineStoricoPerReport } from '../utils/origineStorico';
+import { chiaveCoppia, coppieMembro, eSuProxy, idPezzo, MESSAGGIO_AVVIO_PROXY, NESSUN_PROXY } from '../../../lib/areeCanali/proxy';
+import { caricaProxy, trovaPezzo } from './areeCanaliProxy';
 
 /** Maps a raw PG RuntimeKit (snake_case) to the camelCase shape expected by the client */
 function normalizeRuntimeKitFromPg(raw: any): RUNTIME_KIT {
@@ -153,6 +155,16 @@ export class KitRuntimeService implements IKitRuntimeService {
       const canaleIds = Array.from(
         new Set(listaCombinazioniDaIstanta.map(item => item.guidIdCanale).flat().filter(Boolean))
       ) as string[];
+      // Un design proxy vale per le combinazioni dei suoi membri: si cerca anche lui, e piu' sotto si
+      // divide nei pezzi delle combinazioni che la promo ha in Istanta (lib/areeCanali/proxy.ts)
+      const proxy = await caricaProxy();
+      const proxyConMembroFra = (mappa: ReadonlyMap<string, readonly string[]>, ids: string[]) =>
+        [...mappa].filter(([, membri]) => membri.some(m => ids.includes(m))).map(([id]) => id);
+      areaIds.push(...proxyConMembroFra(proxy.aree, areaIds));
+      canaleIds.push(...proxyConMembroFra(proxy.canali, canaleIds));
+      const comeElenco = (valore: unknown): string[] => ([] as unknown[]).concat(valore ?? []).filter((v): v is string => typeof v === 'string' && v !== '');
+      const coppieDellaPromo = new Set(listaCombinazioniDaIstanta.flatMap(item =>
+        comeElenco(item.guidIdCanale).flatMap(canale => comeElenco(item.guidIdArea).map(area => chiaveCoppia(canale, area)))));
 
       const [_rawDesignKits, _rawKitRuntime] = await Promise.all([
         DesignKit.findAll({
@@ -172,10 +184,25 @@ export class KitRuntimeService implements IKitRuntimeService {
           raw: true
         }) as unknown as Promise<any[]>
       ]);
-      const resultCreazioneCombinazioneDesign = _rawDesignKits.map(normalizeDesignKitFromPg) as (DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean })[];
+      type DesignPerGestione = DESIGN_KIT & { nomeCanale: string, nomeArea: string, lavorazioneStarted: boolean, guidIdDesign?: string, pezzo?: boolean };
+      const resultCreazioneCombinazioneDesign = (_rawDesignKits.map(normalizeDesignKitFromPg) as DesignPerGestione[])
+        .flatMap((design): DesignPerGestione[] => proxy !== NESSUN_PROXY && eSuProxy(design, proxy)
+          ? coppieMembro(design.guidCanale ?? '', design.guidArea ?? '', proxy)
+            .filter(([canale, area]) => coppieDellaPromo.has(chiaveCoppia(canale, area)))
+            .map(([canale, area]) => ({
+              ...design,
+              guidId: idPezzo(design.guidId, canale, area),
+              guidIdDesign: design.guidId,
+              guidCanale: canale,
+              guidArea: area,
+              pezzo: true,
+            }))
+          : [design]);
       const getKitRuntime = _rawKitRuntime.map(normalizeRuntimeKitFromPg);
 
       const runtimeByDesignId = new Map<string, RUNTIME_KIT>();
+      // I runtime dei pezzi: uno per design proxy, canale e area
+      const runtimeByPezzo = new Map<string, RUNTIME_KIT>();
       const formatoIds = new Set<string>();
       const tipiExportIds = new Set<string>();
       const runtimeIds: string[] = [];
@@ -195,6 +222,7 @@ export class KitRuntimeService implements IKitRuntimeService {
       for (const runtime of getKitRuntime) {
         if (runtime.guidIdDesign) {
           runtimeByDesignId.set(runtime.guidIdDesign, runtime);
+          runtimeByPezzo.set(`${runtime.guidIdDesign}|${chiaveCoppia(runtime.guidCanale, runtime.guidArea)}`, runtime);
         }
         if (runtime.guidFormato) {
           formatoIds.add(runtime.guidFormato);
@@ -366,7 +394,9 @@ export class KitRuntimeService implements IKitRuntimeService {
       }
 
       const arrayMistoPerFrontEnd = resultCreazioneCombinazioneDesign.map((item) => {
-        const kitRuntime = runtimeByDesignId.get(item.guidId);
+        const kitRuntime = item.pezzo
+          ? runtimeByPezzo.get(`${item.guidIdDesign}|${chiaveCoppia(item.guidCanale, item.guidArea)}`)
+          : runtimeByDesignId.get(item.guidId);
         const tipoLavorazione = formatoTipoById.get(kitRuntime?.guidFormato || item.guidFormato);
 
         if (kitRuntime) {
@@ -482,11 +512,21 @@ export class KitRuntimeService implements IKitRuntimeService {
         // Altrimenti, cerchiamo un kit design con l'id fornito
         const rawDesign2 = await DesignKit.findOne({ where: { id: idKit }, raw: true });
         kitDesign = rawDesign2 ? normalizeDesignKitFromPg(rawDesign2) : null;
+        // Un id che non e' un design puo' essere quello di un pezzo: il design proxy sul canale e
+        // l'area del membro (lib/areeCanali/proxy.ts)
+        const pezzo = kitDesign ? null : await trovaPezzo(idKit);
+        if (pezzo) {
+          const rawDesign3 = await DesignKit.findOne({ where: { id: pezzo.idDesign }, raw: true });
+          kitDesign = rawDesign3
+            ? { ...normalizeDesignKitFromPg(rawDesign3), guidId: idKit, guidIdDesign: pezzo.idDesign, guidCanale: pezzo.idCanale, guidArea: pezzo.idArea }
+            : null;
+        }
         if (kitDesign) {
-          // E poi verifichiamo se esiste un kit runtime associato a quel design kit
+          // E poi verifichiamo se esiste un kit runtime associato a quel design kit (o pezzo)
           const _rawKitRuntime2 = await RuntimeKit.findOne({
             where: {
-              id_design: kitDesign.guidId,
+              id_design: pezzo ? pezzo.idDesign : kitDesign.guidId,
+              ...(pezzo ? { id_canale: pezzo.idCanale, id_area: pezzo.idArea } : {}),
               stato_lavorazione: { [Op.notIn]: [STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO] },
               id_promo: idPromo
             },
@@ -505,8 +545,9 @@ export class KitRuntimeService implements IKitRuntimeService {
         });
       }
 
-      const canale = await Canale.findByPk(kitDesign.guidCanale);
-      const area = await Area.findByPk(kitDesign.guidArea);
+      // Il runtime sta sulla sua combinazione: per un pezzo di un design proxy e' quella del membro
+      const canale = await Canale.findByPk(kitRuntime?.guidCanale || kitDesign.guidCanale);
+      const area = await Area.findByPk(kitRuntime?.guidArea || kitDesign.guidArea);
       const getTipiExport = await TipiDiExport.findAll() as unknown as TipiDiExportAttributes[];
 
       if (kitRuntime) {
@@ -889,8 +930,9 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   // questa funzione cerca nelle combinazione design
   async getAllKitByAreaCanalePV(data: {
-    idArea?: string,
-    idCanale?: string,
+    // Piu' voci quando chiede Istanta: il canale (o l'area) e i proxy che vi corrispondono
+    idArea?: string | string[],
+    idCanale?: string | string[],
     idPv?: string,
     idPromo?: string,
     idFormato?: string,
@@ -909,8 +951,9 @@ export class KitRuntimeService implements IKitRuntimeService {
 
       const whereClause: any = {};
       if (data.id) whereClause.id = data.id;
-      if (data.idArea) whereClause.id_area = data.idArea;
-      if (data.idCanale) whereClause.id_canale = data.idCanale;
+      const unaOPiu = (voci: string | string[]) => (Array.isArray(voci) ? { [Op.in]: voci } : voci);
+      if (data.idArea && data.idArea.length > 0) whereClause.id_area = unaOPiu(data.idArea);
+      if (data.idCanale && data.idCanale.length > 0) whereClause.id_canale = unaOPiu(data.idCanale);
       if (data.idFormato) whereClause.id_formato = data.idFormato;
       if (data.tipoLavorazione) {
         const formati = await Formati.findAll({
@@ -1046,12 +1089,18 @@ export class KitRuntimeService implements IKitRuntimeService {
 
   /** ──────────────── Mutations ──────────────── */
 
-  async createKitRunTime(data: RUNTIME_KIT) {
+  /**
+   * Crea il runtime del design nella promo, o restituisce quello che c'e' gia'. Con `perCombinazione`
+   * (il pezzo di un design proxy) il runtime esistente deve avere anche lo stesso canale e area: un
+   * design proxy ha un runtime per pezzo.
+   */
+  async createKitRunTime(data: RUNTIME_KIT, opzioni: { perCombinazione?: boolean } = {}) {
     try {
       const kit = await RuntimeKit.findOne({
         where: {
           id_design: data.guidIdDesign,
           id_promo: data.idPromo,
+          ...(opzioni.perCombinazione ? { id_canale: data.guidCanale, id_area: data.guidArea } : {}),
         },
         raw: true
       }) as unknown as RUNTIME_KIT;
@@ -1103,6 +1152,10 @@ export class KitRuntimeService implements IKitRuntimeService {
   }
 
   async creaKitRuntimeManuale(idPromo: string, kitDesign: DESIGN_KIT) {
+    // Un design proxy si avvia per pezzo, dal plugin di produzione (lib/areeCanali/proxy.ts)
+    if (eSuProxy(kitDesign, await caricaProxy())) {
+      throw new BusinessError({ message: MESSAGGIO_AVVIO_PROXY, rule: 'Un kit proxy ha un kit runtime per canale e area membro' });
+    }
     try {
       const newId = uuidv4();
 
@@ -1153,7 +1206,8 @@ export class KitRuntimeService implements IKitRuntimeService {
     }
   }
 
-  async bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]> {
+  /** Un runtime per design e promo; per un pezzo di un design proxy (`pezzo`) uno per design, promo, canale e area. */
+  async bulkCreateRuntime(data: (DESIGN_KIT & { idPromo: string; pezzo?: boolean })[], traccia?: Record<string, unknown>): Promise<RUNTIME_KIT[]> {
     const contestoLog = { context: 'getKitByPromo', ...traccia };
     try {
       const result: (RUNTIME_KIT & { guidIdDesign: string })[] = [];
@@ -1165,7 +1219,8 @@ export class KitRuntimeService implements IKitRuntimeService {
         const existingCombinations = await RuntimeKit.findAll({
           where: {
             id_design: item.guidId,
-            id_promo: item.idPromo
+            id_promo: item.idPromo,
+            ...(item.pezzo ? { id_canale: item.guidCanale, id_area: item.guidArea } : {}),
           },
           raw: true
         }) as unknown as RUNTIME_KIT[];

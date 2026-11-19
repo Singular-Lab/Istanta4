@@ -10,6 +10,9 @@ import { GestoreImportPuntiVendita } from '../../services/ImportPuntiVenditaJob'
 import { ServerUtils } from '../../utils/ServerUtils';
 import { PuntoVenditaController } from '../PuntoVenditaController';
 
+// Il salvataggio di un PV controlla nel database che la combinazione non sia un proxy: qui non lo e'
+vi.mock('../../services/areeCanaliProxy', () => ({ combinazioneConProxy: vi.fn(async () => false) }));
+
 vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: (_req: any, _res: any, next: any) => next(),
 }));
@@ -42,7 +45,6 @@ function createApp(risposteIstanta: Array<typeof OK>, agenziaLib: Partial<IAgenz
     updatePuntoVendita: vi.fn(async (_id: string, data: any) => data),
   };
   const gdoService = { getGDOByUtenteId: vi.fn(async () => ({ id: 'g1' })) };
-  const aggiornaVista = vi.fn(async () => undefined);
   const cerca = vi.fn(async (_q: string) => [
     { etichetta: 'Via Grayson 20, Mantova', lat: 45.15, lon: 10.79, indirizzo: 'Via Grayson 20', cap: '46100', citta: 'Mantova', provincia: 'MN', regione: 'Lombardia' },
   ]);
@@ -56,11 +58,11 @@ function createApp(risposteIstanta: Array<typeof OK>, agenziaLib: Partial<IAgenz
   app.use(express.json());
   app.use((req: any, _res, next) => { req.session = { id_utente: 'u1' }; next(); });
   new PuntoVenditaController(
-    puntoVenditaService as any, gdoService as any, agenziaLib as IAgenziaLib, gestore, emetti, aggiornaVista, cerca
+    puntoVenditaService as any, gdoService as any, agenziaLib as IAgenziaLib, gestore, emetti, cerca
   ).registerRoutes(app);
   /** Attende la fine dell'import avviato in background. */
   const fineImport = async () => (await avvia.mock.results[0].value).fine;
-  return { app, puntoVenditaService, istanta, aggiornaVista, cerca, gestore, emetti, fineImport };
+  return { app, puntoVenditaService, istanta, cerca, gestore, emetti, fineImport };
 }
 
 function excel(righe: unknown[][]): Buffer {
@@ -118,7 +120,7 @@ describe('POST /api/ACPV/importaPV', () => {
   });
 
   it('Istanta rifiuta una riga: non entra in FP e le altre proseguono, con lo stesso GUID nei due sistemi', async () => {
-    const { app, puntoVenditaService, istanta, fineImport, aggiornaVista } = createApp([RIFIUTO, OK]);
+    const { app, puntoVenditaService, istanta, fineImport } = createApp([RIFIUTO, OK]);
 
     await request(app).post('/api/ACPV/importaPV').attach('file', fileGenerico, 'pv.xlsx');
     const finale = await fineImport();
@@ -126,7 +128,6 @@ describe('POST /api/ACPV/importaPV', () => {
     expect(finale).toMatchObject({ stato: 'completato', creati: 1, aggiornati: 0, scartati: 2 });
     expect(finale.errori.map((e: any) => e.row)).toEqual([2, 4]);
     expect(finale.errori[0].error).toContain('Combinazione sconosciuta');
-    expect(aggiornaVista).toHaveBeenCalledOnce();
 
     expect(puntoVenditaService.createPuntoVendita).toHaveBeenCalledOnce();
     const guidIstanta = (istanta.mock.calls[1][3] as any).guidID;

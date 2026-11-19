@@ -708,6 +708,15 @@
           "tipo": "uuid",
           "unico": false
         },
+        "membri_aree": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": "ARRAY[]::UUID[]",
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "uuid[]",
+          "unico": false
+        },
         "nome_aree": {
           "autoIncremento": false,
           "chiavePrimaria": false,
@@ -1385,6 +1394,15 @@
             "tabella": "gdo"
           },
           "tipo": "uuid",
+          "unico": false
+        },
+        "membri_canali": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": "ARRAY[]::UUID[]",
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "uuid[]",
           "unico": false
         },
         "nome_canali": {

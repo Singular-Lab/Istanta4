@@ -1,6 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
 import { wrapDatabaseError } from '../../../lib/errors';
-import { sequelize } from '../db';
 import { AreaResponseDTO, CreateAreaDTO } from '../dto';
 import { IAreaService } from '../interfaces/IAreaService';
 import { log } from '../logger';
@@ -18,6 +17,7 @@ export class AreaService implements IAreaService {
       nome: area.nome_aree,
       codice: area.codice_aree,
       id_gdo: area.id_gdo_aree,
+      membri: area.membri_aree ?? [],
       createdat: area.createdat,
       updatedat: area.updatedat
     };
@@ -52,7 +52,12 @@ export class AreaService implements IAreaService {
     }
   }
 
+  /**
+   * Crea o aggiorna l'area. `membri` (aree di un proxy) si scrive solo se e' indicato: le scritture
+   * che arrivano da Istanta non lo conoscono e non lo toccano.
+   */
   async createArea(data: CreateAreaDTO): Promise<AreaResponseDTO> {
+    const membri = data.membri ? { membri_aree: data.membri } : {};
     try {
       if (data.id) {
         // Cerca l'area esistente con l'ID fornito
@@ -64,9 +69,9 @@ export class AreaService implements IAreaService {
             nome_aree: data.nome,
             codice_aree: data.codice,
             id_gdo_aree: data.id_gdo ?? "",
+            ...membri,
             updatedat: new Date()
           });
-          await sequelize.query('SELECT refresh_mv_aree()');
           return updated ? this.mapToDTO(updated) : this.mapToDTO(findArea);
         } else {
           // Se non trova l'area con l'ID fornito, crea una nuova area con quell'ID
@@ -74,14 +79,15 @@ export class AreaService implements IAreaService {
             nome_aree: data.nome,
             codice_aree: data.codice,
             id_aree: data.id,
-            id_gdo_aree: data.id_gdo ?? ""
+            id_gdo_aree: data.id_gdo ?? "",
+            ...membri
           });
-          await sequelize.query('SELECT refresh_mv_aree()');
           return {
             id: area.id_aree,
             nome: area.nome_aree,
             codice: area.codice_aree,
             id_gdo: area.id_gdo_aree,
+            membri: area.membri_aree ?? [],
             createdat: area.createdat ?? new Date(),
             updatedat: area.updatedat ?? new Date()
           };
@@ -92,9 +98,9 @@ export class AreaService implements IAreaService {
           nome_aree: data.nome,
           codice_aree: data.codice,
           id_aree: uuidv4(),
-          id_gdo_aree: data.id_gdo ?? ""
+          id_gdo_aree: data.id_gdo ?? "",
+          ...membri
         });
-        await sequelize.query('SELECT refresh_mv_aree()');
         return {
           id: area.id_aree,
           nome: area.nome_aree,
@@ -139,7 +145,6 @@ export class AreaService implements IAreaService {
     try {
       const deleted = await this.areaRepository.delete(guidID);
       if (deleted) {
-        await sequelize.query('SELECT refresh_mv_aree()');
         return true;
       }
       return false;
@@ -171,61 +176,6 @@ export class AreaService implements IAreaService {
 
   async getAllAreeForGDO(gdoId: string): Promise<AreaResponseDTO[]> {
     return this.getAreasByGDOId(gdoId);
-  }
-
-  // Materialized View Operations
-  async getAllAreasFromMaterializedView(): Promise<AreaResponseDTO[]> {
-    try {
-      const [results] = await sequelize.query(`
-        SELECT
-          id,
-          codice,
-          nome,
-          id_gdo,
-          createdat,
-          updatedat
-        FROM mv_aree_ottimizzata
-        ORDER BY nome
-      `);
-
-      return results as AreaResponseDTO[];
-    } catch (error) {
-      log.error('Impossibile recuperare le aree dalla materialized view', error);
-      throw wrapDatabaseError(error, {
-        message: 'Error getting areas from materialized view',
-        operation: 'materialized_view_query',
-        entity: 'Area',
-      });
-    }
-  }
-
-  async getAreasByGDOIdFromMaterializedView(gdoId: string): Promise<AreaResponseDTO[]> {
-    try {
-      const [results] = await sequelize.query(`
-        SELECT
-          id,
-          codice,
-          nome,
-          id_gdo,
-          createdat,
-          updatedat
-        FROM mv_aree_ottimizzata
-        WHERE id_gdo = :gdoId
-        ORDER BY nome
-      `, {
-        replacements: { gdoId }
-      });
-
-      return results as AreaResponseDTO[];
-    } catch (error) {
-      log.error('Impossibile recuperare le aree per GDO dalla materialized view', error, { gdoId });
-      throw wrapDatabaseError(error, {
-        message: `Error getting areas for GDO ${gdoId} from materialized view`,
-        operation: 'materialized_view_query',
-        entity: 'Area',
-        details: { gdoId },
-      });
-    }
   }
 
 }

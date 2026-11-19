@@ -15,6 +15,7 @@ import { permissionGuard } from '../middleware/permissionGuard';
 import { UtentiGDO } from '../models/utenti_gdo';
 import { ServerUtils } from '../utils/ServerUtils';
 import { scriviSuIstanta } from '../utils/istanta';
+import { membriDaRichiesta, problemiVoce, proxyCheContengono, voceDa } from '../../../lib/areeCanali/proxy';
 export class AreaController extends BaseController {
   constructor(private areaService: IAreaService, private gdoService: IGdoService) {
     super('/api');
@@ -75,6 +76,8 @@ export class AreaController extends BaseController {
   private async salvaArea(req: Request, res: Response): Promise<void> {
     try {
       const data = req.body as CreateAreaDTO;
+      // Senza id e' una creazione: l'id lo genera FP e Istanta lo riceve gia' fatto
+      const idInviato = typeof data.id === 'string' ? data.id : '';
 
       if (!data.id) {
         data.id = "";
@@ -104,6 +107,19 @@ export class AreaController extends BaseController {
           return;
         }
       }
+      // Dalla pagina Aree e canali: codice unico nella GDO e regole dei proxy (lib/areeCanali/proxy.ts)
+      const membri = membriDaRichiesta(data.membri);
+      const [areeGdo, esistente] = await Promise.all([
+        data.id_gdo ? this.areaService.getAreasByGDOId(data.id_gdo) : Promise.resolve([]),
+        idInviato ? this.areaService.getAreaById(idInviato) : Promise.resolve(null),
+      ]);
+      const problemi = problemiVoce('area', { id: data.id, codice: data.codice ?? '', membri }, areeGdo.map(voceDa), esistente && voceDa(esistente));
+      if (problemi.length > 0) {
+        res.status(HttpStatusCode.BAD_REQUEST).json({ esito: false, error: problemi.join(' '), message: problemi.join(' '), problemi });
+        return;
+      }
+
+      // Anche un proxy va a Istanta, come un'area qualsiasi: i membri restano in FP
       const dataPerIstanta: {
         guidID: string;
         sigla: string;
@@ -115,19 +131,20 @@ export class AreaController extends BaseController {
       }
       await scriviSuIstanta(req, '/ACPV/salvaArea', 'PUT', dataPerIstanta);
 
-      const area = await this.areaService.createArea(data);
+      const area = await this.areaService.createArea({ ...data, membri });
       if (!area) {
         throw new DatabaseError({ message: "Errore durante il salvataggio dell'area", entity: 'Area' });
       }
-      // Determina se è una creazione o un aggiornamento
-      const isUpdate = data.id && data.id !== '';
+      const isUpdate = Boolean(esistente);
       const statusCode = isUpdate ? HttpStatusCode.OK : HttpStatusCode.CREATED;
       const message = isUpdate ? 'Area aggiornata con successo' : 'Area creata con successo';
 
       res.status(statusCode).json({
-        ...area,
+        esito: true,
+        error: "",
         message,
-        isUpdate
+        isUpdate,
+        data: area
       });
     } catch (error) {
       log.error('Errore nel salvataggio area', error);
@@ -157,6 +174,15 @@ export class AreaController extends BaseController {
         }
       }
 
+      // Un'area membro di un proxy non si elimina finche' il proxy la contiene
+      const area = await this.areaService.getAreaById(guidID);
+      const areeGdo = area ? (await this.areaService.getAreasByGDOId(area.id_gdo)).map(voceDa) : [];
+      const proxy = proxyCheContengono(guidID, areeGdo);
+      if (proxy.length > 0) {
+        const motivo = `L'area è membro di ${proxy.map(p => p.nome).join(', ')}: toglila prima dal proxy.`;
+        res.status(HttpStatusCode.CONFLICT).json({ esito: false, error: motivo, message: motivo });
+        return;
+      }
       await scriviSuIstanta(req, `/ACPV/eliminaArea/${guidID}`, 'DELETE', undefined);
 
       const result = await this.areaService.deleteArea(guidID);

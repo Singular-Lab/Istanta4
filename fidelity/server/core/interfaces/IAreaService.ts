@@ -13,6 +13,4 @@ export interface IAreaService {
   getAllAreeForGDO(gdoId: string): Promise<AreaResponseDTO[]>;
 
   // Materialized View Operations
-  getAllAreasFromMaterializedView(): Promise<AreaResponseDTO[]>;
-  getAreasByGDOIdFromMaterializedView(gdoId: string): Promise<AreaResponseDTO[]>;
 }

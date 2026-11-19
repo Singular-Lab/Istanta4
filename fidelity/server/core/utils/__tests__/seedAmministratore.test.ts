@@ -87,9 +87,9 @@ describe('seed-fidelity.sh: materialized view', () => {
   // Fidelity le crea all'avvio con le tabelle ancora vuote: senza refresh la gestione
   // utenti non mostrerebbe l'amministratore appena seminato.
   it('aggiorna tutte le materialized view lette da Fidelity, dopo gli inserimenti', () => {
-    expect(seed).toContain(
-      'for v in mv_utenti_completi mv_aree_ottimizzata mv_canali_ottimizzata mv_combinazioni_ottimizzata; do'
-    );
+    // Aree, canali e combinazioni non ne hanno piu' (migrazione 0023): resta quella degli utenti
+    expect(seed).toContain('for v in mv_utenti_completi; do');
+    expect(seed).not.toMatch(/mv_(aree|canali|combinazioni)_ottimizzata/);
     expect(seed).toContain('REFRESH MATERIALIZED VIEW public.$v');
     expect(seed.indexOf('REFRESH MATERIALIZED VIEW')).toBeGreaterThan(seed.indexOf('INSERT INTO utenti_gdo'));
   });

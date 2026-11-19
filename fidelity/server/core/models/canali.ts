@@ -11,6 +11,7 @@ class Canale extends Model<CanaliAttributes, CanaliCreationAttributes> implement
   declare codice_canali: string;
   declare nome_canali: string;
   declare id_gdo_canali: string;
+  declare membri_canali: string[];
   declare createdat?: Date;
   declare updatedat: Date;
 }
@@ -34,6 +35,12 @@ const Canali = sequelize.define<Canale>("canali", {
   id_gdo_canali: {
     type: DataTypes.UUID,
     allowNull: false
+  },
+  // Membri di un proxy (canali o aree della stessa GDO), vuoto per le voci normali: vedi lib/areeCanali/proxy.ts
+  membri_canali: {
+    type: DataTypes.ARRAY(DataTypes.UUID),
+    allowNull: false,
+    defaultValue: []
   },
   createdat: {
     type: DataTypes.DATE,

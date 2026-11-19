@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
 import { BaseController } from '../base/BaseController';
+import { ambitoGdoDellaRichiesta } from '../accessi/contestoAccesso';
 import { uploadSvgIcon } from '../config/multerConfig';
 import { IGdoService } from '../interfaces/IGdoService';
 import { IServiceFacade } from '../interfaces/IServiceFacade';
@@ -120,7 +121,8 @@ export class GdoController extends BaseController {
 
   private async getAllCombinazioniCanaleArea(req: Request, res: Response): Promise<void> {
     try {
-      const { combinazioni } = await this.serviceFacade.getAllAreeCanaliECombinazioni();
+      const ambito = await ambitoGdoDellaRichiesta(req, res, req.query.idGdo);
+      const { combinazioni } = await this.serviceFacade.getAllAreeCanaliECombinazioni(ambito);
       this.sendResponse(res, HttpStatusCode.OK, combinazioni);
     } catch (error) {
       this.handleError(res, error);
@@ -174,7 +176,9 @@ export class GdoController extends BaseController {
 
   private async getAllAreeCanaliECombinazioni(req: Request, res: Response): Promise<void> {
     try {
-      const result = await this.serviceFacade.getAllAreeCanaliECombinazioni();
+      // Solo la GDO di chi chiede (o quella indicata da chi opera per piu' GDO)
+      const ambito = await ambitoGdoDellaRichiesta(req, res, req.query.idGdo);
+      const result = await this.serviceFacade.getAllAreeCanaliECombinazioni(ambito);
       this.sendResponse(res, HttpStatusCode.OK, result);
     } catch (error: any) {
       this.handleError(res, error);

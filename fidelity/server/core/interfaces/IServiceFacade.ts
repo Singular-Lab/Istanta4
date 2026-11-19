@@ -1,3 +1,5 @@
+import type { AnagraficaAreeCanali } from '../../../lib/areeCanali/anagrafica';
+import type { AmbitoGdo } from '../accessi/contestoAccesso';
 import { AreaResponseDTO, CanaleResponseDTO, CombinazioneCanaleAreaResponseDTO, FormatiResponseDTO, GDOResponseDTO, PuntoVenditaResponseDTO, TipiDiExportResponseDTO } from '../dto';
 
 /**
@@ -8,11 +10,8 @@ export interface IServiceFacade {
   // GDO Services
   getGDOByUtenteId(idUtente: string): Promise<GDOResponseDTO | null>;
 
-  getAllAreeCanaliECombinazioni(): Promise<{
-    aree: AreaResponseDTO[];
-    canali: CanaleResponseDTO[];
-    combinazioni: CombinazioneCanaleAreaResponseDTO[];
-  }>;
+  /** Aree, canali e combinazioni della GDO (lib/areeCanali/anagrafica.ts). */
+  getAllAreeCanaliECombinazioni(ambito: AmbitoGdo): Promise<AnagraficaAreeCanali>;
   // Area Services
   getAllAreas(): Promise<AreaResponseDTO[]>;
   getAreasByGDOId(gdoId: string): Promise<AreaResponseDTO[]>;

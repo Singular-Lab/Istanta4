@@ -8,10 +8,8 @@ export interface ICanaleService {
   updateCanale(id: string, data: Partial<CanaleResponseDTO>): Promise<CanaleResponseDTO | null>;
   getCanaliByGDOId(idGDO: string): Promise<CanaleResponseDTO[]>;
   getAllCanaliForGDO(idGDO: string): Promise<CanaleResponseDTO[]>;
-  createCanale(data: { nome: string, sigla: string, id: string, idGDO: string }): Promise<CanaliAttributes>;
+  createCanale(data: { nome: string, sigla: string, id: string, idGDO: string, membri?: string[] }): Promise<CanaliAttributes>;
   deleteCanale(guidID: string, req?: Request): Promise<boolean>;
 
   // Materialized View Operations
-  getAllCanaliFromMaterializedView(): Promise<CanaleResponseDTO[]>;
-  getCanaliByGDOIdFromMaterializedView(idGDO: string): Promise<CanaleResponseDTO[]>;
 }
