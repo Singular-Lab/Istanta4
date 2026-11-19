@@ -65,11 +65,13 @@ test('la regola di Coop vale esattamente quando Coopfi.InVolantinoDaTema dice fu
     assert.strictEqual(FuoriVolantino.regolaCheVale({}, regole), null, 'senza tema non vale');
 });
 
-test('Coop abilita Fuori vol e corregge il tema; Edro21 e Famila no', () => {
+//I20-1247: anche Edro21 abilita Fuori vol, senza regole: la rimessa porta in volantino il solo campo
+//core, e tipo_volantino resta com'e' (lo usano sottocosto ed etichetta FUORIVOL).
+test('Coop abilita Fuori vol e corregge il tema; Edro21 lo abilita senza regole; Famila no', () => {
     const coop = configurazione('Coopfi');
     assert.strictEqual(coop.abilitato, true);
     assert.deepStrictEqual(coop.regole.map(r => r.campi), [['tema']]);
-    assert.strictEqual(configurazione('Edro21'), undefined);
+    assert.deepStrictEqual(configurazione('Edro21'), { abilitato: true, regole: [] });
     assert.strictEqual(configurazione('Famila'), undefined);
 });
 

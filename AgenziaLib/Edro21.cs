@@ -14280,7 +14280,28 @@ Descrizione3.EndsWith("\r\n");
                 BuildForzaFormatIstituzionale(),
                 BuildForzaFormatNelCorpoDelVolantino(),
                 BuildForzaScontoLinea(),
-                BuildRimuoviForzaturaScontoLinea()
+                BuildRimuoviForzaturaScontoLinea(),
+                BuildMettiFuoriVolantino()
+            };
+        }
+
+        /// I20-1247: come per Coop, solo il campo core; il fuori volantino resta bloccato alla
+        /// reimportazione finche' la ref non viene rimessa in volantino dal tracciato.
+        private static CambioStrutturale BuildMettiFuoriVolantino()
+        {
+            return new CambioStrutturale
+            {
+                Id = 11,
+                Titolo = "Metti fuori volantino",
+                Istruzioni = new List<IstruzioneCambio>
+                {
+                    new IstruzioneCambio
+                    {
+                        Field = GLOBAL_VARIABLES_FICO.keyInVolantino.Replace(".", "$"),
+                        Operazione = TipoOperazione.Set,
+                        Valore = "false"
+                    }
+                }
             };
         }
 
@@ -14340,6 +14361,8 @@ Descrizione3.EndsWith("\r\n");
             {
                 Id = 2,
                 Titolo = "Rimuovi format SDB",
+                //I20-1247: toglie una forzatura, la lista torna a decidere.
+                Locked = false,
                 Istruzioni = new List<IstruzioneCambio>
                 {
                     new IstruzioneCambio
@@ -14428,6 +14451,8 @@ Descrizione3.EndsWith("\r\n");
             {
                 Id = 10,
                 Titolo = "Rimuovi forzatura sconto linea",
+                //I20-1247: toglie una forzatura, la lista torna a decidere.
+                Locked = false,
                 Istruzioni = new List<IstruzioneCambio>
                 {
                     new IstruzioneCambio

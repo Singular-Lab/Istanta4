@@ -3,6 +3,9 @@ class Promo {
     /// server in ogni riga del report (ReportImportazione.KeyEtichetta), la natura dello scatto la calcola qui.
     static KEY_ETICHETTA = "EtichettaTracciato";
     static KEY_NATURA_SCATTO = "NaturaScatto";
+    /// I20-1247: i campi forzati per cui la lista porta un altro valore, campo -> valore della lista
+    /// (ReportImportazione.KeyForzature).
+    static KEY_FORZATURE = "Forzature";
 
 
     agenzia;
@@ -872,11 +875,28 @@ class Promo {
 
     /// TASK-110bdfa0: la cella di una colonna del core per una riga del report. Le alterazioni sono l'elenco
     /// dei campi cambiati, uno per riga. TASK-c4fdc17b: il testo viene da righeDelReport.
-    static cellaCoreDelReport(colonna, item, campiAlterati) {
+    /// I20-1247: dopo le alterazioni, i campi forzati di cui la lista porta un altro valore, con "(forzato)".
+    static cellaCoreDelReport(colonna, item, campiAlterati, campiForzati) {
         if (colonna.nome == "Alterazioni") {
-            return `<td>${(campiAlterati || []).map(Promo.html).join("<br>")}</td>`;
+            let voci = (campiAlterati || []).concat(Promo.vociForzate(campiForzati));
+            return `<td>${voci.map(Promo.html).join("<br>")}</td>`;
         }
         return `<td>${Promo.html(item[colonna.nome] ?? "")}</td>`;
+    }
+
+    /// I20-1247: il testo del tooltip di una cella del report il cui campo e' forzato e la lista porta un
+    /// altro valore; null se non lo e'.
+    static forzaturaDellaCella(item, campo) {
+        let forzature = item ? item[Promo.KEY_FORZATURE] : null;
+        if (!forzature || !Object.prototype.hasOwnProperty.call(forzature, campo)) {
+            return null;
+        }
+        return `Forzato: resta ${item[campo] ?? ""}, la lista porta ${forzature[campo] ?? ""}`;
+    }
+
+    /// I20-1247: come si leggono i campi forzati fra le alterazioni del report.
+    static vociForzate(campiForzati) {
+        return (campiForzati || []).map(c => c + " (forzato)");
     }
 
     /// TASK-c4fdc17b: la natura dello scatto di ogni riga del report: "Gruppo" quando il suo codice gruppo e'
@@ -907,12 +927,15 @@ class Promo {
             }
             let alterazione = item.Alterazioni;
             let alterate = alterazione ? Object.keys(alterazione) : [];
-            if (alterate.length > 0) {
+            //I20-1247: i campi forzati che la lista avrebbe cambiato. Il dato non cambia, ma la riga conta
+            //fra le cambiate perche' l'operatore la veda.
+            let forzate = item[Promo.KEY_FORZATURE] ? Object.keys(item[Promo.KEY_FORZATURE]) : [];
+            if (alterate.length > 0 || forzate.length > 0) {
                 stato = 2;
             }
             let valori = {};
             (colonneCore || []).forEach(c => {
-                valori[c.nome] = c.nome == "Alterazioni" ? alterate.join(", ")
+                valori[c.nome] = c.nome == "Alterazioni" ? alterate.concat(Promo.vociForzate(forzate)).join(", ")
                     : c.nome == Promo.KEY_NATURA_SCATTO ? nature[indice]
                     : String(item[c.nome] ?? "");
             });
@@ -925,6 +948,7 @@ class Promo {
                 codice: String(item["Referenza.Codice"] ?? ""),
                 ac: String(item.AC ?? ""),
                 alterate: alterate,
+                forzate: forzate,
                 valori: valori,
                 item: item
             };
@@ -955,7 +979,8 @@ class Promo {
 
     /// TASK-c4fdc17b: il CSV delle righe: le colonne del report (meno Alterazioni) e, per ogni campo alterato,
     /// una riga con il campo, il valore precedente e quello attuale; una riga sola senza alterazioni.
-    /// Separatore ; come lo vuole Excel in italiano.
+    /// Separatore ; come lo vuole Excel in italiano. I20-1247: per un campo forzato Prima e' il valore che
+    /// resta, Dopo quello della lista non applicato, e la colonna Forzatura dice "trattenuta".
     static csvDelReport(righe, colonneCore, colonneCliente) {
         let cella = v => {
             let testo = String(v ?? "");
@@ -963,15 +988,19 @@ class Promo {
         };
         let colonne = (colonneCore || []).filter(c => c.nome != "Alterazioni").map(c => ({ chiave: c.nome, titolo: c.titolo }))
             .concat((colonneCliente || []).map(col => ({ chiave: col, titolo: col })));
-        let linee = [colonne.map(c => c.titolo).concat(["Campo", "Prima", "Dopo"]).map(cella).join(";")];
+        let linee = [colonne.map(c => c.titolo).concat(["Campo", "Prima", "Dopo", "Forzatura"]).map(cella).join(";")];
         (righe || []).forEach(riga => {
             let inizio = colonne.map(c => riga.valori[c.chiave] ?? "");
-            if (riga.alterate.length == 0) {
-                linee.push(inizio.concat(["", "", ""]).map(cella).join(";"));
+            let forzate = riga.forzate || [];
+            if (riga.alterate.length == 0 && forzate.length == 0) {
+                linee.push(inizio.concat(["", "", "", ""]).map(cella).join(";"));
                 return;
             }
             riga.alterate.forEach(campo => {
-                linee.push(inizio.concat([campo, riga.item.Alterazioni[campo], riga.item[campo]]).map(cella).join(";"));
+                linee.push(inizio.concat([campo, riga.item.Alterazioni[campo], riga.item[campo], ""]).map(cella).join(";"));
+            });
+            forzate.forEach(campo => {
+                linee.push(inizio.concat([campo, riga.item[campo], riga.item[Promo.KEY_FORZATURE][campo], "trattenuta"]).map(cella).join(";"));
             });
         });
         return linee.join("\r\n") + "\r\n";
@@ -1244,7 +1273,7 @@ class Promo {
                     tblRows += `<td><input type="checkbox" ${riga.stato==3?"":"disabled"} class="chDirectAct"></td>`;
                 }
                 colonneCore.forEach(colonna => {
-                    tblRows += colonna.nome == "Alterazioni" ? Promo.cellaCoreDelReport(colonna, item, riga.alterate)
+                    tblRows += colonna.nome == "Alterazioni" ? Promo.cellaCoreDelReport(colonna, item, riga.alterate, riga.forzate)
                         : `<td>${Promo.html(riga.valori[colonna.nome])}</td>`;
                 });
 
@@ -1257,6 +1286,12 @@ class Promo {
                     if (alterazione && alterazione[col] != null) {
                         cellStyle = "background-color:yellow;";
                         cellTooltip = `title="Da: ${Promo.html(alterazione[col])} → A: ${Promo.html(valore)}"`;
+                    }
+                    //I20-1247: un campo forzato che la lista avrebbe cambiato: resta il valore forzato.
+                    let forzatura = Promo.forzaturaDellaCella(item, col);
+                    if (forzatura != null) {
+                        cellStyle = "background-color:#f4b183;";
+                        cellTooltip = `title="${Promo.html(forzatura)}"`;
                     }
 
                     tblRows += `<td style="${cellStyle}" ${cellTooltip}>${Promo.html(valore)}</td>`;

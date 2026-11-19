@@ -99,7 +99,10 @@ public class AlterazioniImportazioneTests
         //Le alterazioni si filtrano prima del registro e prima di finire nel dato e nel report.
         int filtro = operazioni.IndexOf("alterazioni = AlterazioniImportazione.SoloCampiDelTracciato(alterazioni);", StringComparison.Ordinal);
         Assert.True(filtro < operazioni.IndexOf("AlterazioniImportazione.OperazioneDiRegistro(", StringComparison.Ordinal));
-        Assert.True(filtro < operazioni.IndexOf("item[GLOBAL_VARIABLES.keyAlterazioni] = alterazioni;", StringComparison.Ordinal));
+        //I20-1247: nel dato vanno insieme alle alterazioni dei cambi strutturali ancora bloccati.
+        int nelDato = operazioni.IndexOf("item[GLOBAL_VARIABLES.keyAlterazioni] = CampiBloccati.AlterazioniDaSalvare(alterazioni, bloccati);", StringComparison.Ordinal);
+        Assert.True(nelDato > 0);
+        Assert.True(filtro < nelDato);
     }
 
     [Fact]

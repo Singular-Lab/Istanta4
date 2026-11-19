@@ -19,6 +19,9 @@ const FotoExtraGruppo = require('./reperimentoFoto/fotoExtraGruppo');
 const CampiARiposo = require('./campiARiposo');
 //Il gruppo che un'azione sul box manda fuori volantino passa nella sua sezione della lista del kit.
 const FuoriVolantino = require('./fuoriVolantino');
+//I20-1247: gli Id delle azioni sul box per setCambioStrutturale; il modulo non ha dipendenze, e cosi'
+//non serve il globale cambiStrutturaliJs di indexNew.
+const CambiStrutturali = require('./cambiStrutturali');
 
 /// I20-1002: la scheda della referenza - quello che l'operatore vede e modifica quando
 /// seleziona un box nel documento.
@@ -1229,6 +1232,12 @@ const schedaRef = {
             const valore = daOperatore ? (valori != null && valori[istruzione.field] != null ? valori[istruzione.field] : "") : istruzione.valore;
             params += "&" + kAz + ".attributi." + enc(istruzione.field) + "=" + enc(valore);
         }));
+
+        //I20-1247: quali azioni sono, perche' il server legga nella configurazione se bloccano i campi.
+        const idAzioni = CambiStrutturali.idAzioni(azioniDelBox);
+        if (idAzioni !== "") {
+            params += "&" + kAz + ".idAzioni=" + enc(idAzioni);
+        }
 
         return params;
     },
@@ -5242,6 +5251,12 @@ const schedaRef = {
             console.log($(listaFields[f]).attr("id") + " = " + $(listaFields[f]).val());
             let kAttr = kAz + ".attributi";//["+attr+"]";
             params += "&" + kAttr + "." + encodeURIComponent($(listaFields[f]).attr("id")) + "=" + encodeURIComponent($(listaFields[f]).val());
+        }
+
+        //I20-1247: quali azioni sono, perche' il server legga nella configurazione se bloccano i campi.
+        const idAzioni = CambiStrutturali.idAzioni(this.azioniStrutturaliAggiunte());
+        if (idAzioni !== "") {
+            params += "&" + kAz + ".idAzioni=" + encodeURIComponent(idAzioni);
         }
 
         console.log(params);

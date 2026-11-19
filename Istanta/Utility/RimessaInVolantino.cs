@@ -9,7 +9,8 @@ namespace Istanta.Utility
     /// Le azioni sul box (cambioMetaRecordInLavorazione) valgono solo per un gruppo impaginato, e un
     /// gruppo fuori volantino non lo e': qui si scrive il Dato del record del tracciato. I campi del
     /// cliente (Coop: il tema con "fuori depliant") e il campo core si cambiano come nelle azioni sul
-    /// box: il valore di prima finisce nelle Alterazioni, se non c'era gia'.
+    /// box: il valore di prima finisce nelle Alterazioni, se non c'era gia'. A differenza delle azioni
+    /// sul box, i campi scritti restano sbloccati (I20-1247).
     public static class RimessaInVolantino
     {
         /// Il nome del campo nel Dato: nelle richieste del Plugin il punto si scrive "$".
@@ -39,6 +40,9 @@ namespace Istanta.Utility
                 alterazioni[chiave] = dato.TryGetValue(chiave, out object? prima) && prima != null ? prima : "";
             }
             dato[chiave] = valore;
+            //I20-1247: rimesso in volantino e' sbloccato: alla reimportazione decide di nuovo la lista,
+            //anche sul fuori volantino che un'azione sul box aveva bloccato.
+            CampiBloccati.Registra(alterazioni, chiave, false);
         }
 
         private static Dictionary<string, object> Alterazioni(Dictionary<string, object> dato)

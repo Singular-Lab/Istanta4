@@ -116,17 +116,17 @@ test('il CSV delle righe filtrate per canale SS: per il prezzo cambiato il campo
     const csv = Promo.csvDelReport(visibili, core, ['tipo_volantino']);
     const linee = csv.trimEnd().split('\r\n');
 
-    assert.strictEqual(linee[0], 'Area/canale;Codice;Etichetta;Scatto;tipo_volantino;Campo;Prima;Dopo');
+    assert.strictEqual(linee[0], 'Area/canale;Codice;Etichetta;Scatto;tipo_volantino;Campo;Prima;Dopo;Forzatura');
     assert.strictEqual(linee.length, 4);
     assert.ok(linee.every(l => !l.startsWith('CNA')), 'solo le righe del canale SS');
-    assert.ok(linee.includes('SSA;100;VOL;Singolo;V - Volantino;prezzo_offerta;2,99;2,49'), csv);
-    assert.ok(linee.includes('SSA;101;VOL;Singolo;F - Fuori volantino;;;'), csv);
+    assert.ok(linee.includes('SSA;100;VOL;Singolo;V - Volantino;prezzo_offerta;2,99;2,49;'), csv);
+    assert.ok(linee.includes('SSA;101;VOL;Singolo;F - Fuori volantino;;;;'), csv);
 });
 
 test('nel CSV un valore con il separatore o le virgolette resta una cella sola', () => {
     const righe = Promo.righeDelReport([{ 'Referenza.Codice': '1', AC: 'A', descrizione: 'mele; pere "bio"', versione: 2 }], Promo.colonneCoreDelReport(['Alterazioni']), ['descrizione']);
     const csv = Promo.csvDelReport(righe, Promo.colonneCoreDelReport(['Alterazioni']), ['descrizione']);
-    assert.strictEqual(csv.split('\r\n')[1], 'A;1;;"mele; pere ""bio""";;;');
+    assert.strictEqual(csv.split('\r\n')[1], 'A;1;;"mele; pere ""bio""";;;;');
 });
 
 test('il CSV si scarica dalle righe visibili, in UTF-8 con BOM', () => {

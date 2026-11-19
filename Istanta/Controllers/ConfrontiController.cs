@@ -694,7 +694,8 @@ namespace Istanta.Controllers
                         {
                             //Record NON entrante
                             Dictionary<string,object>? dictAlterazione = (rec.data[GLOBAL_VARIABLES.keyAlterazioni] as JObject)!.ToObject<Dictionary<string, object>>();
-                            if (dictAlterazione!.Keys.Count>0)
+                            //I20-1247: la mappa dei blocchi dei cambi strutturali non e' un campo alterato.
+                            if (dictAlterazione!.Keys.Count(k => k != CampiBloccati.ChiaveLocked)>0)
                             {
                                 rec.stato= StatoRecordConfronto.Alterato;
 

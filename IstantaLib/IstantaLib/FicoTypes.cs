@@ -536,6 +536,13 @@ namespace IstantaLib
         public string codice { get; set; }//Identificativo di un singolo all'interno della prestazione coinvolta nell'alterazione
         public string codiceSottoGruppo { get; set; }//Identificativo di un sottogruppo all'interno della prestazione coinvolta nell'alterazione
         public Dictionary<string, string> attributi { get; set; }
+
+        /// <summary>
+        /// I20-1247: gli Id (CambioStrutturale.Id) delle azioni sul box da cui vengono gli attributi,
+        /// separati da virgola. Il server ci legge nella configurazione se i campi restano bloccati;
+        /// senza Id (i cambi che non sono azioni sul box) i campi si bloccano sempre.
+        /// </summary>
+        public string idAzioni { get; set; }
     }
 
 
@@ -612,6 +619,13 @@ namespace IstantaLib
         /// esporta per Correggo, solo se l'area della lavorazione corrente e' una di queste.
         /// </summary>
         public List<string> Aree { get; set; } = new List<string>();
+
+        /// <summary>
+        /// I20-1247: se i campi che l'azione scrive restano bloccati, cioe' se la reimportazione della
+        /// lista li conserva. Vale true se non dichiarato; false solo per le azioni che tolgono una
+        /// forzatura precedente, e si decide solo qui, nell'external source del plugin di agenzia.
+        /// </summary>
+        public bool Locked { get; set; } = true;
     }
 
     public class CampoInddCoinvolto

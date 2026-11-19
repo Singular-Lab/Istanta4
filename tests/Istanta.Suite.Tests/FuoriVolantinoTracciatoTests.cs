@@ -170,6 +170,20 @@ public class FuoriVolantinoTracciatoTests
         Assert.Equal(true, dato[GLOBAL_VARIABLES_FICO.keyInVolantino]);
     }
 
+    /// I20-1247: rimesso in volantino e' sbloccato, anche se "Metti fuori volantino" aveva bloccato il campo
+    /// core: alla reimportazione la lista torna a decidere stato e tema.
+    [Fact]
+    public void La_rimessa_sblocca_i_campi_che_scrive()
+    {
+        var dato = JsonConvert.DeserializeObject<Dictionary<string, object>>(
+            "{\"tema\":\"SPRINT fuori depliant\",\"Referenza.InVolantino\":false,\"Alterazioni\":{\"Referenza.InVolantino\":true,\"Locked\":{\"Referenza.InVolantino\":true}}}")!;
+
+        RimessaInVolantino.Applica(dato, new Dictionary<string, object> { ["tema"] = "SPRINT" });
+
+        var alterazioni = Assert.IsType<Dictionary<string, object>>(dato[GLOBAL_VARIABLES.keyAlterazioni]);
+        Assert.Equal(new Dictionary<string, bool> { [GLOBAL_VARIABLES_FICO.keyInVolantino] = false, ["tema"] = false }, CampiBloccati.Mappa(alterazioni));
+    }
+
     [Fact]
     public void Nelle_richieste_del_Plugin_il_punto_del_campo_si_scrive_col_dollaro()
     {
@@ -200,7 +214,7 @@ public class FuoriVolantinoTracciatoTests
             File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/wwwroot/external_source/" + cliente + "/SourceCustomPlugin.json")).TrimStart('﻿'))!;
 
     [Fact]
-    public void Coop_abilita_Fuori_vol_con_la_regola_del_tema_le_altre_agenzie_no()
+    public void Coop_abilita_Fuori_vol_con_la_regola_del_tema_Edro21_senza_regole_Famila_no()
     {
         var coop = Configurazione("Coopfi").fuoriVolantinoInTracciato;
         Assert.True(coop.abilitato);
@@ -211,7 +225,10 @@ public class FuoriVolantinoTracciatoTests
         Assert.Equal(OperatoreCondizione.Contains, condizione.Operatore);
         Assert.Equal("fuori depliant", condizione.Value);
 
-        Assert.False(Configurazione("Edro21").fuoriVolantinoInTracciato.abilitato);
+        //I20-1247: Edro21 rimette in volantino solo col campo core, senza finestra dei campi.
+        var edro = Configurazione("Edro21").fuoriVolantinoInTracciato;
+        Assert.True(edro.abilitato);
+        Assert.Empty(edro.regole);
         Assert.False(Configurazione("Famila").fuoriVolantinoInTracciato.abilitato);
     }
 
