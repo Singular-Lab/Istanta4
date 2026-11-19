@@ -1211,6 +1211,13 @@ namespace IstantaLib
         public string name { get; set; }
         public string chiaveDato{ get; set; }
         public decimal percColonna { get; set; }
+
+        /// <summary>
+        /// TASK-ff931e6d: se la colonna va a capo nel tracciato del Plugin, fino a quante righe (oltre si
+        /// taglia, il testo intero resta nel suggerimento). 0, il default: su una riga sola. La descrizione
+        /// va comunque a capo fino a 5. Edro21: la note category, 5.
+        /// </summary>
+        public int righeMassime { get; set; } = 0;
     }
 
     //Oggetto che definisce la modalità di overflow con cui un determinato elemento etichettato deve essere trattato

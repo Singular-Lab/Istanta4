@@ -128,6 +128,8 @@ const grigliaJs = require('./griglia');
 const filtriJs = require('./filtri');
 //Fuori vol del tracciato: i fuori volantino della lista del kit e la rimessa in volantino.
 const FuoriVolantino = require('./fuoriVolantino');
+//TASK-ff931e6d: colonne visibili, ordinamento e larghezze della lista del tracciato.
+const ColonneTracciato = require('./colonneTracciato');
 const CssFramework = require('./CssFramework');
 //I20-1009: la sistemazione delle foto nel box ha un modulo suo. Anche schedaRef la usa da qui.
 const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
@@ -7617,12 +7619,12 @@ function idRecDelRecordDelTracciato(record) {
 /// append diretti al DOM sarebbero mille ridisegni.
 async function aggiornaTracciatoPostRicerca(resRicerca) {
     try {
+        //TASK-ff931e6d: per ridisegnare con gli stessi dati dopo un ordinamento o una colonna nascosta.
+        ultimaRicercaTracciato = resRicerca;
         $("#Tab1Table").empty();
 
-        const $header = renderIntestazioneTracciato();
         const $body = $("<div/>", { id: "ElementiTracciato" });
 
-        $("#Tab1Table").append($header);
         $("#Tab1Table").append($body);
 
         const val = $("#areaFiltriEffettiva").find(".filtro-visualizzazione").val();
@@ -7680,6 +7682,15 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
             tutti.sort((a, b) => (a.index || 0) - (b.index || 0));
             recordsDaMostrare = tutti;
         }
+
+        //TASK-ff931e6d: le colonne si calcolano una volta per ridisegno: quelle visibili, l'ordine delle
+        //righe sulla colonna ordinata, e le larghezze nello spazio della lista. L'intestazione si fa
+        //qui, dopo, perche' le larghezze dipendono dalle righe mostrate.
+        colonneTracciatoInRidisegno = ColonneTracciato.colonneVisibili(getTracciatoColumns());
+        recordsDaMostrare = ColonneTracciato.ordina(recordsDaMostrare, colonneTracciatoInRidisegno, testoCellaTracciato);
+        fabbisogniTracciatoInRidisegno = colonneTracciatoInRidisegno.map(c => ColonneTracciato.fabbisogno(c, recordsDaMostrare, testoCellaTracciato));
+        larghezzeTracciatoInRidisegno = ColonneTracciato.larghezze(colonneTracciatoInRidisegno, larghezzaListaTracciato(), fabbisogniTracciatoInRidisegno);
+        $body.before(renderIntestazioneTracciato());
 
         //I20-1029, lotto 3: le segnalazioni del documento si leggono una volta per ridisegno, non
         //una per riga: le righe possono essere migliaia.
@@ -7977,7 +7988,9 @@ function getTracciatoColumns() {
         result.push({
             nome: col.name,
             chiaveDato: col.chiaveDato,
-            width: col.percColonna || 80
+            width: col.percColonna || 80,
+            //TASK-ff931e6d: fino a quante righe va a capo (0: una riga; la descrizione comunque 5).
+            righeMassime: col.righeMassime || 0
         });
     });
 
@@ -8002,28 +8015,157 @@ function applicaLarghezzaCella($cell, width) {
 
 /// Costruisce la riga di intestazione del tracciato, una cella per colonna, usando le stesse
 /// larghezze delle righe di dati.
+/// TASK-ff931e6d: le colonne visibili, con l'icona dell'ordinamento (clic: crescente, decrescente, di
+/// nuovo l'ordine di prima) e, col click destro, il menu per nascondere e rimostrare le colonne.
 function renderIntestazioneTracciato() {
-    const columns = getTracciatoColumns();
+    const columns = colonneTracciatoInRidisegno || ColonneTracciato.colonneVisibili(getTracciatoColumns());
 
     const $header = $("<div/>", {
         id: "Tab1Intestazione",
         class: "tracciato-header"
     });
 
-    columns.forEach(col => {
+    columns.forEach((col, indice) => {
         const $cell = $("<div/>", {
-            class: "tracciato-cell",
-            text: col.nome
+            class: "tracciato-cell"
         }).css({
             fontWeight: "bold",
-            color: "lightblue"
+            color: "lightblue",
+            cursor: "pointer"
         });
 
-        applicaLarghezzaCella($cell, col.width);
+        $cell.append($("<span/>").css({ overflow: "hidden", textOverflow: "ellipsis" }).text(col.nome));
+        $cell.append($("<span/>").addClass("ordinamento-tracciato").css({ marginLeft: "4px", flexShrink: "0" }).text(ColonneTracciato.simboloOrdinamento(col)));
+        Tooltip.impostaTooltip($cell[0], "Clic: ordina per " + col.nome + ". Clic destro: colonne da mostrare");
+
+        $cell.on("click", function () {
+            ColonneTracciato.cliccaOrdinamento(col);
+            ridisegnaTracciato();
+        });
+
+        applicaLarghezzaCella($cell, larghezzaColonnaTracciato(col, indice));
         $header.append($cell);
     });
 
+    $header.on("contextmenu", function (e) {
+        apriMenuColonneTracciato(e);
+    });
+
     return $header;
+}
+
+/// TASK-ff931e6d: lo stato del ridisegno del tracciato. Le colonne visibili, i fabbisogni e le
+/// larghezze si calcolano una volta per ridisegno (aggiornaTracciatoPostRicerca) e li usano
+/// intestazione e righe; l'ultima ricerca serve a ridisegnare con gli stessi dati.
+let colonneTracciatoInRidisegno = null;
+let fabbisogniTracciatoInRidisegno = [];
+let larghezzeTracciatoInRidisegno = [];
+let ultimaRicercaTracciato = null;
+
+/// La larghezza di una colonna nel ridisegno, o la sua larghezza minima (mai piu' stretta dell'intestazione).
+function larghezzaColonnaTracciato(col, indice) {
+    const larghezza = larghezzeTracciatoInRidisegno[indice];
+    return larghezza != null ? larghezza : ColonneTracciato.minimo(col);
+}
+
+/// Lo spazio orizzontale della lista del tracciato: #Tab1Viewport vive per tutta la sessione, la
+/// sua misura e' affidabile. Zero se non c'e': allora valgono le larghezze configurate.
+function larghezzaListaTracciato() {
+    try {
+        return document.getElementById("Tab1Viewport")?.clientWidth || 0;
+    }
+    catch (e) {
+        return 0;
+    }
+}
+
+/// Il testo di una cella del tracciato, quello su cui si ordina e si stima la larghezza: la pagina,
+/// il codice gruppo, la descrizione del gruppo, o il campo del record.
+function testoCellaTracciato(obj, col) {
+    const record = obj != null && obj.recordInTracciato != null ? obj.recordInTracciato : {};
+    const chiave = String(col.chiaveDato || "").toLowerCase();
+    if (col.chiaveDato === "__pagina__") {
+        return obj != null && obj.paginaImpaginazione != null ? String(obj.paginaImpaginazione) : "";
+    }
+    if (chiave === "codice") {
+        return record["Scatto.CodiceGruppo"] || "";
+    }
+    if (chiave === "descrizione") {
+        return getDescrizioneRecordTracciato(record);
+    }
+    const valore = record[col.chiaveDato];
+    return valore != null ? String(valore) : "";
+}
+
+/// Ridisegna il tracciato con gli stessi dati: dopo un ordinamento o una colonna nascosta o rimostrata.
+function ridisegnaTracciato() {
+    return aggiornaTracciatoPostRicerca(ultimaRicercaTracciato);
+}
+
+/// TASK-ff931e6d: al ridimensionamento le larghezze si ricalcolano sullo spazio nuovo e si riscrivono
+/// sulle celle gia' disegnate, senza rifare il tracciato. Solo se sono cambiate.
+function ridistribuisciLarghezzeTracciato() {
+    if (colonneTracciatoInRidisegno == null) {
+        return;
+    }
+    const nuove = ColonneTracciato.larghezze(colonneTracciatoInRidisegno, larghezzaListaTracciato(), fabbisogniTracciatoInRidisegno);
+    if (nuove.length === larghezzeTracciatoInRidisegno.length && nuove.every((l, i) => l === larghezzeTracciatoInRidisegno[i])) {
+        return;
+    }
+    larghezzeTracciatoInRidisegno = nuove;
+    $("#Tab1Intestazione, #ElementiTracciato .tracciato-row").each(function () {
+        $(this).children(".tracciato-cell").each(function (indice) {
+            if (nuove[indice] != null) {
+                applicaLarghezzaCella($(this), nuove[indice]);
+            }
+        });
+    });
+}
+
+/// TASK-ff931e6d: il menu del click destro sull'intestazione (Menu.creaFloatingMenu, come quello dei
+/// template dei filtri): tutte le colonne, con la casella spuntata per quelle visibili; Pag e Codice
+/// non si possono togliere. Ogni casella ridisegna subito il tracciato, e il menu resta aperto.
+function apriMenuColonneTracciato(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const $contenuto = $("<div></div>").css({ display: "flex", flexDirection: "column", gap: "4px", color: "#222", fontSize: "12px" });
+    $contenuto.append($("<div></div>").css({ fontWeight: "bold", marginBottom: "4px" }).text("Colonne da mostrare"));
+
+    getTracciatoColumns().forEach(col => {
+        const $riga = $("<label></label>").css({ display: "flex", alignItems: "center", gap: "6px" });
+        const $casella = $('<input type="checkbox">');
+        $casella.prop("checked", ColonneTracciato.visibile(col));
+        if (!ColonneTracciato.nascondibile(col)) {
+            $casella.prop("disabled", true);
+        }
+        $casella.on("change", function (evento) {
+            const spuntata = evento != null && evento.target != null ? evento.target.checked : $(this).prop("checked");
+            if (ColonneTracciato.cambiaVisibilita(col, spuntata)) {
+                ridisegnaTracciato();
+            }
+        });
+        $riga.append($casella);
+        $riga.append($("<span></span>").text(col.nome));
+        $contenuto.append($riga);
+    });
+
+    Menu.creaFloatingMenu({
+        x: e.clientX,
+        y: e.clientY,
+        content: $contenuto,
+        className: "floating-menu-colonne-tracciato"
+    });
+}
+
+/// TASK-ff931e6d: una cella che va a capo fino a righe righe; oltre si taglia, il testo intero e' nel
+/// suggerimento.
+function applicaRigheMassime($cell, righe) {
+    $cell.addClass("wrap");
+    $cell.css({
+        lineHeight: ColonneTracciato.ALTEZZA_RIGA + "px",
+        maxHeight: ColonneTracciato.altezzaMassima(righe) + "px"
+    });
 }
 
 /// La pagina su cui si trova l'operatore adesso: si chiede alla finestra attiva di InDesign,
@@ -8216,17 +8358,17 @@ function togliRigheSenzaSegnalazioni(riepilogo) {
 /// presi dal record. riepilogoSegnalazioni (lotto 3 di I20-1029) e' la mappa di
 /// riepilogoSegnalazioniTracciato, letta una volta per tutto il tracciato.
 ///
-/// NOTA (I20-1002): chiama getTracciatoColumns a ogni riga, e quella a sua volta interroga
-/// il pluginMiddleware. Le colonne sono le stesse per tutto l'elenco: su un tracciato da
-/// migliaia di referenze e' lo stesso lavoro rifatto migliaia di volte. Andrebbe calcolato
-/// una volta in aggiornaTracciatoPostRicerca e passato qui.
+/// Le colonne (le visibili) e le loro larghezze si calcolano una volta per ridisegno in
+/// aggiornaTracciatoPostRicerca (TASK-ff931e6d, come chiedeva la nota di I20-1002): qui si leggono
+/// da colonneTracciatoInRidisegno e larghezzeTracciatoInRidisegno.
 //La lista del kit mentre il tracciato mostra i fuori volantino, null con le altre voci.
 let listaFuoriVolantinoInRidisegno = null;
 
 function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
     const listaFuoriVolantino = listaFuoriVolantinoInRidisegno;
     const record = obj.recordInTracciato || {};
-    const columns = getTracciatoColumns();
+    //TASK-ff931e6d: le colonne visibili del ridisegno, calcolate una volta in aggiornaTracciatoPostRicerca.
+    const columns = colonneTracciatoInRidisegno || ColonneTracciato.colonneVisibili(getTracciatoColumns());
 
     //se è isFirst mettiamo un margin-top: 30px
 
@@ -8236,12 +8378,12 @@ function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
     if (isFirst) {
         $row.css("margin-top", "30px");
     }
-    columns.forEach(col => {
+    columns.forEach((col, indice) => {
         let $cell = $("<div/>", {
             class: "tracciato-cell"
         });
 
-        applicaLarghezzaCella($cell, col.width);
+        applicaLarghezzaCella($cell, larghezzaColonnaTracciato(col, indice));
 
         if (col.chiaveDato === "__pagina__") {
             $cell.addClass("pag");
@@ -8337,15 +8479,18 @@ function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
             $cell.attr("title", value);
             $cell.text(value);
 
-            //aumentiamo un po' la larghezza di questa cella
-            $cell.css("width", "300px");
-            // Se vuoi descrizione multilinea:
-            $cell.addClass("wrap");
+            //TASK-ff931e6d: a capo fino a 5 righe. La larghezza la decide ColonneTracciato.larghezze: il
+            //width di 300px che stava qui lo annullava comunque il maxWidth di applicaLarghezzaCella.
+            applicaRigheMassime($cell, ColonneTracciato.righeMassime(col));
         }
         else {
             const value = record[col.chiaveDato] || "";
             $cell.attr("title", value);
             $cell.text(value);
+            //TASK-ff931e6d: le colonne che il cliente dichiara su piu' righe (Edro21: la note category).
+            if (ColonneTracciato.righeMassime(col) > 0) {
+                applicaRigheMassime($cell, ColonneTracciato.righeMassime(col));
+            }
         }
 
         $row.append($cell);
@@ -11023,6 +11168,8 @@ function onResizeTab1Tracciato(){
         var contenitoreTab = document.getElementById("contenitoreTab");
         var listaTracciato = document.getElementById("Tab1Viewport");
         AltezzaScorrimento.fissaAltezza(contenitoreTab, listaTracciato, { margine: AltezzaScorrimento.MARGINE + altezzaBarraScorrimentoTracciato() });
+        //TASK-ff931e6d: le colonne seguono la larghezza nuova della lista, prima di rimisurare la barra.
+        ridistribuisciLarghezzeTracciato();
         scorriTracciato(statoBarraTracciato, statoBarraTracciato.spostamento || 0);
         AltezzaScorrimento.fissaAltezza(contenitoreTab, listaTracciato, { margine: AltezzaScorrimento.MARGINE + altezzaBarraScorrimentoTracciato() });
 
