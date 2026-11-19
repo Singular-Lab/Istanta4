@@ -3,14 +3,15 @@
 import 'reflect-metadata';
 import '../lib/extension.js';
 import cluster from 'cluster';
-import { startClusterIfNeeded } from './core/cluster';
+import { proteggiProcessoPrimario, startClusterIfNeeded } from './core/cluster';
 import config from './core/config';
 import { log } from './core/logger';
 import { applicaMigrazioniAllAvvio } from './core/db/migrazioni/applicaMigrazioni';
 import { preparaAccessiAllAvvio } from './core/accessi/migrazioneAccessi';
 import { preparaConfigAllAvvio } from './core/inizializzazione/migrazioneConfig';
 import { createActualServer } from './core/server';
-import { startWSServer } from './ws-server';
+import { ascoltaAvvisiFraWorker, inoltraAvvisiFraWorker } from './core/utils/avvisiFraWorker';
+import { chiudiCanalePlugin, startWSServer } from './ws-server';
 
 async function main() {
   try {
@@ -18,6 +19,8 @@ async function main() {
       cluster.schedulingPolicy = cluster.SCHED_RR;
 
       if (cluster.isPrimary) {
+        // Un errore sfuggito a un gestore non deve chiudere il primary, e con lui tutti i worker
+        proteggiProcessoPrimario();
         // Migrazioni dello schema una volta sola e prima dei worker: i worker partono con lo schema aggiornato
         await applicaMigrazioniAllAvvio();
         // Catalogo permessi e migrazione degli accessi: una volta sola, prima dei worker
@@ -27,10 +30,14 @@ async function main() {
         log.info('Master process: avvio WebSocket server...');
         await startWSServer();
         log.info('Master process: WebSocket server pronto, fork dei worker HTTP...');
-        await startClusterIfNeeded(createActualServer);
+        // Le invalidazioni delle cache di un worker arrivano agli altri passando da qui
+        inoltraAvvisiFraWorker();
+        // Allo spegnimento si salvano gli eventi del plugin ancora in memoria
+        await startClusterIfNeeded(createActualServer, { primaDiUscire: chiudiCanalePlugin });
 
       } else {
         log.info(`Worker ${process.pid}: avvio server HTTP...`);
+        ascoltaAvvisiFraWorker();
         await startWSServer();
         await createActualServer();
         log.info(`Worker ${process.pid}: server HTTP pronto`);

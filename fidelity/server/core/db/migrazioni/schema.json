@@ -8686,6 +8686,39 @@
       "indici": [],
       "vincoliUnici": []
     },
+    "saml_richieste_in_attesa": {
+      "colonne": {
+        "chiave": {
+          "autoIncremento": false,
+          "chiavePrimaria": true,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "character varying(255)",
+          "unico": false
+        },
+        "creata_il": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "timestamp with time zone",
+          "unico": false
+        },
+        "valore": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": null,
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "text",
+          "unico": false
+        }
+      },
+      "indici": [],
+      "vincoliUnici": []
+    },
     "statistiche_api": {
       "colonne": {
         "api_key_utilizzata": {

@@ -55,6 +55,7 @@
     "migrazioni:verifica": "tsx server/core/db/migrazioni/cli.ts verifica",
     "migrazioni:applica": "tsx server/core/db/migrazioni/cli.ts applica",
     "migrazioni:baseline": "tsx server/core/db/migrazioni/generaBaseline.ts",
+    "prova:cluster": "tsx server/core/scripts/provaCluster.ts",
     "script-dati:stato": "tsx server/core/db/migrazioni/scriptDati.ts stato",
     "accessi:migra": "tsx server/core/scripts/migraAccessi.ts",
     "migrate:olimpo-urls": "tsx server/core/scripts/migrateOlimpoUrls.ts",

@@ -9,7 +9,36 @@ vi.mock('../../logger', () => ({
 import { creaCertificatoProva } from '../../../__tests__/certificatoProva';
 import type { AuthProviderAttributes } from '../../models/auth_provider';
 import { preparaProvider } from '../authProviders/configurazioneProvider';
-import { SamlService } from '../SamlService';
+import { CacheRichiesteSaml, SamlService, type DepositoRichiesteSaml } from '../SamlService';
+
+/**
+ * Le richieste in attesa come le tiene il database, ma in memoria: due servizi con lo stesso
+ * deposito sono due worker che leggono la stessa tabella.
+ */
+function depositoInMemoria(): DepositoRichiesteSaml {
+  const voci = new Map<string, { valore: string; creataIl: Date }>();
+  return {
+    async inserisciSeManca(chiave, valore, creataIl) {
+      if (voci.has(chiave)) return false;
+      voci.set(chiave, { valore, creataIl });
+      return true;
+    },
+    async leggi(chiave, nonPrimaDi) {
+      const voce = voci.get(chiave);
+      return voce && voce.creataIl >= nonPrimaDi ? voce.valore : null;
+    },
+    async togli(chiave) {
+      const voce = voci.get(chiave);
+      voci.delete(chiave);
+      return voce?.valore ?? null;
+    },
+    async togliScadute(primaDi) {
+      for (const [chiave, voce] of voci) if (voce.creataIl < primaDi) voci.delete(chiave);
+    },
+  };
+}
+
+const nuovoService = (deposito: DepositoRichiesteSaml = depositoInMemoria()) => new SamlService(new CacheRichiesteSaml(deposito));
 
 const IDP = creaCertificatoProva('idp-di-prova');
 const ALTRO_IDP = creaCertificatoProva('idp-estraneo');
@@ -90,7 +119,7 @@ function rispostaFirmata(opzioni: { inResponseTo: string; email?: string; chiave
 
 describe('SamlService', () => {
   it('avvia l\'accesso verso l\'indirizzo SSO dell\'IdP con una AuthnRequest', async () => {
-    const url = await new SamlService().getAuthorizeUrl(providerSaml());
+    const url = await nuovoService().getAuthorizeUrl(providerSaml());
 
     expect(url.startsWith('https://idp.example.test/adfs/ls?')).toBe(true);
     expect(new URL(url).searchParams.get('RelayState')).toBe('adfs');
@@ -98,7 +127,7 @@ describe('SamlService', () => {
   });
 
   it('riconosce l\'utente da una risposta firmata dall\'IdP configurato', async () => {
-    const service = new SamlService();
+    const service = nuovoService();
     const provider = providerSaml();
     const richiesta = idRichiesta(await service.getAuthorizeUrl(provider));
 
@@ -115,7 +144,7 @@ describe('SamlService', () => {
   });
 
   it('legge l\'email dall\'attributo configurato', async () => {
-    const service = new SamlService();
+    const service = nuovoService();
     const provider = providerSaml({ attributo_email: 'sn' });
     const richiesta = idRichiesta(await service.getAuthorizeUrl(provider));
 
@@ -125,7 +154,7 @@ describe('SamlService', () => {
   });
 
   it('rifiuta una risposta firmata con un certificato diverso', async () => {
-    const service = new SamlService();
+    const service = nuovoService();
     const provider = providerSaml();
     const richiesta = idRichiesta(await service.getAuthorizeUrl(provider));
 
@@ -133,13 +162,39 @@ describe('SamlService', () => {
       .rejects.toThrow(/Risposta SAML non valida/);
   });
 
+  // Spec processi-in-produzione: con piu' worker la risposta dell'IdP arriva a un processo qualsiasi
+  it('accetta la risposta ricevuta da un worker diverso da quello che ha avviato l\'accesso', async () => {
+    const tabellaCondivisa = depositoInMemoria();
+    const worker1 = nuovoService(tabellaCondivisa);
+    const worker2 = nuovoService(tabellaCondivisa);
+    const provider = providerSaml();
+    const richiesta = idRichiesta(await worker1.getAuthorizeUrl(provider));
+
+    const claims = await worker2.validaRisposta(provider, rispostaFirmata({ inResponseTo: richiesta }));
+
+    expect(claims.email).toBe('mario.rossi@esempio.it');
+  });
+
+  it('rifiuta su un worker la risposta gia\' usata su un altro', async () => {
+    const tabellaCondivisa = depositoInMemoria();
+    const worker1 = nuovoService(tabellaCondivisa);
+    const worker2 = nuovoService(tabellaCondivisa);
+    const provider = providerSaml();
+    const richiesta = idRichiesta(await worker1.getAuthorizeUrl(provider));
+    const risposta = rispostaFirmata({ inResponseTo: richiesta });
+
+    await worker1.validaRisposta(provider, risposta);
+
+    await expect(worker2.validaRisposta(provider, risposta)).rejects.toThrow(/Risposta SAML non valida/);
+  });
+
   it('rifiuta una risposta che non corrisponde a una richiesta di Fidelity', async () => {
-    await expect(new SamlService().validaRisposta(providerSaml(), rispostaFirmata({ inResponseTo: '_mai_richiesta' })))
+    await expect(nuovoService().validaRisposta(providerSaml(), rispostaFirmata({ inResponseTo: '_mai_richiesta' })))
       .rejects.toThrow(/Risposta SAML non valida/);
   });
 
   it('rifiuta la stessa risposta usata una seconda volta', async () => {
-    const service = new SamlService();
+    const service = nuovoService();
     const provider = providerSaml();
     const richiesta = idRichiesta(await service.getAuthorizeUrl(provider));
     const risposta = rispostaFirmata({ inResponseTo: richiesta });
@@ -150,7 +205,7 @@ describe('SamlService', () => {
   });
 
   it('rifiuta un\'asserzione scaduta', async () => {
-    const service = new SamlService();
+    const service = nuovoService();
     const provider = providerSaml({ clock_skew_ms: 0 });
     const richiesta = idRichiesta(await service.getAuthorizeUrl(provider));
 
@@ -159,7 +214,7 @@ describe('SamlService', () => {
   });
 
   it('genera i metadati del service provider con entityID e indirizzo di ritorno', () => {
-    const xml = new SamlService().generaMetadati(providerSaml());
+    const xml = nuovoService().generaMetadati(providerSaml());
 
     expect(xml).toContain(`entityID="${SP_ENTITY}"`);
     expect(xml).toContain(`Location="${ACS}"`);
@@ -176,7 +231,7 @@ describe('SamlService', () => {
       `<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.example.test/redirect"/>` +
       `</md:IDPSSODescriptor></md:EntityDescriptor>`;
 
-    const esito = new SamlService().leggiMetadatiIdp(metadati);
+    const esito = nuovoService().leggiMetadatiIdp(metadati);
 
     expect(esito.entry_point).toBe('https://idp.example.test/redirect');
     expect(esito.idp_issuer).toBe(IDP_ENTITY);
@@ -185,7 +240,7 @@ describe('SamlService', () => {
   });
 
   it('rifiuta metadati che non sono di un identity provider', () => {
-    expect(() => new SamlService().leggiMetadatiIdp('<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="x"/>'))
+    expect(() => nuovoService().leggiMetadatiIdp('<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="x"/>'))
       .toThrow(/IDPSSODescriptor/);
   });
 });

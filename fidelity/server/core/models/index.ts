@@ -80,6 +80,7 @@ import { AuthProvider } from './auth_provider';
 import { HubService } from './hub_service';
 import { HubNews } from './hub_news';
 import { LavoroInBackground } from './lavori_in_background';
+import { RichiestaSamlInAttesa } from './saml_richiesta_in_attesa';
 
 // Elenco di tutti i modelli con metadata
 export const MODELLI_SEQUELIZE = {
@@ -196,6 +197,9 @@ export const MODELLI_SEQUELIZE = {
 
   // Lavori in background condivisi fra i worker (import, raggruppamenti)
   LavoroInBackground: { model: LavoroInBackground, nome: 'LavoroInBackground', tabella: 'lavori_in_background' },
+
+  // Richieste di accesso SAML in attesa, condivise fra i worker
+  RichiestaSamlInAttesa: { model: RichiestaSamlInAttesa, nome: 'RichiestaSamlInAttesa', tabella: 'saml_richieste_in_attesa' },
 };
 
 export interface ModelSyncResult {

@@ -17,10 +17,21 @@ export interface RedisConnectionOptions {
 
 const REDIS_CONNECT_TIMEOUT_MS = 1_000;
 
+/**
+ * Attesa prima di un nuovo tentativo di connessione: raddoppia a ogni tentativo fallito, fino a 10 s.
+ * Cosi' Redis torna in uso entro pochi secondi da quando risponde (spec processi-in-produzione,
+ * "Interruzioni del database e di Redis superate senza riavvio"): prima, dopo il primo errore il
+ * processo restava sui fallback locali fino al riavvio.
+ */
+export const ritardoRiconnessioneRedisMs = (tentativiFalliti: number): number =>
+  Math.min(1000 * 2 ** tentativiFalliti, 10_000);
+
 let client: Redis | null = null;
 let redisStatus: RedisStatus = 'disabled';
 let connectPromise: Promise<RedisStatus> | null = null;
 let isClosing = false;
+let timerRiconnessione: ReturnType<typeof setTimeout> | null = null;
+let tentativiFalliti = 0;
 
 function getRedisUrl(): string | null {
   const url = process.env.REDIS_URL?.trim();
@@ -49,8 +60,23 @@ function setRedisStatus(nextStatus: RedisStatus, message?: string): void {
   }
 }
 
-function markRedisUnavailable(message?: string): void {
+/** Nuovo tentativo di connessione fra poco, se non ce n'e' gia' uno in programma. */
+function programmaRiconnessione(): void {
+  if (isClosing || timerRiconnessione || !getRedisUrl()) return;
+
+  const ritardo = ritardoRiconnessioneRedisMs(tentativiFalliti);
+  timerRiconnessione = setTimeout(() => {
+    timerRiconnessione = null;
+    void connetti();
+  }, ritardo);
+  // Il tentativo in programma non tiene in vita il processo
+  timerRiconnessione.unref?.();
+}
+
+/** `istanza`: il client che ha dato l'errore; quello di una connessione precedente non conta piu'. */
+function markRedisUnavailable(message?: string, istanza?: Redis): void {
   if (isClosing) return;
+  if (istanza && client && istanza !== client) return;
 
   setRedisStatus('unavailable', message);
 
@@ -58,6 +84,7 @@ function markRedisUnavailable(message?: string): void {
     client.disconnect();
     client = null;
   }
+  programmaRiconnessione();
 }
 
 function createRedisClient(url: string): Redis {
@@ -66,36 +93,29 @@ function createRedisClient(url: string): Redis {
     enableOfflineQueue: false,
     maxRetriesPerRequest: 0,
     connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
+    // ioredis non riprova da se': i nuovi tentativi li programma programmaRiconnessione
     retryStrategy: () => null,
   });
 
   redis.on('error', (error) => {
-    markRedisUnavailable(getErrorMessage(error));
+    markRedisUnavailable(getErrorMessage(error), redis);
   });
 
   redis.on('end', () => {
     if (redisStatus === 'ready') {
-      markRedisUnavailable('connection closed');
+      markRedisUnavailable('connection closed', redis);
     }
   });
 
   return redis;
 }
 
-export async function initializeRedisClient(): Promise<RedisStatus> {
+/** Un tentativo di connessione; piu' chiamate contemporanee ne fanno partire uno solo. */
+function connetti(): Promise<RedisStatus> {
   const url = getRedisUrl();
-
   if (!url) {
     setRedisStatus('disabled');
-    return 'disabled';
-  }
-
-  if (redisStatus === 'ready' && client?.status === 'ready') {
-    return 'ready';
-  }
-
-  if (redisStatus === 'unavailable') {
-    return 'unavailable';
+    return Promise.resolve('disabled');
   }
 
   if (connectPromise !== null) {
@@ -108,12 +128,19 @@ export async function initializeRedisClient(): Promise<RedisStatus> {
     try {
       await redis.connect();
       await redis.ping();
+      if (isClosing) {
+        redis.disconnect();
+        return 'unavailable';
+      }
       client = redis;
+      tentativiFalliti = 0;
       setRedisStatus('ready');
       return 'ready';
     } catch (error) {
       redis.disconnect();
+      // Il prossimo tentativo parte dopo 1 s, poi 2, 4, 8 e 10 s
       markRedisUnavailable(getErrorMessage(error));
+      tentativiFalliti++;
       return 'unavailable';
     } finally {
       connectPromise = null;
@@ -121,6 +148,19 @@ export async function initializeRedisClient(): Promise<RedisStatus> {
   })();
 
   return connectPromise;
+}
+
+export async function initializeRedisClient(): Promise<RedisStatus> {
+  if (!getRedisUrl()) {
+    setRedisStatus('disabled');
+    return 'disabled';
+  }
+
+  if (redisStatus === 'ready' && client?.status === 'ready') {
+    return 'ready';
+  }
+
+  return connetti();
 }
 
 export function getRedisClient(): Redis | null {
@@ -169,6 +209,12 @@ export function getRedisConnectionOptions(): RedisConnectionOptions | null {
 
 export async function closeRedisClient(): Promise<void> {
   isClosing = true;
+
+  if (timerRiconnessione) {
+    clearTimeout(timerRiconnessione);
+    timerRiconnessione = null;
+  }
+  tentativiFalliti = 0;
 
   if (client) {
     await client.quit().catch(() => client?.disconnect());

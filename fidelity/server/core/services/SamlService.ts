@@ -1,9 +1,12 @@
 import { SAML, ValidateInResponseTo, type CacheItem, type CacheProvider, type Profile } from '@node-saml/node-saml';
 import { DOMParser } from '@xmldom/xmldom';
+import { Op, QueryTypes } from 'sequelize';
 import { BadRequestError, ErrorCodes, UnauthorizedError } from '../../../lib/errors';
 import type { AuthProviderAttributes } from '../models/auth_provider';
 import type { ISamlService, MetadatiIdpSaml, SamlUserClaims } from '../interfaces/ISamlService';
 import { log } from '../logger';
+import { sequelize } from '../db/SequelizeConnector';
+import { RichiestaSamlInAttesa } from '../models/saml_richiesta_in_attesa';
 import { configServerInChiaro, normalizzaCertificato } from './authProviders/configurazioneProvider';
 
 /** Validita' di una richiesta di accesso SAML in attesa di risposta. */
@@ -23,42 +26,80 @@ const NS_DSIG = 'http://www.w3.org/2000/09/xmldsig#';
 const BINDING_REDIRECT = 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect';
 
 /**
- * Richieste di accesso in attesa, condivise da tutte le istanze SAML del processo:
- * la risposta dell'IdP arriva su una richiesta HTTP diversa da quella che ha avviato
- * l'accesso. Fidelity gira con un solo processo (ecosystem.config.cjs), quindi la
- * memoria del processo basta. Una richiesta viene tolta alla prima risposta, cosi'
- * la stessa risposta non apre una seconda sessione.
+ * Dove stanno le richieste di accesso in attesa della risposta dell'IdP. In produzione il database
+ * (models/saml_richiesta_in_attesa): la risposta arriva su una richiesta HTTP diversa da quella che
+ * ha avviato l'accesso, e con piu' worker spesso a un altro processo.
+ */
+export interface DepositoRichiesteSaml {
+  /** Inserisce la richiesta; false se ce n'e' gia' una con la stessa chiave. */
+  inserisciSeManca(chiave: string, valore: string, creataIl: Date): Promise<boolean>;
+  /** Il valore della richiesta, se e' stata creata non prima di `nonPrimaDi`. */
+  leggi(chiave: string, nonPrimaDi: Date): Promise<string | null>;
+  /** Toglie la richiesta e ne restituisce il valore. */
+  togli(chiave: string): Promise<string | null>;
+  togliScadute(primaDi: Date): Promise<void>;
+}
+
+export const depositoRichiesteSamlNelDatabase: DepositoRichiesteSaml = {
+  async inserisciSeManca(chiave, valore, creataIl) {
+    const righe = await sequelize.query<{ chiave: string }>(
+      `INSERT INTO saml_richieste_in_attesa (chiave, valore, creata_il)
+       VALUES (:chiave, :valore, :creataIl)
+       ON CONFLICT (chiave) DO NOTHING
+       RETURNING chiave`,
+      { replacements: { chiave, valore, creataIl }, type: QueryTypes.SELECT },
+    );
+    return righe.length > 0;
+  },
+  async leggi(chiave, nonPrimaDi) {
+    const riga = await RichiestaSamlInAttesa.findOne({
+      attributes: ['valore'],
+      where: { chiave, creata_il: { [Op.gte]: nonPrimaDi } },
+    });
+    return riga?.valore ?? null;
+  },
+  async togli(chiave) {
+    const righe = await sequelize.query<{ valore: string }>(
+      'DELETE FROM saml_richieste_in_attesa WHERE chiave = :chiave RETURNING valore',
+      { replacements: { chiave }, type: QueryTypes.SELECT },
+    );
+    return righe[0]?.valore ?? null;
+  },
+  async togliScadute(primaDi) {
+    await RichiestaSamlInAttesa.destroy({ where: { creata_il: { [Op.lt]: primaDi } } });
+  },
+};
+
+/**
+ * Richieste di accesso in attesa, condivise da tutte le istanze SAML e da tutti i worker. Una
+ * richiesta viene tolta alla prima risposta, cosi' la stessa risposta non apre una seconda sessione;
+ * quelle scadute si tolgono alla richiesta successiva.
  */
 export class CacheRichiesteSaml implements CacheProvider {
-  private voci = new Map<string, CacheItem>();
+  constructor(
+    private deposito: DepositoRichiesteSaml = depositoRichiesteSamlNelDatabase,
+    private scadenzaMs = SCADENZA_RICHIESTA_MS,
+    private adesso: () => number = Date.now,
+  ) {}
 
-  constructor(private scadenzaMs = SCADENZA_RICHIESTA_MS) {}
-
-  private pulisci(): void {
-    const limite = Date.now() - this.scadenzaMs;
-    for (const [chiave, voce] of this.voci) {
-      if (voce.createdAt < limite) this.voci.delete(chiave);
-    }
+  private limite(): Date {
+    return new Date(this.adesso() - this.scadenzaMs);
   }
 
   async saveAsync(key: string, value: string): Promise<CacheItem | null> {
-    this.pulisci();
-    if (this.voci.has(key)) return null;
-    const voce = { value, createdAt: Date.now() };
-    this.voci.set(key, voce);
-    return voce;
+    await this.deposito.togliScadute(this.limite());
+    const creataIl = new Date(this.adesso());
+    if (!(await this.deposito.inserisciSeManca(key, value, creataIl))) return null;
+    return { value, createdAt: creataIl.getTime() };
   }
 
   async getAsync(key: string): Promise<string | null> {
-    this.pulisci();
-    return this.voci.get(key)?.value ?? null;
+    return this.deposito.leggi(key, this.limite());
   }
 
   async removeAsync(key: string | null): Promise<string | null> {
     if (!key) return null;
-    const voce = this.voci.get(key);
-    this.voci.delete(key);
-    return voce?.value ?? null;
+    return this.deposito.togli(key);
   }
 }
 

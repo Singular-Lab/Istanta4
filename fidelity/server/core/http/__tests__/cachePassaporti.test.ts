@@ -1,5 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Gli avvisi agli altri worker (utils/avvisiFraWorker) si registrano qui invece di passare dall'IPC
+const avvisi = vi.hoisted(() => ({
+  gestori: new Map<string, (dati: unknown) => void>(),
+  inviati: [] as Array<[string, unknown]>,
+}));
+vi.mock('../../utils/avvisiFraWorker', () => ({
+  suAvvisoFraWorker: (tipo: string, gestore: (dati: unknown) => void) => avvisi.gestori.set(tipo, gestore),
+  avvisaGliAltriWorker: (tipo: string, dati: unknown) => avvisi.inviati.push([tipo, dati]),
+}));
+
 import {
+  AVVISO_PASSAPORTO_SCARTATO,
   DURATA_PASSAPORTO_MS,
   invalidaPassaporto,
   MASSIMO_PASSAPORTI,
@@ -19,6 +31,7 @@ function richiestaSospesa() {
 
 afterEach(() => {
   svuotaCachePassaporti();
+  avvisi.inviati.length = 0;
 });
 
 describe('passaportoInCache', () => {
@@ -136,5 +149,35 @@ describe('invalidaPassaporto', () => {
     await passaportoInCache('u10', 'chiave', richiedi);
 
     expect(richiedi).toHaveBeenCalledTimes(2);
+  });
+});
+
+// Spec processi-in-produzione, "Modifiche valide in tutti i processi"
+describe('passaporto scartato in tutti i worker', () => {
+  it('invalidaPassaporto avvisa gli altri worker', () => {
+    invalidaPassaporto('u1');
+
+    expect(avvisi.inviati).toEqual([[AVVISO_PASSAPORTO_SCARTATO, 'u1']]);
+  });
+
+  it('l\'avviso di un altro worker scarta il passaporto qui, senza rimandare l\'avviso', async () => {
+    const richiedi = vi.fn(async () => PASSAPORTO);
+    await passaportoInCache('u1', 'chiave', richiedi);
+
+    avvisi.gestori.get(AVVISO_PASSAPORTO_SCARTATO)?.('u1');
+    await passaportoInCache('u1', 'chiave', richiedi);
+
+    expect(richiedi).toHaveBeenCalledTimes(2);
+    expect(avvisi.inviati).toEqual([]);
+  });
+
+  it('un avviso senza utente non scarta nulla', async () => {
+    const richiedi = vi.fn(async () => PASSAPORTO);
+    await passaportoInCache('u1', 'chiave', richiedi);
+
+    avvisi.gestori.get(AVVISO_PASSAPORTO_SCARTATO)?.(undefined);
+    await passaportoInCache('u1', 'chiave', richiedi);
+
+    expect(richiedi).toHaveBeenCalledTimes(1);
   });
 });

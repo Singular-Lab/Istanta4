@@ -1,7 +1,8 @@
 // ws-server.ts
 import http from 'node:http';
-import cluster from 'cluster';
-import { Server as IOServer } from 'socket.io';
+import cluster, { type Worker } from 'cluster';
+import type { Duplex } from 'node:stream';
+import { Server as IOServer, type Socket } from 'socket.io';
 import { WebSocketServer } from 'ws';
 import { TIPO_UTENTI } from '../lib/enums';
 import config from './core/config/index';
@@ -15,7 +16,9 @@ import {
 } from './core/services/DeviceSocketService.js';
 import ephemeralTokenService from './core/services/EphemeralTokenService.js';
 import { PluginAnalyticsGatewayService } from './core/services/PluginAnalyticsGatewayService.js';
+import { campoTesto, gestoreProtetto } from './core/utils/socketSicuro';
 import { ROOM_AUTENTICATI, stanzeClient } from './core/utils/socketRooms';
+import { gestisciUpgrade } from './core/utils/upgradePlugin';
 
 let io: IOServer | null = null;
 let isInitializing = false;
@@ -185,7 +188,7 @@ export function startWSServer(): Promise<void> {
     try {
       httpServer = http.createServer();
 
-      io = new IOServer(httpServer, {
+      const ioServer = new IOServer(httpServer, {
         cors: {
           origin: [
             'http://localhost:3000',
@@ -199,6 +202,9 @@ export function startWSServer(): Promise<void> {
           credentials: true,
         },
         transports: ['websocket'],
+        // Gli upgrade che non sono di socket.io li chiude gestisciUpgrade: con il valore predefinito
+        // engine.io chiuderebbe dopo 1 s anche quelli del plugin ancora in verifica del token
+        destroyUpgrade: false,
         pingTimeout: 10000,
         pingInterval: 5000,
         connectionStateRecovery: {
@@ -206,6 +212,8 @@ export function startWSServer(): Promise<void> {
           skipMiddlewares: true,
         },
       });
+
+      io = ioServer;
 
       const attachSessionToSocketRequest = sessionMiddleware as unknown as (
         req: SessionAwareRequest,
@@ -219,10 +227,13 @@ export function startWSServer(): Promise<void> {
 
       deviceSocketService.initialize(io);
 
-      io.on('connection', async socket => {
+      // Ogni gestore e' protetto (gestoreProtetto): socket.io li chiama in un process.nextTick, e un
+      // errore che sfugge diventerebbe un'eccezione non gestita del primary
+      io.on('connection', gestoreProtetto('connection', async (socket: Socket) => {
         log.debug(`WS client connesso: ${socket.id}`);
 
-        const deviceToken = socket.handshake.query.deviceToken as string | undefined;
+        const tokenDispositivo = socket.handshake.query.deviceToken;
+        const deviceToken = typeof tokenDispositivo === 'string' && tokenDispositivo ? tokenDispositivo : undefined;
 
         if (deviceToken) {
           // === DISPOSITIVO PUNTO VENDITA ===
@@ -233,21 +244,23 @@ export function startWSServer(): Promise<void> {
             socket.disconnect(true);
             return;
           }
+          // Disconnesso mentre si verificava il token: niente stato "collegato" da ripulire poi
+          if (!socket.connected) return;
 
           deviceSocketService.handleDeviceConnect(socket, device);
 
-          socket.on('device:heartbeat', (payload: DeviceHeartbeatPayload) => {
-            deviceSocketService.handleDeviceHeartbeat(socket, payload);
-          });
+          socket.on('device:heartbeat', gestoreProtetto('device:heartbeat', (payload: unknown) => {
+            deviceSocketService.handleDeviceHeartbeat(socket, payload as DeviceHeartbeatPayload);
+          }));
 
-          socket.on('device:slide-change', (payload: DeviceSlideChangePayload) => {
-            deviceSocketService.handleDeviceSlideChange(socket, payload);
-          });
+          socket.on('device:slide-change', gestoreProtetto('device:slide-change', (payload: unknown) => {
+            deviceSocketService.handleDeviceSlideChange(socket, payload as DeviceSlideChangePayload);
+          }));
 
-          socket.on('disconnect', reason => {
+          socket.on('disconnect', gestoreProtetto('disconnect', (reason: string) => {
             deviceSocketService.handleDeviceDisconnect(socket);
             log.debug(`Device ${socket.id} disconnesso: ${reason}`);
-          });
+          }));
 
         } else {
           // === CLIENT UI NORMALE ===
@@ -260,44 +273,51 @@ export function startWSServer(): Promise<void> {
           }
           void socket.join(stanze);
 
-          socket.on('pv:subscribe', (payload: PVSubscribePayload) => {
-            deviceSocketService.subscribeToPV(socket, payload);
-          });
+          socket.on('pv:subscribe', gestoreProtetto('pv:subscribe', (payload: unknown) => {
+            deviceSocketService.subscribeToPV(socket, payload as PVSubscribePayload);
+          }));
 
-          socket.on('pv:unsubscribe', (payload: PVSubscribePayload) => {
-            deviceSocketService.unsubscribeFromPV(socket, payload);
-          });
+          socket.on('pv:unsubscribe', gestoreProtetto('pv:unsubscribe', (payload: unknown) => {
+            deviceSocketService.unsubscribeFromPV(socket, payload as PVSubscribePayload);
+          }));
 
           // === MENABO PRESENCE ===
 
-          socket.on('menabo:page:join', (payload: { idPromo: string; userId?: string; userName?: string; userTipo?: string }) => {
-            const authenticatedUser = getAuthenticatedMenaboUser(socket, payload.userName);
+          socket.on('menabo:page:join', gestoreProtetto('menabo:page:join', (payload: unknown) => {
+            const idPromo = campoTesto(payload, 'idPromo');
+            if (!idPromo) {
+              log.debug('Menabò presenza: ingresso senza promo, ignorato', { socketId: socket.id });
+              return;
+            }
+
+            const authenticatedUser = getAuthenticatedMenaboUser(socket, campoTesto(payload, 'userName') ?? undefined);
             if (!authenticatedUser) {
               socket.emit('menabo:auth-error', { message: 'Sessione non valida per il Menabo' });
               log.warn('Menabò presenza rifiutata: sessione socket non autenticata', {
                 socketId: socket.id,
-                idPromo: payload.idPromo,
+                idPromo,
               });
               return;
             }
 
-            const { idPromo } = payload;
             const { userId, userName, userTipo } = authenticatedUser;
 
-            if (payload.userId && payload.userId !== userId) {
+            const announcedUserId = campoTesto(payload, 'userId');
+            if (announcedUserId && announcedUserId !== userId) {
               log.warn('Menabò presenza: userId client non coerente con la sessione, uso valore server', {
                 socketId: socket.id,
                 idPromo,
-                announcedUserId: payload.userId,
+                announcedUserId,
                 sessionUserId: userId,
               });
             }
 
-            if (payload.userTipo && payload.userTipo !== userTipo) {
+            const announcedUserTipo = campoTesto(payload, 'userTipo');
+            if (announcedUserTipo && announcedUserTipo !== userTipo) {
               log.warn('Menabò presenza: userTipo client non coerente con la sessione, uso valore server', {
                 socketId: socket.id,
                 idPromo,
-                announcedUserTipo: payload.userTipo,
+                announcedUserTipo,
                 sessionUserTipo: userTipo,
               });
             }
@@ -310,57 +330,61 @@ export function startWSServer(): Promise<void> {
             // Se abbiamo rimosso uno zombie va aggiornata tutta la room (il lock fantasma spariva solo
             // per il joiner); altrimenti basta inviare lo snapshot al socket che è appena entrato.
             if (evictedZombie) {
-              broadcastAllPresences(io!, idPromo, menaboSessions);
+              broadcastAllPresences(ioServer, idPromo, menaboSessions);
             } else {
               socket.emit('menabo:all-presences', buildAllPresences(idPromo, menaboSessions));
             }
             // Nei log l'id dell'utente, non il nome
             log.debug(`Menabò presenza: utente ${userId} entrato nella pagina promo ${idPromo}`);
-          });
+          }));
 
-          socket.on('menabo:page:leave', () => {
-            cleanupMenaboSession(socket, io!, menaboSessions);
-          });
+          socket.on('menabo:page:leave', gestoreProtetto('menabo:page:leave', () => {
+            cleanupMenaboSession(socket, ioServer, menaboSessions);
+          }));
 
-          socket.on('menabo:join', (payload: { idPromo: string; divisionId: string }) => {
+          socket.on('menabo:join', gestoreProtetto('menabo:join', (payload: unknown) => {
             const session = menaboSessions.get(socket.id);
-            if (!session) return;
-            session.divisionId = payload.divisionId;
-            broadcastAllPresences(io!, payload.idPromo, menaboSessions);
-            log.debug(`Menabò presenza: utente ${session.userId} entrato in ${payload.divisionId}`);
-          });
+            const idPromo = campoTesto(payload, 'idPromo');
+            const divisionId = campoTesto(payload, 'divisionId');
+            if (!session || !idPromo || !divisionId) return;
+            session.divisionId = divisionId;
+            broadcastAllPresences(ioServer, idPromo, menaboSessions);
+            log.debug(`Menabò presenza: utente ${session.userId} entrato in ${divisionId}`);
+          }));
 
-          socket.on('menabo:leave', () => {
+          socket.on('menabo:leave', gestoreProtetto('menabo:leave', () => {
             const session = menaboSessions.get(socket.id);
             if (!session?.divisionId) return;
             const { idPromo } = session;
             session.divisionId = undefined;
-            broadcastAllPresences(io!, idPromo, menaboSessions);
-          });
+            broadcastAllPresences(ioServer, idPromo, menaboSessions);
+          }));
 
-          socket.on('menabo:kick', (payload: { targetSocketId: string }) => {
+          socket.on('menabo:kick', gestoreProtetto('menabo:kick', (payload: unknown) => {
             const kicker = menaboSessions.get(socket.id);
             const kickerAuth = getAuthenticatedMenaboUser(socket);
             if (!kicker || !kickerAuth || kickerAuth.userId !== kicker.userId || kickerAuth.userTipo !== TIPO_UTENTI.SUPERADMIN) {
               return;
             }
-            const target = io!.sockets.sockets.get(payload.targetSocketId);
-            const targetSession = menaboSessions.get(payload.targetSocketId);
+            const targetSocketId = campoTesto(payload, 'targetSocketId');
+            if (!targetSocketId) return;
+            const target = ioServer.sockets.sockets.get(targetSocketId);
+            const targetSession = menaboSessions.get(targetSocketId);
             if (!target || !targetSession) return;
             if (targetSession.userTipo === TIPO_UTENTI.SUPERADMIN) return;
             const kickedDivisionId = targetSession.divisionId;
             target.emit('menabo:kicked', { kickedBy: kicker.userName, divisionId: kickedDivisionId });
             targetSession.divisionId = undefined;
-            if (kickedDivisionId) broadcastAllPresences(io!, targetSession.idPromo, menaboSessions);
+            if (kickedDivisionId) broadcastAllPresences(ioServer, targetSession.idPromo, menaboSessions);
             log.debug(`Menabò: utente ${kicker.userId} ha rimosso utente ${targetSession.userId} da ${kickedDivisionId}`);
-          });
+          }));
 
-          socket.on('disconnect', reason => {
-            cleanupMenaboSession(socket, io!, menaboSessions);
+          socket.on('disconnect', gestoreProtetto('disconnect', (reason: string) => {
+            cleanupMenaboSession(socket, ioServer, menaboSessions);
             log.debug(`WS client ${socket.id} disconnesso: ${reason}`);
-          });
+          }));
         }
-      });
+      }));
 
       // === PLUGIN ANALYTICS WebSocket (raw ws, path: /ws/plugin-events) ===
       pluginWss = new WebSocketServer({ noServer: true });
@@ -370,60 +394,43 @@ export function startWSServer(): Promise<void> {
         gateway.handleConnection(ws, request, meta);
       });
 
-      httpServer.on('upgrade', (request, socket, head) => {
-        const url = new URL(request.url || '', `http://${request.headers.host}`);
-
-        if (url.pathname === '/ws/plugin-events') {
-          const token = url.searchParams.get('token');
-          const browserHash = url.searchParams.get('browserHash');
-          const fpVersion = url.searchParams.get('fpVersion') || '';
-          const slug = url.searchParams.get('slug') || '';
-          const origin = request.headers.origin || 'unknown';
-          const ip = request.socket.remoteAddress || 'unknown';
-          const userAgent = request.headers['user-agent'] || 'unknown';
-
-          if (!token || !browserHash) {
-            socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-            socket.destroy();
-            return;
-          }
-
-          ephemeralTokenService.validateToken(token, origin, browserHash, ip, userAgent)
-            .then((result) => {
-              if (!result.valid) {
-                socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-                socket.destroy();
-                return;
-              }
-
-              pluginWss!.handleUpgrade(request, socket, head, (ws) => {
-                pluginWss!.emit('connection', ws, request, { slug, fpVersion });
-              });
-            })
-            .catch(() => {
-              socket.write('HTTP/1.1 500 Internal Server Error\r\n\r\n');
-              socket.destroy();
+      // Upgrade WebSocket: indirizzo letto senza fidarsi dell'intestazione Host, errori del socket
+      // gestiti, canale del plugin solo con token effimero (utils/upgradePlugin.ts)
+      httpServer.on('upgrade', (request: http.IncomingMessage, socket: Duplex, head: Buffer) => {
+        gestisciUpgrade(request, socket, head, {
+          validaToken: (token, origin, browserHash, ip, userAgent) =>
+            ephemeralTokenService.validateToken(token, origin, browserHash, ip, userAgent),
+          accetta: (richiesta, socketUpgrade, testa, meta) => {
+            pluginWss!.handleUpgrade(richiesta, socketUpgrade, testa, (ws) => {
+              pluginWss!.emit('connection', ws, richiesta, meta);
             });
-        }
+          },
+        });
       });
 
       if (cluster.isPrimary) {
-        cluster.on('message', (worker, message) => {
-          if (message.type === 'socket_emit' && io) {
-            log.debug(`Master: evento IPC ricevuto dal worker ${worker.process.pid}`, { event: message.event });
-            emitBuffer(io!, message.event, message.data, message.room);
+        cluster.on('message', gestoreProtetto('message', (worker: Worker, message: unknown) => {
+          if (typeof message !== 'object' || message === null) return;
+          const messaggio = message as { type?: unknown; event?: unknown; data?: unknown; room?: unknown; requestId?: unknown };
+
+          if (messaggio.type === 'socket_emit' && io && typeof messaggio.event === 'string') {
+            log.debug(`Master: evento IPC ricevuto dal worker ${worker.process.pid}`, { event: messaggio.event });
+            emitBuffer(io, messaggio.event, messaggio.data, typeof messaggio.room === 'string' ? messaggio.room : undefined);
           }
 
-          if (message.type === 'analytics_metrics_request') {
+          if (messaggio.type === 'analytics_metrics_request' && worker.isConnected()) {
             const gateway = PluginAnalyticsGatewayService.getInstance();
             const metrics = gateway.getMetrics();
+            // Con la callback un canale IPC chiuso non diventa un evento 'error' non gestito
             worker.send({
               type: 'analytics_metrics_response',
-              requestId: message.requestId,
+              requestId: messaggio.requestId,
               data: metrics,
+            }, (errore: Error | null) => {
+              if (errore) log.warn('Metriche analytics non inviate al worker', { errore: errore.message });
             });
           }
-        });
+        }));
       }
 
       const WS_PORT = config.WS_PORT;
@@ -432,7 +439,9 @@ export function startWSServer(): Promise<void> {
         throw new Error('WS_PORT non configurata nelle variabili d\'ambiente');
       }
 
+      let inAscolto = false;
       httpServer.listen(WS_PORT, () => {
+        inAscolto = true;
         log.info(`WebSocket server in ascolto sulla porta ${WS_PORT}`);
         log.info('Socket.IO inizializzato correttamente');
         isInitializing = false;
@@ -440,6 +449,12 @@ export function startWSServer(): Promise<void> {
       });
 
       httpServer.on('error', (error: NodeJS.ErrnoException) => {
+        // Dopo l'avvio (es. troppi file aperti su un accept) il server resta in piedi: si scrive nel
+        // log e basta. Azzerare io qui farebbe fallire tutti i gestori delle connessioni gia' aperte.
+        if (inAscolto) {
+          log.error('Server WebSocket: errore dopo l\'avvio, il server resta attivo', error, { port: WS_PORT });
+          return;
+        }
         let reason = error.message || 'Errore sconosciuto';
         if (error.code === 'EADDRINUSE') {
           reason = `Porta ${WS_PORT} già occupata da un altro processo`;
@@ -481,7 +496,14 @@ export function startWSServer(): Promise<void> {
  */
 export function emitToClients(event: string, data: any, room: string = ROOM_AUTENTICATI): void {
   if (cluster.isWorker && (config.NODE_ENV === 'production' || config.NODE_ENV === 'test')) {
-    process.send?.({ type: 'socket_emit', event, data, room });
+    if (!process.connected) {
+      log.warn('Evento WebSocket non inviato: canale verso il master chiuso', { event });
+      return;
+    }
+    // Con la callback un canale chiuso nel frattempo non diventa un evento 'error' non gestito
+    process.send?.({ type: 'socket_emit', event, data, room }, (errore: Error | null) => {
+      if (errore) log.warn('Evento WebSocket non inviato al master', { event, errore: errore.message });
+    });
     log.debug(`Worker ${process.pid}: evento inviato al master via IPC`, { event });
   } else if (io) {
     emitBuffer(io, event, data, room);
@@ -508,6 +530,14 @@ export function getIO(): IOServer {
 
 export function isIOInitialized(): boolean {
   return io !== null;
+}
+
+/**
+ * Allo spegnimento del primary, dopo la chiusura dei worker: salva gli eventi del plugin ancora in
+ * memoria e chiude le connessioni del plugin. Non aspetta la chiusura delle altre connessioni.
+ */
+export async function chiudiCanalePlugin(): Promise<void> {
+  await PluginAnalyticsGatewayService.getInstance().shutdown();
 }
 
 export async function stopWSServer(): Promise<void> {
