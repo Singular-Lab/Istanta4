@@ -50,9 +50,12 @@ const confronta = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
 /**
  * La storia di ogni PV per l'elenco: quanti volantini, l'insegna (canale) con piu' volantini di
- * ogni anno e se cambia da un anno all'altro. Solo i PV che compaiono in almeno un volantino.
+ * ogni anno e se ha cambiato insegna. Il cambio viene da `conCambioInsegna`, con la regola delle
+ * insegne nel tempo della scheda (repository.puntiVenditaConCambioInsegna): l'insegna prevalente
+ * di ogni anno conterebbe anche la lista ripetuta nei kit di altre aree. Solo i PV che compaiono in
+ * almeno un volantino.
  */
-export function storiaInElenco(righe: readonly RigaStoriaInElenco[]): Map<string, StoriaInElenco> {
+export function storiaInElenco(righe: readonly RigaStoriaInElenco[], conCambioInsegna: ReadonlySet<string> = new Set()): Map<string, StoriaInElenco> {
   const perPuntoVendita = new Map<string, Map<number, RigaStoriaInElenco[]>>();
   for (const riga of righe) {
     const perAnno = perPuntoVendita.get(riga.id_punto_vendita) ?? new Map<number, RigaStoriaInElenco[]>();
@@ -71,8 +74,7 @@ export function storiaInElenco(righe: readonly RigaStoriaInElenco[]): Map<string
       });
     const volantini = [...perAnno.values()].flat().reduce((totale, riga) => totale + riga.volantini, 0);
     if (volantini === 0) continue;
-    const canali = new Set(insegnePerAnno.map(voce => voce.canale?.id).filter(Boolean));
-    storie.set(idPuntoVendita, { volantini, insegnePerAnno, cambioInsegna: canali.size > 1 });
+    storie.set(idPuntoVendita, { volantini, insegnePerAnno, cambioInsegna: conCambioInsegna.has(idPuntoVendita) });
   }
   return storie;
 }
@@ -118,10 +120,21 @@ export class ConsultazionePuntiVenditaService implements IConsultazionePuntiVend
   /** La storia nell'elenco e' un di piu': se non si legge, l'elenco esce senza. */
   private async storie(idGdo: string): Promise<Map<string, StoriaInElenco>> {
     try {
-      return storiaInElenco(await this.repository.storiaInElenco(idGdo));
+      const [righe, conCambio] = await Promise.all([this.repository.storiaInElenco(idGdo), this.conCambioInsegna(idGdo)]);
+      return storiaInElenco(righe, conCambio);
     } catch (errore) {
       log.warn('Consultazione PV: storia dei volantini non letta per l\'elenco', { idGdo, errore: errore instanceof Error ? errore.message : String(errore) });
       return new Map();
+    }
+  }
+
+  /** Chi ha cambiato insegna: se non si legge, l'elenco esce senza l'indicazione ma con la storia. */
+  private async conCambioInsegna(idGdo: string): Promise<Set<string>> {
+    try {
+      return new Set(await this.repository.puntiVenditaConCambioInsegna(idGdo));
+    } catch (errore) {
+      log.warn('Consultazione PV: cambi di insegna non letti per l\'elenco', { idGdo, errore: errore instanceof Error ? errore.message : String(errore) });
+      return new Set();
     }
   }
 

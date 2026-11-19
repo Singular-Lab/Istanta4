@@ -335,7 +335,10 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
         dopo: ultima.data,
       })
       : [];
-    return { ...calcolaStoria(puntoVendita, apparizioni, volantiniSenza), insegneNelTempo: insegneNelTempo(kit) };
+    return {
+      ...calcolaStoria(puntoVendita, apparizioni, volantiniSenza),
+      insegneNelTempo: insegneNelTempo(kit, { idCanale: puntoVendita.idCanale, idArea: puntoVendita.idArea }),
+    };
   }
 
   async getVolantini(idPuntoVendita: string, idGdo: string | null, pagina = 1, dimensione = DIMENSIONI_PAGINA_STORIA[0]): Promise<PaginaVolantiniStoria> {

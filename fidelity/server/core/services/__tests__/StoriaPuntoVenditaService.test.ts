@@ -444,16 +444,21 @@ describe('StoriaPuntoVenditaService: letture', () => {
     expect(repository.volantiniSenzaPuntoVendita).not.toHaveBeenCalled();
   });
 
-  it('storia: le insegne nel tempo vengono da tutti i volantini del PV, anche di altre insegne', async () => {
-    const { repository } = repositoryInMemoria({ puntiVendita: [puntoVendita] });
-    // La storia vede solo la combinazione attuale (Superstore · Liguria)
+  it('storia: le insegne nel tempo dai volantini dell\'area del PV, anche di altre insegne', async () => {
+    // Oggi Superstore · Liguria: la storia vede solo questa combinazione
+    const pvSuperstore: PuntoVenditaDellaStoria = { ...puntoVendita, idCanale: 'canale-ss', idArea: 'area-li' };
+    const { repository } = repositoryInMemoria({ puntiVendita: [pvSuperstore] });
     repository.apparizioni.mockResolvedValue([apparizione('2026-09-24')]);
     const conad = { canale: { id: 'canale-cy', nome: 'Conad City' }, area: { id: 'area-li', nome: 'Liguria' } };
     const superstore = { canale: { id: 'canale-ss', nome: 'Superstore' }, area: { id: 'area-li', nome: 'Liguria' } };
+    const toscana = { canale: { id: 'canale-cy', nome: 'Conad City' }, area: { id: 'area-to', nome: 'Toscana' } };
     repository.kitDelPuntoVendita.mockResolvedValue([
+      { idKit: 'k4', data: '2026-10-08', al: '2026-10-21', ...superstore },
       { idKit: 'k3', data: '2026-09-24', al: '2026-10-07', ...superstore },
       { idKit: 'k1', data: '2025-01-09', al: '2025-01-22', ...conad },
       { idKit: 'k2', data: '2025-12-04', al: '2025-12-17', ...conad },
+      // La stessa lista in un kit di un'altra area: non conta
+      { idKit: 'k5', data: '2025-06-05', al: '2025-06-18', ...toscana },
     ]);
 
     const storia = await servizio(repository).getStoria(PV_PRA, GDO);
@@ -461,7 +466,7 @@ describe('StoriaPuntoVenditaService: letture', () => {
     expect(repository.kitDelPuntoVendita).toHaveBeenCalledWith(PV_PRA);
     expect(storia.insegneNelTempo).toEqual([
       { ...conad, dal: '2025-01-09', al: '2025-12-17', volantini: 2 },
-      { ...superstore, dal: '2026-09-24', al: '2026-10-07', volantini: 1 },
+      { ...superstore, dal: '2026-09-24', al: '2026-10-21', volantini: 2 },
     ]);
     expect(storia.sintesi?.numeroVolantini).toBe(1);
   });

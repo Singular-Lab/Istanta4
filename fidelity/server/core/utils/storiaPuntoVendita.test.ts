@@ -284,15 +284,18 @@ describe('recapiti stampati senza differenze di scrittura', () => {
 describe('insegne nel tempo', () => {
   const CONAD = { canale: { id: 'CY', nome: 'Conad' }, area: { id: 'EM', nome: 'Emilia' } };
   const CITY = { canale: { id: 'CC', nome: 'City' }, area: { id: 'EM', nome: 'Emilia' } };
+  const CITY_LIGURIA = { canale: { id: 'CC', nome: 'City' }, area: { id: 'LI', nome: 'Liguria' } };
+  const CONAD_SARDEGNA = { canale: { id: 'CY', nome: 'Conad' }, area: { id: 'SA', nome: 'Sardegna' } };
+  const OGGI_CITY = { idCanale: 'CC', idArea: 'EM' };
   const kit = (idKit: string, data: string, insegna: typeof CONAD, al: string | null = piuGiorni(data, 13)) => ({ idKit, data, al, ...insegna });
 
-  it('due insegne: un periodo per insegna, dal piu\' vecchio, con i suoi volantini', () => {
+  it('un cambio vero: un periodo per insegna, dal piu\' vecchio, con i volantini della sua insegna', () => {
     const periodi = insegneNelTempo([
-      kit('k6', '2026-10-26', CITY),
+      kit('k4', '2026-10-26', CITY),
       kit('k1', '2025-01-09', CONAD),
-      kit('k5', '2026-09-24', CITY),
+      kit('k3', '2026-09-24', CITY),
       kit('k2', '2025-12-04', CONAD, null),
-    ]);
+    ], OGGI_CITY);
 
     expect(periodi).toEqual([
       { ...CONAD, dal: '2025-01-09', al: '2025-12-04', volantini: 2 },
@@ -300,14 +303,53 @@ describe('insegne nel tempo', () => {
     ]);
   });
 
+  it('la stessa lista nei kit di altre aree non e\' un cambio (BOLOGNA in Sardegna, Liguria...)', () => {
+    const periodi = insegneNelTempo([
+      kit('s1', '2025-04-07', CONAD_SARDEGNA),
+      kit('s2', '2025-05-08', CONAD_SARDEGNA),
+      kit('e1', '2026-09-24', CITY),
+      kit('l1', '2026-10-26', CITY_LIGURIA),
+      kit('e2', '2026-10-26', CITY),
+    ], OGGI_CITY);
+
+    expect(periodi).toEqual([{ ...CITY, dal: '2026-09-24', al: piuGiorni('2026-10-26', 13), volantini: 2 }]);
+  });
+
+  it('stampato anche nel volantino di un\'altra insegna la stessa settimana: vale l\'insegna attuale', () => {
+    const periodi = insegneNelTempo([
+      kit('a', '2026-09-10', CONAD),
+      kit('b1', '2026-09-24', CONAD),
+      kit('b2', '2026-09-24', CITY),
+      kit('c1', '2026-10-08', CONAD),
+      kit('c2', '2026-10-08', CITY),
+    ], OGGI_CITY);
+
+    // 10/09 Conad da solo e' un'edizione isolata; il 24/09 e l'8/10 valgono per City
+    expect(periodi).toEqual([{ ...CITY, dal: '2026-09-24', al: piuGiorni('2026-10-08', 13), volantini: 2 }]);
+  });
+
+  it('un\'edizione isolata di un\'altra insegna non spezza il periodo', () => {
+    const periodi = insegneNelTempo([
+      kit('a', '2026-01-08', CITY), kit('b', '2026-01-22', CITY), kit('x', '2026-02-05', CONAD), kit('c', '2026-02-19', CITY),
+    ], OGGI_CITY);
+
+    expect(periodi).toEqual([{ ...CITY, dal: '2026-01-08', al: piuGiorni('2026-02-19', 13), volantini: 3 }]);
+  });
+
   it('un ritorno all\'insegna di prima e\' un periodo nuovo', () => {
-    const periodi = insegneNelTempo([kit('a', '2024-03-07', CONAD), kit('b', '2025-03-06', CITY), kit('c', '2026-03-05', CONAD)]);
+    const date = ['2024-03-07', '2024-03-21', '2025-03-06', '2025-03-20', '2026-03-05', '2026-03-19'];
+    const periodi = insegneNelTempo([
+      kit('a1', date[0], CONAD), kit('a2', date[1], CONAD),
+      kit('b1', date[2], CITY), kit('b2', date[3], CITY),
+      kit('c1', date[4], CONAD), kit('c2', date[5], CONAD),
+    ], { idCanale: 'CY', idArea: 'EM' });
 
     expect(periodi.map(periodo => periodo.canale.nome)).toEqual(['Conad', 'City', 'Conad']);
   });
 
-  it('una sola insegna: un periodo solo; senza volantini nessuno', () => {
-    expect(insegneNelTempo([kit('a', '2026-09-24', CITY), kit('b', '2026-10-26', CITY)])).toHaveLength(1);
-    expect(insegneNelTempo([])).toEqual([]);
+  it('una sola insegna, nessun volantino o nessuna area: niente cambio', () => {
+    expect(insegneNelTempo([kit('a', '2026-09-24', CITY), kit('b', '2026-10-26', CITY)], OGGI_CITY)).toHaveLength(1);
+    expect(insegneNelTempo([], OGGI_CITY)).toEqual([]);
+    expect(insegneNelTempo([kit('a', '2026-09-24', CITY), kit('b', '2026-10-26', CITY)], { idCanale: 'CC', idArea: null })).toEqual([]);
   });
 });

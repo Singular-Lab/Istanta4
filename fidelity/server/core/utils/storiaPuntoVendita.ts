@@ -56,27 +56,79 @@ export interface KitDelPuntoVendita {
   area: RiferimentoStoria;
 }
 
+/** Edizioni di seguito con la stessa insegna perche' diventino un periodo: una sola non basta. */
+export const MINIMO_EDIZIONI_INSEGNA = 2;
+
 /**
  * Le insegne nel tempo (spec anagrafica-punti-vendita, "Insegne nel tempo nella scheda del punto
- * vendita"): i periodi consecutivi con la stessa insegna e la stessa area, dal piu' vecchio, con i
- * volantini di ogni periodo. Un ritorno a un'insegna precedente e' un periodo nuovo. Due volantini
- * della stessa edizione con insegne diverse si ordinano per insegna, area e kit: l'ordine non
- * dipende da come arrivano.
+ * vendita"): solo i cambi veri, con la stessa regola di puntiVenditaConCambioInsegna dell'elenco.
+ *
+ * - Contano solo i volantini dell'area attuale del PV: la stessa lista dei PV arriva nei kit di piu'
+ *   aree della stessa promo, e non e' un cambio.
+ * - Ogni edizione (giorno d'inizio) ha un'insegna: quella attuale se il PV e' nel suo volantino (il PV
+ *   stampato anche nel volantino di un'altra insegna la stessa settimana), altrimenti quella con piu'
+ *   volantini, a parita' la prima per id.
+ * - Un'insegna e' un periodo solo con almeno MINIMO_EDIZIONI_INSEGNA edizioni di seguito; i periodi
+ *   vicini della stessa insegna si uniscono. Un'edizione isolata entra nel periodo della sua insegna
+ *   fra i due vicini, se c'e', altrimenti non conta. Che l'insegna sia cambiata (piu' di un periodo)
+ *   e' deciso come nell'elenco: almeno due insegne con sequenze lunghe.
+ *
+ * Ogni periodo conta i volantini della sua insegna. Senza area attuale non c'e' niente da dire.
  */
-export function insegneNelTempo(kit: readonly KitDelPuntoVendita[]): PeriodoInsegna[] {
-  const ordinati = [...kit].sort((a, b) =>
-    confronta(a.data, b.data) || confronta(a.canale.id, b.canale.id) || confronta(a.area.id, b.area.id) || confronta(a.idKit, b.idKit));
-  const periodi: Array<PeriodoInsegna & { kit: Set<string> }> = [];
-  for (const volantino of ordinati) {
-    const ultimo = periodi[periodi.length - 1];
-    const fine = volantino.al ?? volantino.data;
-    if (ultimo && ultimo.canale.id === volantino.canale.id && ultimo.area.id === volantino.area.id) {
-      ultimo.kit.add(volantino.idKit);
-      if (fine > ultimo.al) ultimo.al = fine;
-      continue;
+export function insegneNelTempo(
+  kit: readonly KitDelPuntoVendita[],
+  attuale: { idCanale?: string | null; idArea?: string | null },
+): PeriodoInsegna[] {
+  if (!attuale.idArea) return [];
+  const dellArea = kit.filter(volantino => volantino.area.id === attuale.idArea);
+
+  // L'insegna di ogni edizione
+  const perData = new Map<string, KitDelPuntoVendita[]>();
+  for (const volantino of dellArea) perData.set(volantino.data, [...(perData.get(volantino.data) ?? []), volantino]);
+  const edizioni = [...perData.entries()]
+    .sort((a, b) => confronta(a[0], b[0]))
+    .map(([data, volantini]) => {
+      const perCanale = new Map<string, KitDelPuntoVendita[]>();
+      for (const volantino of volantini) perCanale.set(volantino.canale.id, [...(perCanale.get(volantino.canale.id) ?? []), volantino]);
+      const [idCanale] = [...perCanale.entries()]
+        .sort((a, b) => Number(b[0] === attuale.idCanale) - Number(a[0] === attuale.idCanale) || b[1].length - a[1].length || confronta(a[0], b[0]))[0];
+      return { data, volantini: perCanale.get(idCanale) ?? [] };
+    });
+
+  // Le sequenze di edizioni con la stessa insegna: solo le lunghe fanno un periodo (come le isole
+  // dell'elenco), e quelle vicine della stessa insegna sono un periodo solo
+  const canaleDi = (indice: number) => edizioni[indice].volantini[0].canale.id;
+  const gruppi: Array<{ idCanale: string; primo: number; ultimo: number }> = [];
+  for (let inizio = 0; inizio < edizioni.length;) {
+    let fine = inizio;
+    while (fine + 1 < edizioni.length && canaleDi(fine + 1) === canaleDi(inizio)) fine++;
+    if (fine - inizio + 1 >= MINIMO_EDIZIONI_INSEGNA) {
+      const precedente = gruppi[gruppi.length - 1];
+      if (precedente && precedente.idCanale === canaleDi(inizio)) precedente.ultimo = fine;
+      else gruppi.push({ idCanale: canaleDi(inizio), primo: inizio, ultimo: fine });
     }
-    periodi.push({ canale: volantino.canale, area: volantino.area, dal: volantino.data, al: fine, volantini: 0, kit: new Set([volantino.idKit]) });
+    inizio = fine + 1;
   }
+
+  // Le edizioni sparse vanno al periodo della loro insegna fra i due vicini; le altre non contano
+  const periodi: Array<PeriodoInsegna & { kit: Set<string> }> = gruppi.map(gruppo => {
+    const primo = edizioni[gruppo.primo].volantini[0];
+    return { canale: primo.canale, area: primo.area, dal: primo.data, al: primo.data, volantini: 0, kit: new Set<string>() };
+  });
+  edizioni.forEach((edizione, indice) => {
+    const seguente = gruppi.findIndex(gruppo => gruppo.primo > indice);
+    const corrente = (seguente === -1 ? gruppi.length : seguente) - 1;
+    const candidati = [corrente, corrente + 1].filter(g => g >= 0 && g < gruppi.length && (g === corrente || indice < gruppi[g].primo));
+    const scelto = candidati.find(g => gruppi[g].idCanale === canaleDi(indice));
+    if (scelto === undefined) return;
+    const periodo = periodi[scelto];
+    for (const volantino of edizione.volantini) {
+      periodo.kit.add(volantino.idKit);
+      if (volantino.data < periodo.dal) periodo.dal = volantino.data;
+      const al = volantino.al ?? volantino.data;
+      if (al > periodo.al) periodo.al = al;
+    }
+  });
   return periodi.map(({ kit: volantini, ...periodo }) => ({ ...periodo, volantini: volantini.size }));
 }
 

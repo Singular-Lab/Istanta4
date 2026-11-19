@@ -333,6 +333,47 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
     ]);
   });
 
+  it('cambi di insegna per l\'elenco: solo nell\'area del PV, l\'insegna attuale nella settimana doppia, almeno 2 edizioni', async () => {
+    // Insegna X e area T: la combinazione dei primi volantini
+    const x1 = await creaKitRuntime({ validitaDal: giorno('2021-01-07') });
+    const idGdo = x1.idGdo;
+    const x2 = await creaKitRuntime({ stessaCombinazioneDi: x1, idGdo, validitaDal: giorno('2021-01-21') });
+    // Insegna Y nella stessa area T, dal 2024
+    const y1 = await creaKitRuntime({ idGdo, validitaDal: giorno('2024-01-11') });
+    const y2 = await creaKitRuntime({ stessaCombinazioneDi: y1, idGdo, validitaDal: giorno('2024-01-25') });
+    await sequelize.query('UPDATE runtime_kit SET id_area = :idArea WHERE id IN (:kit)', { replacements: { idArea: x1.idArea, kit: [y1.idRuntime, y2.idRuntime] } });
+    // Insegna X le stesse settimane di Y: la settimana doppia
+    const x3 = await creaKitRuntime({ stessaCombinazioneDi: x1, idGdo, validitaDal: giorno('2024-01-11') });
+    const x4 = await creaKitRuntime({ stessaCombinazioneDi: x1, idGdo, validitaDal: giorno('2024-01-25') });
+    // Un'altra area: la stessa lista ripetuta nei suoi kit
+    const z1 = await creaKitRuntime({ idGdo, validitaDal: giorno('2024-02-08') });
+    const z2 = await creaKitRuntime({ stessaCombinazioneDi: z1, idGdo, validitaDal: giorno('2024-02-22') });
+
+    const comboX = await creaCombinazione(x1);
+    const comboY = await creaCombinazione({ ...y1, idArea: x1.idArea });
+    const cambiato = await creaPuntoVendita(x1, comboY, { citta: 'Pisa', indirizzo: 'Via Pisa 1', telefono: '050 1111111' });
+    const ripetuto = await creaPuntoVendita(x1, comboX, { citta: 'Lucca', indirizzo: 'Via Lucca 2', telefono: '0583 2222222' });
+    const doppio = await creaPuntoVendita(x1, comboY, { citta: 'Prato', indirizzo: 'Via Prato 3', telefono: '0574 3333333' });
+    const PISA = { localita: 'PISA', indirizzo: 'Via Pisa 1', telefono: '050 1111111' };
+    const LUCCA = { localita: 'LUCCA', indirizzo: 'Via Lucca 2', telefono: '0583 2222222' };
+    const PRATO = { localita: 'PRATO', indirizzo: 'Via Prato 3', telefono: '0574 3333333' };
+    const liste: Array<[KitDiProva, Array<typeof PISA>]> = [
+      [x1, [PISA, LUCCA]], [x2, [PISA, LUCCA]],
+      [y1, [PISA, PRATO]], [y2, [PISA, PRATO]],
+      [x3, [PRATO]], [x4, [PRATO]],
+      [z1, [LUCCA]], [z2, [LUCCA]],
+    ];
+    for (const [kit, righe] of liste) {
+      await storia.sostituisciRigheKit(kit.idRuntime, righe.map((dati, i) => riga(kit, i + 1, dati)));
+    }
+    const perLocalita: Record<string, string> = { PISA: cambiato, LUCCA: ripetuto, PRATO: doppio };
+    const daAbbinare = await storia.righeDaRiabbinare(idGdo);
+    await storia.aggiornaAbbinamenti(daAbbinare.map(r => ({ id: r.id, idPuntoVendita: perLocalita[r.localita as string], abbinamento: 'telefono' as const })));
+
+    // Pisa: X per 2 edizioni, poi Y per 2. Lucca: X, piu' la lista dell'altra area. Prato: Y con X la stessa settimana
+    expect(await new ConsultazionePuntiVenditaRepository().puntiVenditaConCambioInsegna(idGdo)).toEqual([cambiato]);
+  });
+
   it('combinazioni dei volantini: storico e produzione, una volta sola; non POP, kit o promo eliminati, altre GDO', async () => {
     const storico = await creaKitRuntime({ statoPromo: 'ARCHIVIATA' });
     const idGdo = storico.idGdo;

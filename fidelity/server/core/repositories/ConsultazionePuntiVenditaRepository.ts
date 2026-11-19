@@ -1,6 +1,7 @@
 import { QueryTypes } from 'sequelize';
 import { TIPO_LAVORAZIONE } from '../../../lib/enums';
 import { sequelize } from '../db';
+import { MINIMO_EDIZIONI_INSEGNA } from '../utils/storiaPuntoVendita';
 import { DATA_EDIZIONE, KIT_VALIDI, SOSTITUZIONI_FISSE } from './PuntiVenditaVolantinoRepository';
 
 /**
@@ -56,6 +57,12 @@ export interface IConsultazionePuntiVenditaRepository {
   trovaDellaGdo(idGdo: string, idPuntoVendita: string): Promise<RigaPuntoVenditaConsultazione | null>;
   /** Per ogni PV della GDO con una storia: volantini per anno e canale. */
   storiaInElenco(idGdo: string): Promise<RigaStoriaInElenco[]>;
+  /**
+   * I PV della GDO che hanno cambiato insegna, con la regola delle insegne nel tempo della scheda
+   * (storiaPuntoVendita.insegneNelTempo): solo i volantini dell'area del PV, l'insegna di ogni
+   * edizione (quella del PV se c'e'), almeno due insegne con MINIMO_EDIZIONI_INSEGNA edizioni di seguito.
+   */
+  puntiVenditaConCambioInsegna(idGdo: string): Promise<string[]>;
   /**
    * Le combinazioni canale/area dei volantini della GDO, nello storico e in produzione: kit di
    * formato volantino non eliminati di promo non eliminate, in qualunque altro stato.
@@ -122,6 +129,46 @@ export class ConsultazionePuntiVenditaRepository implements IConsultazionePuntiV
       { replacements: { ...SOSTITUZIONI_FISSE, idGdo }, type: QueryTypes.SELECT }
     );
     return righe.map(riga => ({ ...riga, anno: Number(riga.anno), volantini: Number(riga.volantini) }));
+  }
+
+  async puntiVenditaConCambioInsegna(idGdo: string): Promise<string[]> {
+    // Isole: la differenza fra la posizione dell'edizione nel PV e nella sua insegna e' costante
+    // lungo una sequenza di edizioni di seguito con la stessa insegna
+    const righe = await sequelize.query<{ id_punto_vendita: string }>(
+      `WITH ap AS (
+         SELECT DISTINCT r.id_punto_vendita::text AS id_punto_vendita, k.id AS id_kit, ${DATA_EDIZIONE} AS data,
+                k.id_canale::text AS id_canale, cca.id_canale_combinazione_canale_area::text AS canale_pv
+           FROM punti_vendita_volantino r
+           JOIN runtime_kit k ON k.id = r.id_kit_runtime
+           JOIN promo p ON p.id_promo = k.id_promo
+           JOIN punti_vendita pv ON pv.id_puntivendita = r.id_punto_vendita
+           JOIN combinazione_canale_area cca ON cca.id_combinazione_canale_area = pv.id_combinazione_canale_area_puntivendita
+          WHERE r.id_gdo = :idGdo AND r.id_punto_vendita IS NOT NULL AND ${KIT_VALIDI}
+            AND k.id_area = cca.id_area_combinazione_canale_area
+       ),
+       per_insegna AS (
+         SELECT id_punto_vendita, data, id_canale, COUNT(*) AS volantini, BOOL_OR(id_canale = canale_pv) AS attuale
+           FROM ap GROUP BY id_punto_vendita, data, id_canale
+       ),
+       edizioni AS (
+         SELECT DISTINCT ON (id_punto_vendita, data) id_punto_vendita, data, id_canale
+           FROM per_insegna
+          ORDER BY id_punto_vendita, data, attuale DESC, volantini DESC, id_canale
+       ),
+       isole AS (
+         SELECT id_punto_vendita, id_canale,
+                ROW_NUMBER() OVER (PARTITION BY id_punto_vendita ORDER BY data)
+                  - ROW_NUMBER() OVER (PARTITION BY id_punto_vendita, id_canale ORDER BY data) AS isola
+           FROM edizioni
+       ),
+       lunghe AS (
+         SELECT id_punto_vendita, id_canale FROM isole
+          GROUP BY id_punto_vendita, id_canale, isola HAVING COUNT(*) >= :minimo
+       )
+       SELECT id_punto_vendita FROM lunghe GROUP BY id_punto_vendita HAVING COUNT(DISTINCT id_canale) > 1`,
+      { replacements: { ...SOSTITUZIONI_FISSE, idGdo, minimo: MINIMO_EDIZIONI_INSEGNA }, type: QueryTypes.SELECT }
+    );
+    return righe.map(riga => riga.id_punto_vendita);
   }
 
   async combinazioniDeiVolantini(idGdo: string): Promise<RigaCombinazioneVolantini[]> {
