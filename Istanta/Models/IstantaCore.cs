@@ -1404,6 +1404,28 @@ namespace Istanta.Models
                 }
             }
         }
+
+        /// <summary>
+        /// TASK-0ba7d005: le primarie e secondarie ereditate da un'altra lavorazione (il passato, o nel
+        /// POP il volantino) valgono solo se indicano una primaria. Un meta storico senza primaria,
+        /// lasciato dal vecchio salvataggio parziale delle P/S, toglieva il primario al gruppo e
+        /// fermava l'impaginazione di tutta la lavorazione: in quel caso resta la selezione automatica.
+        /// </summary>
+        public static List<RevisioneSelezioneFotoFromIndd>? selezioniDaEreditare(List<RevisioneSelezioneFotoFromIndd>? ps)
+        {
+            return ps != null && ps.Any(s => s.stato == StatoSelezioneFoto.Primaria) ? ps : null;
+        }
+
+        /// <summary>
+        /// TASK-0ba7d005: cosa non va nelle primarie e secondarie da salvare, o null se sono buone.
+        /// Il gruppo deve avere esattamente una primaria, qualunque client le mandi: la scheda Foto P/S
+        /// lo controlla gia', il Report integrita' e i Plugin vecchi no.
+        /// </summary>
+        public static string? erroreDelleSelezioniFoto(List<RevisioneSelezioneFotoFromIndd>? ps, string? codiceGruppo)
+        {
+            int primarie = ps?.Count(s => s.stato == StatoSelezioneFoto.Primaria) ?? 0;
+            return primarie == 1 ? null : $"il gruppo {codiceGruppo} deve avere una sola primaria: ne sono arrivate {primarie}.";
+        }
     }
 
     //Legata esclusivamente al dato di revisione articolo su Istanta

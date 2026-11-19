@@ -5159,7 +5159,8 @@ namespace Istanta.Controllers
                     //Qui le primarie/secondarie e le foto, che decidono l'export di agenzia. noRender, foto
                     //extra e testi si legano dopo l'export (sostituisciConIMetaDelVolantino).
                     var ereditati = metaPerIlPop(corrispettivo.Meta);
-                    storeField = new RevisioneMetaPromoLavorazioni { ps = ereditati.ps, foto = ereditati.foto };
+                    //TASK-0ba7d005: P/S senza primaria non si ereditano, la foto si'.
+                    storeField = new RevisioneMetaPromoLavorazioni { ps = MetaPromoLavorazioni.selezioniDaEreditare(ereditati.ps), foto = ereditati.foto };
                     metaDiQuestaLavorazione = false;
                 }
                 else if (promoLavorazione != null && promoLavorazione.Meta != null)
@@ -5225,11 +5226,15 @@ namespace Istanta.Controllers
                                 RevisioneMetaPromoLavorazioni recPassato = MetaPromoLavorazioni.leggi(plrInAC.Meta)!;
                                 //I20-1103: il noRender non si eredita dal passato: vale nella lavorazione
                                 //in cui e' stato messo, e nei POP che lo prendono dal loro volantino.
+                                //TASK-0ba7d005: P/S senza primaria non si ereditano: resta la selezione automatica.
+                                var psDelPassato = MetaPromoLavorazioni.selezioniDaEreditare(recPassato.ps);
+                                if (psDelPassato == null && recPassato.ps != null && recPassato.ps.Count > 0)
+                                    Console.WriteLine($"P/S del gruppo {group.Key.CodiceGruppo} non ereditate dalla lavorazione {plrInAC.IdLavorazione}: non indicano una primaria.");
                                 foreach (var item in group)
                                 {
-                                    if (recPassato.ps != null && recPassato.ps.Count > 0)
+                                    if (psDelPassato != null && psDelPassato.Count > 0)
                                     {
-                                        var psItem = recPassato.ps.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString());
+                                        var psItem = psDelPassato.FirstOrDefault(f => f.codRef == item.recordInTracciato[keyRefCodice].ToString());
                                         if (psItem != null)
                                         {
                                             item.recordInTracciato.TryGetValue(keyStatoSelezione, out var statoDelDato);
