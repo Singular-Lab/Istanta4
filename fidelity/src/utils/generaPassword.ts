@@ -19,8 +19,8 @@ function casuale(massimo: number): number {
 const caratteriDa = (insieme: string) => insieme.charAt(casuale(insieme.length));
 
 /**
- * Password casuale per un nuovo utente, conforme a REGOLA_PASSWORD: almeno una minuscola, una
- * maiuscola, una cifra e un simbolo ammesso, nelle posizioni mescolate.
+ * Genera la password casuale di un nuovo utente secondo REGOLA_PASSWORD (almeno una minuscola, una
+ * maiuscola, una cifra e un simbolo ammesso), con i caratteri in posizioni mescolate.
  */
 export function generaPassword(lunghezza = 14): string {
   const caratteri = [caratteriDa(MINUSCOLE), caratteriDa(MAIUSCOLE), caratteriDa(CIFRE), caratteriDa(SIMBOLI_PASSWORD)];

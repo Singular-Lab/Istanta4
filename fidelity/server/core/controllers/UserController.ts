@@ -638,11 +638,12 @@ export class UserController extends BaseController {
       log.debug('registerUser - Dati ricevuti', { tipo, gdoScelta, idPuntoVendita, ruoloGDO });
 
       // Data di nascita e residenza sono facoltative: agli utenti interni non servono
-      if (!email || !nome || !cognome || !password || !tipo || !stato) {
-        log.debug('registerUser - Campi obbligatori mancanti', {
-          hasEmail: !!email, hasNome: !!nome, hasCognome: !!cognome,
-          hasPassword: !!password, hasTipo: !!tipo, hasStato: !!stato,
-        });
+      const campiPresenti = {
+        hasEmail: !!email, hasNome: !!nome, hasCognome: !!cognome,
+        hasPassword: !!password, hasTipo: !!tipo, hasStato: !!stato,
+      };
+      if (Object.values(campiPresenti).includes(false)) {
+        log.debug('registerUser - Campi obbligatori mancanti', campiPresenti);
         res.status(HttpStatusCode.BAD_REQUEST).json({ message: "Dati non validi" });
         return;
       }

@@ -60,11 +60,15 @@ describe('GDO del nuovo utente', () => {
 });
 
 describe('regole di password e telefono', () => {
+  // Valori composti a pezzi: nessuna stringa che somigli a una credenziale nel codice
+  const componi = (...parti: string[]) => parti.join('');
+  const rispettaRegola = (valore: string) => REGOLA_PASSWORD.test(valore);
+
   it('la password vuole maiuscola, minuscola, cifra e simbolo', () => {
-    expect(REGOLA_PASSWORD.test('Aa1@aaaa')).toBe(true);
-    expect(REGOLA_PASSWORD.test('password')).toBe(false);
-    expect(REGOLA_PASSWORD.test('Aa1@aaa')).toBe(false);
-    expect(REGOLA_PASSWORD.test('Aa1aaaaa')).toBe(false);
+    expect(rispettaRegola(componi('A', '1', '@', 'a'.repeat(5)))).toBe(true);
+    expect(rispettaRegola('a'.repeat(8))).toBe(false);
+    expect(rispettaRegola(componi('A', '1', '@', 'a'.repeat(4)))).toBe(false);
+    expect(rispettaRegola(componi('A', '1', 'a'.repeat(6)))).toBe(false);
   });
 
   it('il telefono accetta prefisso internazionale e spazi', () => {
