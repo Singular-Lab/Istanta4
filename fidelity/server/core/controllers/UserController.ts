@@ -834,7 +834,7 @@ export class UserController extends BaseController {
       await this.userService.refreshMaterializedView();
 
       // Dati, ruolo e stato finiscono nel passaporto Olimpo: alla prossima chiamata si richiede.
-      // Vale per questo worker; l'altro lo rinnova alla scadenza della cache o al primo rifiuto di Istanta.
+      // Vale per tutti i worker: invalidaPassaporto avvisa anche gli altri.
       invalidaPassaporto(id);
       AuditLogService.getInstance().userUpdated(req, id, { changedFields: Object.keys(updateData) });
       res.status(HttpStatusCode.OK).json(result);

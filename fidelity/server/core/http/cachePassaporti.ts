@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
+import { avvisaGliAltriWorker, suAvvisoFraWorker } from '../utils/avvisiFraWorker';
 
 /**
  * Passaporti Olimpo gia' ottenuti, per worker. Olimpo restituisce sempre la stessa chiave
  * pubblica e non ne indica la scadenza: chiederla a ogni chiamata verso Istanta costava due
  * letture dell'utente e un PUT. La voce dura DURATA_PASSAPORTO_MS e si scarta prima quando
  * Istanta non riconosce piu' l'utente, quando Olimpo rifiuta, al login/logout e quando l'utente
- * viene modificato. Gli errori non si memorizzano: la chiamata successiva riprova.
+ * viene modificato: in questo worker e, con un avviso via IPC, negli altri (utils/avvisiFraWorker).
+ * Gli errori non si memorizzano: la chiamata successiva riprova.
  */
 
 export const DURATA_PASSAPORTO_MS = 10 * 60_000;
@@ -20,6 +22,13 @@ type RichiestaInCorso = { promessa: Promise<Passaporto | null>; valida: boolean 
 
 const voci = new Map<string, Voce>();
 const inCorso = new Map<string, RichiestaInCorso>();
+
+/** Avviso agli altri worker: il passaporto di questo utente non vale piu'. */
+export const AVVISO_PASSAPORTO_SCARTATO = 'passaporto-scartato';
+
+suAvvisoFraWorker(AVVISO_PASSAPORTO_SCARTATO, (idUtente) => {
+  if (typeof idUtente === 'string' && idUtente) invalidaPassaportoQui(idUtente);
+});
 
 // La chiave privata della sessione distingue un login fatto dopo un cambio di chiave;
 // in memoria ne resta solo l'impronta
@@ -76,9 +85,18 @@ export function passaportoInCache(
   return richiesta.promessa;
 }
 
-/** Scarta il passaporto dell'utente: la prossima chiamata lo chiede di nuovo a Olimpo. */
+/**
+ * Scarta il passaporto dell'utente: la prossima chiamata lo chiede di nuovo a Olimpo, in questo
+ * worker e negli altri (spec processi-in-produzione, "Modifiche valide in tutti i processi").
+ */
 export function invalidaPassaporto(idUtente: string | undefined | null): void {
   if (!idUtente) return;
+  invalidaPassaportoQui(idUtente);
+  avvisaGliAltriWorker(AVVISO_PASSAPORTO_SCARTATO, idUtente);
+}
+
+/** Scarta il passaporto solo in questo processo: per gli avvisi che arrivano dagli altri worker. */
+function invalidaPassaportoQui(idUtente: string): void {
   voci.delete(idUtente);
   // Una richiesta gia' partita non deve rimettere in cache il passaporto appena scartato
   for (const [chiave, richiesta] of inCorso) {

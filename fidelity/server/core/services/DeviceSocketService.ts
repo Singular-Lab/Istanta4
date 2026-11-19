@@ -13,6 +13,7 @@ import { PuntoVenditaService } from './PuntoVenditaService.js';
 import type { DispositivoPuntoVenditaResponseDTO } from '../dto/PuntoVenditaDTO.js';
 import type { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService.js';
 import { log } from '../logger';
+import { campoTesto } from '../utils/socketSicuro';
 
 /* ======================================================
  * TYPES
@@ -75,6 +76,11 @@ export interface PVSubscribePayload {
 /* ======================================================
  * SERVICE
  * ====================================================== */
+
+/** Un numero finito arrivato da un dispositivo, oppure null. */
+function numeroValido(valore: unknown): number | null {
+  return typeof valore === 'number' && Number.isFinite(valore) ? valore : null;
+}
 
 class DeviceSocketService {
   private io: IOServer | null = null;
@@ -170,7 +176,7 @@ class DeviceSocketService {
   /**
    * Gestisce l'heartbeat da un dispositivo
    */
-  handleDeviceHeartbeat(socket: Socket, payload: DeviceHeartbeatPayload): void {
+  handleDeviceHeartbeat(socket: Socket, payload: DeviceHeartbeatPayload | undefined): void {
     const deviceId = this.socketToDevice.get(socket.id);
     if (!deviceId) return;
 
@@ -178,7 +184,9 @@ class DeviceSocketService {
     if (!state) return;
 
     const serverTimestamp = Date.now();
-    const latencyMs = Math.max(0, Math.floor((serverTimestamp - payload.timestamp) / 2));
+    // Il dispositivo e' vivo anche se il suo orologio manca o non si legge: latenza 0
+    const timestamp = numeroValido(payload?.timestamp) ?? serverTimestamp;
+    const latencyMs = Math.max(0, Math.floor((serverTimestamp - timestamp) / 2));
 
     // Aggiorna stato
     state.lastPingMs = latencyMs;
@@ -186,7 +194,7 @@ class DeviceSocketService {
 
     // Acknowledge al dispositivo
     const ackPayload: DeviceHeartbeatAckPayload = {
-      timestamp: payload.timestamp,
+      timestamp,
       serverTimestamp,
       latencyMs,
     };
@@ -211,27 +219,36 @@ class DeviceSocketService {
   /**
    * Gestisce il cambio slide da un dispositivo
    */
-  handleDeviceSlideChange(socket: Socket, payload: DeviceSlideChangePayload): void {
+  handleDeviceSlideChange(socket: Socket, payload: DeviceSlideChangePayload | undefined): void {
     const deviceId = this.socketToDevice.get(socket.id);
     if (!deviceId) return;
 
     const state = this.deviceStates.get(deviceId);
     if (!state) return;
 
+    const slideIndex = numeroValido(payload?.slideIndex);
+    const totalSlides = numeroValido(payload?.totalSlides);
+    if (slideIndex === null || totalSlides === null) {
+      log.debug('Cambio slide senza indice o totale validi, ignorato', { deviceId });
+      return;
+    }
+    const slideName = campoTesto(payload, 'slideName', 500) ?? undefined;
+    const slideUrl = campoTesto(payload, 'slideUrl', 2000) ?? undefined;
+
     // Aggiorna stato
-    state.currentSlideIndex = payload.slideIndex;
-    state.totalSlides = payload.totalSlides;
-    state.slideName = payload.slideName;
-    state.slideUrl = payload.slideUrl;
+    state.currentSlideIndex = slideIndex;
+    state.totalSlides = totalSlides;
+    state.slideName = slideName;
+    state.slideUrl = slideUrl;
 
     // Notifica agli iscritti del PV
     this.emitToPV(state.pvId, 'pv:device-slide-update', {
       deviceId: state.deviceId,
       deviceName: state.deviceName,
-      currentSlideIndex: payload.slideIndex,
-      totalSlides: payload.totalSlides,
-      slideName: payload.slideName,
-      slideUrl: payload.slideUrl,
+      currentSlideIndex: slideIndex,
+      totalSlides,
+      slideName,
+      slideUrl,
       isConnected: true,
       lastUpdate: Date.now(),
     } as PVDeviceStatusPayload);
@@ -265,8 +282,12 @@ class DeviceSocketService {
   /**
    * Iscrive un socket UI agli aggiornamenti di un punto vendita
    */
-  subscribeToPV(socket: Socket, payload: PVSubscribePayload): void {
-    const { pvId } = payload;
+  subscribeToPV(socket: Socket, payload: PVSubscribePayload | undefined): void {
+    const pvId = campoTesto(payload, 'pvId');
+    if (!pvId) {
+      log.debug('Iscrizione a un punto vendita senza pvId, ignorata', { socketId: socket.id });
+      return;
+    }
     void socket.join(`pv:${pvId}`);
 
     // Invia stato corrente di tutti i dispositivi del PV
@@ -279,8 +300,9 @@ class DeviceSocketService {
   /**
    * Disiscrive un socket UI dagli aggiornamenti di un punto vendita
    */
-  unsubscribeFromPV(socket: Socket, payload: PVSubscribePayload): void {
-    const { pvId } = payload;
+  unsubscribeFromPV(socket: Socket, payload: PVSubscribePayload | undefined): void {
+    const pvId = campoTesto(payload, 'pvId');
+    if (!pvId) return;
     void socket.leave(`pv:${pvId}`);
     log.debug('Socket UI disiscritto dagli aggiornamenti del punto vendita', { socketId: socket.id, pvId });
   }

@@ -10,11 +10,19 @@ import { GDOWhatsappTemplate } from '../models/whatsapp/gdo_whatsapp_template';
 import { createQueue } from '../../src/shared/queue/bullmq.client.js';
 import { QUEUE_NAMES } from '../../src/shared/queue/queues.js';
 
-// Una sola Queue BullMQ (e una sola connessione Redis) per processo; null se Redis non e' configurato
-let waQueue: ReturnType<typeof createQueue> | undefined;
+// Una sola Queue BullMQ (e una sola connessione Redis) per processo. Null finche' Redis non e' pronto:
+// non si ricorda, cosi' la coda nasce appena Redis torna disponibile (redis.client si riconnette).
+let waQueue: ReturnType<typeof createQueue> = null;
 function getWaQueue() {
-    if (waQueue === undefined) waQueue = createQueue(QUEUE_NAMES.WHATSAPP);
+    if (waQueue === null) waQueue = createQueue(QUEUE_NAMES.WHATSAPP);
     return waQueue;
+}
+
+/** La connessione della coda non si riprende da sola dopo un'interruzione di Redis: la prossima volta se ne crea una nuova. */
+function scartaWaQueue(coda: NonNullable<ReturnType<typeof createQueue>>) {
+    if (waQueue !== coda) return;
+    waQueue = null;
+    void Promise.resolve().then(() => coda.close()).catch(() => undefined);
 }
 
 /**
@@ -180,17 +188,20 @@ export class WhatsappQueueService {
         log.info(Colorize.green(`✅ Bulk ${bulkId} creato con successo: ${created} job pronti per l'invio`));
 
         // Trigger dopo il commit: prima il worker non vedrebbe i job. Se fallisce li recupera il polling
-        const waQueue = getWaQueue();
-        if (waQueue) {
-            await waQueue.add('process-bulk', { bulk_id: bulkId }, {
+        const coda = getWaQueue();
+        if (coda) {
+            await coda.add('process-bulk', { bulk_id: bulkId }, {
                 attempts: 1,
                 removeOnComplete: true,
                 removeOnFail: true,
             }).then(
                 () => log.debug(`⚡ Bulk ${bulkId} accodato in BullMQ per elaborazione immediata`),
-                (error) => log.warn(`Bulk ${bulkId} non accodato in BullMQ, lo elabora il polling`, {
-                    message: error instanceof Error ? error.message : String(error),
-                })
+                (error) => {
+                    log.warn(`Bulk ${bulkId} non accodato in BullMQ, lo elabora il polling`, {
+                        message: error instanceof Error ? error.message : String(error),
+                    });
+                    scartaWaQueue(coda);
+                }
             );
         }
 

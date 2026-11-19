@@ -114,3 +114,28 @@ describe('StatoImportazioniCondiviso', () => {
     expect(chiama).toHaveBeenCalledTimes(2);
   });
 });
+
+// Spec processi-in-produzione, "Modifiche valide in tutti i processi"
+describe('StatoImportazioniCondiviso con piu\' worker', () => {
+  it('dimentica avvisa gli altri processi', () => {
+    const avvisaAltriProcessi = vi.fn();
+    const servizio = new StatoImportazioniCondiviso({ statoRegistrato: async () => null, adesso: () => 0, avvisaAltriProcessi });
+
+    servizio.dimentica('t1');
+
+    expect(avvisaAltriProcessi).toHaveBeenCalledWith('t1');
+  });
+
+  it('dimenticaQui, per l\'avviso di un altro worker, scarta la risposta senza rimandare l\'avviso', async () => {
+    const avvisaAltriProcessi = vi.fn();
+    const servizio = new StatoImportazioniCondiviso({ statoRegistrato: async () => null, adesso: () => 0, avvisaAltriProcessi });
+    const chiama = istanta('InAttesaDiConfermaUtente');
+
+    await servizio.leggi('t1', chiama);
+    servizio.dimenticaQui('t1');
+    await servizio.leggi('t1', chiama);
+
+    expect(chiama).toHaveBeenCalledTimes(2);
+    expect(avvisaAltriProcessi).not.toHaveBeenCalled();
+  });
+});

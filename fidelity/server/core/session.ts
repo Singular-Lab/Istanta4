@@ -3,6 +3,7 @@ import session from 'express-session';
 import { randomBytes } from 'node:crypto';
 import pkg from 'pg';
 import config from './config/index';
+import { log } from './logger';
 
 const { Pool } = pkg;
 const PgSession = connectPgSimple(session);
@@ -13,6 +14,16 @@ const pgPool = new Pool({
   database: config.DB_POSTGRESQL_NAME,
   user: config.DB_POSTGRESQL_USER,
   password: String(config.DB_POSTGRESQL_PASSWORD),
+});
+
+// Una connessione inattiva chiusa dal server (riavvio di PostgreSQL, pg_terminate_backend, rete)
+// arriva come evento 'error' del pool: senza ascoltatore diventerebbe un'eccezione non gestita del
+// processo (spec processi-in-produzione, "Interruzioni del database e di Redis superate senza
+// riavvio"). Il pool scarta da se' la connessione e alla richiesta successiva ne apre una nuova.
+pgPool.on('error', (errore: Error) => {
+  log.warn('Sessioni: connessione inattiva al database chiusa, verra\' riaperta alla prossima richiesta', {
+    errore: errore.message,
+  });
 });
 
 /**
@@ -69,3 +80,6 @@ export const sessionMiddleware = session({
 });
 
 export { calculateSessionTimeout };
+
+/** Solo per i test: il pool delle sessioni, per verificare che un suo errore non fermi il processo. */
+export { pgPool as poolSessioni };
