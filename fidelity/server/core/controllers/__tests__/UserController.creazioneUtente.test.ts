@@ -30,14 +30,14 @@ vi.mock('../../models', async (importOriginal) => ({
 import { UserController } from '../UserController';
 
 // Generata a ogni esecuzione: nessuna credenziale fissa nel codice, anche se finta
-const credenzialeDiProva = randomUUID();
+const CREDENZIALE_DI_PROVA = randomUUID();
 
 /** Solo i dati essenziali: niente data di nascita, residenza, telefono. */
 const NUOVO_UTENTE = {
   email: 'anna.rossi@esempio.it',
   nome: 'Anna',
   cognome: 'Rossi',
-  password: credenzialeDiProva,
+  password: CREDENZIALE_DI_PROVA,
   stato: STATO_UTENTI.ATTIVO,
 };
 
