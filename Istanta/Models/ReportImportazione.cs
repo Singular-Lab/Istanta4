@@ -23,6 +23,14 @@ namespace Istanta.Models
         /// dato: integrazioneMirataInTracciato non la copia nel record.</summary>
         public const string KeyEtichetta = "EtichettaTracciato";
 
+        /// <summary>I20-1247: la chiave delle forzature nelle righe del report: i campi bloccati da un cambio
+        /// strutturale per cui la lista porta un altro valore, campo -> valore della lista. Il dato della
+        /// referenza tiene il suo valore; la riga conta fra le cambiate perche' l'operatore la veda.</summary>
+        public const string KeyForzature = "Forzature";
+
+        /// <summary>I20-1247: il testo della colonna Forzatura del CSV per un campo forzato.</summary>
+        public const string ForzaturaTrattenuta = "trattenuta";
+
         public const string StatoNuovo = "Nuovo";
         public const string StatoUscito = "Uscito";
         public const string StatoCambiato = "Cambiato";
@@ -57,7 +65,7 @@ namespace Istanta.Models
         /// (versione 1), uscita (versione -1), cambiata se ha alterazioni, altrimenti inalterata.</summary>
         public static string Stato(IDictionary<string, object> riga)
         {
-            if (Alterazioni(riga).Count > 0)
+            if (Alterazioni(riga).Count > 0 || Forzature(riga).Count > 0)
             {
                 return StatoCambiato;
             }
@@ -67,23 +75,29 @@ namespace Istanta.Models
 
         /// <summary>Il CSV del report completo: separatore ;, una riga per campo alterato con il valore
         /// precedente e quello attuale, una riga sola per le referenze senza alterazioni. Le colonne del
-        /// cliente le conosce solo la pagina: qui ci sono quelle del core.</summary>
+        /// cliente le conosce solo la pagina: qui ci sono quelle del core. I20-1247: per un campo forzato
+        /// Prima e' il valore che resta, Dopo quello della lista non applicato, e Forzatura "trattenuta".</summary>
         public static string Csv(IEnumerable<IDictionary<string, object>> report)
         {
             var testo = new StringBuilder();
-            testo.Append(Riga(new[] { "Stato", "Area/canale", "Codice", "Etichetta", "Campo", "Prima", "Dopo" }));
+            testo.Append(Riga(new[] { "Stato", "Area/canale", "Codice", "Etichetta", "Campo", "Prima", "Dopo", "Forzatura" }));
             foreach (var riga in report)
             {
                 string[] inizio = { Stato(riga), Valore(riga, "AC"), Valore(riga, "Referenza.Codice"), Valore(riga, KeyEtichetta) };
                 var alterazioni = Alterazioni(riga);
-                if (alterazioni.Count == 0)
+                var forzature = Forzature(riga);
+                if (alterazioni.Count == 0 && forzature.Count == 0)
                 {
-                    testo.Append(Riga(inizio.Concat(new[] { "", "", "" })));
+                    testo.Append(Riga(inizio.Concat(new[] { "", "", "", "" })));
                     continue;
                 }
                 foreach (var campo in alterazioni)
                 {
-                    testo.Append(Riga(inizio.Concat(new[] { campo.Key, Testo(campo.Value), Valore(riga, campo.Key) })));
+                    testo.Append(Riga(inizio.Concat(new[] { campo.Key, Testo(campo.Value), Valore(riga, campo.Key), "" })));
+                }
+                foreach (var campo in forzature)
+                {
+                    testo.Append(Riga(inizio.Concat(new[] { campo.Key, Valore(riga, campo.Key), Testo(campo.Value), ForzaturaTrattenuta })));
                 }
             }
             return testo.ToString();
@@ -97,7 +111,17 @@ namespace Istanta.Models
 
         private static Dictionary<string, object?> Alterazioni(IDictionary<string, object> riga)
         {
-            if (!riga.TryGetValue(GLOBAL_VARIABLES.keyAlterazioni, out object? valore) || valore == null)
+            return Mappa(riga, GLOBAL_VARIABLES.keyAlterazioni);
+        }
+
+        private static Dictionary<string, object?> Forzature(IDictionary<string, object> riga)
+        {
+            return Mappa(riga, KeyForzature);
+        }
+
+        private static Dictionary<string, object?> Mappa(IDictionary<string, object> riga, string chiave)
+        {
+            if (!riga.TryGetValue(chiave, out object? valore) || valore == null)
             {
                 return new Dictionary<string, object?>();
             }

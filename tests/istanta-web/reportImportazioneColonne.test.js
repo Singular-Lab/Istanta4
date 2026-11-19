@@ -71,7 +71,7 @@ const report = promo.substring(inizio, promo.indexOf('\n    consultaErrorReport(
 test('intestazione e celle vengono dalle colonne del core, meno quelle che l\'agenzia esclude', () => {
     //TASK-c4fdc17b: con la natura dello scatto se l'agenzia la chiede; le celle dal testo di righeDelReport.
     assert.match(report, /let colonneCore = Promo\.colonneCoreDelReport\(this\.agenzia\.getColonneCoreEscluseReport != null \? this\.agenzia\.getColonneCoreEscluseReport\(\) : \[\],/);
-    assert.match(report, /colonneCore\.forEach\(colonna => \{\s*tblRows \+= colonna\.nome == "Alterazioni" \? Promo\.cellaCoreDelReport\(colonna, item, riga\.alterate\)/);
+    assert.match(report, /colonneCore\.forEach\(colonna => \{\s*tblRows \+= colonna\.nome == "Alterazioni" \? Promo\.cellaCoreDelReport\(colonna, item, riga\.alterate, riga\.forzate\)/);
     assert.match(report, /\$\{colonneCore\.map\(colonna => intestazione\(colonna\.nome, colonna\.titolo\)\)\.join\(""\)\}/);
     assert.doesNotMatch(report, /<th>Alterazioni<\/th>/);
     //Lo stato e il colore delle righe cambiate non dipendono dalla colonna Alterazioni.

@@ -1494,6 +1494,12 @@ namespace Istanta.Controllers
 
                                     Dictionary<string, object> oldItem = JsonConvert.DeserializeObject<Dictionary<string, object>>(_rec.Dato!)!;
 
+                                    //I20-1247: i campi bloccati dai cambi strutturali riprendono il valore di prima, e quelli
+                                    //che la lista non porta tornano nel dato, prima del confronto: per data di modifica,
+                                    //alterazioni e registro non sono cambiati. Le forzature che trattengono un valore
+                                    //diverso della lista le segnala il report.
+                                    CampiBloccati.Esito bloccati = CampiBloccati.ApplicaAllaReimportazione(oldItem, item);
+
                                     //La data di modifica cambia solo se un campo del tracciato e' cambiato (anche uno nuovo,
                                     //che le Alterazioni qui sotto non registrano). Va calcolata prima del ciclo, che allinea
                                     //oldItem al dato nuovo.
@@ -1551,7 +1557,9 @@ namespace Istanta.Controllers
                                         }
                                     }
 
-                                    item[GLOBAL_VARIABLES.keyAlterazioni] = alterazioni;
+                                    //I20-1247: nel dato restano anche le alterazioni dei cambi strutturali ancora in vigore,
+                                    //con la loro mappa dei blocchi; registro e report hanno solo quelle dell'importazione.
+                                    item[GLOBAL_VARIABLES.keyAlterazioni] = CampiBloccati.AlterazioniDaSalvare(alterazioni, bloccati);
 
                                     _rec.Versione = versioneLab;
 
@@ -1585,6 +1593,12 @@ namespace Istanta.Controllers
                                         //sono i campi da controllare: con la condizione invertita il ciclo non toglieva niente,
                                         //e corretto avrebbe tolto proprio i campi che contano (prezzi, tema, meccanica).
                                         item[GLOBAL_VARIABLES.keyAlterazioni] = ReportImportazione.SenzaCampiEsclusi(alterazioni, dbConfExt.campiEsclusiDalReport);
+                                        //I20-1247: i campi forzati per cui la lista porta un altro valore, con il valore della lista.
+                                        var forzature = ReportImportazione.SenzaCampiEsclusi(bloccati.Forzature, dbConfExt.campiEsclusiDalReport);
+                                        if (forzature.Count > 0)
+                                        {
+                                            item[ReportImportazione.KeyForzature] = forzature;
+                                        }
 
                                         _report.Add(item);
                                     }

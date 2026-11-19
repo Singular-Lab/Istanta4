@@ -500,3 +500,23 @@ test("il Salva del noRender su piu' box manda a ogni box cambiato la sua lista e
     assert.strictEqual(NoRenderElementi.modificheNonSalvate(listaB, piuBox[1].statoSalvato), 1);
     assert.deepStrictEqual(messaggi, [["Code SRF-144 noRender salvato: 1 box su 2. Non riusciti: B (salvataggio non riuscito)", "warning"]]);
 });
+
+/* ---- I20-1247: gli Id delle azioni ---- */
+
+test("con le azioni della configurazione i parametri dicono quali sono, per il blocco dei campi", () => {
+    const a = Object.assign(azione(1, "Rimuovi forzatura", undefined, [{ field: "sconto_linea_forzato", valore: "false" }]), { idConfig: 10 });
+    const b = Object.assign(azione(2, "Metti fuori volantino", undefined, [{ field: "Referenza$InVolantino", valore: "false" }]), { idConfig: 11 });
+
+    const params = schedaRef.parametriAzioniDelBox([record("123", "123", {}, true, 77)], [a, b], {}, "tutto");
+
+    assert.match(params, /&azioni\[0\]\.idAzioni=10%2C11$/);
+    //Un'azione senza Id della configurazione non ne aggiunge: il server blocca.
+    assert.doesNotMatch(schedaRef.parametriAzioniDelBox([record("123", "123", {}, true, 77)], [azione(1, "x")], {}, "tutto"), /idAzioni/);
+});
+
+test("anche la scheda di un box manda gli Id delle azioni aggiunte", () => {
+    const scheda = fs.readFileSync(path.join(__dirname, '..', '..', 'plugin', 'schedaRef.js'), 'utf8').replace(/\r/g, '');
+    const prepara = scheda.slice(scheda.indexOf("preparaCambioStrutturale() {"), scheda.indexOf("this.salvaCambioStrutturaleDo(params);", scheda.indexOf("preparaCambioStrutturale() {")));
+    assert.match(prepara, /const idAzioni = CambiStrutturali\.idAzioni\(this\.azioniStrutturaliAggiunte\(\)\);/);
+    assert.match(prepara, /params \+= "&" \+ kAz \+ "\.idAzioni=" \+ encodeURIComponent\(idAzioni\);/);
+});

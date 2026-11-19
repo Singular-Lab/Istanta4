@@ -9463,6 +9463,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 foreach (var (act, ptrList_Act) in azioniConRecord)
                 {
                     Dictionary<string, string> attributi = act.attributi;
+                    //I20-1247: i campi che le azioni sul box lasciano sbloccati, letti dalla configurazione
+                    //dell'external source con gli Id che manda il Plugin; senza Id tutto si blocca.
+                    HashSet<string> campiSbloccati = CampiBloccati.CampiSbloccati(act.idAzioni, SingletonConfiguration.DbPluginAgenzia?.DB?.cambiStrutturali);
 
                     foreach (PromoTracciatiRecord ptr in ptrList_Act)
                     {
@@ -9489,6 +9492,13 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         foreach (string k in attributi.Keys)
                         {
                             string kParsed = k.Replace("$", ".");
+
+                            //I20-1247: un cambio strutturale blocca il campo per la reimportazione, salvo le
+                            //azioni dichiarate non bloccanti. L'artwork (strutturale false) non blocca.
+                            if (strutturale)
+                            {
+                                CampiBloccati.Registra(alterazioniObj, kParsed, !campiSbloccati.Contains(kParsed));
+                            }
 
                             if (metaRef.ContainsKey(kParsed))
                             {

@@ -292,8 +292,22 @@ const cambiStrutturali = {
                 item: campo.item ?? null
             })),
             labelELementCorreggo: struttura.labelElementCorreggo ?? null,
-            opzioniValide: this._opzioniValide(struttura)
+            opzioniValide: this._opzioniValide(struttura),
+            //I20-1247: l'Id della configurazione (id qui sopra e' solo la posizione): il server ci
+            //legge se i campi dell'azione restano bloccati alla reimportazione.
+            idConfig: struttura.id ?? struttura.Id ?? null
         };
+    },
+
+    /// I20-1247: gli Id della configurazione delle azioni scelte, separati da virgola, per
+    /// azioni[0].idAzioni di Menabo/setCambioStrutturale. Il blocco dei campi lo decide il server
+    /// dalla configurazione: il Plugin manda solo quali azioni sono, mai il blocco.
+    idAzioni(azioni) {
+        const ids = (Array.isArray(azioni) ? azioni : [])
+            .map(a => a?.idConfig)
+            .filter(id => id != null && String(id) !== "")
+            .map(id => String(id));
+        return [...new Set(ids)].join(",");
     },
 
     /// I20-1049: le opzioni valide di una struttura del server, nell'ordine della tendina. Una

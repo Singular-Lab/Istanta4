@@ -163,12 +163,41 @@ public class ReportImportazioneTests : IDisposable
 
         Assert.Equal(new[]
         {
-            "Stato;Area/canale;Codice;Etichetta;Campo;Prima;Dopo",
-            "Cambiato;SSA;100;VOL;prezzo_offerta;2,99;2,49",
-            "Cambiato;SSA;100;VOL;tema;SPRINT;JOLLY",
-            "Nuovo;SSA;101;VOL;;;",
-            "Uscito;CNA;103;VOL;;;"
+            "Stato;Area/canale;Codice;Etichetta;Campo;Prima;Dopo;Forzatura",
+            "Cambiato;SSA;100;VOL;prezzo_offerta;2,99;2,49;",
+            "Cambiato;SSA;100;VOL;tema;SPRINT;JOLLY;",
+            "Nuovo;SSA;101;VOL;;;;",
+            "Uscito;CNA;103;VOL;;;;"
         }, linee);
+    }
+
+    /// I20-1247: un campo forzato che la lista avrebbe cambiato. Il dato tiene il suo valore; nel CSV
+    /// Prima e' quello che resta, Dopo quello della lista, e Forzatura dice "trattenuta".
+    [Fact]
+    public void Nel_CSV_un_campo_forzato_trattenuto_ha_la_sua_riga_e_la_referenza_e_cambiata()
+    {
+        var report = new List<IDictionary<string, object>>
+        {
+            new Dictionary<string, object> { ["Referenza.Codice"] = "200", ["AC"] = "SSA", [ReportImportazione.KeyEtichetta] = "VOL", ["versione"] = 3,
+                ["distintivita"] = " benessere",
+                [GLOBAL_VARIABLES.keyAlterazioni] = new Dictionary<string, object>(),
+                [ReportImportazione.KeyForzature] = new Dictionary<string, object> { ["distintivita"] = "premium" } },
+        };
+
+        var linee = ReportImportazione.Csv(report).TrimEnd().Split("\r\n");
+
+        Assert.Equal("Cambiato;SSA;200;VOL;distintivita; benessere;premium;trattenuta", linee[1]);
+        Assert.Equal(2, linee.Length);
+        Assert.Equal(ReportImportazione.StatoCambiato, ReportImportazione.Stato(report[0]));
+    }
+
+    [Fact]
+    public void Senza_forzature_ne_alterazioni_una_referenza_reimportata_resta_inalterata()
+    {
+        //Le forzature arrivano dal Report.json riletto: un JObject vuoto non conta.
+        var riga = new Dictionary<string, object> { ["versione"] = 3, [ReportImportazione.KeyForzature] = new JObject() };
+
+        Assert.Equal(ReportImportazione.StatoInalterato, ReportImportazione.Stato(riga));
     }
 
     [Fact]
@@ -180,7 +209,7 @@ public class ReportImportazioneTests : IDisposable
                 [GLOBAL_VARIABLES.keyAlterazioni] = new Dictionary<string, object> { ["descrizione"] = "mele" } }
         };
 
-        Assert.Equal("Cambiato;A;1;;descrizione;mele;\"mele; pere \"\"bio\"\"\"", ReportImportazione.Csv(report).Split("\r\n")[1]);
+        Assert.Equal("Cambiato;A;1;;descrizione;mele;\"mele; pere \"\"bio\"\"\";", ReportImportazione.Csv(report).Split("\r\n")[1]);
     }
 
     [Fact]

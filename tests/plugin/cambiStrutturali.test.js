@@ -409,3 +409,22 @@ test('Metti fuori volantino di Coop e Famila scrive solo il campo core, a false'
         }
     }
 });
+
+/* ---- I20-1247: gli Id delle azioni per il blocco dei campi ---- */
+
+test('la scheda porta l\'Id della configurazione, non solo la posizione', () => {
+    assert.strictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(Object.assign(struttura(), { id: 10 }), {}, 3).idConfig, 10);
+    assert.strictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(Object.assign(struttura(), { Id: 7 }), {}, 3).idConfig, 7);
+    assert.strictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(struttura(), {}, 3).idConfig, null);
+    assert.strictEqual(cambiStrutturali._mapCambioStrutturaleToLegacy(Object.assign(struttura(), { id: 10 }), {}, 3).id, 3);
+});
+
+test('gli Id delle azioni scelte vanno al server una volta ciascuno, mai il blocco', () => {
+    assert.strictEqual(cambiStrutturali.idAzioni([{ idConfig: 2 }, { idConfig: 10 }, { idConfig: 2 }]), '2,10');
+    assert.strictEqual(cambiStrutturali.idAzioni([{ idConfig: null }, {}, null]), '');
+    assert.strictEqual(cambiStrutturali.idAzioni(undefined), '');
+    //Il Plugin non sa se un'azione blocca: lo legge il server dalla configurazione.
+    const legacy = cambiStrutturali._mapCambioStrutturaleToLegacy(azioneEdro21('Rimuovi format SDB'), {}, 1);
+    assert.strictEqual(legacy.locked, undefined);
+    assert.strictEqual(cambiStrutturali.idAzioni([legacy]), '2');
+});
