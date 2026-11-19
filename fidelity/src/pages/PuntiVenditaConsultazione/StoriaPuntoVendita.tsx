@@ -12,7 +12,7 @@ import { PreviewImmaginePdf } from "@/components/PreviewImmaginePdf";
 import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
 import { useFetchVolantiniStoriaPuntoVendita, useFetchVolantinoPuntoVendita } from "@/query/query";
-import { formatData, formatNumero } from "@/utils/format";
+import { formatNumero } from "@/utils/format";
 import { testoValidita, urlAnteprimaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useState, type ReactNode } from "react";
@@ -45,16 +45,7 @@ import {
   type SintesiPeriodo,
 } from "./analisi";
 import { RigaStampata, StatoBox, type QueryBox } from "./componenti";
-import {
-  chiaveEvento,
-  descriviEvento,
-  nomePdfVolantino,
-  periodoMesi,
-  testoRecapito,
-  testoSintesi,
-  testoVolantini,
-  urlPdfVolantino,
-} from "./storia";
+import { nomePdfVolantino, testoSintesi, testoVolantini, urlPdfVolantino } from "./storia";
 
 /**
  * Scala sotto la quale la timeline non scorre ma sta nella larghezza della scheda: cinque anni di
@@ -339,16 +330,23 @@ export function BoxStoria({
       { replace: true }
     );
 
-  // Senza volantini la guida alla lettura della timeline non serve: parla lo stato vuoto
+  // Senza volantini la guida alla lettura della timeline non serve: parla lo stato vuoto.
+  // Altrimenti una frase breve; la guida completa si apre a richiesta
   const senzaVolantini = analisi.data !== undefined && analisi.data.timeline.length === 0;
-  const descrizione = senzaVolantini
-    ? undefined
-    : [
-        storia?.sintesi ? `${testoSintesi(storia.sintesi)}.` : null,
-        "Ogni barra è un volantino in cui compare, dal primo all'ultimo giorno di validità; sotto, sullo stesso asse, le sue referenze, il suo sconto medio, le sue meccaniche e l'indirizzo e il telefono stampati. Passa su un volantino per i suoi numeri, sceglilo per vederlo qui sotto.",
-      ]
-        .filter(Boolean)
-        .join(" ");
+  const descrizione = senzaVolantini ? undefined : (
+    <>
+      <p>{[storia?.sintesi ? `${testoSintesi(storia.sintesi)}.` : null, "Scegli un volantino per vederlo qui sotto."].filter(Boolean).join(" ")}</p>
+      <details className="group/guida mt-1">
+        <summary className="inline-flex cursor-pointer select-none items-center gap-1 text-xs font-medium text-primary">
+          <Lucide icon="ChevronRight" aria-hidden="true" className="h-3.5 w-3.5 transition-transform group-open/guida:rotate-90" />
+          Come si legge
+        </summary>
+        <p className="mt-1 max-w-3xl text-xs">
+          Ogni barra è un volantino in cui compare, dal primo all'ultimo giorno di validità. Sotto, sullo stesso asse, le sue referenze, il suo sconto medio, le sue meccaniche e l'indirizzo e il telefono stampati. Passa su un volantino per i suoi numeri.
+        </p>
+      </details>
+    </>
+  );
 
   return (
     <Sezione titolo="Storia" descrizione={descrizione}>
@@ -385,97 +383,6 @@ export function BoxStoria({
   );
 }
 
-interface VoceCambiamento {
-  chiave: string;
-  /** Per ordinare, dal più recente (ISO). */
-  ordine: string;
-  icona: string;
-  titolo: string;
-  quando: string;
-  dettaglio: string;
-  diverso?: boolean;
-}
-
-/**
- * "Cambiamenti": gli eventi della storia e i periodi dell'indirizzo e del telefono stampati, dal
- * più recente, con il primo volantino registrato in fondo. Vale per tutta la storia, non per il periodo.
- */
-export function Cambiamenti({ storia, primo }: { storia: QueryBox<StoriaPuntoVendita>; primo: EdizioneTimeline | null }) {
-  return (
-    <Sezione titolo="Cambiamenti" descrizione="Eventi e recapiti stampati nei volantini, dal più recente.">
-      <StatoBox
-        query={storia}
-        titoloErrore="Cambiamenti non caricati"
-        vuoto={dati =>
-          dati.eventi.length === 0 && dati.recapiti.length === 0 && !primo ? (
-            <EmptyState compatta icon="Clock" title="Nessun cambiamento" description="Nei volantini importati insegna, area, indirizzo e telefono sono sempre gli stessi." />
-          ) : null
-        }
-      >
-        {dati => {
-          const voci: VoceCambiamento[] = [
-            ...dati.eventi.map((evento, i) => {
-              const descritto = descriviEvento(evento);
-              return {
-                chiave: chiaveEvento(evento, i),
-                ordine: evento.tipo === "assente" ? evento.dal : evento.data,
-                icona: descritto.icona,
-                titolo: descritto.titolo,
-                quando: descritto.data,
-                dettaglio: descritto.dettaglio,
-              };
-            }),
-            ...dati.recapiti.map(recapito => ({
-              chiave: `recapito-${recapito.dal}-${recapito.al}-${recapito.indirizzo ?? ""}-${recapito.telefono ?? ""}`,
-              ordine: recapito.dal,
-              icona: "MapPin",
-              titolo: recapito.diversoDallAttuale ? "Stampato diverso dall'anagrafica" : "Stampato come in anagrafica",
-              quando: `${periodoMesi(recapito.dal, recapito.al)} · ${testoVolantini(recapito.volantini)}`,
-              dettaglio: testoRecapito(recapito),
-              diverso: recapito.diversoDallAttuale,
-            })),
-          ].sort((a, b) => b.ordine.localeCompare(a.ordine));
-          return (
-            <ul aria-label="Cambiamenti" className="flex flex-col gap-3">
-              {voci.map(voce => (
-                <li key={voce.chiave} className="flex gap-3">
-                  <span className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-darkmode-400 dark:text-slate-300">
-                    <Lucide icon={voce.icona} aria-hidden="true" className="h-3.5 w-3.5" />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-                      <span className="font-medium">{voce.titolo}</span>
-                      <span className="text-xs tabular-nums text-slate-500">{voce.quando}</span>
-                      {voce.diverso && <StatusBadge tono="warning" etichetta="Diverso dall'attuale" icon="TriangleAlert" />}
-                    </div>
-                    <p className="text-sm text-slate-600 [overflow-wrap:anywhere] dark:text-slate-400">{voce.dettaglio}</p>
-                  </div>
-                </li>
-              ))}
-              {primo && (
-                <li className="flex gap-3">
-                  <span className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-darkmode-400 dark:text-slate-300">
-                    <Lucide icon="Flag" aria-hidden="true" className="h-3.5 w-3.5" />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="text-sm">
-                      <span className="font-medium">Primo volantino registrato</span>{" "}
-                      <span className="text-xs tabular-nums text-slate-500">{formatData(primo.dal)}</span>
-                    </div>
-                    <p className="text-sm text-slate-600 [overflow-wrap:anywhere] dark:text-slate-400">
-                      {primo.promo.nome} · {primo.canale.nome} · {primo.area.nome}
-                    </p>
-                  </div>
-                </li>
-              )}
-            </ul>
-          );
-        }}
-      </StatoBox>
-    </Sezione>
-  );
-}
-
 function VoceVolantino({ volantino }: { volantino: VolantinoNellaStoria }) {
   const [anteprimaAperta, setAnteprimaAperta] = useState(false);
   const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
@@ -503,9 +410,8 @@ function VoceVolantino({ volantino }: { volantino: VolantinoNellaStoria }) {
       </div>
       <div className="min-w-0 flex-1">
         <h4 className="title-card [overflow-wrap:anywhere] dark:text-slate-100">{promo.nome}</h4>
-        <div className="text-xs text-slate-500 [overflow-wrap:anywhere]">
-          {[validita, volantino.titoloKit].filter(Boolean).join(" · ")}
-        </div>
+        {/* Il titolo del kit è un codice tecnico (VOLANTINO_SSCNCY_CYTO_VOL): bastano promo, validità, insegna e area */}
+        {validita && <div className="text-xs tabular-nums text-slate-500">{validita}</div>}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <Badge variant="primary" size="sm">
             <Lucide icon="Store" aria-hidden="true" className="h-3 w-3" />
@@ -522,15 +428,16 @@ function VoceVolantino({ volantino }: { volantino: VolantinoNellaStoria }) {
             <StatusBadge tono="info" etichetta="Collegato a mano" icon="Link" />
           )}
         </div>
-        <p className="mt-2 break-words text-sm text-slate-600 dark:text-slate-400">
-          <span className="sr-only">Riga stampata: </span>«{volantino.rigaStampata}»
+        <p className="mt-2">
+          <span className="sr-only">Riga stampata: </span>
+          <RigaStampata>{volantino.rigaStampata}</RigaStampata>
         </p>
         {volantino.numeroReferenze !== null && (
           <div className="mt-1 text-xs text-slate-500">{formatNumero(volantino.numeroReferenze)} referenze</div>
         )}
       </div>
-      {/* Le azioni in riga (due righe al massimo da desktop), non in una colonna alta quanto quattro pulsanti */}
-      <div className="flex flex-none flex-wrap content-start items-start gap-2 sm:max-w-[17rem] sm:justify-end">
+      {/* Le azioni su una riga da desktop, non in una colonna né spezzate su due righe */}
+      <div className="flex flex-none flex-wrap content-start items-start gap-2 sm:flex-nowrap sm:justify-end">
         {puoConsultareVolantini && (
           <Button as={Link} to={percorsoDettaglioVolantino(volantino.idKit)} size="sm" variant="outline-secondary">
             <Lucide icon="BookOpen" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />

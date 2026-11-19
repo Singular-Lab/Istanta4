@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STATO_PROMO } from '../../../lib/enums';
 import { chiaveIndirizzo, chiaveTelefono } from './puntoVenditaNormalization';
-import { type ApparizioneStoria, calcolaStoria, MINIMO_VOLANTINI_ASSENZA, ultimaApparizione } from './storiaPuntoVendita';
+import { type ApparizioneStoria, calcolaStoria, chiaveRecapitoIndirizzo, insegneNelTempo, MINIMO_VOLANTINI_ASSENZA, ultimaApparizione } from './storiaPuntoVendita';
 
 // La storia del PV dalle sue apparizioni nei volantini: periodi, eventi confermati da almeno due edizioni
 
@@ -237,5 +237,77 @@ describe('ultimaApparizione', () => {
 
     expect(ultimaApparizione([recente, vecchia])).toBe(recente);
     expect(ultimaApparizione([])).toBeNull();
+  });
+});
+
+describe('recapiti stampati senza differenze di scrittura', () => {
+  // BARGA: "Via Canipaia snc - tel. 0583 711452" e "VIA CANIPAIA - tel. 0583711452" sono lo stesso recapito
+  const BARGA = { id: 'pv-barga', indirizzo: 'VIA CANIPAIA', telefono: '0583711452' };
+
+  it('snc e il formato del telefono non sono un cambio ne\' una differenza dall\'anagrafica', () => {
+    const apparizioni = [
+      apparizione(settimana(0), { indirizzo: 'VIA CANIPAIA', telefono: '0583711452' }),
+      apparizione(settimana(1), { indirizzo: 'VIA CANIPAIA', telefono: '0583711452' }),
+      apparizione(settimana(2), { indirizzo: 'Via Canipaia snc', telefono: '0583 711452' }),
+      apparizione(settimana(3), { indirizzo: 'Via Canipaia snc', telefono: '0583 711452' }),
+    ];
+
+    const storia = calcolaStoria(BARGA, apparizioni);
+
+    expect(storia.recapiti).toHaveLength(1);
+    expect(storia.recapiti[0]).toMatchObject({ volantini: 4, diversoDallAttuale: false });
+    expect(storia.eventi.filter(evento => evento.tipo === 'cambio_indirizzo' || evento.tipo === 'cambio_telefono')).toEqual([]);
+  });
+
+  it('una via davvero diversa resta un cambio e una differenza', () => {
+    const apparizioni = [
+      apparizione(settimana(0), { indirizzo: 'Via Roma 3 snc', telefono: '0583711452' }),
+      apparizione(settimana(1), { indirizzo: 'Via Roma 3 snc', telefono: '0583711452' }),
+      apparizione(settimana(2), { indirizzo: 'VIA CANIPAIA', telefono: '0583711452' }),
+      apparizione(settimana(3), { indirizzo: 'VIA CANIPAIA', telefono: '0583711452' }),
+    ];
+
+    const storia = calcolaStoria(BARGA, apparizioni);
+
+    expect(storia.recapiti.map(recapito => recapito.diversoDallAttuale)).toEqual([true, false]);
+    expect(storia.eventi.some(evento => evento.tipo === 'cambio_indirizzo')).toBe(true);
+  });
+
+  it('chiaveRecapitoIndirizzo toglie solo la parola SNC', () => {
+    expect(chiaveRecapitoIndirizzo('VIA CANIPAIA SNC')).toBe('VIA CANIPAIA');
+    expect(chiaveRecapitoIndirizzo('VIA SNCF 3')).toBe('VIA SNCF 3');
+    expect(chiaveRecapitoIndirizzo('SNC')).toBeNull();
+    expect(chiaveRecapitoIndirizzo(null)).toBeNull();
+  });
+});
+
+describe('insegne nel tempo', () => {
+  const CONAD = { canale: { id: 'CY', nome: 'Conad' }, area: { id: 'EM', nome: 'Emilia' } };
+  const CITY = { canale: { id: 'CC', nome: 'City' }, area: { id: 'EM', nome: 'Emilia' } };
+  const kit = (idKit: string, data: string, insegna: typeof CONAD, al: string | null = piuGiorni(data, 13)) => ({ idKit, data, al, ...insegna });
+
+  it('due insegne: un periodo per insegna, dal piu\' vecchio, con i suoi volantini', () => {
+    const periodi = insegneNelTempo([
+      kit('k6', '2026-10-26', CITY),
+      kit('k1', '2025-01-09', CONAD),
+      kit('k5', '2026-09-24', CITY),
+      kit('k2', '2025-12-04', CONAD, null),
+    ]);
+
+    expect(periodi).toEqual([
+      { ...CONAD, dal: '2025-01-09', al: '2025-12-04', volantini: 2 },
+      { ...CITY, dal: '2026-09-24', al: piuGiorni('2026-10-26', 13), volantini: 2 },
+    ]);
+  });
+
+  it('un ritorno all\'insegna di prima e\' un periodo nuovo', () => {
+    const periodi = insegneNelTempo([kit('a', '2024-03-07', CONAD), kit('b', '2025-03-06', CITY), kit('c', '2026-03-05', CONAD)]);
+
+    expect(periodi.map(periodo => periodo.canale.nome)).toEqual(['Conad', 'City', 'Conad']);
+  });
+
+  it('una sola insegna: un periodo solo; senza volantini nessuno', () => {
+    expect(insegneNelTempo([kit('a', '2026-09-24', CITY), kit('b', '2026-10-26', CITY)])).toHaveLength(1);
+    expect(insegneNelTempo([])).toEqual([]);
   });
 });

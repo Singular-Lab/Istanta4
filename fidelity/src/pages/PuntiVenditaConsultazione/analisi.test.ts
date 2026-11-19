@@ -40,6 +40,8 @@ import {
   tracceStoria,
   ULTIMI_12_MESI,
   ULTIMI_3_MESI,
+  chiaveConfrontoIndirizzo,
+  chiaveConfrontoTelefono,
 } from "./analisi";
 
 // Pagine del punto vendita costruite sulla timeline: formati, percorsi, colori e dati dei grafici
@@ -249,6 +251,25 @@ describe("indirizzo e telefono stampati", () => {
 
   it("una riga senza nessun valore stampato non si mostra", () => {
     expect(righeRecapiti([recapito({ telefono: null })]).map(r => r.id)).toEqual(["indirizzo"]);
+  });
+
+  it("due scritture dello stesso recapito sono un tratto solo, uguale all'anagrafica", () => {
+    // BARGA: "VIA CANIPAIA" e "Via Canipaia snc", "0583711452" e "0583 711452"
+    const righe = righeRecapiti([
+      recapito({ localita: "BARGA", indirizzo: "VIA CANIPAIA", telefono: "0583711452", dal: "2025-12-29", al: "2026-01-11", volantini: 1 }),
+      recapito({ localita: "BARGA", indirizzo: "Via Canipaia snc", telefono: "0583 711452", dal: "2026-09-24", al: "2026-10-07", volantini: 1, diversoDallAttuale: true }),
+    ]);
+
+    const [indirizzo, telefono] = righe;
+    expect(indirizzo.fasce.map(f => [f.etichetta, f.tono, f.dal, f.al])).toEqual([["VIA CANIPAIA, BARGA", "evidenza", "2025-12-29", "2026-10-07"]]);
+    expect(telefono.fasce.map(f => [f.etichetta, f.tono])).toEqual([["tel. 0583711452", "evidenza"]]);
+  });
+
+  it("chiavi di confronto dei recapiti", () => {
+    expect(chiaveConfrontoIndirizzo("Via Canipaia snc")).toBe(chiaveConfrontoIndirizzo("VIA CANIPAIA"));
+    expect(chiaveConfrontoIndirizzo("Via Roma 3")).not.toBe(chiaveConfrontoIndirizzo("Via Roma 30"));
+    expect(chiaveConfrontoTelefono("+39 0583 711452")).toBe(chiaveConfrontoTelefono("0583711452"));
+    expect(chiaveConfrontoTelefono(null)).toBeNull();
   });
 });
 

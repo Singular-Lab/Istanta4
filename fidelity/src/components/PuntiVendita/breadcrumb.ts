@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import type { DettaglioReferenzaPv } from "../../../lib/puntiVendita/analisi";
 import type { PuntoVenditaConsultazione } from "../../../lib/puntiVendita/consultazione";
 import type { PuntoVenditaResponseDTO } from "../../../server/core/dto";
+import { testoLeggibile } from "../../utils/testoLeggibile";
 
 /**
  * Nomi del breadcrumb per le pagine dei punti vendita: il nome del punto vendita al posto del suo
@@ -53,7 +54,8 @@ const dettagliDelPercorso = (segmenti: string[]): { puntoVendita: Dettaglio | nu
   const puntoVendita: Dettaglio = {
     indice: 1,
     chiave: ["puntiVendita", "consultazione", idPv],
-    nome: dato => (dato as PuntoVenditaConsultazione | undefined)?.nome,
+    // Come il titolo della scheda: un nome tutto in maiuscolo si legge come parole, solo a video
+    nome: dato => testoLeggibile((dato as PuntoVenditaConsultazione | undefined)?.nome),
   };
   const [, , pagina, idFiglio] = segmenti;
   if (pagina === "referenze" && idFiglio && segmenti.length === 4) {

@@ -42,6 +42,44 @@ export interface ApparizioneStoria {
   abbinamento: TipoAbbinamento;
 }
 
+/**
+ * Un volantino in cui compare il PV, di qualunque insegna e area: per le insegne nel tempo, che
+ * mostrano anche le combinazioni escluse dalla storia.
+ */
+export interface KitDelPuntoVendita {
+  idKit: string;
+  /** Giorno dell'edizione (YYYY-MM-DD). */
+  data: string;
+  /** Fine della validita' (YYYY-MM-DD), se c'e'. */
+  al: string | null;
+  canale: RiferimentoStoria;
+  area: RiferimentoStoria;
+}
+
+/**
+ * Le insegne nel tempo (spec anagrafica-punti-vendita, "Insegne nel tempo nella scheda del punto
+ * vendita"): i periodi consecutivi con la stessa insegna e la stessa area, dal piu' vecchio, con i
+ * volantini di ogni periodo. Un ritorno a un'insegna precedente e' un periodo nuovo. Due volantini
+ * della stessa edizione con insegne diverse si ordinano per insegna, area e kit: l'ordine non
+ * dipende da come arrivano.
+ */
+export function insegneNelTempo(kit: readonly KitDelPuntoVendita[]): PeriodoInsegna[] {
+  const ordinati = [...kit].sort((a, b) =>
+    confronta(a.data, b.data) || confronta(a.canale.id, b.canale.id) || confronta(a.area.id, b.area.id) || confronta(a.idKit, b.idKit));
+  const periodi: Array<PeriodoInsegna & { kit: Set<string> }> = [];
+  for (const volantino of ordinati) {
+    const ultimo = periodi[periodi.length - 1];
+    const fine = volantino.al ?? volantino.data;
+    if (ultimo && ultimo.canale.id === volantino.canale.id && ultimo.area.id === volantino.area.id) {
+      ultimo.kit.add(volantino.idKit);
+      if (fine > ultimo.al) ultimo.al = fine;
+      continue;
+    }
+    periodi.push({ canale: volantino.canale, area: volantino.area, dal: volantino.data, al: fine, volantini: 0, kit: new Set([volantino.idKit]) });
+  }
+  return periodi.map(({ kit: volantini, ...periodo }) => ({ ...periodo, volantini: volantini.size }));
+}
+
 /** Recapiti attuali del punto vendita in anagrafica. */
 export interface PuntoVenditaAttuale {
   id: string;
@@ -87,6 +125,15 @@ interface Recapito {
 }
 
 const confronta = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Chiave dell'indirizzo per confrontare i recapiti stampati fra loro e con l'anagrafica: "SNC"
+ * (senza numero civico) non e' una differenza, "VIA CANIPAIA SNC" e' "VIA CANIPAIA" (spec
+ * anagrafica-punti-vendita, "Recapiti stampati confrontati senza differenze di scrittura").
+ * Solo per la storia: l'abbinamento delle righe usa chiaveIndirizzo com'e'.
+ */
+export const chiaveRecapitoIndirizzo = (chiave: string | null): string | null =>
+  chiave?.replace(/(^| )SNC(?= |$)/g, ' ').replace(/\s+/g, ' ').trim() || null;
 
 /** In ordine di edizione; a parita' per fine validita', titolo e kit, cosi' l'ordine non cambia fra due letture. */
 export function ordinaApparizioni(apparizioni: readonly ApparizioneStoria[]): ApparizioneStoria[] {
@@ -251,7 +298,7 @@ export function calcolaStoria(
   puntoVendita: PuntoVenditaAttuale,
   elencoApparizioni: readonly ApparizioneStoria[],
   volantiniSenza: ReadonlyArray<Pick<VolantinoSenzaPuntoVendita, 'idKit' | 'data'>> = [],
-): StoriaPuntoVendita {
+): Omit<StoriaPuntoVendita, 'insegneNelTempo'> {
   const apparizioni = unaPerKit(ordinaApparizioni(elencoApparizioni));
   if (apparizioni.length === 0) {
     return { idPuntoVendita: puntoVendita.id, sintesi: null, anni: [], insegne: [], recapiti: [], eventi: [] };
@@ -274,7 +321,7 @@ export function calcolaStoria(
   const trattiRecapito = tratti<Recapito>(
     edizioni,
     ({ localita, indirizzo, telefono, chiaveIndirizzo: indirizzoChiave, chiaveTelefono: telefonoChiave }) => ({
-      localita, indirizzo, telefono, chiaveIndirizzo: indirizzoChiave, chiaveTelefono: telefonoChiave,
+      localita, indirizzo, telefono, chiaveIndirizzo: chiaveRecapitoIndirizzo(indirizzoChiave), chiaveTelefono: telefonoChiave,
     }),
     recapitiCompatibili,
     unisciRecapiti,
@@ -298,7 +345,7 @@ export function calcolaStoria(
     eventi.push({ tipo: 'assente', dal: primo.data, volantiniSenza: new Set(senza.map(volantino => volantino.idKit)).size });
   }
 
-  const indirizzoAttuale = chiaveIndirizzo(puntoVendita.indirizzo);
+  const indirizzoAttuale = chiaveRecapitoIndirizzo(chiaveIndirizzo(puntoVendita.indirizzo));
   const telefonoAttuale = chiaveTelefono(puntoVendita.telefono);
   const insegne: PeriodoInsegna[] = trattiInsegna.map(tratto => ({
     canale: tratto.valore.canale,

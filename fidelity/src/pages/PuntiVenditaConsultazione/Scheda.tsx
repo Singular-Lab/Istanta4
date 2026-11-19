@@ -20,6 +20,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import type { PuntoVenditaConsultazione } from "../../../lib/puntiVendita/consultazione";
 import type { CustomError } from "../../../lib/server_call";
 import { codiciGdo } from "../../utils/puntoVendita";
+import { testoLeggibile } from "../../utils/testoLeggibile";
 import { ImportStoricoVolantini } from "../PuntiVendita/ImportStoricoVolantini";
 import {
   contestoPeriodo,
@@ -39,7 +40,8 @@ import {
   type InfograficaScheda,
 } from "./analisi";
 import { ComeSiPromuove, GraficiSenzaDati, MarchePiuPresenti, NumeriScheda, ProdottiCheTornano, SpazioPerReparto } from "./Infografiche";
-import { BoxStoria, Cambiamenti, TuttiIVolantini } from "./StoriaPuntoVendita";
+import { InsegneNelTempo } from "./InsegneNelTempo";
+import { BoxStoria, TuttiIVolantini } from "./StoriaPuntoVendita";
 import { VolantiniAttivi } from "./VolantiniAttivi";
 
 /** Oltre tanti giorni di storia la scelta comprende gli ultimi 12 mesi: prima sarebbero tutto il periodo. */
@@ -108,22 +110,30 @@ function Dato({ icona, etichetta, children }: { icona: string; etichetta: string
   );
 }
 
-const conCodice = (riferimento: { nome: string; codice: string | null }) =>
-  riferimento.codice && riferimento.codice !== riferimento.nome ? `${riferimento.nome} (${riferimento.codice})` : riferimento.nome;
+/** "55051 Barga (LU)": la città leggibile, la provincia come sigla. */
+const localitaLeggibile = (pv: Pick<PuntoVenditaConsultazione, "cap" | "citta" | "provincia">) =>
+  [pv.cap, testoLeggibile(pv.citta), pv.provincia && `(${pv.provincia})`].filter(Boolean).join(" ");
+
+/**
+ * Etichetta di un dato del sistema della GDO: gli identificativi restano sigle ("ID ANACAN"), gli
+ * altri campi si leggono come parole ("INSEGNA" -> "Insegna").
+ */
+const etichettaDatoGdo = (etichetta: string) =>
+  identificativiGdo([{ etichetta }]).length > 0 ? etichetta : testoLeggibile(etichetta).replace(/^\p{Ll}/u, lettera => lettera.toLocaleUpperCase("it-IT"));
 
 function DatiPuntoVendita({ pv }: { pv: PuntoVenditaConsultazione }) {
-  const localita = [pv.cap, pv.citta, pv.provincia && `(${pv.provincia})`].filter(Boolean).join(" ");
+  const localita = localitaLeggibile(pv);
   const codici = codiciGdo(pv.meta);
 
   return (
-    <Sezione titolo="Dati">
+    <Sezione titolo="Dati" className="h-full">
       <dl className="flex flex-col gap-3.5">
         {pv.ragioneSociale && (
-          <Dato icona="Briefcase" etichetta="Ragione sociale">{pv.ragioneSociale}</Dato>
+          <Dato icona="Briefcase" etichetta="Ragione sociale">{testoLeggibile(pv.ragioneSociale)}</Dato>
         )}
         {(pv.indirizzo || localita || pv.regione) && (
           <Dato icona="MapPin" etichetta="Indirizzo">
-            {pv.indirizzo && <div>{pv.indirizzo}</div>}
+            {pv.indirizzo && <div>{testoLeggibile(pv.indirizzo)}</div>}
             {(localita || pv.regione) && <div>{[localita, pv.regione].filter(Boolean).join(", ")}</div>}
           </Dato>
         )}
@@ -137,12 +147,20 @@ function DatiPuntoVendita({ pv }: { pv: PuntoVenditaConsultazione }) {
             </a>
           </Dato>
         )}
-        {pv.canale && <Dato icona="Store" etichetta="Insegna (canale)">{conCodice(pv.canale)}</Dato>}
-        {pv.area && <Dato icona="Globe" etichetta="Area">{conCodice(pv.area)}</Dato>}
-        {codici.map(c => (
-          <Dato key={c.etichetta} icona="Hash" etichetta={c.etichetta}>{c.valore}</Dato>
-        ))}
+        {/* Per nome: il codice dell'area ("TO") si confonderebbe con la provincia */}
+        {pv.canale && <Dato icona="Store" etichetta="Insegna (canale)">{pv.canale.nome}</Dato>}
+        {pv.area && <Dato icona="Globe" etichetta="Area">{pv.area.nome}</Dato>}
       </dl>
+      {codici.length > 0 && (
+        <div className="mt-5 border-t border-dashed border-slate-200 pt-4 dark:border-darkmode-400">
+          <h3 className="title-eyebrow mb-3">Dal sistema della GDO</h3>
+          <dl className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+            {codici.map(c => (
+              <Dato key={c.etichetta} icona="Hash" etichetta={etichettaDatoGdo(c.etichetta)}>{c.valore}</Dato>
+            ))}
+          </dl>
+        </div>
+      )}
     </Sezione>
   );
 }
@@ -151,9 +169,10 @@ function MappaPuntoVendita({ pv }: { pv: PuntoVenditaConsultazione }) {
   const posizione: [number, number] | null = pv.coordinate ? [pv.coordinate.lat, pv.coordinate.lon] : null;
 
   return (
-    <Sezione titolo="Mappa">
+    <Sezione titolo="Mappa" className="flex h-full flex-col">
       {posizione ? (
-        <div className="relative h-64 w-full overflow-hidden rounded-control" data-testid="mappa-punto-vendita">
+        // Alta quanto il riquadro, affiancato ai dati: almeno 16rem
+        <div className="relative min-h-64 w-full flex-1 overflow-hidden rounded-control" data-testid="mappa-punto-vendita">
           <MapContainer center={posizione} zoom={16} preferCanvas scrollWheelZoom={false} className="absolute inset-0">
             <TileLayer
               url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -178,9 +197,12 @@ function MappaPuntoVendita({ pv }: { pv: PuntoVenditaConsultazione }) {
 /**
  * Scheda di consultazione del punto vendita (/punti-vendita/:id), con "gdo.visualizza", costruita
  * sulla timeline dei suoi volantini. Un periodo (nell'indirizzo, `?anno=`) vale per tutta la
- * scheda: numeri, storia con le corsie dei numeri di ogni volantino e il volantino scelto,
- * meccaniche e reparti col periodo prima, marche, prodotti che tornano;
- * poi cambiamenti, volantini attivi, tutti i volantini, dati e mappa. La gestione (dispositivi,
+ * scheda: numeri, volantini attivi, insegne nel tempo (se sono cambiate), storia con le corsie
+ * dei numeri di ogni volantino (recapiti stampati ed eventi compresi) e il volantino scelto,
+ * meccaniche e reparti col periodo prima, marche, prodotti che tornano; poi tutti i volantini,
+ * dati e mappa (spec anagrafica-punti-vendita, "Ordine e
+ * impaginazione della scheda di consultazione"). Nome, indirizzo e città in maiuscolo si leggono
+ * come parole (testoLeggibile), solo a video. La gestione (dispositivi,
  * contesti display, modifica) resta sotto /gestione-interna e si apre con "Gestisci" a chi ha il permesso.
  */
 function SchedaPuntoVendita() {
@@ -259,15 +281,15 @@ function SchedaPuntoVendita() {
   }
 
   const insegnaArea = [pv.canale?.nome, pv.area?.nome].filter(Boolean).join(" · ");
-  const localita = [pv.cap, pv.citta, pv.provincia && `(${pv.provincia})`].filter(Boolean).join(" ");
+  const localita = localitaLeggibile(pv);
   // Nella testata solo gli identificativi: l'insegna è già nel badge, gli altri meta stanno nei dati
   const testata = [
-    [pv.indirizzo, localita].filter(Boolean).join(" · "),
+    [testoLeggibile(pv.indirizzo), localita].filter(Boolean).join(" · "),
     ...identificativiGdo(codiciGdo(pv.meta)).map(c => `${c.etichetta} ${c.valore}`),
   ].filter(Boolean);
 
   // Analisi arrivata e nessun volantino: la storia lo spiega una volta sola, i riquadri che ne
-  // dipendono (numeri, grafici, cambiamenti) non si disegnano
+  // dipendono (numeri, grafici) non si disegnano
   const senzaStoria = analisi.data !== undefined && analisi.data.timeline.length === 0;
   // Un periodo senza volantini: lo dice la storia, i grafici del periodo non si disegnano
   const edizioniPeriodo = analisi.data ? edizioniDelPeriodo(analisi.data.timeline, contesto.giorni) : null;
@@ -276,11 +298,10 @@ function SchedaPuntoVendita() {
   const conDati = analisi.data && edizioniPeriodo ? infograficheConDati(sintesiPeriodo(edizioniPeriodo), analisi.data) : null;
   const mostra = (infografica: InfograficaScheda) => !senzaStoria && !periodoVuoto && (conDati === null || conDati[infografica]);
   const senzaGrafico = conDati && !senzaStoria && !periodoVuoto ? INFOGRAFICHE_SCHEDA.filter(voce => !conDati[voce.id]).map(voce => voce.id) : [];
-  const conCambiamenti = !senzaStoria && (!storia.data || storia.data.eventi.length > 0 || storia.data.recapiti.length > 0 || Boolean(timeline?.[0]));
 
   return (
     <Pagina
-      titolo={pv.nome}
+      titolo={testoLeggibile(pv.nome)}
       indietro={INDIETRO}
       descrizione={
         testata.length > 0 ? (
@@ -324,6 +345,10 @@ function SchedaPuntoVendita() {
     >
       {primoVolantino && <SceltaPeriodo contesto={contesto} anni={anni} primoVolantino={primoVolantino} onCambia={cambiaPeriodo} />}
       <NumeriScheda analisi={analisi} contesto={contesto} />
+      {/* Quello che vale oggi prima della storia: compatto quando non ce n'è */}
+      <VolantiniAttivi idPv={pv.id} canaleArea={insegnaArea} />
+      {/* Solo se i volantini sono di più insegne o aree: la Storia resta della combinazione attuale */}
+      {storia.data && <InsegneNelTempo periodi={storia.data.insegneNelTempo ?? []} attuale={{ canale: pv.canale, area: pv.area }} />}
       <BoxStoria
         idPv={pv.id}
         analisi={analisi}
@@ -331,7 +356,8 @@ function SchedaPuntoVendita() {
         contesto={contesto}
         onImporta={puoGestire ? () => setImportAperto(true) : undefined}
       />
-      <Fila className="items-start">
+      {/* Riquadri affiancati alla stessa altezza */}
+      <Fila>
         {mostra("meccaniche") && <ComeSiPromuove analisi={analisi} contesto={contesto} />}
         {mostra("reparti") && <SpazioPerReparto analisi={analisi} contesto={contesto} />}
       </Fila>
@@ -339,8 +365,6 @@ function SchedaPuntoVendita() {
       {mostra("marche") && <MarchePiuPresenti analisi={analisi} contesto={contesto} />}
       {mostra("prodotti") && <ProdottiCheTornano idPv={pv.id} analisi={analisi} contesto={contesto} />}
       <GraficiSenzaDati assenti={senzaGrafico} />
-      {conCambiamenti && <Cambiamenti storia={storia} primo={timeline?.[0] ?? null} />}
-      <VolantiniAttivi idPv={pv.id} canaleArea={insegnaArea} />
       {storia.data?.sintesi && <TuttiIVolantini idPv={pv.id} />}
       <div id="dati-e-mappa" className="grid scroll-mt-6 grid-cols-1 gap-6 lg:grid-cols-2">
         <DatiPuntoVendita pv={pv} />

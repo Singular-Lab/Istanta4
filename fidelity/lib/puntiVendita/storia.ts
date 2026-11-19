@@ -103,7 +103,13 @@ export interface StoriaPuntoVendita {
     insegne: RiferimentoStoria[];
   } | null;
   anni: AnnoStoria[];
+  /** Le insegne della combinazione attuale, come il resto della storia. */
   insegne: PeriodoInsegna[];
+  /**
+   * Le insegne nel tempo da tutti i volantini in cui compare, anche di altre insegne e aree (spec
+   * anagrafica-punti-vendita, "Insegne nel tempo nella scheda del punto vendita"), dal piu' vecchio.
+   */
+  insegneNelTempo: PeriodoInsegna[];
   recapiti: PeriodoRecapito[];
   /** Dal piu' recente. */
   eventi: EventoStoria[];

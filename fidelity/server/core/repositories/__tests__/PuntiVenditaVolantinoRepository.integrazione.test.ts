@@ -311,6 +311,36 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
     });
   });
 
+  it('insegne nel tempo: tutti i volantini del PV una volta per kit, anche di altre aree, senza kit eliminati', async () => {
+    const primo = await creaKitRuntime({ validitaDal: giorno('2025-01-09'), validitaAl: giorno('2025-01-22') });
+    // Una promo sua nella stessa GDO: le date del volantino sono quelle della promo
+    const altraArea = await creaKitRuntime({ idGdo: primo.idGdo, validitaDal: giorno('2026-09-24'), validitaAl: giorno('2026-10-07') });
+    await sequelize.query('UPDATE runtime_kit SET id_canale = :idCanale WHERE id = :idKit', {
+      replacements: { idCanale: primo.idCanale, idKit: altraArea.idRuntime },
+    });
+    const eliminato = await creaKitRuntime({ stessaCombinazioneDi: primo, validitaDal: giorno('2025-02-06'), statoLavorazione: 'ELIMINATO' });
+    const combinazione = await creaCombinazione(primo);
+    const pra = await creaPuntoVendita(primo, combinazione, { citta: 'Genova', indirizzo: 'Via Murtola 12/14' });
+    for (const kit of [primo, altraArea, eliminato]) {
+      // Il PV due volte nella stessa lista: il kit conta una volta
+      await repository.sostituisciRigheKit(kit.idRuntime, [
+        riga(kit, 1, { localita: 'PRA', indirizzo: 'Via Murtola 12/14' }),
+        riga(kit, 2, { localita: 'PRA', indirizzo: 'Via Murtola 12-14' }),
+      ]);
+    }
+    const righe = await repository.righeDaRiabbinare(primo.idGdo);
+    await repository.aggiornaAbbinamenti(righe.map(r => ({ id: r.id, idPuntoVendita: pra, abbinamento: 'indirizzo' as const })));
+
+    const kit = await repository.kitDelPuntoVendita(pra);
+
+    expect([...kit].sort((a, b) => a.data.localeCompare(b.data))).toEqual([
+      { idKit: primo.idRuntime, data: '2025-01-09', al: '2025-01-22', canale: { id: primo.idCanale, nome: 'Superstore' }, area: { id: primo.idArea, nome: 'Toscana' } },
+      { idKit: altraArea.idRuntime, data: '2026-09-24', al: '2026-10-07', canale: { id: primo.idCanale, nome: 'Superstore' }, area: expect.objectContaining({ id: altraArea.idArea }) },
+    ]);
+    // La storia resta della sola combinazione del PV (le apparizioni sono una per riga stampata)
+    expect([...new Set((await repository.apparizioni(pra)).map(a => a.idKit))]).toEqual([primo.idRuntime]);
+  });
+
   it('volantini successivi della stessa insegna e area con la lista registrata, senza il PV', async () => {
     const primo = await creaKitRuntime({ validitaDal: giorno('2022-01-06') });
     const senzaPv = await creaKitRuntime({
