@@ -503,17 +503,46 @@ export const eventiTimeline = (eventi: readonly EventoStoria[]): EventoTimeline[
 /* ---------- Indirizzo e telefono stampati ---------- */
 
 /**
- * Unisce i periodi consecutivi con lo stesso valore. Un tratto è "diverso dall'anagrafica" se il
- * suo valore non è quello del recapito più recente uguale all'anagrafica; senza un recapito così
- * vale il segnale del server, che però riguarda indirizzo e telefono insieme.
+ * Chiave di confronto di un indirizzo stampato: senza maiuscole, accenti, punteggiatura e "snc"
+ * (senza numero civico). Le abbreviazioni le riconosce gia' il server, che unisce i periodi uguali
+ * (spec anagrafica-punti-vendita, "Recapiti stampati confrontati senza differenze di scrittura").
  */
-const tratti = (recapiti: readonly PeriodoRecapito[], valore: (r: PeriodoRecapito) => string | null): FasciaTempo[] => {
+export const chiaveConfrontoIndirizzo = (testo: string | null): string | null =>
+  testo
+    ?.normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/(^| )snc(?= |$)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || null;
+
+/** Chiave di confronto di un telefono stampato: le sole cifre, senza prefisso internazionale. */
+export const chiaveConfrontoTelefono = (testo: string | null): string | null => {
+  let cifre = (testo ?? "").replace(/\D/g, "");
+  if (cifre.startsWith("0039")) cifre = cifre.slice(4);
+  else if (cifre.startsWith("39") && cifre.length >= 11) cifre = cifre.slice(2);
+  return cifre || null;
+};
+
+/**
+ * Unisce i periodi consecutivi con lo stesso valore, confrontato con `confronto` (due scritture dello
+ * stesso recapito sono un periodo solo, con il testo del primo). Un tratto è "diverso
+ * dall'anagrafica" se il suo valore non è quello del recapito più recente uguale all'anagrafica;
+ * senza un recapito così vale il segnale del server, che però riguarda indirizzo e telefono insieme.
+ */
+const tratti = (
+  recapiti: readonly PeriodoRecapito[],
+  valore: (r: PeriodoRecapito) => string | null,
+  confronto: (testo: string | null) => string | null
+): FasciaTempo[] => {
   const ordinati = [...recapiti].sort((a, b) => a.dal.localeCompare(b.dal));
   const comeOggi = [...ordinati].reverse().find(r => !r.diversoDallAttuale);
-  const diverso = (r: PeriodoRecapito) => (comeOggi ? valore(r) !== valore(comeOggi) : r.diversoDallAttuale);
+  const chiaveDi = (r: PeriodoRecapito) => confronto(valore(r)) ?? "";
+  const diverso = (r: PeriodoRecapito) => (comeOggi ? chiaveDi(r) !== chiaveDi(comeOggi) : r.diversoDallAttuale);
   const risultato: Array<FasciaTempo & { chiave: string; volantini: number }> = [];
   for (const recapito of ordinati) {
-    const chiave = valore(recapito) ?? "";
+    const chiave = chiaveDi(recapito);
     const ultimo = risultato[risultato.length - 1];
     if (ultimo && ultimo.chiave === chiave) {
       ultimo.al = recapito.al > ultimo.al ? recapito.al : ultimo.al;
@@ -525,7 +554,7 @@ const tratti = (recapiti: readonly PeriodoRecapito[], valore: (r: PeriodoRecapit
       chiave,
       dal: recapito.dal,
       al: recapito.al,
-      etichetta: chiave || "non stampato",
+      etichetta: (chiave && valore(recapito)) || "non stampato",
       tono: !chiave ? "neutro" : diverso(recapito) ? "attenzione" : "evidenza",
       volantini: recapito.volantini,
     });
@@ -547,8 +576,8 @@ export const NOMI_TONI_RECAPITI = {
 export const righeRecapiti = (recapiti: readonly PeriodoRecapito[]): RigaFasce[] => {
   const indirizzo = (r: PeriodoRecapito) => [r.indirizzo, r.localita].filter(Boolean).join(", ") || null;
   return [
-    { id: "indirizzo", etichetta: "Indirizzo", fasce: tratti(recapiti, indirizzo) },
-    { id: "telefono", etichetta: "Telefono", fasce: tratti(recapiti, r => (r.telefono ? `tel. ${r.telefono}` : null)) },
+    { id: "indirizzo", etichetta: "Indirizzo", fasce: tratti(recapiti, indirizzo, chiaveConfrontoIndirizzo) },
+    { id: "telefono", etichetta: "Telefono", fasce: tratti(recapiti, r => (r.telefono ? `tel. ${r.telefono}` : null), chiaveConfrontoTelefono) },
   ].filter(riga => riga.fasce.some(f => f.etichetta !== "non stampato"));
 };
 

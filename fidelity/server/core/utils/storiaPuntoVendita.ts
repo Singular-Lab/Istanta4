@@ -42,6 +42,96 @@ export interface ApparizioneStoria {
   abbinamento: TipoAbbinamento;
 }
 
+/**
+ * Un volantino in cui compare il PV, di qualunque insegna e area: per le insegne nel tempo, che
+ * mostrano anche le combinazioni escluse dalla storia.
+ */
+export interface KitDelPuntoVendita {
+  idKit: string;
+  /** Giorno dell'edizione (YYYY-MM-DD). */
+  data: string;
+  /** Fine della validita' (YYYY-MM-DD), se c'e'. */
+  al: string | null;
+  canale: RiferimentoStoria;
+  area: RiferimentoStoria;
+}
+
+/** Edizioni di seguito con la stessa insegna perche' diventino un periodo: una sola non basta. */
+export const MINIMO_EDIZIONI_INSEGNA = 2;
+
+/**
+ * Le insegne nel tempo (spec anagrafica-punti-vendita, "Insegne nel tempo nella scheda del punto
+ * vendita"): solo i cambi veri, con la stessa regola di puntiVenditaConCambioInsegna dell'elenco.
+ *
+ * - Contano solo i volantini dell'area attuale del PV: la stessa lista dei PV arriva nei kit di piu'
+ *   aree della stessa promo, e non e' un cambio.
+ * - Ogni edizione (giorno d'inizio) ha un'insegna: quella attuale se il PV e' nel suo volantino (il PV
+ *   stampato anche nel volantino di un'altra insegna la stessa settimana), altrimenti quella con piu'
+ *   volantini, a parita' la prima per id.
+ * - Un'insegna e' un periodo solo con almeno MINIMO_EDIZIONI_INSEGNA edizioni di seguito; i periodi
+ *   vicini della stessa insegna si uniscono. Un'edizione isolata entra nel periodo della sua insegna
+ *   fra i due vicini, se c'e', altrimenti non conta. Che l'insegna sia cambiata (piu' di un periodo)
+ *   e' deciso come nell'elenco: almeno due insegne con sequenze lunghe.
+ *
+ * Ogni periodo conta i volantini della sua insegna. Senza area attuale non c'e' niente da dire.
+ */
+export function insegneNelTempo(
+  kit: readonly KitDelPuntoVendita[],
+  attuale: { idCanale?: string | null; idArea?: string | null },
+): PeriodoInsegna[] {
+  if (!attuale.idArea) return [];
+  const dellArea = kit.filter(volantino => volantino.area.id === attuale.idArea);
+
+  // L'insegna di ogni edizione
+  const perData = new Map<string, KitDelPuntoVendita[]>();
+  for (const volantino of dellArea) perData.set(volantino.data, [...(perData.get(volantino.data) ?? []), volantino]);
+  const edizioni = [...perData.entries()]
+    .sort((a, b) => confronta(a[0], b[0]))
+    .map(([data, volantini]) => {
+      const perCanale = new Map<string, KitDelPuntoVendita[]>();
+      for (const volantino of volantini) perCanale.set(volantino.canale.id, [...(perCanale.get(volantino.canale.id) ?? []), volantino]);
+      const [idCanale] = [...perCanale.entries()]
+        .sort((a, b) => Number(b[0] === attuale.idCanale) - Number(a[0] === attuale.idCanale) || b[1].length - a[1].length || confronta(a[0], b[0]))[0];
+      return { data, volantini: perCanale.get(idCanale) ?? [] };
+    });
+
+  // Le sequenze di edizioni con la stessa insegna: solo le lunghe fanno un periodo (come le isole
+  // dell'elenco), e quelle vicine della stessa insegna sono un periodo solo
+  const canaleDi = (indice: number) => edizioni[indice].volantini[0].canale.id;
+  const gruppi: Array<{ idCanale: string; primo: number; ultimo: number }> = [];
+  for (let inizio = 0; inizio < edizioni.length;) {
+    let fine = inizio;
+    while (fine + 1 < edizioni.length && canaleDi(fine + 1) === canaleDi(inizio)) fine++;
+    if (fine - inizio + 1 >= MINIMO_EDIZIONI_INSEGNA) {
+      const precedente = gruppi[gruppi.length - 1];
+      if (precedente && precedente.idCanale === canaleDi(inizio)) precedente.ultimo = fine;
+      else gruppi.push({ idCanale: canaleDi(inizio), primo: inizio, ultimo: fine });
+    }
+    inizio = fine + 1;
+  }
+
+  // Le edizioni sparse vanno al periodo della loro insegna fra i due vicini; le altre non contano
+  const periodi: Array<PeriodoInsegna & { kit: Set<string> }> = gruppi.map(gruppo => {
+    const primo = edizioni[gruppo.primo].volantini[0];
+    return { canale: primo.canale, area: primo.area, dal: primo.data, al: primo.data, volantini: 0, kit: new Set<string>() };
+  });
+  edizioni.forEach((edizione, indice) => {
+    const seguente = gruppi.findIndex(gruppo => gruppo.primo > indice);
+    const corrente = (seguente === -1 ? gruppi.length : seguente) - 1;
+    const candidati = [corrente, corrente + 1].filter(g => g >= 0 && g < gruppi.length && (g === corrente || indice < gruppi[g].primo));
+    const scelto = candidati.find(g => gruppi[g].idCanale === canaleDi(indice));
+    if (scelto === undefined) return;
+    const periodo = periodi[scelto];
+    for (const volantino of edizione.volantini) {
+      periodo.kit.add(volantino.idKit);
+      if (volantino.data < periodo.dal) periodo.dal = volantino.data;
+      const al = volantino.al ?? volantino.data;
+      if (al > periodo.al) periodo.al = al;
+    }
+  });
+  return periodi.map(({ kit: volantini, ...periodo }) => ({ ...periodo, volantini: volantini.size }));
+}
+
 /** Recapiti attuali del punto vendita in anagrafica. */
 export interface PuntoVenditaAttuale {
   id: string;
@@ -87,6 +177,15 @@ interface Recapito {
 }
 
 const confronta = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/**
+ * Chiave dell'indirizzo per confrontare i recapiti stampati fra loro e con l'anagrafica: "SNC"
+ * (senza numero civico) non e' una differenza, "VIA CANIPAIA SNC" e' "VIA CANIPAIA" (spec
+ * anagrafica-punti-vendita, "Recapiti stampati confrontati senza differenze di scrittura").
+ * Solo per la storia: l'abbinamento delle righe usa chiaveIndirizzo com'e'.
+ */
+export const chiaveRecapitoIndirizzo = (chiave: string | null): string | null =>
+  chiave?.replace(/(^| )SNC(?= |$)/g, ' ').replace(/\s+/g, ' ').trim() || null;
 
 /** In ordine di edizione; a parita' per fine validita', titolo e kit, cosi' l'ordine non cambia fra due letture. */
 export function ordinaApparizioni(apparizioni: readonly ApparizioneStoria[]): ApparizioneStoria[] {
@@ -251,7 +350,7 @@ export function calcolaStoria(
   puntoVendita: PuntoVenditaAttuale,
   elencoApparizioni: readonly ApparizioneStoria[],
   volantiniSenza: ReadonlyArray<Pick<VolantinoSenzaPuntoVendita, 'idKit' | 'data'>> = [],
-): StoriaPuntoVendita {
+): Omit<StoriaPuntoVendita, 'insegneNelTempo'> {
   const apparizioni = unaPerKit(ordinaApparizioni(elencoApparizioni));
   if (apparizioni.length === 0) {
     return { idPuntoVendita: puntoVendita.id, sintesi: null, anni: [], insegne: [], recapiti: [], eventi: [] };
@@ -274,7 +373,7 @@ export function calcolaStoria(
   const trattiRecapito = tratti<Recapito>(
     edizioni,
     ({ localita, indirizzo, telefono, chiaveIndirizzo: indirizzoChiave, chiaveTelefono: telefonoChiave }) => ({
-      localita, indirizzo, telefono, chiaveIndirizzo: indirizzoChiave, chiaveTelefono: telefonoChiave,
+      localita, indirizzo, telefono, chiaveIndirizzo: chiaveRecapitoIndirizzo(indirizzoChiave), chiaveTelefono: telefonoChiave,
     }),
     recapitiCompatibili,
     unisciRecapiti,
@@ -298,7 +397,7 @@ export function calcolaStoria(
     eventi.push({ tipo: 'assente', dal: primo.data, volantiniSenza: new Set(senza.map(volantino => volantino.idKit)).size });
   }
 
-  const indirizzoAttuale = chiaveIndirizzo(puntoVendita.indirizzo);
+  const indirizzoAttuale = chiaveRecapitoIndirizzo(chiaveIndirizzo(puntoVendita.indirizzo));
   const telefonoAttuale = chiaveTelefono(puntoVendita.telefono);
   const insegne: PeriodoInsegna[] = trattiInsegna.map(tratto => ({
     canale: tratto.valore.canale,

@@ -69,6 +69,7 @@ describe('ConsultazionePuntiVenditaService', () => {
       elencaDellaGdo: vi.fn(async () => [riga()]),
       trovaDellaGdo: vi.fn(async () => trovato),
       storiaInElenco: vi.fn(async (): Promise<RigaStoriaInElenco[]> => []),
+      puntiVenditaConCambioInsegna: vi.fn(async (): Promise<string[]> => []),
       combinazioniDeiVolantini: vi.fn(async (): Promise<RigaCombinazioneVolantini[]> => []),
     };
     const puntoVenditaService = { getVolantiniAttivi: vi.fn(async () => []) };
@@ -113,6 +114,34 @@ describe('ConsultazionePuntiVenditaService', () => {
     ]);
   });
 
+  it('nell\'elenco "ha cambiato insegna" viene dalla regola delle insegne nel tempo, non dall\'insegna di ogni anno', async () => {
+    const { servizio, repository } = crea(riga());
+    const PV_2 = '22222222-2222-4222-8222-222222222222';
+    repository.elencaDellaGdo.mockResolvedValueOnce([riga(), riga({ id: PV_2 })]);
+    // PV: Conad nel 2025 per la lista ripetuta in un'altra area, City nel 2026 (insegna prevalente diversa)
+    repository.storiaInElenco.mockResolvedValueOnce([
+      { id_punto_vendita: PV, anno: 2025, id_canale: 'conad', nome_canale: 'Conad', volantini: 2 },
+      { id_punto_vendita: PV, anno: 2026, id_canale: 'city', nome_canale: 'City', volantini: 2 },
+      { id_punto_vendita: PV_2, anno: 2026, id_canale: 'city', nome_canale: 'City', volantini: 4 },
+    ]);
+    repository.puntiVenditaConCambioInsegna.mockResolvedValueOnce([PV_2]);
+
+    const elenco = await servizio.elenca('g1');
+
+    expect(repository.puntiVenditaConCambioInsegna).toHaveBeenCalledWith('g1');
+    expect(elenco.map(pv => [pv.id, pv.storia?.cambioInsegna])).toEqual([[PV, false], [PV_2, true]]);
+  });
+
+  it('se i cambi di insegna non si leggono, l\'elenco esce con la storia e senza l\'indicazione', async () => {
+    const { servizio, repository } = crea(riga());
+    repository.storiaInElenco.mockResolvedValueOnce([{ id_punto_vendita: PV, anno: 2026, id_canale: 'city', nome_canale: 'City', volantini: 3 }]);
+    repository.puntiVenditaConCambioInsegna.mockRejectedValueOnce(new Error('timeout'));
+
+    const [pv] = await servizio.elenca('g1');
+
+    expect(pv.storia).toMatchObject({ volantini: 3, cambioInsegna: false });
+  });
+
   it('i volantini attivi sono quelli della gestione, dopo il controllo della GDO', async () => {
     const { servizio, puntoVenditaService } = crea(riga());
 
@@ -127,7 +156,7 @@ describe('storiaInElenco', () => {
     id_punto_vendita: idPuntoVendita, anno, id_canale: idCanale, nome_canale: idCanale ? `Insegna ${idCanale}` : '', volantini,
   });
 
-  it('per PV: volantini, l\'insegna con piu\' volantini di ogni anno (a parita\' per nome) e se cambia', () => {
+  it('per PV: volantini, l\'insegna con piu\' volantini di ogni anno (a parita\' per nome) e se ha cambiato insegna', () => {
     const storie = storiaInElenco([
       voce('pv-1', 2024, 'B', 5),
       voce('pv-1', 2023, 'A', 10),
@@ -142,7 +171,10 @@ describe('storiaInElenco', () => {
       cambioInsegna: false,
     });
     expect(storie.get('pv-2')).toMatchObject({ volantini: 10, cambioInsegna: false });
-    expect(storiaInElenco([voce('pv-3', 2023, 'A', 2), voce('pv-3', 2024, 'B', 2)]).get('pv-3')?.cambioInsegna).toBe(true);
+    // L'insegna prevalente diversa da un anno all'altro non basta: decide la regola delle insegne nel tempo
+    const cambiata = [voce('pv-3', 2023, 'A', 2), voce('pv-3', 2024, 'B', 2)];
+    expect(storiaInElenco(cambiata).get('pv-3')?.cambioInsegna).toBe(false);
+    expect(storiaInElenco(cambiata, new Set(['pv-3'])).get('pv-3')?.cambioInsegna).toBe(true);
   });
 
   it('un anno senza canale non e\' un cambio di insegna; i PV senza volantini non ci sono', () => {

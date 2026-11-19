@@ -17,7 +17,7 @@ import { chiaviRigaVolantino } from '../../utils/chiaviRigheVolantino';
 import { chiaveCombinazione } from '../../utils/confrontoPuntiVendita';
 import type { PuntoVenditaAnagrafica } from '../../utils/abbinamentoPuntiVendita';
 import { chiaveIndirizzo, chiaveTelefono } from '../../utils/puntoVenditaNormalization';
-import type { ApparizioneStoria, VolantinoSenzaPuntoVendita } from '../../utils/storiaPuntoVendita';
+import type { ApparizioneStoria, KitDelPuntoVendita, VolantinoSenzaPuntoVendita } from '../../utils/storiaPuntoVendita';
 import { MOTIVI_SCARTO_EXPORT, StoriaPuntoVenditaService } from '../StoriaPuntoVenditaService';
 
 vi.mock('../../logger', () => ({
@@ -165,6 +165,7 @@ function repositoryInMemoria(opzioni: { kit?: KitVolantino[]; anagrafica?: Punto
     })),
     trovaPuntoVendita: vi.fn(async (id: string) => (opzioni.puntiVendita ?? []).find(pv => pv.id === id) ?? null),
     apparizioni: vi.fn(async (_id: string): Promise<ApparizioneStoria[]> => []),
+    kitDelPuntoVendita: vi.fn(async (_id: string): Promise<KitDelPuntoVendita[]> => []),
     volantiniSenzaPuntoVendita: vi.fn(async (_criteri: Parameters<IPuntiVenditaVolantinoRepository['volantiniSenzaPuntoVendita']>[0]) => [] as VolantinoSenzaPuntoVendita[]),
     paginaVolantini: vi.fn(async (_id: string, _limite: number, _scarto: number) => ({ volantini: [], totale: 0 })),
   } satisfies IPuntiVenditaVolantinoRepository;
@@ -439,8 +440,35 @@ describe('StoriaPuntoVenditaService: letture', () => {
 
     const storia = await servizio(repository).getStoria(PV_PRA, GDO);
 
-    expect(storia).toEqual({ idPuntoVendita: PV_PRA, sintesi: null, anni: [], insegne: [], recapiti: [], eventi: [] });
+    expect(storia).toEqual({ idPuntoVendita: PV_PRA, sintesi: null, anni: [], insegne: [], insegneNelTempo: [], recapiti: [], eventi: [] });
     expect(repository.volantiniSenzaPuntoVendita).not.toHaveBeenCalled();
+  });
+
+  it('storia: le insegne nel tempo dai volantini dell\'area del PV, anche di altre insegne', async () => {
+    // Oggi Superstore · Liguria: la storia vede solo questa combinazione
+    const pvSuperstore: PuntoVenditaDellaStoria = { ...puntoVendita, idCanale: 'canale-ss', idArea: 'area-li' };
+    const { repository } = repositoryInMemoria({ puntiVendita: [pvSuperstore] });
+    repository.apparizioni.mockResolvedValue([apparizione('2026-09-24')]);
+    const conad = { canale: { id: 'canale-cy', nome: 'Conad City' }, area: { id: 'area-li', nome: 'Liguria' } };
+    const superstore = { canale: { id: 'canale-ss', nome: 'Superstore' }, area: { id: 'area-li', nome: 'Liguria' } };
+    const toscana = { canale: { id: 'canale-cy', nome: 'Conad City' }, area: { id: 'area-to', nome: 'Toscana' } };
+    repository.kitDelPuntoVendita.mockResolvedValue([
+      { idKit: 'k4', data: '2026-10-08', al: '2026-10-21', ...superstore },
+      { idKit: 'k3', data: '2026-09-24', al: '2026-10-07', ...superstore },
+      { idKit: 'k1', data: '2025-01-09', al: '2025-01-22', ...conad },
+      { idKit: 'k2', data: '2025-12-04', al: '2025-12-17', ...conad },
+      // La stessa lista in un kit di un'altra area: non conta
+      { idKit: 'k5', data: '2025-06-05', al: '2025-06-18', ...toscana },
+    ]);
+
+    const storia = await servizio(repository).getStoria(PV_PRA, GDO);
+
+    expect(repository.kitDelPuntoVendita).toHaveBeenCalledWith(PV_PRA);
+    expect(storia.insegneNelTempo).toEqual([
+      { ...conad, dal: '2025-01-09', al: '2025-12-17', volantini: 2 },
+      { ...superstore, dal: '2026-09-24', al: '2026-10-21', volantini: 2 },
+    ]);
+    expect(storia.sintesi?.numeroVolantini).toBe(1);
   });
 
   it('volantini: pagina e dimensione ammesse, altrimenti la prima pagina da 10', async () => {

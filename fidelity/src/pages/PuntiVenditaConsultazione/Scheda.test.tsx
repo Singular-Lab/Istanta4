@@ -109,6 +109,10 @@ const STORIA: StoriaPuntoVendita = {
     { tipo: "cambio_insegna", data: "2023-01-10", da: { id: "c1", nome: "Conad City" }, a: { id: "c2", nome: "Conad Superstore" } },
     { tipo: "cambio_indirizzo", data: "2021-01-01", da: "Via Vecchia 3", a: "Via Roma 1" },
   ],
+  // Di solito una sola combinazione: la striscia delle insegne non compare
+  insegneNelTempo: [
+    { canale: { id: "c1", nome: "Conad City" }, area: { id: "a1", nome: "Toscana" }, dal: "2019-03-01", al: "2026-10-20", volantini: 120 },
+  ],
 };
 
 const volantino = (dati: Partial<VolantinoNellaStoria>): VolantinoNellaStoria => ({
@@ -344,9 +348,45 @@ describe("Scheda del punto vendita", () => {
     expect(dati).toHaveTextContent("Via Roma 1");
     expect(dati).toHaveTextContent("55100 Lucca (LU), Toscana");
     expect(within(dati).getByRole("link", { name: "0583 123456" })).toHaveAttribute("href", "tel:0583 123456");
-    expect(dati).toHaveTextContent("Conad City (CC)");
-    expect(dati).toHaveTextContent("ID ANACAN");
-    expect(dati).toHaveTextContent("004512");
+    // Insegna e area per nome: "Toscana (TO)" sembrerebbe la provincia di Torino
+    expect(dati).toHaveTextContent("Conad City");
+    expect(dati).not.toHaveTextContent("(CC)");
+    expect(dati).not.toHaveTextContent("(TO)");
+    const sistemaGdo = within(dati).getByRole("heading", { name: "Dal sistema della GDO" }).parentElement!;
+    expect(sistemaGdo).toHaveTextContent("ID ANACAN");
+    expect(sistemaGdo).toHaveTextContent("004512");
+  });
+
+  it("Dati: i campi del sistema della GDO che non sono identificativi si leggono come parole", () => {
+    finti.pv = caricato({ ...PUNTO_VENDITA, meta: { id_anacan: "004512", insegna: "CONAD City" } });
+    apri();
+
+    const sistemaGdo = within(sezione("Dati")).getByRole("heading", { name: "Dal sistema della GDO" }).parentElement!;
+    expect(within(sistemaGdo).getByText("Insegna")).toBeInTheDocument();
+    expect(within(sistemaGdo).getByText("ID ANACAN")).toBeInTheDocument();
+    expect(sistemaGdo).toHaveTextContent("CONAD City");
+  });
+
+  it("nome, indirizzo e città in maiuscolo si leggono come parole; il dato e le righe stampate no", () => {
+    finti.pv = caricato({
+      ...PUNTO_VENDITA,
+      nome: "BARGA VIA CANIPAIA SNC",
+      ragioneSociale: "BARGA MARKET SRL",
+      indirizzo: "VIA CANIPAIA",
+      cap: "55051",
+      citta: "BARGA",
+    });
+    apri();
+
+    expect(screen.getByRole("heading", { level: 1, name: "Barga Via Canipaia snc" })).toBeInTheDocument();
+    const testata = screen.getByRole("heading", { level: 1 }).parentElement!.parentElement!;
+    expect(testata).toHaveTextContent("Via Canipaia · 55051 Barga (LU)");
+    const dati = sezione("Dati");
+    expect(dati).toHaveTextContent("Barga Market srl");
+    expect(dati).toHaveTextContent("55051 Barga (LU), Toscana");
+    // La riga stampata resta com'era nel volantino
+    const voci = within(within(sezione("Tutti i volantini")).getByRole("list", { name: "Volantini della storia" })).getAllByRole("listitem");
+    expect(voci[0]).toHaveTextContent("LUCCA - Via Roma 1 - tel. 0583 123456");
   });
 
   it("Dati: senza ragione sociale e telefono niente righe vuote né segnaposto", () => {
@@ -383,6 +423,35 @@ describe("Scheda del punto vendita", () => {
     apri();
 
     expect(screen.getByRole("link", { name: /Gestisci/ })).toHaveAttribute("href", "/gestione-interna/punti-vendita/pv1");
+  });
+
+  it("Volantini attivi: sotto i numeri e prima della Storia", () => {
+    apri();
+
+    const attivi = sezione("Volantini attivi");
+    const numeri = screen.getByLabelText("Il punto vendita in numeri");
+    expect(numeri.compareDocumentPosition(attivi) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(attivi.compareDocumentPosition(sezione("Storia")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("Volantini attivi: senza volantini una riga con insegna e area", () => {
+    finti.volantiniAttivi = caricato([]);
+    apri();
+
+    const attivi = sezione("Volantini attivi");
+    expect(attivi).toHaveTextContent("Nessun volantino attivo per Conad City · Toscana.");
+    expect(within(attivi).queryByRole("heading")).not.toBeInTheDocument();
+  });
+
+  it("Storia: una descrizione breve e la guida della timeline chiusa in \"Come si legge\"", () => {
+    apri();
+
+    const storia = sezione("Storia");
+    expect(storia).toHaveTextContent("Scegli un volantino per vederlo qui sotto.");
+    // Il <details> si apre da sé al clic sul riassunto: qui basta che la guida ci sia, chiusa
+    const guida = within(storia).getByText("Come si legge").closest("details")!;
+    expect(guida).not.toHaveAttribute("open");
+    expect(guida).toHaveTextContent("Ogni barra è un volantino in cui compare");
   });
 
   it("Volantini attivi: i PDF delle promo valide del canale e dell'area", () => {
@@ -791,35 +860,52 @@ describe("Scheda del punto vendita", () => {
     expect(within(sezione("Spazio per reparto")).getByRole("img", { name: "Spazio per reparto" })).toHaveTextContent("Bevande");
   });
 
-  it("Cambiamenti: eventi e recapiti stampati dal più recente, il primo volantino registrato in fondo", () => {
+  it("niente sezione Cambiamenti: recapiti stampati ed eventi stanno nella timeline della Storia", () => {
     apri();
 
-    const voci = within(within(sezione("Cambiamenti")).getByRole("list", { name: "Cambiamenti" })).getAllByRole("listitem");
-    expect(voci).toHaveLength(5);
-    expect(voci[0]).toHaveTextContent("Cambio di insegna");
-    expect(voci[0]).toHaveTextContent("10/01/2023");
-    expect(voci[0]).toHaveTextContent("Da Conad City a Conad Superstore.");
-    expect(voci[1]).toHaveTextContent("Nei volantini era «Via Vecchia 3», poi «Via Roma 1».");
-    expect(voci[2]).toHaveTextContent("Stampato come in anagrafica");
-    expect(voci[2]).toHaveTextContent("Via Roma 1, Lucca · tel. 0583 123456");
-    expect(voci[2]).not.toHaveTextContent("Diverso dall'attuale");
-    expect(voci[3]).toHaveTextContent("Via Vecchia 3, Lucca · tel. 0583 000000");
-    expect(voci[3]).toHaveTextContent("Diverso dall'attuale");
-    expect(voci[4]).toHaveTextContent("Primo volantino registrato");
-    expect(voci[4]).toHaveTextContent("03/03/2025");
-    expect(voci[4]).toHaveTextContent("Promo k1 · Conad City · Toscana");
+    expect(screen.queryByRole("region", { name: "Cambiamenti" })).not.toBeInTheDocument();
+    const storia = sezione("Storia");
+    // Nella corsia e nella sua legenda
+    expect(within(storia).getAllByText(/^Indirizzo stampato/).length).toBeGreaterThan(0);
+    expect(within(storia).getAllByText(/^Telefono stampato/).length).toBeGreaterThan(0);
   });
 
-  it("Storia del punto vendita non arrivata: i cambiamenti mostrano l'errore, la timeline resta", async () => {
-    const refetch = vi.fn();
-    finti.storia = { data: undefined, isLoading: false, isError: true, error: new Error("Timeout"), refetch };
+  it("Insegne nel tempo: con più insegne una striscia sopra la Storia, l'attuale analizzata e le altre fuori", () => {
+    finti.storia = caricato({
+      ...STORIA,
+      insegneNelTempo: [
+        { canale: { id: "c9", nome: "Conad" }, area: { id: "a1", nome: "Toscana" }, dal: "2025-01-09", al: "2025-12-17", volantini: 5 },
+        { canale: { id: "c1", nome: "Conad City" }, area: { id: "a1", nome: "Toscana" }, dal: "2026-09-24", al: "2026-11-05", volantini: 2 },
+      ],
+    });
     apri();
 
-    expect(within(sezione("Cambiamenti")).getByRole("alert")).toHaveTextContent("Cambiamenti non caricati");
-    expect(within(sezione("Cambiamenti")).getByRole("alert")).toHaveTextContent("Timeout");
+    const insegne = sezione("Insegne nel tempo");
+    expect(insegne).toHaveTextContent("La Storia qui sotto analizza solo Conad City · Toscana.");
+    const periodi = within(within(insegne).getByRole("list", { name: "Insegne nel tempo" })).getAllByRole("listitem");
+    expect(periodi).toHaveLength(2);
+    expect(periodi[0]).toHaveTextContent("Conad · Toscana");
+    expect(periodi[0]).toHaveTextContent("dal gennaio 2025 al dicembre 2025");
+    expect(periodi[0]).toHaveTextContent("5 volantini");
+    expect(periodi[0]).toHaveTextContent("non compresa nell'analisi");
+    expect(periodi[1]).toHaveTextContent("Conad City · Toscana");
+    expect(periodi[1]).toHaveTextContent("Analizzata qui sotto");
+    // Sopra la Storia
+    expect(insegne.compareDocumentPosition(sezione("Storia")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("Insegne nel tempo: con una sola insegna e area la striscia non c'è", () => {
+    apri();
+
+    expect(screen.queryByRole("region", { name: "Insegne nel tempo" })).not.toBeInTheDocument();
+  });
+
+  it("Storia del punto vendita non arrivata: niente striscia delle insegne, la timeline resta", () => {
+    finti.storia = { data: undefined, isLoading: false, isError: true, error: new Error("Timeout"), refetch: vi.fn() };
+    apri();
+
+    expect(screen.queryByRole("region", { name: "Insegne nel tempo" })).not.toBeInTheDocument();
     expect(within(sezione("Storia")).getAllByRole("option")).toHaveLength(3);
-    await userEvent.click(within(sezione("Cambiamenti")).getByRole("button", { name: "Riprova" }));
-    expect(refetch).toHaveBeenCalled();
   });
 
   it("Tutti i volantini: riga stampata, referenze, abbinamento probabile, PDF e il volantino da aprire", () => {
@@ -828,7 +914,11 @@ describe("Scheda del punto vendita", () => {
     const voci = within(within(sezione("Tutti i volantini")).getByRole("list", { name: "Volantini della storia" })).getAllByRole("listitem");
     expect(voci[0]).toHaveTextContent("Promo ottobre");
     expect(voci[0]).toHaveTextContent("01/10 – 20/10/2026");
-    expect(voci[0]).toHaveTextContent("«LUCCA - Via Roma 1 - tel. 0583 123456»");
+    // La riga stampata con lo stesso aspetto del volantino scelto, non fra virgolette
+    expect(voci[0]).toHaveTextContent("LUCCA - Via Roma 1 - tel. 0583 123456");
+    expect(voci[0]).not.toHaveTextContent("«");
+    // Il titolo del kit è un codice tecnico: non si mostra
+    expect(voci[0]).not.toHaveTextContent("Volantino Toscana");
     expect(voci[0]).toHaveTextContent("120 referenze");
     expect(voci[0]).not.toHaveTextContent("Abbinamento probabile");
     expect(within(voci[0]).getByRole("link", { name: /Apri volantino/ })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=k1");

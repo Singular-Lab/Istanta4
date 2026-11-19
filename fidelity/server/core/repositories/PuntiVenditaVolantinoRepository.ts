@@ -7,7 +7,7 @@ import { PuntoVenditaVolantino, type PuntoVenditaVolantinoAttributes } from '../
 import type { PuntoVenditaAnagrafica } from '../utils/abbinamentoPuntiVendita';
 import type { RegolaCollegamento } from '../utils/chiaviRigheVolantino';
 import { chiaveCombinazione } from '../utils/confrontoPuntiVendita';
-import type { ApparizioneStoria, VolantinoSenzaPuntoVendita } from '../utils/storiaPuntoVendita';
+import type { ApparizioneStoria, KitDelPuntoVendita, VolantinoSenzaPuntoVendita } from '../utils/storiaPuntoVendita';
 
 /**
  * Letture e scritture della tabella punti_vendita_volantino (i PV stampati nelle liste dei
@@ -150,6 +150,11 @@ export interface IPuntiVenditaVolantinoRepository {
   trovaPuntoVendita(id: string): Promise<PuntoVenditaDellaStoria | null>;
   /** Le apparizioni del PV nei volantini, dalla piu' vecchia. */
   apparizioni(idPuntoVendita: string): Promise<ApparizioneStoria[]>;
+  /**
+   * I volantini in cui compare il PV, una volta per kit, di qualunque insegna e area (anche quelle
+   * escluse dalla storia): per le insegne nel tempo della scheda.
+   */
+  kitDelPuntoVendita(idPuntoVendita: string): Promise<KitDelPuntoVendita[]>;
   /**
    * Volantini con la lista registrata della stessa insegna e area, con l'edizione dopo la data
    * indicata, in cui il PV non c'e': dal piu' vecchio, con le date di validita' e la promo.
@@ -629,6 +634,29 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
       { idPuntoVendita }
     );
     return righe.map(apparizioneDa);
+  }
+
+  async kitDelPuntoVendita(idPuntoVendita: string): Promise<KitDelPuntoVendita[]> {
+    // Senza il filtro della combinazione del PV: le insegne nel tempo mostrano anche le altre
+    const righe = await this.seleziona<{
+      id_kit: string; data: string; validita_al: string | null; id_canale: string; nome_canale: string; id_area: string; nome_area: string;
+    }>(
+      `SELECT DISTINCT ON (k.id) k.id::text AS id_kit, ${DATA_EDIZIONE} AS data, ${giorno('p.validita_al')} AS validita_al,
+              k.id_canale::text AS id_canale, COALESCE(c.nome_canali, k.nome_canale, '') AS nome_canale,
+              k.id_area::text AS id_area, COALESCE(a.nome_aree, k.nome_area, '') AS nome_area
+       FROM punti_vendita_volantino r
+       ${DA_KIT}
+       WHERE r.id_punto_vendita = :idPuntoVendita AND ${KIT_VALIDI}
+       ORDER BY k.id`,
+      { idPuntoVendita }
+    );
+    return righe.map(riga => ({
+      idKit: riga.id_kit,
+      data: riga.data,
+      al: riga.validita_al,
+      canale: { id: riga.id_canale, nome: riga.nome_canale },
+      area: { id: riga.id_area, nome: riga.nome_area },
+    }));
   }
 
   async volantiniSenzaPuntoVendita(criteri: {

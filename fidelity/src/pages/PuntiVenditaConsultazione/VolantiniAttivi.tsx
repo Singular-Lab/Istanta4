@@ -2,16 +2,31 @@ import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
 import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
-import EmptyState from "@/components/EmptyState";
 import { useFetchVolantiniAttiviPuntoVendita } from "@/query/query";
 import { formatData } from "@/utils/format";
 
 /**
  * Volantini delle promo valide, dai kit pubblicati con la stessa area e lo stesso canale del
  * punto vendita (spec anagrafica-punti-vendita, "Volantini attivi nel dettaglio del punto vendita").
+ * Sta sotto i numeri della scheda: senza volantini attivi e' una riga sola, non un riquadro vuoto.
  */
 export function VolantiniAttivi({ idPv, canaleArea }: { idPv: string; canaleArea: string }) {
   const { data: volantini = [], isLoading, isError, error, refetch } = useFetchVolantiniAttiviPuntoVendita(idPv);
+  const nessuno = !isLoading && !isError && volantini.length === 0;
+
+  if (nessuno) {
+    return (
+      <Sezione compatta aria-label="Volantini attivi" className="flex items-center gap-3">
+        <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-slate-100 text-slate-500 dark:bg-darkmode-400 dark:text-slate-300">
+          <Lucide icon="FileSearch" aria-hidden="true" className="h-4 w-4" />
+        </span>
+        <p className="text-sm">
+          <span className="font-medium text-slate-800 dark:text-slate-100">Nessun volantino attivo</span>{" "}
+          <span className="text-slate-500 dark:text-slate-400">{canaleArea ? `per ${canaleArea}.` : "per questo canale e quest'area."}</span>
+        </p>
+      </Sezione>
+    );
+  }
 
   return (
     <Sezione titolo="Volantini attivi" descrizione={canaleArea}>
@@ -25,13 +40,6 @@ export function VolantiniAttivi({ idPv, canaleArea }: { idPv: string; canaleArea
           titolo="Volantini non caricati"
           motivo={(error as Error)?.message || "Errore durante il recupero dei volantini"}
           onRiprova={() => refetch()}
-        />
-      ) : volantini.length === 0 ? (
-        <EmptyState
-          compatta
-          icon="FileSearch"
-          title="Nessun volantino attivo"
-          description="Nessun volantino attivo per questo canale e quest'area."
         />
       ) : (
         <div className="flex flex-col gap-5">

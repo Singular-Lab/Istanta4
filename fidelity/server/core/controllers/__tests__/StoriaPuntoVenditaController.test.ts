@@ -44,7 +44,7 @@ function servizioFinto() {
   return {
     letti,
     storia: {
-      getStoria: vi.fn(async (idPuntoVendita: string, _idGdo: string | null) => ({ idPuntoVendita, sintesi: null, anni: [], insegne: [], recapiti: [], eventi: [] })),
+      getStoria: vi.fn(async (idPuntoVendita: string, _idGdo: string | null) => ({ idPuntoVendita, sintesi: null, anni: [], insegne: [], insegneNelTempo: [], recapiti: [], eventi: [] })),
       getVolantini: vi.fn(async (_id: string, _idGdo: string | null, pagina?: number, dimensione?: number) => (
         { volantini: [], totale: 0, pagina: pagina ?? 1, dimensione: dimensione ?? 10 }
       )),

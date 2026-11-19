@@ -86,6 +86,8 @@ function creaApp(tipo_utente: TIPO_UTENTI = TIPO_UTENTI.GDO) {
       return resto;
     }),
     storiaInElenco: vi.fn(async (_idGdo: string) => storie),
+    // La regola delle insegne nel tempo sta nella query: qui il PV della sessione ha cambiato insegna
+    puntiVenditaConCambioInsegna: vi.fn(async (_idGdo: string) => [PV_NOSTRO]),
     combinazioniDeiVolantini: vi.fn(async (_idGdo: string) => combinazioni),
   };
   const puntoVenditaService = {
@@ -182,6 +184,7 @@ describe('GET /api/punti-vendita', () => {
     const res = await request(app).get('/api/punti-vendita');
 
     expect(repository.storiaInElenco).toHaveBeenCalledWith('gdo-sessione');
+    expect(repository.puntiVenditaConCambioInsegna).toHaveBeenCalledWith('gdo-sessione');
     expect(res.body[0].storia).toEqual({
       volantini: 42,
       insegnePerAnno: [

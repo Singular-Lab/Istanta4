@@ -40,7 +40,7 @@ import {
 import { chiaveCombinazione } from '../utils/confrontoPuntiVendita';
 import { type VoceListaPuntiVendita, vociDelVolantino } from '../utils/listaPuntiVenditaVolantino';
 import { chiaveIndirizzo, chiaveTelefono } from '../utils/puntoVenditaNormalization';
-import { calcolaStoria, ultimaApparizione } from '../utils/storiaPuntoVendita';
+import { calcolaStoria, insegneNelTempo, ultimaApparizione } from '../utils/storiaPuntoVendita';
 import { importPuntiVenditaJobs } from './ImportPuntiVenditaJob';
 
 /**
@@ -320,7 +320,11 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
 
   async getStoria(idPuntoVendita: string, idGdo: string | null): Promise<StoriaPuntoVendita> {
     const puntoVendita = await this.puntoVenditaDellaGdo(idPuntoVendita, idGdo);
-    const apparizioni = await this.repository.apparizioni(puntoVendita.id);
+    // La storia e' della combinazione attuale; le insegne nel tempo vengono da tutti i volantini
+    const [apparizioni, kit] = await Promise.all([
+      this.repository.apparizioni(puntoVendita.id),
+      this.repository.kitDelPuntoVendita(puntoVendita.id),
+    ]);
     const ultima = ultimaApparizione(apparizioni);
     const volantiniSenza = ultima
       ? await this.repository.volantiniSenzaPuntoVendita({
@@ -331,7 +335,10 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
         dopo: ultima.data,
       })
       : [];
-    return calcolaStoria(puntoVendita, apparizioni, volantiniSenza);
+    return {
+      ...calcolaStoria(puntoVendita, apparizioni, volantiniSenza),
+      insegneNelTempo: insegneNelTempo(kit, { idCanale: puntoVendita.idCanale, idArea: puntoVendita.idArea }),
+    };
   }
 
   async getVolantini(idPuntoVendita: string, idGdo: string | null, pagina = 1, dimensione = DIMENSIONI_PAGINA_STORIA[0]): Promise<PaginaVolantiniStoria> {

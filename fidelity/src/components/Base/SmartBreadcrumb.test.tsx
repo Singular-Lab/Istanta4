@@ -164,10 +164,11 @@ describe("SmartBreadcrumb nelle pagine dei punti vendita", () => {
     });
   });
 
-  it("la scheda di consultazione mostra il nome del punto vendita, con la sola richiesta della pagina", async () => {
+  it("la scheda di consultazione mostra il nome del punto vendita, leggibile, con la sola richiesta della pagina", async () => {
     apriPv(`/punti-vendita/${PV}`, <PaginaConsultazione />);
 
-    expect(await screen.findByText("BOLOGNA SANT'ISAIA 67/2")).toBeInTheDocument();
+    // Il nome arriva in maiuscolo dall'anagrafica: come il titolo della scheda si legge come parole
+    expect(await screen.findByText("Bologna Sant'Isaia 67/2")).toBeInTheDocument();
     expect(screen.queryByText(`${PV.substring(0, 8)}...`)).not.toBeInTheDocument();
     expect(finti.get).toHaveBeenCalledTimes(1);
   });
@@ -176,7 +177,7 @@ describe("SmartBreadcrumb nelle pagine dei punti vendita", () => {
     apriPv(`/punti-vendita/${PV}/referenze/${encodeURIComponent(CHIAVE)}`, <PaginaReferenza />);
 
     expect(await screen.findByText("Condimento con tonno")).toBeInTheDocument();
-    await waitFor(() => expect(voci()).toEqual(["FP", "Punti vendita", "BOLOGNA SANT'ISAIA 67/2", "Condimento con tonno"]));
+    await waitFor(() => expect(voci()).toEqual(["FP", "Punti vendita", "Bologna Sant'Isaia 67/2", "Condimento con tonno"]));
   });
 
   it("su una riga sola: ogni voce si tronca con il nome intero nel title, l'ultima prende lo spazio che resta", async () => {
@@ -195,7 +196,7 @@ describe("SmartBreadcrumb nelle pagine dei punti vendita", () => {
       // Una larghezza massima, cedono spazio prima dell'ultima; su mobile non ci sono
       expect(voce).toHaveClass("max-w-[11rem]", "shrink-[8]", "max-sm:hidden");
     }
-    expect(screen.getByTitle("BOLOGNA SANT'ISAIA 67/2")).toHaveTextContent("BOLOGNA SANT'ISAIA 67/2");
+    expect(screen.getByTitle("Bologna Sant'Isaia 67/2")).toHaveTextContent("Bologna Sant'Isaia 67/2");
     // L'ultima senza larghezza massima: da sm una riga con i puntini, su mobile al più due righe
     expect(ultima).toHaveClass("min-w-0");
     expect(ultima).not.toHaveClass("max-w-[11rem]");
