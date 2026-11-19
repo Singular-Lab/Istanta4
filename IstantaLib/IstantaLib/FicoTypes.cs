@@ -1425,6 +1425,13 @@ namespace IstantaLib
         public string gravita { get; set; } = "warning";
         public string codice { get; set; } = "";
         public string testo { get; set; } = "";
+
+        /// <summary>
+        /// I20-1248: quando scatta. Vuoto, come prima: il valore non contiene deveContenere.
+        /// "compilato": il valore non e' vuoto, e deveContenere non serve. Ogni campo diverso da
+        /// nomeFoto si legge dal record del primario del box (Edro21: note_category).
+        /// </summary>
+        public string quando { get; set; } = "";
     }
 
     /// <summary>
