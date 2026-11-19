@@ -154,6 +154,47 @@ public class FormatoParmigianoEdro21Tests
         Assert.DoesNotContain(codice, r => r.Contains("PARMIGIANO_mesi"));
     }
 
+    /* ---- TASK-2e79b332: distintivita' TIPICO ---- */
+
+    [Theory]
+    //L'etichetta e un box del format tipico: vale il tipico.
+    [InlineData(new[] { "DIS.TIPICO", "PARMIGIANO TIPICO" }, "PREZZO_MM_bdp", true)]
+    [InlineData(new[] { "PARMIGIANO TIPICO" }, "percento_mm_BDP_kg", true)]
+    //L'etichetta ma il tipico non scatta (sottocosto, NM, PUNTI, B&F...): resta il Parmigiano.
+    [InlineData(new[] { "PARMIGIANO TIPICO" }, "PREZZO_MM_sottocosto", false)]
+    [InlineData(new[] { "PARMIGIANO TIPICO" }, "", false)]
+    //Senza l'etichetta (TIPICO_ con un brand, nessuna distintivita'): resta il Parmigiano.
+    [InlineData(new[] { "DIS.TIPICO", "DIS.TIPICO_BRAND" }, "PREZZO_MM_bdp", false)]
+    [InlineData(new string[0], "PREZZO_MM_bdp", false)]
+    public void Il_format_tipico_vale_solo_con_l_etichetta_e_il_box_tipico(string[] etichette, string combinazione, bool atteso)
+    {
+        Assert.Equal(atteso, FormatoParmigianoEdro21.FormatTipico(etichette, combinazione));
+    }
+
+    [Fact]
+    public void Senza_etichette_o_combinazione_resta_il_Parmigiano()
+    {
+        Assert.False(FormatoParmigianoEdro21.FormatTipico(null!, "PREZZO_MM_bdp"));
+        Assert.False(FormatoParmigianoEdro21.FormatTipico(new[] { "PARMIGIANO TIPICO" }, null!));
+    }
+
+    [Fact]
+    public void Con_il_format_tipico_escono_solo_il_bollo_dei_mesi_e_non_i_loghi_del_formato()
+    {
+        var sorgente = File.ReadAllText(TrovaFile("AgenziaLib/Edro21.cs")).Replace("\r", "");
+        int inizio = sorgente.IndexOf("if (tipo_lavorazione == 1 && FormatoParmigianoEdro21.EParmigianoReggiano(desc1))", StringComparison.Ordinal);
+        Assert.True(inizio > 0);
+        var ramo = sorgente.Substring(inizio, sorgente.IndexOf("loghi_e_bolli.Add(FormatoParmigianoEdro21.ChiaveBolloMesi", inizio, StringComparison.Ordinal) - inizio);
+
+        Assert.Contains("bool formatTipico = FormatoParmigianoEdro21.FormatTipico(", ramo);
+        Assert.Matches(@"if \(!formatTipico\)\s*\{\s*foreach \(var logo in FormatoParmigianoEdro21\.LoghiDelFormato\)", ramo);
+        //Il bollo dei mesi sta fuori dal ramo dei loghi del formato: esce anche con il tipico.
+        int bollo = ramo.IndexOf("var mesi = FormatoParmigianoEdro21.MesiDiStagionatura(gusto);", StringComparison.Ordinal);
+        int chiusuraLoghi = ramo.LastIndexOf("}", bollo, StringComparison.Ordinal);
+        Assert.True(bollo > 0 && chiusuraLoghi > ramo.IndexOf("if (!formatTipico)", StringComparison.Ordinal));
+        Assert.Equal("PARMIGIANO TIPICO", FormatoParmigianoEdro21.EtichettaTipico);
+    }
+
     private static List<VoceLogo> Voci()
     {
         var testo = File.ReadAllText(TrovaFile("Istanta/wwwroot/external_source/Edro21/SourceLoghiBolli.json"));

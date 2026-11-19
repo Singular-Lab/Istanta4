@@ -1047,7 +1047,9 @@ NumeroDiRegola.TryLeggi(percorso, out double valore16))
 
                     PropertyInfo? p = ty.GetProperty(chiave);
 
-                    percorso = p!.GetValue(record.recordRevisionato)!;
+                    //TASK-2e79b332: una revisione senza quel campo (Descrizione1 null) vale come testo vuoto. Prima
+                    //restava null, IN e SIN facevano ToString() su null e il record perdeva tutte le etichette.
+                    percorso = p!.GetValue(record.recordRevisionato) ?? "";
                 }
                 else if (campo.Contains("recordImpaginato"))
                 {
