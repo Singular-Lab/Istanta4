@@ -1888,10 +1888,19 @@ var STILE_REPORT = `
 
     /* Se la pagina non ha ancora una griglia, le si mette quella indovinata. Non conta come una
        modifica dell'utente: non ha scelto niente lui, si sta solo mostrando com'e' fatta la
-       pagina. Al primo SALVA quella griglia diventa ufficiale, ed e' giusto cosi'. */
+       pagina. Al primo SALVA quella griglia diventa ufficiale, ed e' giusto cosi'.
+
+       I20-1245, LA PAGINA VUOTA. Una pagina senza prodotti suoi non ha niente da cui indovinare la
+       griglia, e senza griglia si disegnano solo le referenze nate li': una referenza mandata in
+       una pagina vuota cambiava pagina ma non si vedeva, e sembrava che lo spostamento non fosse
+       successo. Se nella pagina c'e' qualcosa da mettere («quante» > 0) e la griglia non si puo'
+       indovinare, si prende la piu' piccola che basta: con una referenza la 1x3 (scelta
+       dell'operatore, 19/11). E' la stessa regola della pagina piena, e da li' la griglia cresce
+       da sola se ne arrivano altre. Una pagina vuota in cui non arriva niente resta senza. */
     function grigliaDiPartenza(pagina, nativi, quante) {
         if (pagina.griglia) return;
         var g = indovinaGriglia(nativi, quante);
+        if (!g && quante > 0) g = piuPiccolaCheBasta(quante);
         if (!g) return;
         pagina.griglia = g.nome;
         pagina.righe = g.righe;
@@ -1900,6 +1909,12 @@ var STILE_REPORT = `
         // questa e' la griglia "di base" della pagina: allargando una referenza si puo' salire,
         // ma stringendola si torna fin qui e non piu' in giu' (Michele, 28/09)
         pagina.grigliaBase = g.nome;
+    }
+
+    /* I20-1245: la piu' piccola griglia in cui ci stanno «quante» caselle. Le griglie ammesse
+       arrivano dal server gia' in ordine, dalla piu' piccola (GriglieFormato.Tutte). */
+    function piuPiccolaCheBasta(quante) {
+        return (piano.griglieAmmesse || []).filter(function (x) { return x.posti >= quante; })[0] || null;
     }
 
     /* ---------- la finestrella della scelta ----------
@@ -2771,6 +2786,14 @@ var STILE_REPORT = `
         // se la pagina di arrivo non ha ancora una griglia, le si mette quella che ha nell'impaginato
         grigliaDiPartenza(dest, dentro.filter(function (x) { return x.paginaOrigine === dest.numero; }),
                           dentro.length);
+        /* I20-1245: se la griglia non si e' potuta indovinare (pagina vuota, o con sole referenze
+           arrivate da altre pagine), la si da' adesso contando anche chi sta arrivando: le caselle
+           gia' prese piu' una. Lo si dice nell'avviso, perche' la griglia l'ha scelta il timone. */
+        var grigliaDataOra = null;
+        if (!dest.griglia) {
+            grigliaDiPartenza(dest, [], dentro.filter(function (x) { return !!x.posizione; }).length + 1);
+            grigliaDataOra = dest.griglia || null;
+        }
         var g = grigliaDi(dest);
         // j280: le caselle bloccate contano come occupate, sennò la referenza andrebbe a finirci sopra
         var bl = blocchiDi(dest.id);
@@ -2851,6 +2874,8 @@ var STILE_REPORT = `
         avviso('«' + codiceDi(v) + '» e\' andata in pagina ' + dest.numero + ', casella ' + casella +
                (casella !== 1 ? ' (in quella pagina ci sono referenze allargate, quindi non si fa scalare tutto)' : '') +
                (cambiata ? '. La pagina ' + dest.numero + ' e\' passata da ' + cambiata : '.') +
+               (grigliaDataOra && !cambiata ? ' La pagina ' + dest.numero + ' non aveva una griglia: ' +
+                   'le e\' stata data la ' + grigliaDataOra + ', che si cambia dal pulsante della griglia.' : '') +
                (tornata && daDove ? ' La pagina ' + daDove.numero + ' e\' tornata da ' + tornata + '.' : ''));
     }
 
