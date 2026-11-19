@@ -60,3 +60,29 @@ describe('registerUserWithTransaction', () => {
     expect(transazione.commit).toHaveBeenCalled();
   });
 });
+
+describe('registerUserWithTransaction senza dati anagrafici', () => {
+  it('crea l\'utente senza residenza né data di nascita, senza geocodificare', async () => {
+    const transazione = { commit: vi.fn(), rollback: vi.fn() };
+    vi.spyOn(sequelize, 'transaction').mockResolvedValue(transazione as never);
+    vi.spyOn(sequelize, 'query').mockResolvedValue([] as never);
+    vi.spyOn(ServerUtils, 'CREA_ATTIVITA').mockResolvedValue(undefined as never);
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    const repository = { createWithOptions: vi.fn(async () => ({ id_utenti: 'u1' })) };
+
+    await new UserService(repository as never).registerUserWithTransaction({
+      email: 'anna@esempio.it',
+      nome: 'Anna',
+      cognome: 'Rossi',
+      tipo: TIPO_UTENTI.SUPERADMIN,
+      stato: STATO_UTENTI.ATTIVO,
+    }, 'admin');
+
+    expect(geocodifica).not.toHaveBeenCalled();
+    expect(repository.createWithOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ residenza_utenti: null, datadinascita_utenti: null, lat_utenti: null }),
+      { transaction: transazione },
+    );
+    expect(transazione.commit).toHaveBeenCalled();
+  });
+});

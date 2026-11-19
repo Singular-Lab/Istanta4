@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ServerCall } from "../../../lib/server_call";
@@ -13,7 +13,11 @@ globalThis.ResizeObserver ??= class {
   disconnect() {}
 };
 
-const finti = vi.hoisted(() => ({ utenti: {} as Record<string, unknown>, refetch: vi.fn() }));
+const finti = vi.hoisted(() => ({
+  utenti: {} as Record<string, unknown>,
+  refetch: vi.fn(),
+  gdo: [] as Array<{ id: string; nome: string }>,
+}));
 
 vi.mock("../../../lib/server_call", () => ({ ServerCall: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() } }));
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: any) => Componente }));
@@ -24,8 +28,9 @@ vi.mock("../../context/UserContext", () => ({ useUser: () => ({ user: { id: "adm
 vi.mock("@/query/query", () => ({
   useFetchPuntiVenditaFromIdGDO: () => ({ data: { data: [] } }),
   useFetchAllRuoliGDO: () => ({ data: [] }),
-  useFetchAllGDO: () => ({ data: [] }),
+  useFetchAllGDO: () => ({ data: finti.gdo }),
   useFetchAllUtentiPaginated: () => finti.utenti,
+  useFetchPuntiVenditaDellaGdo: () => ({ data: [], isLoading: false }),
 }));
 
 import GestioneUtenti from ".";
@@ -57,6 +62,9 @@ describe("Gestione utenti", () => {
     finti.refetch.mockReset();
     vi.mocked(ServerCall.delete).mockReset().mockResolvedValue(undefined);
     vi.mocked(ServerCall.post).mockReset();
+    vi.mocked(ServerCall.put).mockReset().mockResolvedValue(undefined);
+    vi.mocked(ServerCall.get).mockReset().mockResolvedValue({ registrata: false });
+    finti.gdo = [];
     finti.utenti = {
       data: { utenti: [utente], total: 1, total_pages: 1 },
       isLoading: false,
@@ -154,10 +162,7 @@ describe("Gestione utenti", () => {
     await userEvent.type(within(creazione).getByLabelText(/^Cognome/), "Rossi");
     await userEvent.type(within(creazione).getByLabelText(/^Email/), "anna.rossi@example.com");
     await userEvent.type(within(creazione).getByLabelText(/^Password/), "Segreta1!");
-    fireEvent.change(within(creazione).getByLabelText(/^Data di Nascita/), { target: { value: "1990-01-01" } });
-    await userEvent.type(within(creazione).getByLabelText(/^Residenza/), "Roma");
-    await userEvent.selectOptions(within(creazione).getByLabelText(/^Tipo Utente/), "Superadmin");
-    await userEvent.type(within(creazione).getByLabelText(/^Telefono/), "3331234567");
+    await userEvent.selectOptions(within(creazione).getByLabelText(/^Tipo utente/), "Superadmin");
     await userEvent.click(within(creazione).getByRole("button", { name: "Crea" }));
 
     const avviso = await screen.findByRole("dialog", { name: "Limite di richieste superato" });
@@ -165,5 +170,27 @@ describe("Gestione utenti", () => {
     expect(avviso).not.toHaveTextContent("00:00:36");
     expect(avviso).not.toHaveTextContent("Riprova tra");
     expect(within(avviso).getAllByRole("button").map((pulsante) => pulsante.textContent)).toEqual(["Ho capito"]);
+  });
+
+  it("modifica un utente senza telefono, data di nascita e residenza", async () => {
+    finti.gdo = [{ id: "g1", nome: "Conad CNO" }];
+    finti.utenti = {
+      data: { utenti: [{ ...utente, id_gdo: "g1" }], total: 1, total_pages: 1 },
+      isLoading: false,
+      isError: false,
+      refetch: finti.refetch,
+    };
+    apri();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Azioni utente Anna Rossi" })[0]);
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Modifica" }));
+    const modifica = await screen.findByRole("dialog", { name: "Modifica utente" });
+    await userEvent.clear(within(modifica).getByLabelText(/^Cognome/));
+    await userEvent.type(within(modifica).getByLabelText(/^Cognome/), "Bianchi");
+    await userEvent.click(within(modifica).getByRole("button", { name: "Salva modifiche" }));
+
+    await waitFor(() => expect(ServerCall.put).toHaveBeenCalledWith("/updateUser", expect.objectContaining({
+      id: "u1", cognome: "Bianchi", telefono: "", dataDiNascita: "", residenza: "",
+    })));
   });
 });

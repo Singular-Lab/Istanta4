@@ -58,7 +58,8 @@ function creaApp() {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
-    (req as unknown as { session: object }).session = { id_utente: 'admin-1' };
+    // Superadmin: crea ogni tipo e sceglie la GDO, qui conta solo cosa finisce nei log
+    (req as unknown as { session: object }).session = { id_utente: 'admin-1', tipo_utente: TIPO_UTENTI.SUPERADMIN };
     next();
   });
   new UserController(userService as never, {} as never, {} as never, {} as never).registerRoutes(app);
@@ -104,10 +105,11 @@ describe('POST /api/register-user: dati personali nei log', () => {
 
   it('con un campo obbligatorio mancante risponde 400 e i log dicono solo quali campi ci sono', async () => {
     const { app, userService } = creaApp();
-    const { residenza: _residenza, ...senzaResidenza } = DATI_PERSONALI;
+    // Il cognome resta obbligatorio (residenza e data di nascita sono diventate facoltative)
+    const { cognome: _cognome, ...senzaCognome } = DATI_PERSONALI;
 
     const res = await request(app).post('/api/register-user').send({
-      ...senzaResidenza,
+      ...senzaCognome,
       password: PASSWORD_DI_PROVA,
       tipo: TIPO_UTENTI.GDO,
       stato: STATO_UTENTI.ATTIVO,
@@ -115,9 +117,9 @@ describe('POST /api/register-user: dati personali nei log', () => {
 
     expect(res.status).toBe(400);
     expect(userService.registerUserWithTransaction).not.toHaveBeenCalled();
-    expect(log.debug).toHaveBeenCalledWith('registerUser - Campi obbligatori mancanti', expect.objectContaining({ hasEmail: true, hasResidenza: false }));
+    expect(log.debug).toHaveBeenCalledWith('registerUser - Campi obbligatori mancanti', expect.objectContaining({ hasEmail: true, hasCognome: false }));
     const scritto = testoScrittoNeiLog();
-    for (const valore of Object.values(senzaResidenza)) {
+    for (const valore of Object.values(senzaCognome)) {
       expect(scritto).not.toContain(valore);
     }
   });

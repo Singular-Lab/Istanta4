@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import 'express-session';
 import { Optional } from 'sequelize';
 import { CATEGORIA_ATTIVITA, HttpStatusCode, STATO_UTENTI, TIPO_ATTIVITA, TIPO_UTENTI } from '../../../lib/enums';
-import { ApplicationError, BadRequestError, UnauthorizedError } from '../../../lib/errors';
+import { ApplicationError, BadRequestError, ForbiddenError, UnauthorizedError } from '../../../lib/errors';
+import { ETICHETTE_TIPO_UTENTE, puoCreareTipo } from '../../../lib/accessi/tipiUtenteCreabili';
 import { GlobalUserFilter, UtenteAttributes } from '../../../lib/types';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import { BaseController } from '../base/BaseController';
@@ -19,7 +20,7 @@ import { uxpClientTokenHashForLogin } from '../middleware/uxpOriginSession';
 import { CODICE_EMAIL_PASSWORD } from '../services/authProviders/configurazioneProvider';
 import { authEmailRateLimiter, authRateLimiter, registrationRateLimiter } from '../middleware/rateLimiter';
 import { AuditLogService } from '../services/AuditLogService';
-import { leggiContestoAccesso } from '../accessi/contestoAccesso';
+import { gdoOperativaPerRichiesta, leggiContestoAccesso, operaPerPiuGdo } from '../accessi/contestoAccesso';
 import { RisolutoreAccessi } from '../accessi/RisolutoreAccessi';
 import { normalizzaPercorso } from '../../../lib/accessi/pagine';
 import { calculateSessionTimeout } from '../session';
@@ -132,7 +133,9 @@ export class UserController extends BaseController {
     this.router.post('/login_user', authRateLimiter, authEmailRateLimiter, emailPasswordAttivo, this.loginUser.bind(this));
     this.router.post('/check_login_for_multiple_users', authRateLimiter, authEmailRateLimiter, emailPasswordAttivo, this.checkLoginForMultipleUsers.bind(this));
     this.router.get('/logout-user', authMiddleware, this.logoutUser.bind(this));
-    this.router.post('/register-user', registrationRateLimiter, authMiddleware, permissionGuard('utenti.crea'), this.registerUser.bind(this));
+    // Il limite conta per amministratore: dopo authMiddleware, quando la sessione e' gia' verificata
+    this.router.post('/register-user', authMiddleware, permissionGuard('utenti.crea'), registrationRateLimiter, this.registerUser.bind(this));
+    this.router.get('/utenti/email-registrata', authMiddleware, permissionGuard('utenti.crea'), this.emailRegistrata.bind(this));
 
     // User management routes
     this.router.get('/getAllUtentiOperatori', authMiddleware, permissionGuard('utenti.visualizza'), this.getAllUtentiOperatori.bind(this));
@@ -593,6 +596,23 @@ export class UserController extends BaseController {
     }
   }
 
+  /**
+   * GET /utenti/email-registrata?email=: il modulo di creazione avvisa subito se l'email e' gia' di un
+   * utente. Stessa normalizzazione del salvataggio (minuscole, senza spazi ai lati); l'email non va nei log.
+   */
+  private async emailRegistrata(req: Request, res: Response): Promise<void> {
+    try {
+      const email = typeof req.query['email'] === 'string' ? req.query['email'].trim().toLowerCase() : '';
+      if (!email) {
+        throw new BadRequestError({ message: 'Email obbligatoria' });
+      }
+      const utente = await this.userService.getUserByEmail(email);
+      res.status(HttpStatusCode.OK).json({ registrata: utente !== null });
+    } catch (error) {
+      this.handleError(res, error as Error);
+    }
+  }
+
   private async registerUser(req: Request, res: Response): Promise<void> {
     try {
       // Mai il body nei log: contiene la password
@@ -605,8 +625,8 @@ export class UserController extends BaseController {
         password: string,
         tipo: TIPO_UTENTI,
         stato: string,
-        residenza: string,
-        dataDiNascita: string,
+        residenza?: string,
+        dataDiNascita?: string,
         gdoScelta?: string,
         idPuntoVendita?: string,
         ruoloGDO?: string,
@@ -617,15 +637,40 @@ export class UserController extends BaseController {
       // Dati personali (email, nome, residenza, telefono...) mai nei log: solo tipo e identificativi
       log.debug('registerUser - Dati ricevuti', { tipo, gdoScelta, idPuntoVendita, ruoloGDO });
 
-      if (!email || !nome || !cognome || !password || !tipo || !stato || !residenza || !dataDiNascita) {
+      // Data di nascita e residenza sono facoltative: agli utenti interni non servono
+      if (!email || !nome || !cognome || !password || !tipo || !stato) {
         log.debug('registerUser - Campi obbligatori mancanti', {
           hasEmail: !!email, hasNome: !!nome, hasCognome: !!cognome,
           hasPassword: !!password, hasTipo: !!tipo, hasStato: !!stato,
-          hasResidenza: !!residenza, hasDataDiNascita: !!dataDiNascita
         });
         res.status(HttpStatusCode.BAD_REQUEST).json({ message: "Dati non validi" });
         return;
       }
+
+      // Tipi creabili e GDO valgono per la chiamata, non solo per il modulo
+      const tipoChiamante = req.session.tipo_utente as string | undefined;
+      if (!puoCreareTipo(tipoChiamante, tipo)) {
+        log.debug('registerUser - Tipo non creabile dal chiamante', { tipo, tipoChiamante });
+        throw new ForbiddenError({
+          message: `Non puoi creare utenti di tipo ${ETICHETTE_TIPO_UTENTE[tipo] ?? tipo}`,
+          resource: 'utenti',
+          action: 'crea',
+        });
+      }
+      let gdoNuovoUtente = gdoScelta;
+      if (tipo !== TIPO_UTENTI.SUPERADMIN && !operaPerPiuGdo(tipoChiamante as TIPO_UTENTI | undefined)) {
+        // Fuori da Superadmin e Agenzia la GDO e' quella dell'amministratore, qualunque cosa dica la richiesta
+        const gdoAmministratore = await gdoOperativaPerRichiesta(req, res, gdoScelta);
+        if (!gdoAmministratore) {
+          throw new ForbiddenError({
+            message: 'Non sei associato a una GDO: non puoi creare utenti',
+            resource: 'utenti',
+            action: 'crea',
+          });
+        }
+        gdoNuovoUtente = gdoAmministratore;
+      }
+
       const result = await this.userService.registerUserWithTransaction({
         email,
         nome,
@@ -633,9 +678,9 @@ export class UserController extends BaseController {
         password,
         tipo,
         stato,
-        residenza,
-        dataDiNascita,
-        gdoScelta,
+        residenza: residenza || undefined,
+        dataDiNascita: dataDiNascita || undefined,
+        gdoScelta: gdoNuovoUtente,
         idPuntoVendita,
         id_ruolo_utente_gdo: ruoloGDO,
         telefono,
@@ -760,8 +805,9 @@ export class UserController extends BaseController {
       if (nome !== undefined) updateData.nome = nome;
       if (cognome !== undefined) updateData.cognome = cognome;
       if (tipo !== undefined) updateData.tipo = tipo;
-      if (residenza !== undefined) updateData.residenza = residenza;
-      if (dataDiNascita !== undefined) updateData.datadinascita = new Date(dataDiNascita);
+      // Residenza e data di nascita sono facoltative: vuote si cancellano, mai una data non valida
+      if (residenza !== undefined) updateData.residenza = residenza || null;
+      if (dataDiNascita !== undefined) updateData.datadinascita = dataDiNascita ? new Date(dataDiNascita) : null;
       if (telefono !== undefined) updateData.telefono = telefono || null;
       if (sesso !== undefined) updateData.sesso = sesso || null;
       if (stato !== undefined) updateData.stato = stato;

@@ -148,27 +148,36 @@ export const apiRateLimiter = createBootstrapRateLimiter('rl:api:', {
   }
 });
 
+/** Utenti che un amministratore puo' creare a mano in un'ora (pagina Gestione Utenti). */
+export const MAX_UTENTI_CREATI_ORA = 60;
+
 /**
- * Rate limiter specifico per operazioni di registrazione
+ * Chiave del limite delle creazioni: l'amministratore della sessione, non l'IP, cosi' piu' persone
+ * dietro lo stesso indirizzo non si consumano il limite a vicenda. Senza sessione resta l'IP.
  */
-export const registrationRateLimiter = createBootstrapRateLimiter('rl:reg:', {
+export function chiaveCreazioneUtenti(req: Request): string {
+  const idUtente = (req.session as { id_utente?: string } | undefined)?.id_utente;
+  return idUtente ? `utente:${idUtente}` : `ip:${generateIPKey(req)}`;
+}
+
+/**
+ * Rate limiter della creazione manuale degli utenti (POST /register-user), da montare dopo
+ * authMiddleware. Era di 3 registrazioni per IP all'ora, pensato per una registrazione pubblica:
+ * fermava l'amministratore al quarto utente. Prefisso nuovo per non ereditare i vecchi contatori.
+ */
+export const registrationRateLimiter = createBootstrapRateLimiter('rl:reg-utente:', {
   windowMs: 60 * 60 * 1000, // 1 ora
-  max: 3, // massimo 3 registrazioni per IP all'ora
-  message: {
-    error: 'Limite registrazioni superato',
-    message: 'Hai superato il limite di registrazioni per ora. Riprova più tardi.',
-    retryAfter: 60 * 60 * 1000
-  },
+  max: MAX_UTENTI_CREATI_ORA,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: generateIPKey,
+  keyGenerator: chiaveCreazioneUtenti,
   handler: (req: Request, res: Response) => {
     AuditLogService.getInstance().rateLimitExceeded(req, 'registration');
 
-    log.warn(`Registration rate limit exceeded for IP: ${req.ip}`, { ip: req.ip });
+    log.warn('Limite di creazione utenti superato', { chiave: chiaveCreazioneUtenti(req) });
 
     sendAppError(res, new RateLimitError({
-      message: 'Hai superato il limite di registrazioni per ora.',
+      message: `Hai creato ${MAX_UTENTI_CREATI_ORA} utenti nell'ultima ora: attendi prima di crearne altri.`,
       limitType: 'registration',
       retryAfter: 3600
     }));
