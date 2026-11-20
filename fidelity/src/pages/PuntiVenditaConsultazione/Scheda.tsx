@@ -11,10 +11,9 @@ import withSessionCheck from "@/components/SessionChecker";
 import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
 import { useFetchAnalisiPuntoVendita, useFetchPuntoVenditaConsultazione, useFetchStoriaPuntoVendita } from "@/query/query";
-import { twMerge } from "@/utils/twMerge";
 import dayjs from "dayjs";
 import "leaflet/dist/leaflet.css";
-import { Children, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { CircleMarker, MapContainer, TileLayer } from "react-leaflet";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { PuntoVenditaConsultazione } from "../../../lib/puntiVendita/consultazione";
@@ -39,7 +38,7 @@ import {
   type ContestoPeriodo,
   type InfograficaScheda,
 } from "./analisi";
-import { ComeSiPromuove, GraficiSenzaDati, MarchePiuPresenti, NumeriScheda, ProdottiCheTornano, SpazioPerReparto } from "./Infografiche";
+import { GraficiSenzaDati, NumeriScheda, ProdottiCheTornano, SpazioPerReparto } from "./Infografiche";
 import { InsegneNelTempo } from "./InsegneNelTempo";
 import { BoxStoria, TuttiIVolantini } from "./StoriaPuntoVendita";
 import { VolantiniAttivi } from "./VolantiniAttivi";
@@ -83,19 +82,6 @@ function SceltaPeriodo({
 }
 
 const INDIETRO = { to: "/punti-vendita", etichetta: "Torna ai punti vendita" };
-
-// Colonne di una fila di riquadri, secondo quanti ce ne sono: chi resta si allarga, senza buchi
-const COLONNE_FILA: Readonly<Record<number, string>> = {
-  2: "lg:grid-cols-2",
-  3: "xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]",
-};
-
-/** Una fila di riquadri affiancati; senza riquadri non c'è. */
-function Fila({ children, className }: { children: ReactNode; className?: string }) {
-  const riquadri = Children.toArray(children);
-  if (riquadri.length === 0) return null;
-  return <div className={twMerge("grid grid-cols-1 gap-6", COLONNE_FILA[riquadri.length], className)}>{riquadri}</div>;
-}
 
 /** Una riga dei dati: si mostra solo se c'è un valore, mai un segnaposto. */
 function Dato({ icona, etichetta, children }: { icona: string; etichetta: string; children: ReactNode }) {
@@ -356,13 +342,8 @@ function SchedaPuntoVendita() {
         contesto={contesto}
         onImporta={puoGestire ? () => setImportAperto(true) : undefined}
       />
-      {/* Riquadri affiancati alla stessa altezza */}
-      <Fila>
-        {mostra("meccaniche") && <ComeSiPromuove analisi={analisi} contesto={contesto} />}
-        {mostra("reparti") && <SpazioPerReparto analisi={analisi} contesto={contesto} />}
-      </Fila>
-      {/* Le marche a schede, come le linee negli insight del volantino: una riga intera */}
-      {mostra("marche") && <MarchePiuPresenti analisi={analisi} contesto={contesto} />}
+      {/* Niente "Come si promuove" e "Marche più presenti" (richiesta del 2026-11-19): i reparti hanno la riga intera */}
+      {mostra("reparti") && <SpazioPerReparto analisi={analisi} contesto={contesto} />}
       {mostra("prodotti") && <ProdottiCheTornano idPv={pv.id} analisi={analisi} contesto={contesto} />}
       <GraficiSenzaDati assenti={senzaGrafico} />
       {storia.data?.sintesi && <TuttiIVolantini idPv={pv.id} />}

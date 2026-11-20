@@ -583,13 +583,12 @@ export const righeRecapiti = (recapiti: readonly PeriodoRecapito[]): RigaFasce[]
 
 /* ---------- Infografiche della scheda ---------- */
 
-export type InfograficaScheda = "meccaniche" | "reparti" | "marche" | "prodotti";
+/** Niente meccaniche ("Come si promuove") né marche più presenti: le ha tolte l'utente il 2026-11-19. */
+export type InfograficaScheda = "reparti" | "prodotti";
 
 /** Le infografiche del periodo nell'ordine della scheda, con il titolo del riquadro e perché manca il grafico. */
 export const INFOGRAFICHE_SCHEDA: ReadonlyArray<{ id: InfograficaScheda; titolo: string; senzaDati: string }> = [
-  { id: "meccaniche", titolo: "Come si promuove", senzaDati: "le referenze non dicono la meccanica" },
   { id: "reparti", titolo: "Spazio per reparto", senzaDati: "il reparto non è arrivato da DB1 né da Istanta" },
-  { id: "marche", titolo: "Marche più presenti", senzaDati: "le referenze non hanno la marca" },
   { id: "prodotti", titolo: "Prodotti che tornano", senzaDati: "nessun prodotto compare in almeno 2 volantini del periodo" },
 ];
 
@@ -598,12 +597,10 @@ export const INFOGRAFICHE_SCHEDA: ReadonlyArray<{ id: InfograficaScheda; titolo:
  * riquadro con lo stato vuoto, ma una riga della nota "senza grafico".
  */
 export const infograficheConDati = (
-  sintesi: Pick<SintesiPeriodo, "meccaniche" | "reparti">,
-  analisi: Pick<AnalisiPuntoVendita, "marche" | "prodottiRicorrenti">
+  sintesi: Pick<SintesiPeriodo, "reparti">,
+  analisi: Pick<AnalisiPuntoVendita, "prodottiRicorrenti">
 ): Record<InfograficaScheda, boolean> => ({
-  meccaniche: sintesi.meccaniche.size > 0,
   reparti: sintesi.reparti.length > 0,
-  marche: analisi.marche.length > 0,
   prodotti: analisi.prodottiRicorrenti.length > 0,
 });
 

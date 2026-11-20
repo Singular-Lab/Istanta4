@@ -142,7 +142,9 @@ const AREA_ATTIVA_MINIMA = 12;
 /** Ordine delle forme degli eventi in legenda, fisso. */
 const ORDINE_FORME: readonly FormaEvento[] = ["cerchio", "rombo", "quadrato", "triangolo", "croce"];
 /** Il contorno di un volantino senza il soggetto: il tono "da guardare" delle fasce. */
-const CLASSE_ASSENZA = "stroke-amber-500 dark:stroke-amber-400";
+/** Il volantino senza il soggetto: rosso, tratteggiato e velato, ben distinto dalle barre piene. */
+const CLASSE_ASSENZA = "stroke-rose-600 dark:stroke-rose-400";
+const CLASSE_ASSENZA_RIEMPIMENTO = "fill-rose-500/15 dark:fill-rose-400/20";
 /** Il volantino scelto nelle tracce: una colonna appena velata, col bordo sottile. */
 const CLASSE_COLONNA_SCELTA = "fill-slate-800/5 stroke-slate-800/40 dark:fill-slate-100/10 dark:stroke-slate-100/40";
 
@@ -457,7 +459,7 @@ export function TimelineVolantini({
             );
           })}
 
-          {/* Volantini senza il soggetto: un contorno, senza riempimento, fuori dalla lista delle opzioni */}
+          {/* Volantini senza il soggetto: rossi, tratteggiati e velati, fuori dalla lista delle opzioni */}
           {assenzeVisibili.map(({ assenza, x, w, corsia }) => {
             const y = cimaCorsie + corsia * PASSO_CORSIA;
             return (
@@ -469,9 +471,9 @@ export function TimelineVolantini({
                   width={Math.max(0.5, w - 1.5)}
                   height={ALTEZZA_BARRA - 1.5}
                   rx={Math.min(4, w / 2)}
-                  fill="none"
                   strokeWidth={1.5}
-                  className={twMerge("pointer-events-none", CLASSE_ASSENZA)}
+                  strokeDasharray="3 2"
+                  className={twMerge("pointer-events-none", CLASSE_ASSENZA, CLASSE_ASSENZA_RIEMPIMENTO)}
                 />
               </g>
             );

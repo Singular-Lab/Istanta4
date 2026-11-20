@@ -42,7 +42,8 @@ const boxFidelity = (sintesi: SintesiVolantino, box?: readonly Pick<BoxInsight, 
 
 /**
  * I riquadri della fascia, nell'ordine in cui si leggono: quanto e' grande il volantino, quanto
- * sconta, quanto spinge la carta, i marchi del distributore e le marche.
+ * sconta, quanto spinge la carta e i marchi del distributore. Sottocosto e numero di marche non ci
+ * sono (spec insight-volantino, "Prezzi, sconti, spazio e marche del volantino").
  */
 export const numeriSintesi = (
   sintesi: SintesiVolantino,
@@ -66,7 +67,6 @@ export const numeriSintesi = (
       valore: formatPercentuale(sintesi.quotaFidelity),
       sottotitolo: contaBox(boxFidelity(sintesi, box)),
     },
-    { id: "sottocosto", etichetta: "Sottocosto", icona: "Tag", valore: formatNumero(sintesi.sottocosto), sottotitolo: "box sotto costo" },
   ];
   if (lineeDistributore) {
     numeri.push({
@@ -78,14 +78,6 @@ export const numeriSintesi = (
       evidenza: true,
     });
   }
-  const linee = lineeDistributore?.linee.length ?? 0;
-  numeri.push({
-    id: "marche",
-    etichetta: "Marche",
-    icona: "Award",
-    valore: formatNumero(sintesi.marche),
-    sottotitolo: lineeDistributore ? `di cui ${linee === 1 ? "1 Private Label" : `${formatNumero(linee)} Private Labels`}` : undefined,
-  });
   return numeri;
 };
 

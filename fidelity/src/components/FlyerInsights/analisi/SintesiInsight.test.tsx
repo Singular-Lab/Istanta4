@@ -49,8 +49,15 @@ describe("SintesiInsight", () => {
     expect(riquadro("Prezzo Fidelity")).toHaveTextContent("12,5%");
     // Senza i box il conteggio si ricava dalla quota: 12,5% di 80
     expect(riquadro("Prezzo Fidelity")).toHaveTextContent("10 box");
-    expect(riquadro("Sottocosto")).toHaveTextContent("3");
-    expect(riquadro("Marche")).toHaveTextContent("35");
+  });
+
+  // Richiesta del 2026-11-19: niente indicatori dei sottocosto e delle marche
+  it("non mostra i riquadri Sottocosto e Marche", () => {
+    render(<SintesiInsight sintesi={sintesi()} lineeDistributore={LINEE} />);
+
+    expect(screen.queryByText("Sottocosto", { selector: "dt span" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Marche", { selector: "dt span" })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-numero="sottocosto"], [data-numero="marche"]')).toBeNull();
   });
 
   it("non confronta con altre edizioni: niente variazioni né \"prima\"", () => {
@@ -68,14 +75,13 @@ describe("SintesiInsight", () => {
   });
 
   // TASK-7b68e012: le linee del distributore si chiamano Private Labels
-  it("con le linee del distributore aggiunge il riquadro in evidenza Private Labels e il dettaglio delle marche", () => {
+  it("con le linee del distributore aggiunge il riquadro in evidenza Private Labels", () => {
     render(<SintesiInsight sintesi={sintesi()} lineeDistributore={LINEE} />);
 
     const marchi = riquadro("Private Labels");
     expect(marchi).toHaveAttribute("data-evidenza", "true");
     expect(marchi).toHaveTextContent("18,4%");
     expect(marchi).toHaveTextContent("dello spazio, 12 box");
-    expect(riquadro("Marche")).toHaveTextContent("di cui 2 Private Labels");
     expect(screen.queryByText(/Marchi del distributore|linee del distributore/)).not.toBeInTheDocument();
   });
 
@@ -83,7 +89,6 @@ describe("SintesiInsight", () => {
     render(<SintesiInsight sintesi={sintesi()} lineeDistributore={null} />);
 
     expect(screen.queryByText("Private Labels")).not.toBeInTheDocument();
-    expect(riquadro("Marche")).not.toHaveTextContent("di cui");
   });
 
   it("segnala i dati parziali sotto la soglia di copertura, e tace quando la copertura è buona", () => {
@@ -109,17 +114,9 @@ describe("SintesiInsight", () => {
 });
 
 describe("numeriSintesi e testoCoperturaParziale", () => {
-  it("l'ordine dei riquadri: i marchi del distributore prima delle marche, solo se dichiarati", () => {
-    expect(numeriSintesi(sintesi()).map(n => n.id)).toEqual(["referenze", "pagine", "scontoMedio", "fidelity", "sottocosto", "marche"]);
-    expect(numeriSintesi(sintesi(), undefined, LINEE).map(n => n.id)).toEqual([
-      "referenze",
-      "pagine",
-      "scontoMedio",
-      "fidelity",
-      "sottocosto",
-      "distributore",
-      "marche",
-    ]);
+  it("l'ordine dei riquadri: i marchi del distributore in fondo, solo se dichiarati; niente sottocosto e marche", () => {
+    expect(numeriSintesi(sintesi()).map(n => n.id)).toEqual(["referenze", "pagine", "scontoMedio", "fidelity"]);
+    expect(numeriSintesi(sintesi(), undefined, LINEE).map(n => n.id)).toEqual(["referenze", "pagine", "scontoMedio", "fidelity", "distributore"]);
   });
 
   it("al singolare con un box e una linea", () => {
@@ -129,7 +126,6 @@ describe("numeriSintesi e testoCoperturaParziale", () => {
     expect(numero("referenze").sottotitolo).toBe("1 box");
     expect(numero("scontoMedio").sottotitolo).toBe("1 box scontato");
     expect(numero("distributore").sottotitolo).toBe("dello spazio, 1 box");
-    expect(numero("marche").sottotitolo).toBe("di cui 1 Private Label");
   });
 
   it("solo i dati sotto il 60% entrano nella nota", () => {
