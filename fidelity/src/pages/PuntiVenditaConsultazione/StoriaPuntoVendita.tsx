@@ -15,10 +15,10 @@ import { useFetchVolantiniStoriaPuntoVendita, useFetchVolantinoPuntoVendita } fr
 import { formatNumero } from "@/utils/format";
 import { testoValidita, urlAnteprimaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
-import { ETICHETTA_MECCANICA, MECCANICHE, type AnalisiPuntoVendita, type EdizioneTimeline } from "../../../lib/puntiVendita/analisi";
+import type { AnalisiPuntoVendita, EdizioneTimeline, VolantinoAssente } from "../../../lib/puntiVendita/analisi";
 import { DIMENSIONI_PAGINA_STORIA, type StoriaPuntoVendita, type VolantinoNellaStoria } from "../../../lib/puntiVendita/storia";
 import { giorniAllaScadenza, testoScadenza } from "../VolantiniKit/scadenza";
 import {
@@ -26,77 +26,40 @@ import {
   barreTimeline,
   edizioneScelta,
   edizioniDelPeriodo,
-  eventiTimeline,
   fasceInsegne,
-  formatDifferenza,
-  formatDifferenzaPunti,
-  formatPercentuale,
   intervalloPeriodo,
-  NOMI_EVENTI,
   PARAMETRO_VOLANTINO,
   periodoValidita,
-  quoteMeccaniche,
-  sintesiPeriodo,
-  tintaMeccanica,
-  tracceStoria,
   ULTIMI_12_MESI,
   ULTIMI_3_MESI,
   type ContestoPeriodo,
-  type SintesiPeriodo,
 } from "./analisi";
 import { RigaStampata, StatoBox, type QueryBox } from "./componenti";
 import { nomePdfVolantino, testoSintesi, testoVolantini, urlPdfVolantino } from "./storia";
 
 /**
  * Scala sotto la quale la timeline non scorre ma sta nella larghezza della scheda: cinque anni di
- * volantini si leggono in una volta, e le corsie sotto ne mostrano l'andamento.
+ * volantini si leggono in una volta.
  */
 const PIXEL_GIORNO_SCHEDA = 0.5;
 
-/** Una barra al 100% delle meccaniche, senza testo: i numeri sono nella legenda accanto. */
-function BarraMeccaniche({ quote, etichetta }: { quote: ReadonlyMap<string, number>; etichetta: string }) {
-  const voci = MECCANICHE.filter(m => (quote.get(m) ?? 0) > 0);
-  return (
-    <div
-      role="img"
-      aria-label={`${etichetta}: ${voci.map(m => `${ETICHETTA_MECCANICA[m]} ${formatPercentuale(Math.round(quote.get(m) ?? 0))}`).join(", ")}`}
-      className="flex h-3 w-full gap-0.5 overflow-hidden rounded-sm bg-slate-100 dark:bg-darkmode-400"
-    >
-      {voci.map(m => {
-        const tinta = tintaMeccanica(m);
-        return <span key={m} className="h-full" style={{ width: `${quote.get(m)}%`, backgroundColor: tinta.colore }} />;
-      })}
-    </div>
-  );
-}
-
-/** Un numero del volantino scelto, con il confronto con la media del periodo sotto. */
-function NumeroVolantino({ valore, etichetta, confronto }: { valore: ReactNode; etichetta: string; confronto?: string }) {
-  return (
-    <li className="flex flex-col">
-      <span>
-        <b className="text-base font-semibold text-slate-800 dark:text-slate-100">{valore}</b> <span className="text-slate-600 dark:text-slate-300">{etichetta}</span>
-      </span>
-      {confronto && <span className="text-slate-500 dark:text-slate-400">{confronto}</span>}
-    </li>
-  );
-}
+/** Il nome delle assenze in legenda e nel tooltip della timeline. */
+const NOME_ASSENZE = "volantino della sua insegna e area senza il punto vendita";
 
 /**
- * Il volantino scelto nella timeline: copertina, date, numeri confrontati con la media del periodo,
- * meccaniche accanto a quelle del periodo, reparti con più spazio, riga stampata e passaggio agli altri.
+ * Il volantino scelto nella timeline: copertina, promo, validità, insegna e area, e il passaggio
+ * agli altri. Nella Storia restano soltanto insegna e volantini (richiesta del 2026-11-19): niente
+ * numeri, meccaniche, reparti né riga stampata; resta l'indicazione di un abbinamento probabile.
  */
 function EdizioneSelezionata({
   idPv,
   edizione,
-  periodo,
   precedente,
   successiva,
   onScegli,
 }: {
   idPv: string;
   edizione: EdizioneTimeline;
-  periodo: SintesiPeriodo;
   precedente: EdizioneTimeline | null;
   successiva: EdizioneTimeline | null;
   onScegli: (idKit: string) => void;
@@ -108,10 +71,7 @@ function EdizioneSelezionata({
   const anteprima = dati?.pdf ? urlAnteprimaMateriale(dati.pdf.idOlimpoCloud) : null;
   const giorni = edizione.attivo ? giorniAllaScadenza(edizione.al) : null;
   const stato = edizione.attivo ? `attivo${giorni !== null ? `, ${testoScadenza(giorni).toLowerCase()}` : ""}` : null;
-  const conMedia = periodo.volantini > 1;
-  const reparti = edizione.reparti.slice(0, 4);
-  const spazioReparti = edizione.reparti.reduce((somma, r) => somma + r.spazio, 0);
-  const quote = quoteMeccaniche(edizione.meccaniche);
+  const abbinamento = dati?.rigaPuntoVendita?.abbinamento;
 
   return (
     <section
@@ -133,10 +93,6 @@ function EdizioneSelezionata({
         <h3 className="title-card text-base [overflow-wrap:anywhere] dark:text-slate-100">{edizione.promo.nome}</h3>
         <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-slate-500 dark:text-slate-400">
           <span className="tabular-nums">{periodoValidita(edizione.dal, edizione.al)}</span>
-          <span aria-hidden="true">·</span>
-          <span>{edizione.canale.nome}</span>
-          <span aria-hidden="true">·</span>
-          <span>{edizione.area.nome}</span>
           {stato && (
             <>
               <span aria-hidden="true">·</span>
@@ -144,65 +100,18 @@ function EdizioneSelezionata({
             </>
           )}
         </p>
-        <div className="mt-3 grid grid-cols-1 gap-x-8 gap-y-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <ul aria-label="Il volantino in numeri" className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs tabular-nums">
-            <NumeroVolantino
-              valore={formatNumero(edizione.numeroReferenze)}
-              etichetta="referenze"
-              confronto={conMedia && periodo.mediaReferenze !== null ? `${formatDifferenza(edizione.numeroReferenze - periodo.mediaReferenze)} sulla media del periodo` : undefined}
-            />
-            {edizione.scontoMedio !== null && (
-              <NumeroVolantino
-                valore={formatPercentuale(edizione.scontoMedio)}
-                etichetta="sconto medio"
-                confronto={conMedia && periodo.scontoMedio !== null ? `${formatDifferenzaPunti(edizione.scontoMedio - periodo.scontoMedio)} sulla media del periodo` : undefined}
-              />
-            )}
-            {dettaglio.isLoading ? (
-              <li className="col-span-2">
-                <Skeleton className="h-4 w-3/4" />
-              </li>
-            ) : dati ? (
-              <>
-                <NumeroVolantino valore={formatNumero(dati.numeri.pagine)} etichetta="pagine" />
-                <NumeroVolantino valore={formatNumero(dati.numeri.puntiVenditaInLista)} etichetta="punti vendita nella lista" />
-              </>
-            ) : (
-              <li className="col-span-2 text-slate-500">I dettagli del volantino non sono arrivati.</li>
-            )}
-          </ul>
-          {quote.size > 0 && (
-            <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-              <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-2">
-                <span>Questo volantino</span>
-                <BarraMeccaniche quote={quote} etichetta="Meccaniche di questo volantino" />
-              </div>
-              {conMedia && (
-                <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-2">
-                  <span>Media del periodo</span>
-                  <BarraMeccaniche quote={periodo.meccaniche} etichetta="Meccaniche del periodo" />
-                </div>
-              )}
-              {reparti.length > 0 && spazioReparti > 0 && (
-                <ul aria-label="Reparti con più spazio" className="mt-1 flex flex-wrap gap-1.5">
-                  {reparti.map(r => (
-                    <li key={r.reparto} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 tabular-nums dark:border-darkmode-400 dark:bg-darkmode-600">
-                      {r.reparto} {formatPercentuale(Math.round((r.spazio / spazioReparti) * 100))}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-        {dati?.rigaPuntoVendita && (
-          <p className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="sr-only">Riga stampata: </span>
-            <RigaStampata>{dati.rigaPuntoVendita.riga}</RigaStampata>
-            {dati.rigaPuntoVendita.abbinamento === "probabile" && <StatusBadge tono="warning" etichetta="Abbinamento probabile" icon="Info" />}
-            {dati.rigaPuntoVendita.abbinamento === "manuale" && <StatusBadge tono="info" etichetta="Collegato a mano" icon="Link" />}
-          </p>
-        )}
+        <p className="mt-2 flex flex-wrap items-center gap-1.5">
+          <Badge variant="primary" size="sm">
+            <Lucide icon="Store" aria-hidden="true" className="h-3 w-3" />
+            {edizione.canale.nome}
+          </Badge>
+          <Badge variant="secondary" size="sm">
+            <Lucide icon="MapPin" aria-hidden="true" className="h-3 w-3" />
+            {edizione.area.nome}
+          </Badge>
+          {abbinamento === "probabile" && <StatusBadge tono="warning" etichetta="Abbinamento probabile" icon="Info" />}
+          {abbinamento === "manuale" && <StatusBadge tono="info" etichetta="Collegato a mano" icon="Link" />}
+        </p>
       </div>
       <div className="col-span-2 flex flex-wrap items-center gap-2">
         <Button
@@ -235,28 +144,62 @@ function EdizioneSelezionata({
   );
 }
 
-/** Timeline del periodo con le corsie dei numeri di ogni volantino, e la scheda del volantino scelto. */
+/**
+ * "Quando non c'era": i volantini del periodo della sua insegna e area, con la lista dei punti
+ * vendita registrata, in cui il punto vendita non compare, dal più vecchio. Ognuno si apre per
+ * vedere la lista stampata. Senza assenze non c'è.
+ */
+export function AssenzeDelPeriodo({ assenze, volantini }: { assenze: readonly VolantinoAssente[]; volantini: number }) {
+  const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
+  if (assenze.length === 0) return null;
+  const totale = assenze.length + volantini;
+  return (
+    <section aria-label="Quando non c'era" className="mt-5 rounded-card border border-rose-200 bg-rose-50/60 p-4 dark:border-rose-400/30 dark:bg-rose-400/10">
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+        <Lucide icon="CalendarX" aria-hidden="true" className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+        Quando non c'era
+      </h3>
+      <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
+        Manca da {formatNumero(assenze.length)} {assenze.length === 1 ? "volantino" : "volantini"} su {formatNumero(totale)} della sua insegna e area: la loro lista dei punti vendita non lo stampa.
+      </p>
+      <ul className="mt-3 divide-y divide-rose-100 dark:divide-rose-400/20">
+        {assenze.map(assenza => (
+          <li key={assenza.idKit} data-volantino-assente={assenza.idKit} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-800 [overflow-wrap:anywhere] dark:text-slate-100">{assenza.promo.nome}</p>
+              <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{periodoValidita(assenza.dal, assenza.al)}</p>
+            </div>
+            {puoConsultareVolantini && (
+              <Button as={Link} to={percorsoDettaglioVolantino(assenza.idKit)} variant="outline-secondary" size="sm" aria-label={`Apri il volantino ${assenza.promo.nome}`}>
+                Apri
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Timeline del periodo con insegna e volantini, la scheda del volantino scelto e le assenze. */
 function TimelineStoria({
   idPv,
   analisi,
-  storia,
   contesto,
   richiesta,
   onScegli,
 }: {
   idPv: string;
   analisi: AnalisiPuntoVendita;
-  storia: StoriaPuntoVendita | undefined;
   contesto: ContestoPeriodo;
   richiesta: string | null;
   onScegli: (idKit: string) => void;
 }) {
   const edizioni = edizioniDelPeriodo(analisi.timeline, contesto.giorni);
+  const assenze = edizioniDelPeriodo(analisi.assenze, contesto.giorni);
   const scelta = edizioneScelta(edizioni, richiesta);
   const indice = scelta ? edizioni.indexOf(scelta) : -1;
   const canali = new Map(analisi.timeline.map(e => [e.canale.id, e.canale]));
-  // La storia ha i soli volantini della sua insegna e area: le barre prendono il colore del tema, non
-  // quello dell'insegna, che nella palette coincide con quello di una meccanica nelle corsie sotto
   const gruppi = [...canali.values()].map(canale => ({ id: canale.id, etichetta: canale.nome, tinta: TINTA_PRINCIPALE }));
 
   return (
@@ -265,11 +208,8 @@ function TimelineStoria({
         barre={barreTimeline(edizioni)}
         gruppi={gruppi}
         fasce={fasceInsegne(edizioni)}
-        eventi={eventiTimeline(storia?.eventi ?? [])}
-        nomiEventi={NOMI_EVENTI}
-        tracce={tracceStoria(edizioni, storia?.recapiti)}
-        assenze={assenzeTimeline(edizioniDelPeriodo(analisi.assenze, contesto.giorni))}
-        nomeAssenze="volantino della sua insegna e area senza il punto vendita"
+        assenze={assenzeTimeline(assenze)}
+        nomeAssenze={NOME_ASSENZE}
         pixelGiornoMinimi={PIXEL_GIORNO_SCHEDA}
         intervallo={intervalloPeriodo(contesto.periodo, edizioni, contesto.oggi)}
         oggi={contesto.oggi}
@@ -282,7 +222,6 @@ function TimelineStoria({
         <EdizioneSelezionata
           idPv={idPv}
           edizione={scelta}
-          periodo={sintesiPeriodo(edizioni)}
           precedente={edizioni[indice - 1] ?? null}
           successiva={edizioni[indice + 1] ?? null}
           onScegli={onScegli}
@@ -292,16 +231,17 @@ function TimelineStoria({
       ) : (
         <EmptyState compatta icon="CalendarX" title="Nessun volantino in questo anno" description="Scegli un altro anno o tutto il periodo." />
       )}
+      <AssenzeDelPeriodo assenze={assenze} volantini={edizioni.length} />
     </>
   );
 }
 
 /**
  * Riquadro "Storia" della scheda: la timeline a calendario dei volantini del periodo in cui compare
- * il punto vendita, con l'insegna, gli eventi e le assenze, e sotto, sullo stesso asse, referenze,
- * sconto medio, meccaniche e recapiti stampati di ogni volantino; poi il volantino scelto. Il
- * periodo lo sceglie la scheda; il volantino sta nell'indirizzo, così tornando dal volantino la
- * scheda resta dov'era.
+ * il punto vendita, con l'insegna e le assenze; poi il volantino scelto e quando non c'era. Solo
+ * insegna e volantini (spec anagrafica-punti-vendita, "Storia del punto vendita"): niente corsie di
+ * numeri, recapiti stampati o eventi. Il periodo lo sceglie la scheda; il volantino sta
+ * nell'indirizzo, così tornando dal volantino la scheda resta dov'era.
  * Senza volantini è l'unico riquadro della storia: dice che cos'è e come arriva, e a chi gestisce
  * i punti vendita offre l'import degli export (`onImporta`).
  */
@@ -342,7 +282,7 @@ export function BoxStoria({
           Come si legge
         </summary>
         <p className="mt-1 max-w-3xl text-xs">
-          Ogni barra è un volantino in cui compare, dal primo all'ultimo giorno di validità. Sotto, sullo stesso asse, le sue referenze, il suo sconto medio, le sue meccaniche e l'indirizzo e il telefono stampati. Passa su un volantino per i suoi numeri.
+          Ogni barra è un volantino in cui compare, dal primo all'ultimo giorno di validità, raggruppato per insegna. I riquadri rossi tratteggiati sono i volantini della sua insegna e area in cui non c'era, elencati sotto in "Quando non c'era". Passa su un volantino per nome, validità e insegna.
         </p>
       </details>
     </>
@@ -372,7 +312,6 @@ export function BoxStoria({
           <TimelineStoria
             idPv={idPv}
             analisi={dati}
-            storia={storia}
             contesto={contesto}
             richiesta={parametri.get(PARAMETRO_VOLANTINO)}
             onScegli={scegli}

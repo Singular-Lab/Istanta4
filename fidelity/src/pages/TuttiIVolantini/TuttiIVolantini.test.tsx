@@ -328,7 +328,7 @@ describe("Dettaglio del volantino", () => {
     expect(document.querySelector("[data-direzione]")).toBeNull();
   });
 
-  it("i numeri chiave in riquadri: referenze, pagine, sconto, Prezzo Fidelity, sottocosto e marche", () => {
+  it("i numeri chiave in riquadri: referenze, pagine, sconto e Prezzo Fidelity, senza sottocosto e marche", () => {
     apri();
 
     expect(numero("Referenze")).toHaveTextContent("4");
@@ -337,8 +337,8 @@ describe("Dettaglio del volantino", () => {
     expect(numero("Sconto medio")).toHaveTextContent("30%");
     expect(numero("Prezzo Fidelity")).toHaveTextContent("33,3%");
     expect(numero("Prezzo Fidelity")).toHaveTextContent("1 box");
-    expect(numero("Sottocosto")).toHaveTextContent("1");
-    expect(numero("Marche")).toHaveTextContent("2");
+    expect(within(numeri()).queryByText("Sottocosto")).not.toBeInTheDocument();
+    expect(within(numeri()).queryByText("Marche")).not.toBeInTheDocument();
     expect(within(numeri()).queryByText("Private Labels")).not.toBeInTheDocument();
   });
 
@@ -620,6 +620,8 @@ describe("Dettaglio del volantino: Scarica il volantino", () => {
 
     expect(finti.richiestaFile).toEqual({ idKit: "k1", abilitata: true });
     expect(pulsante()).toBeEnabled();
+    // Comando principale della pagina: pieno, non col contorno grigio che sembrava disattivato
+    expect(pulsante()).toHaveAttribute("data-variante", "primary");
     fireEvent.click(pulsante());
     expect(finti.scarica).toHaveBeenCalledWith("f1", "Roma.pdf");
   });
@@ -628,6 +630,7 @@ describe("Dettaglio del volantino: Scarica il volantino", () => {
     finti.file = caricato({ ...PUBBLICATO, file: [WEB, VOL, VOL_MILANO] });
     apri();
 
+    expect(pulsante()).toHaveAttribute("data-variante", "primary");
     fireEvent.click(pulsante());
     const voci = await screen.findAllByRole("menuitem");
     expect(voci.map(voce => voce.textContent)).toEqual(["MILANO.pdf", "Roma.pdf", "Banner web.zip"]);
@@ -641,6 +644,7 @@ describe("Dettaglio del volantino: Scarica il volantino", () => {
     const { unmount } = apri();
     expect(pulsante()).toBeDisabled();
     expect(pulsante()).toHaveAttribute("title", NESSUN_FILE);
+    expect(pulsante()).toHaveAttribute("data-variante", "outline-secondary");
     unmount();
 
     finti.file = inCaricamento();

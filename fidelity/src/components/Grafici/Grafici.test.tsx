@@ -651,7 +651,7 @@ describe("TimelineVolantini: tracce, assenze e periodi lunghi", () => {
     expect(colonna[0]).toHaveClass("pointer-events-none");
   });
 
-  it("assenze: un contorno che non copre mai una barra, col tooltip, in legenda e in tabella, ma non si sceglie", () => {
+  it("assenze: un riquadro tratteggiato che non copre mai una barra, col tooltip, in legenda e in tabella, ma non si sceglie", () => {
     const onSeleziona = vi.fn();
     const { container } = disegna({
       onSeleziona,
@@ -668,7 +668,9 @@ describe("TimelineVolantini: tracce, assenze e periodi lunghi", () => {
     const yBarra = (id: string) => Number(container.querySelector(`[data-barra="${id}"]`)!.getAttribute("y"));
     expect(yRect(x)).toBe(yBarra("a"));
     expect(new Set([yBarra("a"), yBarra("c"), yRect(y)]).size).toBe(3);
-    expect(x.querySelectorAll('rect[fill="none"]')).toHaveLength(1);
+    // Tratteggiata e velata di rosso: ben distinta dalle barre piene dei volantini (richiesta del 2026-11-19)
+    expect(x.querySelectorAll('rect[stroke-dasharray="3 2"]')).toHaveLength(1);
+    expect(x.querySelector('rect[stroke-dasharray="3 2"]')!.getAttribute("class")).toMatch(/stroke-rose-600/);
 
     expect(screen.getAllByRole("option")).toHaveLength(3);
     expect(screen.queryByRole("option", { name: /Promo aprile Liguria/ })).not.toBeInTheDocument();

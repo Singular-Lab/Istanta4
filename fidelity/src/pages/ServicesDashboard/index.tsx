@@ -17,6 +17,7 @@ import ServiceCardSkeleton from "./components/ServiceCardSkeleton";
 import ServiceDetailsModal from "./components/ServiceDetailsModal";
 import UserWelcome from "./components/UserWelcome";
 import { indirizzoServizioFico } from "./aperturaFico";
+import { dimenticaAccessoAppenaFatto, leggiAccessoAppenaFatto, servizioDaAprireSubito } from "./ingressoDiretto";
 
 interface HubUserInfo {
   id: string;
@@ -42,7 +43,7 @@ const ServicesDashboard: React.FC = () => {
   });
 
   // Fetch services
-  const { data: servicesResponse = [], isLoading: loadingServices } = useQuery({
+  const { data: servicesResponse = [], isLoading: loadingServices, isSuccess: serviziArrivati } = useQuery({
     queryKey: ['hubServices'],
     queryFn: () => ServerCall.get<HubServiceDTO[]>('/hub-services'),
     staleTime: 1000 * 60 * 5,
@@ -95,8 +96,13 @@ const ServicesDashboard: React.FC = () => {
     }, delayMs);
   };
 
-  const handleServiceClick = async (service: HubServiceDTO) => {
+  /**
+   * Apre il servizio. `stessaScheda` per l'ingresso diretto: un servizio esterno aperto senza un clic
+   * dell'utente in una scheda nuova verrebbe bloccato dal browser come popup.
+   */
+  const handleServiceClick = async (service: HubServiceDTO, { stessaScheda = false }: { stessaScheda?: boolean } = {}) => {
     if (!service.attivo || service.in_manutenzione || openingServiceId) return;
+    const apri = (url: string) => (stessaScheda ? window.location.assign(url) : window.open(url, '_blank'));
 
     setOpeningServiceId(service.id);
     // Garantisce almeno un frame di rendering del loading prima dell'apertura.
@@ -110,7 +116,7 @@ const ServicesDashboard: React.FC = () => {
       try {
         const esito = await indirizzoServizioFico(service, ServerCall.getUrl());
         if ('url' in esito) {
-          window.open(esito.url, '_blank');
+          apri(esito.url);
         } else {
           setErroreApertura({ servizio: service.nome, messaggio: esito.errore });
         }
@@ -120,7 +126,7 @@ const ServicesDashboard: React.FC = () => {
         }
       }
     } else if (service.tipo_url === 'external') {
-      window.open(service.url, '_blank');
+      apri(service.url);
       if (shouldResetInFinally) {
         scheduleLoadingReset(service.id, 250);
       }
@@ -135,6 +141,21 @@ const ServicesDashboard: React.FC = () => {
   useEffect(() => {
     window.dispatchEvent(new Event("app:ready"));
   }, []);
+
+  // Ingresso diretto (spec hub-servizi): subito dopo l'accesso, con un solo servizio da aprire, ci si
+  // entra senza sceglierlo. Il segno dell'accesso si legge una volta e si toglie: tornando all'hub si
+  // vede l'hub. Se il servizio non si apre l'hub resta, con il motivo.
+  const [dopoAccesso] = useState(leggiAccessoAppenaFatto);
+  const ingressoDirettoProvato = useRef(false);
+  useEffect(() => {
+    if (!dopoAccesso || ingressoDirettoProvato.current || !userInfo || !serviziArrivati) return;
+    ingressoDirettoProvato.current = true;
+    dimenticaAccessoAppenaFatto();
+    const unico = servizioDaAprireSubito(services);
+    if (unico) void handleServiceClick(unico, { stessaScheda: true });
+    // handleServiceClick cambia a ogni render: l'ingresso si prova una volta sola, quando i dati ci sono
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dopoAccesso, userInfo, serviziArrivati, services]);
 
   useEffect(() => {
     if (userError) {

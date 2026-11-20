@@ -357,14 +357,10 @@ describe("il periodo in sintesi", () => {
   });
 
   it("le infografiche del periodo senza dati non hanno un riquadro; la differenza in punti per la nota", () => {
-    const vuota = { marche: [], prodottiRicorrenti: [] };
-    expect(infograficheConDati(sintesiPeriodo([]), vuota)).toEqual({ meccaniche: false, reparti: false, marche: false, prodotti: false });
-    expect(infograficheConDati(sintesiPeriodo(conNumeri), { ...vuota, marche: [{ marca: "Barilla", quota: 3, volantini: 2, linea: null }] })).toEqual({
-      meccaniche: true,
-      reparti: true,
-      marche: true,
-      prodotti: false,
-    });
+    // Meccaniche e marche non sono piu' infografiche della scheda (richiesta del 2026-11-19)
+    const vuota = { prodottiRicorrenti: [] };
+    expect(infograficheConDati(sintesiPeriodo([]), vuota)).toEqual({ reparti: false, prodotti: false });
+    expect(infograficheConDati(sintesiPeriodo(conNumeri), vuota)).toEqual({ reparti: true, prodotti: false });
     expect(notaDifferenza(22, 18)).toBe("+4 punti");
     expect(notaDifferenza(22, null)).toBeUndefined();
     expect(formatDifferenza(4.6)).toBe("+5");

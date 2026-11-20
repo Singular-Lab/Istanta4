@@ -35,12 +35,15 @@ export interface ScaricaVolantinoProps {
 /**
  * "Scarica il volantino", in alto nel dettaglio del volantino accanto al titolo (spec
  * dati-consultazione, "Download dei file pubblicati dalla Visualizzazione"). Con un solo file pubblicato
- * lo scarica; con più file apre l'elenco, il PDF del volantino per primo. Senza permesso, mentre i
- * file arrivano, se non arrivano o se non ce ne sono resta disattivato e dice perché.
+ * lo scarica; con più file apre l'elenco, il PDF del volantino per primo. E' il comando principale
+ * della pagina, pieno; senza permesso, se i file non arrivano o se non ce ne sono resta disattivato,
+ * grigio, e dice perché.
  */
 export function ScaricaVolantino({ puoScaricare, file, caricamento, errore, inCorso, onScarica }: ScaricaVolantinoProps) {
   const elenco = fileInOrdine(file ?? []);
   const motivo = !puoScaricare ? SERVE_IL_PERMESSO : errore ? errore : !caricamento && elenco.length === 0 ? NESSUN_FILE : null;
+  // Pieno quando si puo' scaricare: col solo contorno grigio sembrava disattivato. Grigio solo se non si puo'
+  const variante = motivo ? "outline-secondary" : "primary";
   const icona = <Lucide icon="Download" aria-hidden="true" className="mr-2 h-4 w-4" />;
 
   if (motivo || caricamento || elenco.length === 1) {
@@ -48,7 +51,8 @@ export function ScaricaVolantino({ puoScaricare, file, caricamento, errore, inCo
     return (
       <Button
         type="button"
-        variant="outline-secondary"
+        variant={variante}
+        data-variante={variante}
         disabled={Boolean(motivo) || caricamento || Boolean(inCorso)}
         loading={caricamento || (unico !== null && inCorso === unico.id)}
         title={motivo ?? (unico ? `Scarica ${unico.nome}` : undefined)}
@@ -62,7 +66,7 @@ export function ScaricaVolantino({ puoScaricare, file, caricamento, errore, inCo
 
   return (
     <Menu className="inline-block text-left">
-      <Menu.Button as={Button} type="button" variant="outline-secondary" disabled={Boolean(inCorso)}>
+      <Menu.Button as={Button} type="button" variant={variante} data-variante={variante} disabled={Boolean(inCorso)}>
         {icona}
         Scarica il volantino
         <Lucide icon="ChevronDown" aria-hidden="true" className="ml-1.5 h-4 w-4" />

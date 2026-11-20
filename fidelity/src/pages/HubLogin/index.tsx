@@ -15,6 +15,7 @@ import { TIPO_UTENTI } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
 import type { AuthProviderDTO, UtenteAttributes } from "../../../lib/types";
 import type { UtenteResponseDTO } from "../../../server/core/dto";
+import { segnaAccessoAppenaFatto } from "../ServicesDashboard/ingressoDiretto";
 import CampoPassword from "./components/CampoPassword";
 import CardAccesso from "./components/CardAccesso";
 import ProviderCard from "./components/ProviderCard";
@@ -134,6 +135,8 @@ const HubLogin: React.FC = () => {
       ServerCall.resetSessionExpiredFlag();
       localStorage.removeItem('session_expired');
       localStorage.removeItem('logout');
+      // Con un solo servizio l'hub ci porta dentro, una volta sola per accesso
+      segnaAccessoAppenaFatto();
       navigate("/hub")
     },
     onError: (err: any) => handleLoginError(err),
@@ -202,6 +205,7 @@ const HubLogin: React.FC = () => {
         setExpandedProvider(expandedProvider === provider.codice ? null : provider.codice);
       });
     } else if (provider.tipo === 'custom' && provider.config_client?.redirect_uri) {
+      segnaAccessoAppenaFatto();
       window.location.href = provider.config_client.redirect_uri;
     } else if (provider.tipo === 'oidc' || provider.tipo === 'saml') {
       try {
@@ -209,6 +213,8 @@ const HubLogin: React.FC = () => {
         setGeneralError(null);
         const response = await ServerCall.get<{ authorize_url: string }>(`/auth/${provider.tipo}/authorize/${provider.codice}`);
         if (response?.authorize_url) {
+          // L'accesso torna all'hub passando dal fornitore: il segno resta nella sessione del browser
+          segnaAccessoAppenaFatto();
           window.location.href = response.authorize_url;
         } else {
           setGeneralError("Impossibile avviare l'autenticazione con questo provider");

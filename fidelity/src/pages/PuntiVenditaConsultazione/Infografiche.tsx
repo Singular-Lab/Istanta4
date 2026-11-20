@@ -2,13 +2,11 @@ import Lucide from "@/components/Base/Lucide";
 import Sezione from "@/components/Base/Sezione";
 import Table from "@/components/Base/Table";
 import EmptyState from "@/components/EmptyState";
-import { Logo, testoSuColore } from "@/components/FlyerInsights/analisi/MarchiDistributore";
-import { BarreOrizzontali, ForbicePrezzo, Legenda, SERIE_PRINCIPALE, StrisciaNumeri, StrisciaPresenze, TINTA_NEUTRA, TINTA_PRINCIPALE, type NumeroStriscia } from "@/components/Grafici";
+import { BarreOrizzontali, ForbicePrezzo, StrisciaNumeri, StrisciaPresenze, TINTA_NEUTRA, type NumeroStriscia } from "@/components/Grafici";
 import { formatData, formatNumero } from "@/utils/format";
-import { twMerge } from "@/utils/twMerge";
 import { Fragment } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ETICHETTA_MECCANICA, MECCANICHE, type AnalisiPuntoVendita } from "../../../lib/puntiVendita/analisi";
+import type { AnalisiPuntoVendita } from "../../../lib/puntiVendita/analisi";
 import {
   coperturaParziale,
   edizioniDelPeriodo,
@@ -23,7 +21,6 @@ import {
   percorsoReferenza,
   repartiInBarre,
   sintesiPeriodo,
-  tintaMeccanica,
   type ContestoPeriodo,
   type InfograficaScheda,
 } from "./analisi";
@@ -31,10 +28,11 @@ import { FotoReferenza, NotaDato, StatoBox, type QueryBox } from "./componenti";
 
 /**
  * Le infografiche della scheda del punto vendita (contratto in lib/puntiVendita/analisi.ts), tutte
- * del periodo scelto (ContestoPeriodo): numeri, meccaniche e reparti col periodo prima, marche e
- * prodotti che tornano. Niente griglie colorate per intensità: le ha escluse l'utente. Meccaniche, reparti e sconto si calcolano qui dai
- * numeri di ogni volantino della timeline; marche, prodotti e copertura arrivano dal server per il
- * periodo. Ogni riquadro ha il suo caricamento e il suo errore e dice quando il dato è parziale.
+ * del periodo scelto (ContestoPeriodo): numeri e reparti col periodo prima, e prodotti che tornano.
+ * Niente griglie colorate per intensità, e niente meccaniche ("Come si promuove") né marche più
+ * presenti: le ha escluse l'utente. Reparti e sconto si calcolano qui dai numeri di ogni volantino
+ * della timeline; prodotti e copertura arrivano dal server per il periodo. Ogni riquadro ha il suo
+ * caricamento e il suo errore e dice quando il dato è parziale.
  */
 
 type Analisi = QueryBox<AnalisiPuntoVendita>;
@@ -144,44 +142,6 @@ export function GraficiSenzaDati({ assenti }: { assenti: readonly InfograficaSch
 const descrizioneConfronto = (contesto: ContestoPeriodo, conPrima: boolean) =>
   conPrima && contesto.confronto ? ` Il segno verticale è il valore ${contesto.confronto.nel}.` : "";
 
-/** "Come si promuove": la quota delle referenze per meccanica nel periodo, col periodo prima. */
-export function ComeSiPromuove({ analisi, contesto }: { analisi: Analisi; contesto: ContestoPeriodo }) {
-  const conPrima = analisi.data ? datiDelPeriodo(analisi.data, contesto).sintesiPrima !== null : false;
-  return (
-    <Sezione titolo="Come si promuove" descrizione={`Quota delle referenze per meccanica ${contesto.nome}.${descrizioneConfronto(contesto, conPrima)}`}>
-      <StatoBox
-        query={analisi}
-        titoloErrore="Meccaniche non caricate"
-        vuoto={dati =>
-          datiDelPeriodo(dati, contesto).sintesi.meccaniche.size === 0 ? (
-            <EmptyState compatta icon="Tags" title="Meccaniche non riconosciute" description="Le referenze dei volantini non dicono con quale meccanica sono promosse." />
-          ) : null
-        }
-      >
-        {dati => {
-          const { sintesi, sintesiPrima } = datiDelPeriodo(dati, contesto);
-          const voci = MECCANICHE.filter(m => sintesi.meccaniche.has(m))
-            .map(m => {
-              const valore = sintesi.meccaniche.get(m) ?? 0;
-              const prima = sintesiPrima ? (sintesiPrima.meccaniche.get(m) ?? 0) : null;
-              return { id: m, etichetta: ETICHETTA_MECCANICA[m], valore, tinta: tintaMeccanica(m), riferimento: prima, nota: notaDifferenza(valore, prima) };
-            })
-            .sort((a, b) => b.valore - a.valore);
-          return (
-            <BarreOrizzontali
-              voci={voci}
-              titolo="Meccaniche del periodo"
-              descrizioneValore="Quota delle referenze"
-              formatta={v => formatPercentuale(v)}
-              nomeRiferimento={contesto.confronto?.nel}
-            />
-          );
-        }}
-      </StatoBox>
-    </Sezione>
-  );
-}
-
 /** "Spazio per reparto": la quota dello spazio dei box per reparto nel periodo, col periodo prima. */
 export function SpazioPerReparto({ analisi, contesto }: { analisi: Analisi; contesto: ContestoPeriodo }) {
   const conPrima = analisi.data ? datiDelPeriodo(analisi.data, contesto).sintesiPrima !== null : false;
@@ -228,113 +188,6 @@ export function SpazioPerReparto({ analisi, contesto }: { analisi: Analisi; cont
                 </NotaDato>
               )}
             </>
-          );
-        }}
-      </StatoBox>
-    </Sezione>
-  );
-}
-
-/** "in 18 su 26 volantini": i volantini del periodo in cui compare la marca. */
-const testoVolantiniMarca = (volantini: number, delPeriodo: number): string =>
-  `in ${formatNumero(volantini)} su ${formatNumero(delPeriodo)} ${delPeriodo === 1 ? "volantino" : "volantini"}`;
-
-/** Le Private Labels (linee del distributore) contro le altre marche, in una barra sola, come negli insight del volantino. */
-function QuotaLineeDistributore({ quota }: { quota: number }) {
-  const linee = Math.max(0, Math.min(100, quota));
-  const altre = Math.round((100 - linee) * 10) / 10;
-  return (
-    <div className="space-y-2">
-      <p className="text-sm text-slate-700 dark:text-slate-200">
-        <b className="text-xl font-bold tabular-nums text-slate-800 dark:text-slate-100">{formatPercentuale(linee)}</b> delle referenze con marca sono
-        delle Private Labels
-      </p>
-      <div
-        role="img"
-        aria-label={`Private Labels ${formatPercentuale(linee)} delle referenze con marca, altre marche ${formatPercentuale(altre)}`}
-        className="flex h-3 overflow-hidden rounded-full bg-slate-100 dark:bg-darkmode-400"
-      >
-        <div className={twMerge("h-full", SERIE_PRINCIPALE.sfondo)} style={{ width: `${linee}%` }} />
-      </div>
-      <Legenda
-        voci={[
-          { id: "linee", etichetta: `Private Labels ${formatPercentuale(linee)}`, forma: "quadrato", tinta: TINTA_PRINCIPALE },
-          { id: "altre", etichetta: `Altre marche ${formatPercentuale(altre)}`, forma: "quadrato", tinta: TINTA_NEUTRA },
-        ]}
-      />
-    </div>
-  );
-}
-
-/**
- * Una marca come le linee negli insight del volantino: il logo della linea del distributore o le
- * iniziali (nel colore della linea, o neutre), il nome intero, la quota, i volantini e una barra
- * rispetto alla marca più presente, nel colore della linea.
- */
-function SchedaMarca({ marca, massimo, volantiniDelPeriodo }: { marca: AnalisiPuntoVendita["marche"][number]; massimo: number; volantiniDelPeriodo: number }) {
-  const larghezza = massimo > 0 ? Math.max(0, Math.min(100, (marca.quota / massimo) * 100)) : 0;
-  const coloreLinea = marca.linea && testoSuColore(marca.linea.colore) !== null ? marca.linea.colore : null;
-  return (
-    <li className="flex min-w-0 items-start gap-3 rounded-control border border-slate-200 bg-white p-3 dark:border-darkmode-400 dark:bg-darkmode-600">
-      <Logo
-        key={marca.linea?.logo ?? ""}
-        url={marca.linea?.logo ?? null}
-        nome={marca.linea?.nome ?? marca.marca}
-        sigla=""
-        colore={marca.linea?.colore}
-        misura="grande"
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold leading-snug text-slate-800 [overflow-wrap:anywhere] dark:text-slate-100">{marca.marca}</p>
-        {marca.linea && <p className="text-xs text-slate-500 dark:text-slate-400">Private Label {marca.linea.nome}</p>}
-        <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">
-          <b className="font-semibold text-slate-700 dark:text-slate-200">{formatPercentuale(marca.quota)}</b> delle referenze ·{" "}
-          {testoVolantiniMarca(marca.volantini, volantiniDelPeriodo)}
-        </p>
-        {/* Rispetto alla marca più presente: le barre delle schede si confrontano fra loro */}
-        <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100 dark:bg-darkmode-400">
-          <div
-            className={twMerge("h-full rounded-full", !coloreLinea && SERIE_PRINCIPALE.sfondo)}
-            style={{ width: `${larghezza}%`, ...(coloreLinea ? { backgroundColor: coloreLinea } : {}) }}
-          />
-        </div>
-      </div>
-    </li>
-  );
-}
-
-/**
- * "Marche più presenti": le 8 marche con più referenze nel periodo come schede, come le linee del
- * distributore negli insight del volantino; con le linee dichiarate dalla libreria agenzia, il loro
- * logo e colore e la quota delle linee del distributore su tutte le marche.
- */
-export function MarchePiuPresenti({ analisi, contesto }: { analisi: Analisi; contesto: ContestoPeriodo }) {
-  return (
-    <Sezione titolo="Marche più presenti" descrizione={`Quota delle referenze con la marca ${contesto.nome}, dalla marca più presente.`}>
-      <StatoBox
-        query={analisi}
-        titoloErrore="Marche non caricate"
-        vuoto={dati =>
-          dati.marche.length === 0 ? (
-            <EmptyState compatta icon="Award" title="Nessuna marca riconosciuta" description="Le referenze di questi volantini non hanno la marca." />
-          ) : null
-        }
-      >
-        {dati => {
-          const massimo = Math.max(0, ...dati.marche.map(marca => marca.quota));
-          const volantiniDelPeriodo = edizioniDelPeriodo(dati.timeline, contesto.giorni).length;
-          return (
-            <div className="space-y-5">
-              {dati.lineeDistributore && <QuotaLineeDistributore quota={dati.lineeDistributore.quota} />}
-              <ul aria-label="Marche più presenti" className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
-                {dati.marche.map(marca => (
-                  <SchedaMarca key={marca.marca} marca={marca} massimo={massimo} volantiniDelPeriodo={volantiniDelPeriodo} />
-                ))}
-              </ul>
-              {coperturaParziale(dati.copertura.conMarca) && (
-                <NotaDato>Dato parziale: la marca è nota per il {formatPercentuale(dati.copertura.conMarca, 0)} delle referenze.</NotaDato>
-              )}
-            </div>
           );
         }}
       </StatoBox>
