@@ -187,9 +187,9 @@ export interface AnalisiPuntoVendita {
   numeri: NumeriPuntoVendita;
   /** Tutti i volantini della combinazione attuale, dal più vecchio, qualunque sia il periodo. */
   timeline: EdizioneTimeline[];
-  /** Le assenze dal primo volantino del PV in poi, dalla più vecchia, qualunque sia il periodo. */
+  /** Le assenze, anche prima del primo volantino del PV, dalla più vecchia, qualunque sia il periodo. */
   assenze: VolantinoAssente[];
-  /** Anni in cui inizia almeno un volantino della timeline, dal più vecchio. */
+  /** Anni in cui inizia almeno un volantino della timeline o un'assenza, dal più vecchio. */
   anni: number[];
   /**
    * Le 8 marche con più referenze nel periodo: quota sulle referenze con marca, volantini in cui
@@ -360,10 +360,29 @@ export interface ReteInsegne {
 }
 
 /** Sintesi per riga dell'elenco: insegna dei volantini anno per anno e numero di volantini. */
+/**
+ * Le assenze recenti di un PV nell'elenco, con la regola della Storia: i volantini della sua insegna
+ * e area con la lista dei punti vendita registrata degli ultimi 12 mesi, dalla sua prima comparsa in
+ * poi, quanti non lo stampano e se manca dal più recente. La storia intera sta nella scheda.
+ */
+export interface AssenzeInElenco {
+  /** I volantini della sua insegna e area con la lista registrata negli ultimi 12 mesi. */
+  volantini: number;
+  /** Quanti di quei volantini non lo stampano. */
+  mancanti: number;
+  /** Vero se il più recente volantino della sua insegna e area con la lista non lo stampa. */
+  nonNellUltimo: boolean;
+}
+
+/** I mesi delle assenze recenti nell'elenco dei punti vendita. */
+export const MESI_ASSENZE_IN_ELENCO = 12;
+
 export interface StoriaInElenco {
   volantini: number;
   insegnePerAnno: Array<{ anno: number; canale: RiferimentoStoria | null }>;
   cambioInsegna: boolean;
+  /** Solo per i PV che compaiono in un volantino della loro insegna e area, se il server le ha lette. */
+  assenze?: AssenzeInElenco;
 }
 
 /* ---------- Gestione ---------- */

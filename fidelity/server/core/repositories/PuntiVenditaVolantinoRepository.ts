@@ -156,15 +156,16 @@ export interface IPuntiVenditaVolantinoRepository {
    */
   kitDelPuntoVendita(idPuntoVendita: string): Promise<KitDelPuntoVendita[]>;
   /**
-   * Volantini con la lista registrata della stessa insegna e area, con l'edizione dopo la data
-   * indicata, in cui il PV non c'e': dal piu' vecchio, con le date di validita' e la promo.
+   * Volantini con la lista registrata della stessa insegna e area in cui il PV non c'e': dal piu'
+   * vecchio, con le date di validita' e la promo. Con `dopo`, solo le edizioni successive a quella
+   * data; senza, tutte.
    */
   volantiniSenzaPuntoVendita(criteri: {
     idPuntoVendita: string;
     idGdo: string;
     idCanale: string;
     idArea: string;
-    dopo: string;
+    dopo?: string;
   }): Promise<VolantinoSenzaPuntoVendita[]>;
   /** I volantini in cui compare il PV, dal piu' recente, una volta per kit. */
   paginaVolantini(idPuntoVendita: string, limite: number, scarto: number): Promise<{ volantini: VolantinoNellaStoria[]; totale: number }>;
@@ -664,7 +665,7 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
     idGdo: string;
     idCanale: string;
     idArea: string;
-    dopo: string;
+    dopo?: string;
   }): Promise<VolantinoSenzaPuntoVendita[]> {
     const righe = await this.seleziona<{
       id_kit: string; data: string; validita_dal: string | null; validita_al: string | null; id_promo: string; nome_promo: string;
@@ -675,7 +676,7 @@ export class PuntiVenditaVolantinoRepository implements IPuntiVenditaVolantinoRe
        FROM runtime_kit k
        JOIN promo p ON p.id_promo = k.id_promo
        WHERE k.id_canale = :idCanale AND k.id_area = :idArea AND ${KIT_VALIDI}
-         AND ${DATA_EDIZIONE} > :dopo
+         ${criteri.dopo ? `AND ${DATA_EDIZIONE} > :dopo` : ''}
          AND EXISTS (SELECT 1 FROM punti_vendita_volantino r WHERE r.id_kit_runtime = k.id AND r.id_gdo = :idGdo)
          AND NOT EXISTS (
            SELECT 1 FROM punti_vendita_volantino r WHERE r.id_kit_runtime = k.id AND r.id_punto_vendita = :idPuntoVendita

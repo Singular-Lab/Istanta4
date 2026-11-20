@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { NotFoundError } from '../../../../lib/errors';
 import type {
+  RigaAssenzeInElenco,
   RigaCombinazioneVolantini,
   RigaPuntoVenditaConsultazione,
   RigaStoriaInElenco,
 } from '../../repositories/ConsultazionePuntiVenditaRepository';
-import { ConsultazionePuntiVenditaService, inConsultazione, storiaInElenco } from '../ConsultazionePuntiVenditaService';
+import { ConsultazionePuntiVenditaService, inConsultazione, inizioAssenzeInElenco, storiaInElenco } from '../ConsultazionePuntiVenditaService';
 
 vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -70,10 +71,11 @@ describe('ConsultazionePuntiVenditaService', () => {
       trovaDellaGdo: vi.fn(async () => trovato),
       storiaInElenco: vi.fn(async (): Promise<RigaStoriaInElenco[]> => []),
       puntiVenditaConCambioInsegna: vi.fn(async (): Promise<string[]> => []),
+      assenzeInElenco: vi.fn(async (): Promise<RigaAssenzeInElenco[]> => []),
       combinazioniDeiVolantini: vi.fn(async (): Promise<RigaCombinazioneVolantini[]> => []),
     };
     const puntoVenditaService = { getVolantiniAttivi: vi.fn(async () => []) };
-    return { servizio: new ConsultazionePuntiVenditaService(repository, puntoVenditaService), repository, puntoVenditaService };
+    return { servizio: new ConsultazionePuntiVenditaService(repository, puntoVenditaService, () => '2026-11-20'), repository, puntoVenditaService };
   };
 
   it('cerca il punto vendita sempre dentro la GDO indicata', async () => {
@@ -142,12 +144,54 @@ describe('ConsultazionePuntiVenditaService', () => {
     expect(pv.storia).toMatchObject({ volantini: 3, cambioInsegna: false });
   });
 
+  it('nell\'elenco le assenze recenti dai volantini della sua insegna e area: quanti, su quanti e se manca dall\'ultimo', async () => {
+    const { servizio, repository } = crea(riga());
+    const PV_2 = '22222222-2222-4222-8222-222222222222';
+    repository.elencaDellaGdo.mockResolvedValueOnce([riga(), riga({ id: PV_2 })]);
+    repository.storiaInElenco.mockResolvedValueOnce([
+      { id_punto_vendita: PV, anno: 2026, id_canale: 'city', nome_canale: 'City', volantini: 1 },
+      { id_punto_vendita: PV_2, anno: 2026, id_canale: 'city', nome_canale: 'City', volantini: 3 },
+    ]);
+    repository.assenzeInElenco.mockResolvedValueOnce([
+      { id_punto_vendita: PV, volantini: 3, presenze: 1, assente_ultimo: true },
+      { id_punto_vendita: PV_2, volantini: 3, presenze: 3, assente_ultimo: false },
+    ]);
+
+    const elenco = await servizio.elenca('g1');
+
+    // Gli ultimi 12 mesi da oggi a Roma
+    expect(repository.assenzeInElenco).toHaveBeenCalledWith('g1', '2025-11-20');
+    expect(elenco.map(pv => [pv.id, pv.storia?.assenze])).toEqual([
+      [PV, { volantini: 3, mancanti: 2, nonNellUltimo: true }],
+      [PV_2, { volantini: 3, mancanti: 0, nonNellUltimo: false }],
+    ]);
+  });
+
+  it('se le assenze non si leggono, l\'elenco esce con la storia e senza le assenze', async () => {
+    const { servizio, repository } = crea(riga());
+    repository.storiaInElenco.mockResolvedValueOnce([{ id_punto_vendita: PV, anno: 2026, id_canale: 'city', nome_canale: 'City', volantini: 3 }]);
+    repository.assenzeInElenco.mockRejectedValueOnce(new Error('timeout'));
+
+    const [pv] = await servizio.elenca('g1');
+
+    expect(pv.storia).toMatchObject({ volantini: 3, cambioInsegna: false });
+    expect(pv.storia).not.toHaveProperty('assenze');
+  });
+
   it('i volantini attivi sono quelli della gestione, dopo il controllo della GDO', async () => {
     const { servizio, puntoVenditaService } = crea(riga());
 
     await servizio.volantiniAttivi('g1', PV);
 
     expect(puntoVenditaService.getVolantiniAttivi).toHaveBeenCalledWith(PV);
+  });
+});
+
+describe('inizioAssenzeInElenco', () => {
+  it('lo stesso giorno di 12 mesi prima, anche a cavallo d\'anno e dal 29 febbraio', () => {
+    expect(inizioAssenzeInElenco('2026-11-20')).toBe('2025-11-20');
+    expect(inizioAssenzeInElenco('2026-01-05')).toBe('2025-01-05');
+    expect(inizioAssenzeInElenco('2028-02-29')).toBe('2027-03-01');
   });
 });
 

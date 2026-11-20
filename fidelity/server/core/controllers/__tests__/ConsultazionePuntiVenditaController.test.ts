@@ -88,6 +88,7 @@ function creaApp(tipo_utente: TIPO_UTENTI = TIPO_UTENTI.GDO) {
     storiaInElenco: vi.fn(async (_idGdo: string) => storie),
     // La regola delle insegne nel tempo sta nella query: qui il PV della sessione ha cambiato insegna
     puntiVenditaConCambioInsegna: vi.fn(async (_idGdo: string) => [PV_NOSTRO]),
+    assenzeInElenco: vi.fn(async (_idGdo: string) => []),
     combinazioniDeiVolantini: vi.fn(async (_idGdo: string) => combinazioni),
   };
   const puntoVenditaService = {

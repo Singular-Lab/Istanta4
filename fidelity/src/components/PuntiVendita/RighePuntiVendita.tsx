@@ -1,12 +1,22 @@
 import PageError from "@/components/Base/PageError";
 import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
 import Skeleton from "@/components/Base/Skeleton";
+import Lucide from "@/components/Base/Lucide";
 import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import { formatNumero } from "@/utils/format";
 import { Link } from "react-router-dom";
+import { MESI_ASSENZE_IN_ELENCO } from "../../../lib/puntiVendita/analisi";
 import { indirizzoCompleto } from "../../utils/puntoVendita";
-import { codiciIdentificativi, DIMENSIONI_PAGINA_PUNTI_VENDITA, volantiniDi, type ConStoria, type ElencoPuntiVendita, type PuntoVenditaInElenco } from "./elenco";
+import {
+  assenzeDi,
+  codiciIdentificativi,
+  DIMENSIONI_PAGINA_PUNTI_VENDITA,
+  volantiniDi,
+  type ConStoria,
+  type ElencoPuntiVendita,
+  type PuntoVenditaInElenco,
+} from "./elenco";
 
 export interface RighePuntiVenditaProps<T extends PuntoVenditaInElenco & ConStoria> {
   elenco: ElencoPuntiVendita<T>;
@@ -23,11 +33,17 @@ export interface RighePuntiVenditaProps<T extends PuntoVenditaInElenco & ConStor
 
 const testoVolantini = (numero: number) => (numero === 1 ? "1 volantino" : `${formatNumero(numero)} volantini`);
 
+/** "manca da 2 su 70 in 12 mesi": le assenze recenti dai volantini della sua insegna e area. */
+export const testoMancanti = (mancanti: number, volantini: number) =>
+  `manca da ${formatNumero(mancanti)} su ${formatNumero(volantini)} in ${MESI_ASSENZE_IN_ELENCO} mesi`;
+
 /**
  * Le righe dell'elenco della consultazione: nome, indirizzo e, sotto, insegna, area e codici GDO;
- * a destra quanti volantini e se ha cambiato insegna. Niente insegna anno per anno (spec
- * anagrafica-punti-vendita, "Rete dei punti vendita e qualità dei dati"). Senza la storia
- * nell'elenco la riga ha solo la prima colonna. Tutta la riga apre la scheda del punto vendita.
+ * a destra quanti volantini, da quanti volantini della sua insegna e area degli ultimi 12 mesi
+ * manca (dalla sua prima comparsa), se manca dall'ultimo e se ha cambiato insegna. Niente insegna anno per anno (spec
+ * anagrafica-punti-vendita, "Rete dei punti vendita e qualità dei dati", "Assenze dei punti
+ * vendita nell'elenco"). Senza la storia nell'elenco la riga ha solo la prima colonna. Tutta la
+ * riga apre la scheda del punto vendita.
  */
 export function RighePuntiVendita<T extends PuntoVenditaInElenco & ConStoria>({
   elenco,
@@ -87,12 +103,16 @@ export function RighePuntiVendita<T extends PuntoVenditaInElenco & ConStoria>({
           const indirizzo = indirizzoCompleto(pv);
           const volantini = volantiniDi(pv);
           const cambio = Boolean(pv.storia?.cambioInsegna);
+          const assenze = assenzeDi(pv);
+          const mancanti = assenze && assenze.mancanti > 0 ? assenze : null;
           // Il nome del link per intero, con quello che la riga mostra
           const etichetta = [
             pv.nome,
             indirizzo,
             pv.nome_canale,
             ...(conStoria ? [volantini > 0 ? testoVolantini(volantini) : "mai nei volantini"] : []),
+            ...(mancanti ? [testoMancanti(mancanti.mancanti, mancanti.volantini)] : []),
+            ...(mancanti?.nonNellUltimo ? ["non c'è nell'ultimo volantino"] : []),
             ...(cambio ? ["ha cambiato insegna"] : []),
           ]
             .filter(Boolean)
@@ -129,6 +149,13 @@ export function RighePuntiVendita<T extends PuntoVenditaInElenco & ConStoria>({
                         {volantini === 1 ? "volantino" : "volantini"}
                       </span>
                     )}
+                    {mancanti && (
+                      <span data-assenze className="inline-flex items-center gap-1 whitespace-nowrap tabular-nums text-rose-700 dark:text-rose-300">
+                        <Lucide icon="CalendarX" aria-hidden="true" className="h-3.5 w-3.5" />
+                        {testoMancanti(mancanti.mancanti, mancanti.volantini)}
+                      </span>
+                    )}
+                    {mancanti?.nonNellUltimo && <StatusBadge tono="danger" icon="TriangleAlert" etichetta="Non nell'ultimo" />}
                     {cambio && <StatusBadge tono="info" icon="Repeat" etichetta="Ha cambiato insegna" />}
                   </div>
                 )}

@@ -1,6 +1,6 @@
 import { validate as isUuid } from 'uuid';
 import { NotFoundError } from '../../../lib/errors';
-import type { StoriaInElenco } from '../../../lib/puntiVendita/analisi';
+import { MESI_ASSENZE_IN_ELENCO, type AssenzeInElenco, type StoriaInElenco } from '../../../lib/puntiVendita/analisi';
 import type { PuntoVenditaConsultazione, RiferimentoCodificato } from '../../../lib/puntiVendita/consultazione';
 import type { VolantinoAttivoDTO } from '../dto/PuntoVenditaDTO';
 import type { IConsultazionePuntiVenditaService } from '../interfaces/IConsultazionePuntiVenditaService';
@@ -8,10 +8,12 @@ import type { IPuntoVenditaService } from '../interfaces/IPuntoVenditaService';
 import { log } from '../logger';
 import type {
   IConsultazionePuntiVenditaRepository,
+  RigaAssenzeInElenco,
   RigaPuntoVenditaConsultazione,
   RigaStoriaInElenco,
 } from '../repositories/ConsultazionePuntiVenditaRepository';
 import { chiaveCombinazione } from '../utils/confrontoPuntiVendita';
+import { oggiARoma } from './AnalisiPuntoVenditaService';
 
 const testo = (valore: string | null | undefined): string | null => valore?.trim() || null;
 
@@ -48,14 +50,34 @@ export function inConsultazione(riga: RigaPuntoVenditaConsultazione): PuntoVendi
 
 const confronta = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
+/** Il primo giorno della finestra delle assenze dell'elenco: lo stesso giorno di 12 mesi prima (ISO). */
+export const inizioAssenzeInElenco = (oggi: string): string => {
+  const [anno, mese, giorno] = oggi.split('-').map(Number);
+  const data = new Date(Date.UTC(anno, mese - 1 - MESI_ASSENZE_IN_ELENCO, giorno));
+  return data.toISOString().slice(0, 10);
+};
+
+/** Le assenze dell'elenco per PV, dalle righe del repository. */
+export function assenzeInElenco(righe: readonly RigaAssenzeInElenco[]): Map<string, AssenzeInElenco> {
+  return new Map(righe.map(riga => [riga.id_punto_vendita, {
+    volantini: riga.volantini,
+    mancanti: Math.max(0, riga.volantini - riga.presenze),
+    nonNellUltimo: riga.assente_ultimo,
+  }]));
+}
+
 /**
  * La storia di ogni PV per l'elenco: quanti volantini, l'insegna (canale) con piu' volantini di
  * ogni anno e se ha cambiato insegna. Il cambio viene da `conCambioInsegna`, con la regola delle
  * insegne nel tempo della scheda (repository.puntiVenditaConCambioInsegna): l'insegna prevalente
- * di ogni anno conterebbe anche la lista ripetuta nei kit di altre aree. Solo i PV che compaiono in
- * almeno un volantino.
+ * di ogni anno conterebbe anche la lista ripetuta nei kit di altre aree. Le assenze, quando ci sono,
+ * vengono da `assenze` (repository.assenzeInElenco). Solo i PV che compaiono in almeno un volantino.
  */
-export function storiaInElenco(righe: readonly RigaStoriaInElenco[], conCambioInsegna: ReadonlySet<string> = new Set()): Map<string, StoriaInElenco> {
+export function storiaInElenco(
+  righe: readonly RigaStoriaInElenco[],
+  conCambioInsegna: ReadonlySet<string> = new Set(),
+  assenze: ReadonlyMap<string, AssenzeInElenco> = new Map(),
+): Map<string, StoriaInElenco> {
   const perPuntoVendita = new Map<string, Map<number, RigaStoriaInElenco[]>>();
   for (const riga of righe) {
     const perAnno = perPuntoVendita.get(riga.id_punto_vendita) ?? new Map<number, RigaStoriaInElenco[]>();
@@ -74,7 +96,10 @@ export function storiaInElenco(righe: readonly RigaStoriaInElenco[], conCambioIn
       });
     const volantini = [...perAnno.values()].flat().reduce((totale, riga) => totale + riga.volantini, 0);
     if (volantini === 0) continue;
-    storie.set(idPuntoVendita, { volantini, insegnePerAnno, cambioInsegna: conCambioInsegna.has(idPuntoVendita) });
+    const storia: StoriaInElenco = { volantini, insegnePerAnno, cambioInsegna: conCambioInsegna.has(idPuntoVendita) };
+    const assenzeDelPv = assenze.get(idPuntoVendita);
+    if (assenzeDelPv) storia.assenze = assenzeDelPv;
+    storie.set(idPuntoVendita, storia);
   }
   return storie;
 }
@@ -82,7 +107,9 @@ export function storiaInElenco(righe: readonly RigaStoriaInElenco[], conCambioIn
 export class ConsultazionePuntiVenditaService implements IConsultazionePuntiVenditaService {
   constructor(
     private readonly repository: IConsultazionePuntiVenditaRepository,
-    private readonly puntoVenditaService: Pick<IPuntoVenditaService, 'getVolantiniAttivi'>
+    private readonly puntoVenditaService: Pick<IPuntoVenditaService, 'getVolantiniAttivi'>,
+    /** Oggi a Roma (ISO): da qui le assenze recenti dell'elenco. */
+    private readonly oggi: () => string = () => oggiARoma(),
   ) { }
 
   async elenca(idGdo: string): Promise<PuntoVenditaConsultazione[]> {
@@ -120,8 +147,12 @@ export class ConsultazionePuntiVenditaService implements IConsultazionePuntiVend
   /** La storia nell'elenco e' un di piu': se non si legge, l'elenco esce senza. */
   private async storie(idGdo: string): Promise<Map<string, StoriaInElenco>> {
     try {
-      const [righe, conCambio] = await Promise.all([this.repository.storiaInElenco(idGdo), this.conCambioInsegna(idGdo)]);
-      return storiaInElenco(righe, conCambio);
+      const [righe, conCambio, assenze] = await Promise.all([
+        this.repository.storiaInElenco(idGdo),
+        this.conCambioInsegna(idGdo),
+        this.assenze(idGdo),
+      ]);
+      return storiaInElenco(righe, conCambio, assenze);
     } catch (errore) {
       log.warn('Consultazione PV: storia dei volantini non letta per l\'elenco', { idGdo, errore: errore instanceof Error ? errore.message : String(errore) });
       return new Map();
@@ -135,6 +166,16 @@ export class ConsultazionePuntiVenditaService implements IConsultazionePuntiVend
     } catch (errore) {
       log.warn('Consultazione PV: cambi di insegna non letti per l\'elenco', { idGdo, errore: errore instanceof Error ? errore.message : String(errore) });
       return new Set();
+    }
+  }
+
+  /** Le assenze recenti dei PV: se non si leggono, l'elenco esce con la storia ma senza le assenze. */
+  private async assenze(idGdo: string): Promise<Map<string, AssenzeInElenco>> {
+    try {
+      return assenzeInElenco(await this.repository.assenzeInElenco(idGdo, inizioAssenzeInElenco(this.oggi())));
+    } catch (errore) {
+      log.warn('Consultazione PV: assenze dei volantini non lette per l\'elenco', { idGdo, errore: errore instanceof Error ? errore.message : String(errore) });
+      return new Map();
     }
   }
 

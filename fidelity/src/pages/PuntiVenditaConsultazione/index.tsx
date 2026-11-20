@@ -2,8 +2,16 @@ import Button from "@/components/Base/Button";
 import Lucide from "@/components/Base/Lucide";
 import Pagina from "@/components/Base/Pagina";
 import Sezione from "@/components/Base/Sezione";
-import { daConsultazione, storiaNellElenco, useElencoPuntiVendita } from "@/components/PuntiVendita/elenco";
-import { FiltriPuntiVendita } from "@/components/PuntiVendita/FiltriPuntiVendita";
+import {
+  assenzeNellElenco,
+  contaAssenze,
+  daConsultazione,
+  passaFiltroAssenze,
+  storiaNellElenco,
+  useElencoPuntiVendita,
+  type FiltroAssenze,
+} from "@/components/PuntiVendita/elenco";
+import { FiltriPuntiVendita, FiltroChip } from "@/components/PuntiVendita/FiltriPuntiVendita";
 import { MappaPuntiVendita } from "@/components/PuntiVendita/MappaPuntiVendita";
 import { RighePuntiVendita } from "@/components/PuntiVendita/RighePuntiVendita";
 import withSessionCheck from "@/components/SessionChecker";
@@ -11,11 +19,18 @@ import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
 import { useFetchPuntiVenditaConsultazione } from "@/query/query";
 import { formatNumero } from "@/utils/format";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { contaPer } from "../../utils/puntoVendita";
+import { MESI_ASSENZE_IN_ELENCO } from "../../../lib/puntiVendita/analisi";
+import { contaPer, filtraPuntiVendita } from "../../utils/puntoVendita";
 
 const percorsoScheda = (pv: { id: string }) => `/punti-vendita/${pv.id}`;
+
+/** Le scelte del filtro Assenze dopo "Tutti", nell'ordine in cui compaiono. */
+const SCELTE_ASSENZE: Array<{ id: Exclude<FiltroAssenze, "">; nome: string }> = [
+  { id: "conAssenze", nome: `Negli ultimi ${MESI_ASSENZE_IN_ELENCO} mesi` },
+  { id: "nonNellUltimo", nome: "Non nell'ultimo volantino" },
+];
 
 const testoNonMostrati = (numero: number) =>
   numero === 1
@@ -27,9 +42,10 @@ const testoNonMostrati = (numero: number) =>
  * e la mappa a destra, con ricerca, area e insegna sopra entrambi; su schermo stretto la mappa sta
  * sopra l'elenco. Solo i punti vendita la cui combinazione canale/area ha volantini, nello storico
  * o in produzione, così insegne e aree dei filtri sono quelle dei volantini (spec
- * anagrafica-punti-vendita, "Elenco e mappa della consultazione secondo i volantini"). Niente
- * infografiche della rete. In sola lettura: creazione, modifica e import stanno nella gestione,
- * che mostra tutti i punti vendita.
+ * anagrafica-punti-vendita, "Elenco e mappa della consultazione secondo i volantini"). Il filtro
+ * Assenze mostra, nell'elenco e sulla mappa, chi manca dai volantini della sua insegna e area
+ * degli ultimi 12 mesi o dall'ultimo ("Assenze dei punti vendita nell'elenco"). Niente infografiche della rete. In sola lettura:
+ * creazione, modifica e import stanno nella gestione, che mostra tutti i punti vendita.
  */
 function PuntiVenditaConsultazione() {
   const navigate = useNavigate();
@@ -41,9 +57,32 @@ function PuntiVenditaConsultazione() {
     const mostrati = dati.filter(pv => pv.combinazioneConVolantini !== false);
     return { tutti: mostrati.map(daConsultazione), nonMostrati: dati.length - mostrati.length };
   }, [query.data]);
+  // Il filtro Assenze vale prima degli altri, per l'elenco e per la mappa
+  const [filtroAssenze, setFiltroAssenze] = useState<FiltroAssenze>("");
+  const filtro = useMemo(
+    () =>
+      filtroAssenze
+        ? { chiave: filtroAssenze, test: (pv: (typeof tutti)[number]) => passaFiltroAssenze(pv, filtroAssenze), azzera: () => setFiltroAssenze("") }
+        : null,
+    [filtroAssenze]
+  );
   // I colori delle insegne sono quelli di tutte le pagine dei punti vendita (tinteCanali sulla rete)
-  const elenco = useElencoPuntiVendita(tutti);
+  const elenco = useElencoPuntiVendita(tutti, { filtro });
   const conStoria = useMemo(() => storiaNellElenco(tutti), [tutti]);
+  const conAssenze = useMemo(() => assenzeNellElenco(tutti), [tutti]);
+  // Ogni scelta conta i punti vendita che passano ricerca, insegna e area, come i chip delle insegne
+  const perAssenze = useMemo(
+    () =>
+      contaAssenze(
+        filtraPuntiVendita(tutti, {
+          testo: elenco.ricercaApplicata,
+          campo: elenco.campoRicerca || undefined,
+          idCanale: elenco.filtroCanale,
+          idArea: elenco.filtroArea,
+        })
+      ),
+    [tutti, elenco.ricercaApplicata, elenco.campoRicerca, elenco.filtroCanale, elenco.filtroArea]
+  );
   const errore = query.isError ? (query.error as Error)?.message || "Errore durante il recupero dei punti vendita" : null;
 
   const riepilogo = useMemo(() => {
@@ -93,6 +132,26 @@ function PuntiVenditaConsultazione() {
           elenco={elenco}
           aggiornamento={query.isFetching && !query.isLoading}
           placeholder="Nome, città, indirizzo, CAP o codice"
+          sotto={
+            conAssenze ? (
+              // Il nome visibile: "Tutti" accanto alle insegne non direbbe di che cosa
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <span aria-hidden="true" className="inline-flex items-center gap-1 text-xs text-slate-500">
+                  <Lucide icon="CalendarX" className="h-3.5 w-3.5" />
+                  Assenze dai volantini
+                </span>
+                <FiltroChip
+                  etichetta="Assenze"
+                  tutti="Tutti"
+                  totaleTutti={perAssenze[""]}
+                  voci={SCELTE_ASSENZE.map(scelta => ({ ...scelta, totale: perAssenze[scelta.id] }))}
+                  attivo={filtroAssenze}
+                  onScegli={id => setFiltroAssenze(id as FiltroAssenze)}
+                  tono="assenza"
+                />
+              </div>
+            ) : undefined
+          }
         />
         <div className="grid grid-cols-1 lg:grid-cols-2">
           <div className="min-w-0 lg:border-r lg:border-dashed lg:border-slate-200 dark:lg:border-darkmode-400">

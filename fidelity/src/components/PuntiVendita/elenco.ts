@@ -2,7 +2,7 @@ import type { Tinta } from "@/components/Grafici/colori";
 import { useTinteCanali } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { coloreSemantico } from "@/utils/chartTheme";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { StoriaInElenco } from "../../../lib/puntiVendita/analisi";
+import type { AssenzeInElenco, StoriaInElenco } from "../../../lib/puntiVendita/analisi";
 import type { PuntoVenditaConsultazione } from "../../../lib/puntiVendita/consultazione";
 import type { PuntoVenditaResponseDTO } from "../../../server/core/dto";
 import { codiciGdo, contaPer, filtraPuntiVendita } from "../../utils/puntoVendita";
@@ -106,6 +106,29 @@ export const storiaDi = (pv: object): StoriaInElenco | undefined => (pv as ConSt
 
 /** Volantini del punto vendita secondo la storia nell'elenco; 0 se non ne ha. */
 export const volantiniDi = (pv: object) => storiaDi(pv)?.volantini ?? 0;
+
+/** Le assenze del punto vendita dai volantini della sua insegna e area, se il server le manda. */
+export const assenzeDi = (pv: object): AssenzeInElenco | undefined => storiaDi(pv)?.assenze;
+
+/** Vero se il server manda le assenze con l'elenco: solo allora il filtro Assenze ha senso. */
+export const assenzeNellElenco = (puntiVendita: ReadonlyArray<object>) => puntiVendita.some(pv => assenzeDi(pv) !== undefined);
+
+/** Il filtro Assenze: tutti, quelli che mancano da almeno un volantino degli ultimi 12 mesi, quelli che mancano dall'ultimo. */
+export type FiltroAssenze = "" | "conAssenze" | "nonNellUltimo";
+
+export const passaFiltroAssenze = (pv: object, filtro: FiltroAssenze): boolean => {
+  if (filtro === "") return true;
+  const assenze = assenzeDi(pv);
+  if (!assenze) return false;
+  return filtro === "conAssenze" ? assenze.mancanti > 0 : assenze.nonNellUltimo;
+};
+
+/** Quanti punti vendita per ogni scelta del filtro Assenze. */
+export const contaAssenze = (puntiVendita: ReadonlyArray<object>): Record<FiltroAssenze, number> => ({
+  "": puntiVendita.length,
+  conAssenze: puntiVendita.filter(pv => passaFiltroAssenze(pv, "conAssenze")).length,
+  nonNellUltimo: puntiVendita.filter(pv => passaFiltroAssenze(pv, "nonNellUltimo")).length,
+});
 
 // Il colore di un canale (insegna) è quello di tutte le pagine dei punti vendita: tinteCanali di
 // PuntiVenditaConsultazione/analisi, per nome sulle insegne della rete. Stabile anche filtrando,

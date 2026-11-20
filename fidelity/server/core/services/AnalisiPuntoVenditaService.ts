@@ -211,17 +211,15 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
 
   /**
    * I volantini della combinazione attuale del PV (con la lista registrata) in cui il PV non c'e',
-   * dopo la sua prima apparizione; nessuno se il PV non ha una combinazione o non compare mai.
+   * anche prima della sua prima apparizione; nessuno se il PV non ha una combinazione o non compare mai.
    */
   private async assenze(puntoVendita: PuntoVenditaDellaStoria, edizioni: readonly EdizionePuntoVendita[]): Promise<VolantinoSenzaPuntoVendita[]> {
-    const [prima] = edizioni;
-    if (!prima || !puntoVendita.idCanale || !puntoVendita.idArea) return [];
+    if (edizioni.length === 0 || !puntoVendita.idCanale || !puntoVendita.idArea) return [];
     return this.storia.volantiniSenzaPuntoVendita({
       idPuntoVendita: puntoVendita.id,
       idGdo: puntoVendita.idGdo,
       idCanale: puntoVendita.idCanale,
       idArea: puntoVendita.idArea,
-      dopo: prima.data,
     });
   }
 

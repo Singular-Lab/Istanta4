@@ -67,6 +67,12 @@ export const meseAnnoBreve = (dataIso: string): string => {
   return data.isValid() ? data.locale("it").format("MMM YYYY") : dataIso;
 };
 
+/** "10 set 2026". */
+export const giornoBreve = (dataIso: string): string => {
+  const data = dayjs(dataIso);
+  return data.isValid() ? data.locale("it").format("D MMM YYYY") : dataIso;
+};
+
 /** "23 ottobre – 5 novembre 2026", "3 – 16 marzo 2026", "dal 3 marzo 2026" senza la fine. */
 export const periodoValidita = (dal: string | null | undefined, al: string | null | undefined): string => {
   const inizio = dal ? dayjs(dal).locale("it") : null;
@@ -387,6 +393,132 @@ export const barreTimeline = (edizioni: readonly EdizioneTimeline[]): BarraTimel
 /** I volantini della sua insegna e area senza il punto vendita, come contorni sulla timeline. */
 export const assenzeTimeline = (assenze: readonly VolantinoAssente[]): AssenzaTimeline[] =>
   assenze.map(assenza => ({ id: assenza.idKit, dal: assenza.dal, al: assenza.al, titolo: assenza.promo.nome }));
+
+/**
+ * Un riquadro della striscia "c'era / non c'era": un mese o una settimana del calendario, con i
+ * volantini della sua insegna e area che vi iniziano e quanti non lo stampano. Tre stati, mai
+ * un'intensità: senza volantini, c'era in tutti, mancava da almeno uno.
+ */
+export interface TrattoCalendario {
+  /** Il primo giorno del mese o della settimana (lunedì), ISO. */
+  inizio: string;
+  /** "set 2026", "settimana del 7 set 2026". */
+  etichetta: string;
+  /** L'anno (per i mesi) o il mese (per le settimane): i segni sotto la striscia. */
+  gruppo: string;
+  volantini: number;
+  mancanti: number;
+}
+
+export interface StrisciaCalendario {
+  passo: "mese" | "settimana";
+  tratti: TrattoCalendario[];
+}
+
+/** Fino a tanti giorni la striscia va per settimana; oltre, per mese. */
+export const GIORNI_STRISCIA_SETTIMANE = 183;
+
+/** Le assenze del periodo come le mostra "Quando non c'era". */
+export interface AssenzeDellaStoria {
+  /** Dopo il primo volantino in cui c'è: i buchi veri, dalla più recente. */
+  fraISuoi: VolantinoAssente[];
+  /** Prima del primo volantino in cui c'è (spesso il negozio non era aperto), dalla più recente. */
+  primaDelPrimo: VolantinoAssente[];
+  /** I volantini del periodo, presenti e assenti. */
+  volantini: number;
+}
+
+const dallaPiuRecente = (a: VolantinoAssente, b: VolantinoAssente) => b.dal.localeCompare(a.dal) || a.idKit.localeCompare(b.idKit);
+
+/**
+ * Le assenze del periodo divise fra quelle dopo il primo volantino in cui il PV c'è (`primoDelPv`,
+ * di tutta la storia) e quelle prima, con quanti sono i volantini del periodo, presenti e assenti.
+ */
+export const assenzeDellaStoria = (
+  edizioni: readonly Pick<EdizioneTimeline, "dal">[],
+  assenze: readonly VolantinoAssente[],
+  primoDelPv: string | null
+): AssenzeDellaStoria => {
+  const prima = (assenza: VolantinoAssente) => primoDelPv !== null && assenza.dal < primoDelPv;
+  return {
+    fraISuoi: assenze.filter(a => !prima(a)).sort(dallaPiuRecente),
+    primaDelPrimo: assenze.filter(prima).sort(dallaPiuRecente),
+    volantini: edizioni.length + assenze.length,
+  };
+};
+
+/** Le assenze per anno, dal più recente; dentro l'anno dalla più recente. */
+export const assenzePerAnno = (assenze: readonly VolantinoAssente[]): Array<{ anno: number; assenze: VolantinoAssente[] }> => {
+  const perAnno = new Map<number, VolantinoAssente[]>();
+  for (const assenza of [...assenze].sort(dallaPiuRecente)) {
+    const anno = Number(assenza.dal.slice(0, 4));
+    perAnno.set(anno, [...(perAnno.get(anno) ?? []), assenza]);
+  }
+  return [...perAnno.entries()].sort((a, b) => b[0] - a[0]).map(([anno, voci]) => ({ anno, assenze: voci }));
+};
+
+const lunediDi = (data: dayjs.Dayjs) => data.subtract((data.day() + 6) % 7, "day");
+
+/**
+ * La striscia del calendario del periodo: un riquadro per mese, o per settimana quando il periodo
+ * dura al più GIORNI_STRISCIA_SETTIMANE giorni, dal primo all'ultimo giorno (`intervallo`, oppure
+ * dal primo all'ultimo volantino). Ogni volantino sta nel riquadro in cui inizia. Il numero dei
+ * riquadri dipende dalla durata del periodo, mai dal numero dei volantini.
+ */
+export const strisciaCalendario = (
+  edizioni: readonly Pick<EdizioneTimeline, "dal">[],
+  assenze: readonly Pick<VolantinoAssente, "dal">[],
+  intervallo?: { dal: string; al: string }
+): StrisciaCalendario => {
+  const date = [...edizioni.map(e => e.dal), ...assenze.map(a => a.dal)].sort();
+  if (date.length === 0) return { passo: "mese", tratti: [] };
+  const inizio = dayjs(intervallo?.dal ?? date[0]).locale("it");
+  const fine = dayjs(intervallo?.al ?? date[date.length - 1]).locale("it");
+  const passo = fine.diff(inizio, "day") <= GIORNI_STRISCIA_SETTIMANE ? "settimana" : "mese";
+  const primo = passo === "mese" ? inizio.startOf("month") : lunediDi(inizio.startOf("day"));
+  const tratti: TrattoCalendario[] = [];
+  for (let corrente = primo; !corrente.isAfter(fine, "day"); corrente = corrente.add(1, passo === "mese" ? "month" : "week")) {
+    tratti.push({
+      inizio: corrente.format("YYYY-MM-DD"),
+      etichetta: passo === "mese" ? corrente.format("MMM YYYY") : `settimana del ${corrente.format("D MMM YYYY")}`,
+      gruppo: passo === "mese" ? corrente.format("YYYY") : corrente.format("MMM YYYY"),
+      volantini: 0,
+      mancanti: 0,
+    });
+  }
+  const indice = (dal: string) => {
+    const giorno = dayjs(dal);
+    // Le settimane contate in giorni: un cambio dell'ora legale non sposta il volantino di riquadro
+    const daPrimo = passo === "mese" ? giorno.startOf("month").diff(primo, "month") : Math.round(lunediDi(giorno.startOf("day")).diff(primo, "day") / 7);
+    return daPrimo >= 0 && daPrimo < tratti.length ? daPrimo : -1;
+  };
+  for (const e of edizioni) {
+    const i = indice(e.dal);
+    if (i >= 0) tratti[i].volantini += 1;
+  }
+  for (const a of assenze) {
+    const i = indice(a.dal);
+    if (i >= 0) {
+      tratti[i].volantini += 1;
+      tratti[i].mancanti += 1;
+    }
+  }
+  return { passo, tratti };
+};
+
+/**
+ * Il volantino più recente della sua insegna e area, se il PV non c'è: l'assenza più recente quando
+ * è più nuova dell'ultimo volantino in cui c'è. Su tutta la storia, qualunque sia il periodo.
+ */
+export const assenzaDallUltimo = (
+  timeline: readonly Pick<EdizioneTimeline, "dal">[],
+  assenze: readonly VolantinoAssente[]
+): VolantinoAssente | null => {
+  const [ultima] = [...assenze].sort(dallaPiuRecente);
+  if (!ultima) return null;
+  const ultimaPresenza = timeline.reduce<string | null>((massima, e) => (massima === null || e.dal > massima ? e.dal : massima), null);
+  return ultimaPresenza === null || ultima.dal > ultimaPresenza ? ultima : null;
+};
 
 /**
  * Le corsie sotto la timeline, sullo stesso asse: referenze, sconto medio e meccaniche di ogni

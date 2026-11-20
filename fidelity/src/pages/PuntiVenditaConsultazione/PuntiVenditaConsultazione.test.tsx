@@ -46,6 +46,7 @@ const STORIE: Record<string, StoriaInElenco> = {
   "pv-lucca": {
     volantini: 12,
     cambioInsegna: false,
+    assenze: { volantini: 14, mancanti: 2, nonNellUltimo: true },
     insegnePerAnno: [
       { anno: 2024, canale: CITY },
       { anno: 2025, canale: CITY },
@@ -55,6 +56,7 @@ const STORIE: Record<string, StoriaInElenco> = {
   "pv-pisa": {
     volantini: 30,
     cambioInsegna: true,
+    assenze: { volantini: 30, mancanti: 0, nonNellUltimo: false },
     insegnePerAnno: [
       { anno: 2024, canale: CITY },
       { anno: 2025, canale: SUPERSTORE },
@@ -183,6 +185,55 @@ describe("Consultazione dei punti vendita", () => {
 
     await userEvent.click(lucca);
     expect(await screen.findByText("Scheda aperta")).toBeInTheDocument();
+  });
+
+  it("ogni riga dice da quanti volantini della sua insegna e area degli ultimi 12 mesi manca e se manca dall'ultimo", () => {
+    apri();
+
+    const lucca = screen.getByRole("link", { name: /^Conad Lucca/ });
+    expect(lucca).toHaveAccessibleName("Conad Lucca, Via Roma 1 - 55100 Lucca (LU), Conad City, 12 volantini, manca da 2 su 14 in 12 mesi, non c'è nell'ultimo volantino");
+    expect(lucca).toHaveTextContent("manca da 2 su 14 in 12 mesi");
+    expect(within(lucca).getByText("Non nell'ultimo")).toBeInTheDocument();
+
+    // Presente in tutti: nessuna assenza
+    const pisa = screen.getByRole("link", { name: /^Superstore Pisa/ });
+    expect(pisa).not.toHaveTextContent("manca da");
+    expect(within(pisa).queryByText("Non nell'ultimo")).not.toBeInTheDocument();
+  });
+
+  it("il filtro Assenze vale per elenco e mappa, con i conteggi che rispettano gli altri filtri", async () => {
+    apri();
+
+    expect(within(chip("Assenze", /^Tutti/)).getByText("3")).toBeInTheDocument();
+    expect(within(chip("Assenze", /^Negli ultimi 12 mesi/)).getByText("1")).toBeInTheDocument();
+    expect(within(chip("Assenze", /^Non nell'ultimo volantino/)).getByText("1")).toBeInTheDocument();
+
+    await userEvent.click(chip("Assenze", /^Negli ultimi 12 mesi/));
+
+    expect(chip("Assenze", /^Negli ultimi 12 mesi/)).toHaveAttribute("aria-pressed", "true");
+    expect(nomiInElenco()).toEqual(["Conad Lucca"]);
+
+    // Anche le insegne contano soltanto i punti vendita con assenze: Superstore non ne ha
+    expect(within(screen.getByRole("group", { name: "Insegna" })).queryByRole("button", { name: /^Conad Superstore/ })).not.toBeInTheDocument();
+    await userEvent.click(chip("Assenze", /^Tutti/));
+
+    // Un'insegna senza assenze: il conteggio la rispetta e l'elenco propone di azzerare i filtri
+    await userEvent.click(chip("Insegna", /^Conad Superstore/));
+    expect(within(chip("Assenze", /^Negli ultimi 12 mesi/)).getByText("0")).toBeInTheDocument();
+    await userEvent.click(chip("Assenze", /^Negli ultimi 12 mesi/));
+    await userEvent.click(screen.getByRole("button", { name: "Azzera filtri" }));
+    expect(chip("Assenze", /^Tutti/)).toHaveAttribute("aria-pressed", "true");
+    expect(nomiInElenco()).toEqual(["Conad Lucca", "Conad Genova", "Superstore Pisa"]);
+  });
+
+  it("senza le assenze dal server non c'è il filtro Assenze", () => {
+    finti.query = {
+      ...finti.query,
+      data: conStoria(PUNTI_VENDITA).map(p => (p.storia ? { ...p, storia: { ...p.storia, assenze: undefined } } : p)),
+    };
+    apri();
+
+    expect(screen.queryByRole("group", { name: "Assenze" })).not.toBeInTheDocument();
   });
 
   it("se il server non manda la storia con l'elenco, le righe non mostrano i volantini", () => {

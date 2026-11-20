@@ -204,6 +204,17 @@ describe('calcolaAnalisiPuntoVendita', () => {
     expect(analisi.anni).toEqual([2021, 2022]);
   });
 
+  it('gli anni comprendono quelli in cui il PV mancava soltanto, anche prima della sua prima apparizione', () => {
+    const conAssenze = calcolaAnalisiPuntoVendita('pv-1', EDIZIONI, AGGREGATI, STATISTICHE, DESCRIZIONI, '2022-10-25', {
+      assenze: [{ idKit: 'k0', data: '2020-11-05', dal: '2020-11-05', al: '2020-11-18', promo: { id: 'p-k0', nome: 'Promo 2020-11-05' } }],
+    });
+
+    expect(conAssenze.anni).toEqual([2020, 2021, 2022]);
+    expect(conAssenze.assenze.map(assenza => assenza.idKit)).toEqual(['k0']);
+    expect(conAssenze.timeline.map(voce => voce.idKit)).toEqual(['k1', 'k2', 'k3', 'k4']);
+    expect(conAssenze.numeri.volantini).toBe(4);
+  });
+
   it('ogni volantino col suo riepilogo: pagine, sconto medio con due decimali, meccaniche presenti nell\'ordine del contratto, reparti', () => {
     expect(analisi.timeline.map(({ pagine, scontoMedio, referenzeConSconto, meccaniche, reparti }) => ({ pagine, scontoMedio, referenzeConSconto, meccaniche, reparti }))).toEqual([
       {
