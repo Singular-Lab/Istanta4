@@ -1,7 +1,6 @@
 import Lucide from "@/components/Base/Lucide";
 import { coperturaParziale, formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { formatNumero, VALORE_ASSENTE } from "@/utils/format";
-import { twMerge } from "@/utils/twMerge";
 import type { BoxInsight, CoperturaDati, LineeDistributore, SintesiVolantino } from "../../../../lib/insightVolantino/tipi";
 import { Nota } from "./comuni";
 
@@ -16,7 +15,7 @@ export interface SintesiInsightProps {
   sintesi: SintesiVolantino;
   /** I box del volantino, per contare quelli con il Prezzo Fidelity; senza, si ricavano dalla quota. */
   box?: readonly Pick<BoxInsight, "meccanica">[];
-  /** Le linee del distributore: aggiungono il riquadro dei suoi marchi e il dettaglio delle marche. */
+  /** Le linee del distributore: aggiungono il riquadro delle Private Labels. */
   lineeDistributore?: LineeDistributore | null;
 }
 
@@ -26,8 +25,6 @@ export interface NumeroSintesi {
   icona: string;
   valore: string;
   sottotitolo?: string;
-  /** Il riquadro in evidenza (i marchi del distributore). */
-  evidenza?: boolean;
 }
 
 const contaBox = (numero: number): string => (numero === 1 ? "1 box" : `${formatNumero(numero)} box`);
@@ -41,8 +38,8 @@ const boxFidelity = (sintesi: SintesiVolantino, box?: readonly Pick<BoxInsight, 
   box ? box.filter(voce => voce.meccanica === "fidelity").length : Math.round((sintesi.quotaFidelity / 100) * sintesi.box);
 
 /**
- * I riquadri della fascia, nell'ordine in cui si leggono: quanto e' grande il volantino, quanto
- * sconta, quanto spinge la carta e i marchi del distributore. Sottocosto e numero di marche non ci
+ * I riquadri della fascia, nell'ordine in cui si leggono: quanto e' grande il volantino, quanto spinge
+ * la carta e quanto spazio hanno le Private Labels. Sconto medio, sottocosto e numero di marche non ci
  * sono (spec insight-volantino, "Prezzi, sconti, spazio e marche del volantino").
  */
 export const numeriSintesi = (
@@ -53,13 +50,6 @@ export const numeriSintesi = (
   const numeri: NumeroSintesi[] = [
     { id: "referenze", etichetta: "Referenze", icona: "Package", valore: formatNumero(sintesi.referenze), sottotitolo: contaBox(sintesi.box) },
     { id: "pagine", etichetta: "Pagine", icona: "BookOpen", valore: formatNumero(sintesi.pagine), sottotitolo: boxAPagina(sintesi.box, sintesi.pagine) },
-    {
-      id: "scontoMedio",
-      etichetta: "Sconto medio",
-      icona: "Percent",
-      valore: formatPercentuale(sintesi.scontoMedio),
-      sottotitolo: sintesi.boxConSconto === 1 ? "1 box scontato" : `${formatNumero(sintesi.boxConSconto)} box scontati`,
-    },
     {
       id: "fidelity",
       etichetta: "Prezzo Fidelity",
@@ -75,7 +65,6 @@ export const numeriSintesi = (
       icona: "BadgeCheck",
       valore: formatPercentuale(lineeDistributore.quotaSpazio),
       sottotitolo: `dello spazio, ${contaBox(lineeDistributore.box)}`,
-      evidenza: true,
     });
   }
   return numeri;
@@ -97,43 +86,16 @@ export const testoCoperturaParziale = (copertura: CoperturaDati): string | null 
     .join(", ");
 };
 
-/** Un riquadro della fascia: etichetta, valore grande e una riga di dettaglio. */
+/** Un riquadro della fascia, bianco come gli altri anche per le Private Labels: etichetta, valore grande e una riga di dettaglio. */
 function Riquadro({ numero }: { numero: NumeroSintesi }) {
-  const { evidenza = false } = numero;
   return (
-    <dl
-      data-numero={numero.id}
-      data-evidenza={evidenza || undefined}
-      className={twMerge(
-        "min-w-0 rounded-card border px-4 py-3 shadow-card",
-        evidenza
-          ? "border-theme-1 bg-theme-1 text-white dark:border-indigo-300/40 dark:bg-indigo-300/15"
-          : "border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600"
-      )}
-    >
-      <dt
-        title={numero.etichetta}
-        className={twMerge(
-          "flex items-center gap-1.5 truncate text-2xs font-medium uppercase tracking-wide",
-          evidenza ? "text-white/80 dark:text-indigo-200" : "text-slate-500 dark:text-slate-400"
-        )}
-      >
+    <dl data-numero={numero.id} className="min-w-0 rounded-card border border-slate-200 bg-white px-4 py-3 shadow-card dark:border-darkmode-400 dark:bg-darkmode-600">
+      <dt title={numero.etichetta} className="flex items-center gap-1.5 truncate text-2xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
         <Lucide icon={numero.icona} aria-hidden="true" className="h-3.5 w-3.5 flex-none" />
         <span className="truncate">{numero.etichetta}</span>
       </dt>
-      <dd
-        className={twMerge(
-          "mt-1 truncate text-2xl font-bold leading-tight tabular-nums",
-          evidenza ? "text-white dark:text-indigo-100" : "text-slate-800 dark:text-slate-100"
-        )}
-      >
-        {numero.valore || VALORE_ASSENTE}
-      </dd>
-      {numero.sottotitolo && (
-        <dd className={twMerge("mt-0.5 truncate text-xs", evidenza ? "text-white/80 dark:text-indigo-200" : "text-slate-500 dark:text-slate-400")}>
-          {numero.sottotitolo}
-        </dd>
-      )}
+      <dd className="mt-1 truncate text-2xl font-bold leading-tight tabular-nums text-slate-800 dark:text-slate-100">{numero.valore || VALORE_ASSENTE}</dd>
+      {numero.sottotitolo && <dd className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">{numero.sottotitolo}</dd>}
     </dl>
   );
 }

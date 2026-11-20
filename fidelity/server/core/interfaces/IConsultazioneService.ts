@@ -18,6 +18,7 @@ import type {
   RichiestaZipPopConsultazione,
   RiepilogoPopConsultazione,
   VerificaZipPopConsultazione,
+  VolantiniPromozioneConsultazione,
 } from '../../../lib/consultazione/tipi';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
 import type { EsitoZipOlimpo } from './IFileManagementService';
@@ -47,6 +48,12 @@ export interface IConsultazioneService {
     ambito: AmbitoGdo,
     filtri?: FiltriDettaglioPromozioneVolantini
   ): Promise<DettaglioPromozioneVolantiniConsultazione>;
+  /**
+   * I volantini pubblicati della promo, senza i loro insight, per la tendina degli insight del volantino
+   * (spec insight-volantino). Come il dettaglio: 404 per una promo di un'altra GDO, eliminata o senza
+   * kit volantino pubblicati.
+   */
+  getVolantiniPromozione(idPromo: string, ambito: AmbitoGdo): Promise<VolantiniPromozioneConsultazione>;
   getVolantino(idKit: string, ambito: AmbitoGdo): Promise<DettaglioVolantinoConsultazione>;
 
   getPromozioniPop(periodo: PeriodoConsultazione, ambito: AmbitoGdo): Promise<ElencoPromozioniPopConsultazione>;

@@ -387,6 +387,23 @@ export interface DettaglioPromozioneVolantiniConsultazione {
   assortimento: AssortimentoPromozioneConsultazione;
 }
 
+/**
+ * GET /api/consultazione/volantini/promozioni/:idPromo/volantini con "materiali.visualizza": i volantini
+ * della promo per la tendina degli insight del volantino (spec insight-volantino, "Promozione del
+ * volantino e passaggio agli altri volantini"). Gli stessi kit e la stessa promo del dettaglio di
+ * consultazione, senza i loro insight: 404 per una promo di un'altra GDO, eliminata o senza volantini
+ * pubblicati. Nessuna chiamata a Istanta.
+ */
+export interface VolantiniPromozioneConsultazione {
+  promo: PromoConsultazione;
+  /** Periodo in cui si consulta la promo, dal suo stato. */
+  periodo: PeriodoConsultazione;
+  /** I kit volantino pubblicati della promo, nell'ordine del dettaglio: canale, area, titolo. */
+  volantini: VarianteConsultazione[];
+  /** URL del logo di ogni insegna dei volantini che ne ha uno, per id del canale, come nel dettaglio. */
+  loghiInsegne: Record<string, string>;
+}
+
 /** Dettaglio di un kit pubblicato, con i suoi file (senza quelli dell'export Correggo). */
 export interface DettaglioVolantinoConsultazione {
   id: string;

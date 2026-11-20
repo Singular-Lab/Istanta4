@@ -2,6 +2,7 @@ import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import {
   PERCORSO_CONSULTAZIONE,
   percorsoPromozioneVolantiniConsultazione,
+  percorsoVolantiniPromozioneConsultazione,
   percorsoVolantinoConsultazione,
   type PeriodoConsultazione,
 } from "../../lib/consultazione/periodi";
@@ -20,6 +21,7 @@ import type {
   PaginaPromozioniVolantiniConsultazione,
   PaginaVolantiniConsultazione,
   RiepilogoPopConsultazione,
+  VolantiniPromozioneConsultazione,
 } from "../../lib/consultazione/tipi";
 import { ServerCall } from "../../lib/server_call";
 import { parametriMateriali } from "../utils/materiali";
@@ -160,6 +162,19 @@ export const useDettaglioPromozioneVolantini = (
     staleTime: STALE_VISTE,
     // Solo il dettaglio della stessa promo: un'altra promo riparte dal caricamento
     placeholderData: (precedente, query) => (query?.queryKey[3] === idPromo ? precedente : undefined),
+  });
+
+/**
+ * I volantini pubblicati di una promozione, senza i loro insight, per la tendina degli insight del
+ * volantino (spec insight-volantino). Una chiave sua: non e' il dettaglio della promozione. Una promo
+ * non consultabile risponde 404, che non si ritenta (predefinito per i 4xx).
+ */
+export const useVolantiniPromozione = (idPromo: string | undefined) =>
+  useQuery({
+    queryKey: [CHIAVE_CONSULTAZIONE, "volantini", "promozione-volantini", idPromo],
+    queryFn: () => ServerCall.get<VolantiniPromozioneConsultazione>(percorsoVolantiniPromozioneConsultazione(idPromo ?? "")),
+    enabled: Boolean(idPromo),
+    staleTime: STALE_VISTE,
   });
 
 /** Promozioni del periodo con file POP pubblicati, con il loro conteggio. */

@@ -84,6 +84,10 @@ export const percorsoPromozioneVolantini = (idPromo: string, filtri: FiltriPromo
 export const percorsoPromozioneVolantiniConsultazione = (idPromo: string): string =>
   `${PERCORSO_CONSULTAZIONE}/volantini/promozioni/${encodeURIComponent(idPromo)}`;
 
+/** API dei volantini di una promozione per la tendina degli insight, relativa all'indirizzo delle API. */
+export const percorsoVolantiniPromozioneConsultazione = (idPromo: string): string =>
+  `${percorsoPromozioneVolantiniConsultazione(idPromo)}/volantini`;
+
 /** Dettaglio di un kit volantino pubblicato, relativo all'indirizzo delle API. */
 export const percorsoVolantinoConsultazione = (idKit: string): string =>
   `${PERCORSO_CONSULTAZIONE}/volantini/${encodeURIComponent(idKit)}`;

@@ -102,31 +102,34 @@ describe("FlyerInsights", () => {
     finti.config = { data: CONFIG, isError: false };
   });
 
-  it("mostra le analisi come sezioni separate, senza schede: Reparti e Meccaniche e sconti, senza la sezione delle marche", () => {
+  it("mostra le analisi come sezioni separate, senza schede: Reparti e Meccaniche, senza la sezione delle marche", () => {
     render(<FlyerInsights insights={insights()} exportCodes={[EXPORT_DI_SISTEMA.VOL]} />);
 
-    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche e sconti"]);
+    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche"]);
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /mappa|zone calde/i })).not.toBeInTheDocument();
   });
 
-  it("ogni sezione ha il suo contenuto: spazio per reparto, sconti e sottocosto", () => {
+  it("ogni sezione ha il suo contenuto: spazio per reparto e sottocosto", () => {
     render(<FlyerInsights insights={insights()} />);
 
     const spazioReparti = within(regione("Reparti")).getByRole("table", { name: "Spazio e referenze per reparto" });
-    // Drogheria compare anche nella tabella dello sconto medio per reparto: qui conta quella dello spazio
     expect(within(spazioReparti).getByRole("rowheader", { name: "Drogheria" })).toBeInTheDocument();
-    expect(within(regione("Meccaniche e sconti")).getByRole("heading", { name: "Fasce di sconto" })).toBeInTheDocument();
-    expect(within(regione("Meccaniche e sconti")).getByText("Zucchero")).toBeInTheDocument();
+    expect(within(regione("Meccaniche")).getByRole("heading", { name: "Sottocosto" })).toBeInTheDocument();
+    expect(within(regione("Meccaniche")).getByText("Zucchero")).toBeInTheDocument();
   });
 
-  it("i reparti hanno anche lo sconto medio per reparto, preso da prezzi e sconti", () => {
+  // TASK-26449b2d: via gli sconti da reparti e meccaniche; restano nell'interrogazione del volantino
+  it("niente sconti nelle sezioni: né fasce, né sconto medio per meccanica o per reparto", () => {
     render(<FlyerInsights insights={insights()} />);
 
-    const tabella = within(regione("Reparti")).getByRole("table", { name: "Sconto medio per reparto" });
-    expect(within(tabella).getByRole("rowheader", { name: "Drogheria" })).toBeInTheDocument();
-    expect(within(regione("Meccaniche e sconti")).queryByRole("table", { name: "Sconto medio per reparto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Meccaniche e sconti" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Fasce di sconto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Sconto medio per meccanica" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Sconto medio per reparto" })).not.toBeInTheDocument();
+    expect(regione("Reparti")).not.toHaveTextContent(/sconto/i);
+    expect(regione("Meccaniche")).not.toHaveTextContent(/sconto/i);
   });
 
   it("niente sezione delle marche con più spazio, neanche con la quota delle marche del distributore", () => {
@@ -144,14 +147,14 @@ describe("FlyerInsights", () => {
     render(<FlyerInsights insights={insights()} />);
 
     expect(regione("Reparti").parentElement).toHaveClass("lg:grid-cols-2");
-    expect(regione("Meccaniche e sconti").parentElement).toBe(regione("Reparti").parentElement);
+    expect(regione("Meccaniche").parentElement).toBe(regione("Reparti").parentElement);
   });
 
   it("la config della GDO può spegnere reparti e meccaniche; spente tutte e due non resta nessuna sezione", () => {
     finti.config = { data: { ...CONFIG, reparti: sezioneConfig(false) }, isError: false };
     const { unmount } = render(<FlyerInsights insights={insights()} />);
-    expect(titoliSezioni()).toEqual(["Meccaniche e sconti"]);
-    expect(regione("Meccaniche e sconti").parentElement).not.toHaveClass("lg:grid-cols-2");
+    expect(titoliSezioni()).toEqual(["Meccaniche"]);
+    expect(regione("Meccaniche").parentElement).not.toHaveClass("lg:grid-cols-2");
     unmount();
 
     finti.config = { data: { ...CONFIG, reparti: sezioneConfig(false), meccaniche: sezioneConfig(false) }, isError: false };
@@ -162,12 +165,12 @@ describe("FlyerInsights", () => {
   it("senza config, o mentre si carica, le sezioni ci sono: i dati vengono dal server", () => {
     finti.config = { data: undefined, isError: true };
     const { unmount } = render(<FlyerInsights insights={insights()} />);
-    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche e sconti"]);
+    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche"]);
     unmount();
 
     finti.config = { data: { ...CONFIG, meccaniche: undefined }, isError: false };
     render(<FlyerInsights insights={insights()} />);
-    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche e sconti"]);
+    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche"]);
   });
 
   it("un kit dello storico ha le stesse analisi", () => {
@@ -180,15 +183,15 @@ describe("FlyerInsights", () => {
       />
     );
 
-    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche e sconti"]);
-    expect(within(regione("Meccaniche e sconti")).getByText("Zucchero")).toBeInTheDocument();
+    expect(titoliSezioni()).toEqual(["Reparti", "Meccaniche"]);
+    expect(within(regione("Meccaniche")).getByText("Zucchero")).toBeInTheDocument();
   });
 
   it("una risposta senza le sezioni nuove mostra uno stato vuoto invece di rompersi", () => {
     const vecchia = insights({ prezziSconti: undefined, sintesi: undefined, box: undefined } as unknown as Partial<DatiFlyerInsights>);
     render(<FlyerInsights insights={vecchia} />);
 
-    expect(within(regione("Meccaniche e sconti")).getByText("Analisi non disponibile")).toBeInTheDocument();
+    expect(within(regione("Meccaniche")).getByText("Analisi non disponibile")).toBeInTheDocument();
   });
 
   it("senza esportazione VOL o senza referenze mostra lo stato vuoto di sempre", () => {

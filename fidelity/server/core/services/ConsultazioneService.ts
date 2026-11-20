@@ -40,6 +40,7 @@ import {
   VarianteConsultazione,
   VerificaZipPopConsultazione,
   VetrinaVolantiniConsultazione,
+  VolantiniPromozioneConsultazione,
   VolantinoConsultazione,
 } from '../../../lib/consultazione/tipi';
 import { EXPORT_DI_SISTEMA, STATO_LAVORAZIONE_KIT_RUNTIME, TIPO_LAVORAZIONE } from '../../../lib/enums';
@@ -575,19 +576,9 @@ export class ConsultazioneService implements IConsultazioneService {
     ambito: AmbitoGdo,
     filtri: FiltriDettaglioPromozioneVolantini = {}
   ): Promise<DettaglioPromozioneVolantiniConsultazione> {
-    const id = idPromoEsistente(idPromo);
     const idArea = uuidOpzionale(filtri.idArea, 'Area');
     const idCanale = uuidOpzionale(filtri.idCanale, 'Canale');
-    const nonDisponibile = () => new NotFoundError({ message: PROMOZIONE_VOLANTINI_NON_DISPONIBILE, entityType: 'Promo', entityId: id });
-    const rigaPromo = await this.repository.trovaPromo(id, STATI_PROMO_CONSULTABILI, ambito);
-    const periodo = periodoConsultazioneDellaPromo(rigaPromo?.stato_promo);
-    if (!rigaPromo || !periodo) throw nonDisponibile();
-
-    // Gli stessi kit dell'elenco Volantini: pubblicati, dei formati volantino, non manuali
-    const criteri = this.criteri(periodo, TIPO_LAVORAZIONE.VOLANTINO, ambito);
-    const righeKit = await this.materiali.elencaVariantiVolantini(criteri, [rigaPromo.id_promo]);
-    if (righeKit.length === 0) throw nonDisponibile();
-    const varianti = righeKit.map(varianteDa).sort(confrontaVarianti);
+    const { rigaPromo, periodo, criteri, varianti } = await this.variantiDellaPromo(idPromo, ambito);
     // Un filtro non indicato vale per tutti; gli id senza distinguere maiuscole, come le opzioni
     const stessa = (id: string, scelto: string | undefined) => scelto === undefined || chiave(id) === chiave(scelto);
     const mostrate = varianti.filter(v => stessa(v.area.id, idArea) && stessa(v.canale.id, idCanale));
@@ -630,6 +621,42 @@ export class ConsultazioneService implements IConsultazioneService {
       loghiInsegne: loghi,
       numeri,
       assortimento,
+    };
+  }
+
+  /**
+   * La promo consultabile nella GDO dell'ambito e i suoi kit volantino pubblicati, nell'ordine del
+   * dettaglio (canale, area, titolo): gli stessi kit dell'elenco Volantini, dei formati volantino, non
+   * manuali. 404 per una promo di un'altra GDO, eliminata, non consultabile o senza kit pubblicati.
+   */
+  private async variantiDellaPromo(
+    idPromo: string,
+    ambito: AmbitoGdo
+  ): Promise<{ rigaPromo: RigaPromo; periodo: PeriodoConsultazione; criteri: CriteriKit; varianti: VarianteConsultazione[] }> {
+    const id = idPromoEsistente(idPromo);
+    const nonDisponibile = () => new NotFoundError({ message: PROMOZIONE_VOLANTINI_NON_DISPONIBILE, entityType: 'Promo', entityId: id });
+    const rigaPromo = await this.repository.trovaPromo(id, STATI_PROMO_CONSULTABILI, ambito);
+    const periodo = periodoConsultazioneDellaPromo(rigaPromo?.stato_promo);
+    if (!rigaPromo || !periodo) throw nonDisponibile();
+
+    const criteri = this.criteri(periodo, TIPO_LAVORAZIONE.VOLANTINO, ambito);
+    const righeKit = await this.materiali.elencaVariantiVolantini(criteri, [rigaPromo.id_promo]);
+    if (righeKit.length === 0) throw nonDisponibile();
+    return { rigaPromo, periodo, criteri, varianti: righeKit.map(varianteDa).sort(confrontaVarianti) };
+  }
+
+  /**
+   * I volantini della promo per la tendina degli insight del volantino (spec insight-volantino,
+   * "Promozione del volantino e passaggio agli altri volantini"): gli stessi kit del dettaglio, con
+   * copertina e loghi delle insegne, senza leggerne gli insight.
+   */
+  async getVolantiniPromozione(idPromo: string, ambito: AmbitoGdo): Promise<VolantiniPromozioneConsultazione> {
+    const { rigaPromo, periodo, varianti } = await this.variantiDellaPromo(idPromo, ambito);
+    return {
+      promo: promoDa(rigaPromo),
+      periodo,
+      volantini: varianti,
+      loghiInsegne: await this.loghiDelleInsegneDellaPromo(varianti),
     };
   }
 

@@ -6,7 +6,7 @@ import type { BoxInsight, PrezziSconti as DatiPrezziSconti } from "../../../../l
 
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
 
-import { etichettaFascia, PrezziSconti, vociScontoMedio } from "./PrezziSconti";
+import { PrezziSconti } from "./PrezziSconti";
 
 const box = (id: string, campi: Partial<BoxInsight> = {}): BoxInsight => ({
   id,
@@ -58,35 +58,16 @@ const BOX = [
 ];
 
 describe("PrezziSconti", () => {
-  it("le fasce di sconto diventano colonne con il conteggio dei box, anche in tabella", () => {
+  // TASK-26449b2d: nella sezione Meccaniche solo il sottocosto, niente sconti
+  it("non mostra le fasce di sconto né lo sconto medio per meccanica o per reparto", () => {
     render(<PrezziSconti prezziSconti={dati()} box={BOX} />);
 
-    expect(screen.getByRole("img", { name: "Box per fascia di sconto" })).toBeInTheDocument();
-    const tabella = screen.getByRole("table", { name: "Box per fascia di sconto" });
-    expect(within(tabella).getByRole("rowheader", { name: "Sconto 20–30%" })).toBeInTheDocument();
-    expect(within(tabella).getByRole("rowheader", { name: "Sconto ≥ 50%" })).toBeInTheDocument();
-    expect(within(tabella).getAllByRole("row")).toHaveLength(7);
-  });
-
-  it("lo sconto medio per meccanica va dal più alto; lo sconto per reparto e il prezzo al kg non ci sono più", () => {
-    render(
-      <PrezziSconti
-        prezziSconti={dati({
-          perMeccanica: [
-            { chiave: "fidelity", etichetta: "Prezzo Fidelity", box: 4, scontoMedio: 25 },
-            { chiave: "sconto", etichetta: "Sconto in %", box: 2, scontoMedio: 35 },
-            { chiave: "taglio", etichetta: "Taglio prezzo", box: 1, scontoMedio: null },
-          ],
-        })}
-        box={BOX}
-      />
-    );
-
-    const tabella = screen.getByRole("table", { name: "Sconto medio per meccanica" });
-    expect(within(tabella).getAllByRole("rowheader").map(cella => cella.textContent)).toEqual(["Sconto in %", "Prezzo Fidelity"]);
-    expect(within(tabella).getByText("35%")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Fasce di sconto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Box per fascia di sconto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Sconto medio per meccanica" })).not.toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Sconto medio per reparto" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Prezzo al kg o al litro" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/sconto/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Sottocosto" })).toBeInTheDocument();
   });
 
   it("elenca i box in sottocosto con marca, formato, prezzo e pagina", () => {
@@ -100,18 +81,11 @@ describe("PrezziSconti", () => {
     expect(within(blocco).getByText("pagina 3")).toBeInTheDocument();
   });
 
-  it("senza sconti, sottocosto e meccaniche mostra stati vuoti sobri", () => {
-    render(
-      <PrezziSconti
-        prezziSconti={dati({ fasce: fasce([]), perReparto: [], perMeccanica: [], sottocosto: [], conPrezzoAlKg: 0 })}
-        box={BOX}
-      />
-    );
+  it("senza box in sottocosto lo dice, con un testo sobrio", () => {
+    render(<PrezziSconti prezziSconti={dati({ fasce: fasce([]), perReparto: [], perMeccanica: [], sottocosto: [], conPrezzoAlKg: 0 })} box={BOX} />);
 
-    expect(screen.getByText("Nessuno sconto calcolabile")).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: "Box per fascia di sconto" })).not.toBeInTheDocument();
-    expect(screen.getByText("Nessuna meccanica con uno sconto calcolabile.")).toBeInTheDocument();
     expect(screen.getByText("Nessun box in sottocosto.")).toBeInTheDocument();
+    expect(screen.queryByText("Nessuno sconto calcolabile")).not.toBeInTheDocument();
   });
 
   it("un id di sottocosto che non è fra i box non rompe l'elenco", () => {
@@ -132,28 +106,5 @@ describe("PrezziSconti", () => {
     fireEvent.click(pulsante);
     expect(within(blocco).getAllByRole("listitem")).toHaveLength(12);
     expect(within(blocco).getByRole("button", { name: "Mostra le prime 10" })).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("con il prezzo sotto la soglia di copertura dice che il dato è parziale", () => {
-    const { rerender } = render(<PrezziSconti prezziSconti={dati()} box={BOX} copertura={{ prezzo: 40, marca: 100, reparto: 100, geometria: 100 }} />);
-    expect(screen.getByText(/Dato parziale: il prezzo c'è nel 40% dei box/)).toBeInTheDocument();
-
-    rerender(<PrezziSconti prezziSconti={dati()} box={BOX} copertura={{ prezzo: 90, marca: 100, reparto: 100, geometria: 100 }} />);
-    expect(screen.queryByText(/Dato parziale/)).not.toBeInTheDocument();
-  });
-});
-
-describe("etichettaFascia e vociScontoMedio", () => {
-  it("l'ultima fascia è aperta in alto", () => {
-    expect(etichettaFascia({ da: 10, a: 20 })).toBe("10–20%");
-    expect(etichettaFascia({ da: 50, a: null })).toBe("≥ 50%");
-  });
-
-  it("a parità di sconto decide il nome", () => {
-    const voci = vociScontoMedio([
-      { chiave: "b", etichetta: "Bevande", box: 1, scontoMedio: 10 },
-      { chiave: "a", etichetta: "Alimentari", box: 1, scontoMedio: 10 },
-    ]);
-    expect(voci.map(v => v.id)).toEqual(["a", "b"]);
   });
 });

@@ -25,6 +25,7 @@ import { nomeVolantino } from "../../../lib/insightVolantino/nome";
 import type { BoxInsight } from "../../../lib/insightVolantino/tipi";
 import { ScaricaVolantino } from "./ScaricaVolantino";
 import { statoValidita } from "./validita";
+import { senzaPaginaPrima, VolantiniDellaPromo } from "./VolantiniDellaPromo";
 
 const VOLANTINI_ATTIVI: Indietro = { to: percorsoVolantini("attivi"), etichetta: "Torna ai volantini attivi" };
 
@@ -32,13 +33,14 @@ const VOLANTINI_ATTIVI: Indietro = { to: percorsoVolantini("attivi"), etichetta:
  * Il ritorno dal volantino (spec insight-volantino, "Ritorno dagli insight del volantino"): alla pagina
  * da cui è stato aperto (Volantini, dettaglio della promo, Storico volantini, punto vendita, dashboard),
  * con la sua query, qualunque sia il periodo della promo. Senza una pagina di Fidelity prima (segnalibro,
- * nuova scheda: la prima voce del router ha la chiave "default") porta al dettaglio della promozione del
- * volantino; se la promozione non si sa ancora, ai volantini attivi.
+ * nuova scheda: la prima voce del router ha la chiave "default", o un volantino che l'ha sostituita
+ * dalla tendina dei volantini della promozione) porta al dettaglio della promozione del volantino; se la
+ * promozione non si sa ancora, ai volantini attivi.
  */
 function useIndietro(idPromo: string | undefined): Indietro {
   const navigate = useNavigate();
-  const { key } = useLocation();
-  if (key !== "default") return { onClick: () => navigate(-1), etichetta: "Torna indietro" };
+  const { key, state } = useLocation();
+  if (!senzaPaginaPrima(key, state)) return { onClick: () => navigate(-1), etichetta: "Torna indietro" };
   if (idPromo) return { to: percorsoPromozioneVolantini(idPromo), etichetta: "Torna alla promozione" };
   return VOLANTINI_ATTIVI;
 }
@@ -92,7 +94,8 @@ const titoloVolantino = (contesto: { nomeCanale?: string; nomeArea?: string; nom
 
 /**
  * Dettaglio di sola consultazione del volantino, dall'alto: intestazione compatta (canale, area,
- * periodo, stato e "Scarica il volantino"), i numeri chiave, il volantino sfogliabile in grande, il
+ * periodo, stato e "Scarica il volantino"), la barra della promozione con la tendina degli altri suoi
+ * volantini, i numeri chiave, il volantino sfogliabile in grande, il
  * menabò quando la libreria agenzia lo dichiara (per Conad CNO la mastro di ogni pagina), la
  * distribuzione nelle pagine, i marchi del distributore, le analisi per reparto, meccanica e marca e
  * la tabella delle referenze. Il report PDF resta visibile ma disattivato per tutti; niente confronti con altre edizioni o
@@ -206,6 +209,9 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
         </div>
       }
     >
+      {/* La promozione sempre indicata, con la tendina degli altri suoi volantini (spec insight-volantino) */}
+      <VolantiniDellaPromo idKit={idKit} idPromo={contesto?.idPromo} nomePromo={contesto?.nomePromo} />
+
       {insights.isLoading ? (
         <div aria-busy="true" className="space-y-6">
           <Skeleton className="h-24" />
