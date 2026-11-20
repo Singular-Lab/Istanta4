@@ -2,96 +2,11 @@ import Sezione from "@/components/Base/Sezione";
 import EmptyState from "@/components/EmptyState";
 import { BarraQuota } from "@/components/FlyerInsights/analisi/comuni";
 import { BarreAppaiate } from "@/components/FlyerInsights/analisi/BarreAppaiate";
-import { BarreImpilate100, SERIE_PRINCIPALE, TabellaDati, taccheTonde } from "@/components/Grafici";
+import { BarreImpilate100, SERIE_PRINCIPALE } from "@/components/Grafici";
 import { formatPercentuale } from "@/pages/PuntiVenditaConsultazione/analisi";
-import { formatNumero } from "@/utils/format";
-import { twMerge } from "@/utils/twMerge";
 import { useMemo } from "react";
-import type { FasciaSconto } from "../../../lib/insightVolantino/tipi";
 import type { AssortimentoPromozioneConsultazione, MarcaPromozione } from "../../../lib/consultazione/tipi";
-import { etichettaFascia, meccanicheImpilate, plurale } from "./analisi";
-
-/* ---------- Quanto è profondo lo sconto ---------- */
-
-/**
- * Colonne dei box per fascia di sconto, con il numero sopra ogni colonna e l'asse a tacche tonde:
- * sono poche fasce e il numero si legge senza passare sul grafico. In scala: la tacca più alta è
- * almeno il massimo, e sopra c'è lo spazio per il numero della colonna più alta.
- */
-function ColonneFasce({ fasce }: { fasce: readonly FasciaSconto[] }) {
-  const massimo = Math.max(0, ...fasce.map(fascia => fascia.box));
-  const tacche = taccheTonde(0, massimo, 4);
-  const fondoScala = tacche[tacche.length - 1] || 1;
-  const altezza = (valore: number) => `${(valore / fondoScala) * 100}%`;
-  const descrizione = fasce.map(fascia => `${etichettaFascia(fascia)}: ${plurale(fascia.box, "box", "box")}`).join(", ");
-
-  return (
-    <figure className="m-0 min-w-0">
-      <div className="grid grid-cols-[2.25rem_minmax(0,1fr)] gap-x-2">
-        {/* Asse verticale: le etichette sulle stesse altezze delle righe della griglia */}
-        <div aria-hidden="true" className="relative h-44">
-          <div className="absolute inset-x-0 bottom-0 top-5">
-            {tacche.map(tacca => (
-              <span
-                key={tacca}
-                style={{ bottom: altezza(tacca) }}
-                className="absolute right-0 translate-y-1/2 text-3xs tabular-nums text-slate-500 dark:text-slate-400"
-              >
-                {formatNumero(tacca)}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div role="img" aria-label={`Box per fascia di sconto: ${descrizione}`} className="relative h-44 border-b border-slate-300 dark:border-darkmode-300">
-          <div className="absolute inset-x-0 bottom-0 top-5">
-            {tacche.slice(1).map(tacca => (
-              <span
-                key={tacca}
-                aria-hidden="true"
-                style={{ bottom: altezza(tacca) }}
-                className="absolute inset-x-0 border-t border-dashed border-slate-200 dark:border-darkmode-400"
-              />
-            ))}
-            <div className="absolute inset-0 grid auto-cols-fr grid-flow-col items-end gap-2.5 sm:gap-4">
-              {fasce.map(fascia => (
-                <div key={fascia.da} className="relative flex h-full items-end justify-center">
-                  <div
-                    style={{ height: altezza(fascia.box) }}
-                    className={twMerge("relative w-full max-w-12 rounded-t", SERIE_PRINCIPALE.sfondo, fascia.box > 0 && "min-h-[2px]")}
-                  >
-                    <span className="absolute inset-x-0 bottom-full mb-1 text-center text-2xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">
-                      {formatNumero(fascia.box)}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div />
-        <div aria-hidden="true" className="mt-1.5 grid auto-cols-fr grid-flow-col gap-2.5 text-center text-3xs tabular-nums text-slate-500 sm:gap-4 dark:text-slate-400">
-          {fasce.map(fascia => (
-            <span key={fascia.da}>{etichettaFascia(fascia)}</span>
-          ))}
-        </div>
-      </div>
-      <TabellaDati titolo="Box per fascia di sconto" colonne={["Fascia di sconto", "Box"]} righe={fasce.map(fascia => [etichettaFascia(fascia), formatNumero(fascia.box)])} />
-    </figure>
-  );
-}
-
-function ProfonditaSconto({ fasce }: { fasce: readonly FasciaSconto[] }) {
-  const conSconto = fasce.reduce((somma, fascia) => somma + fascia.box, 0);
-  return (
-    <Sezione titolo="Quanto è profondo lo sconto" descrizione="I box di tutti i volantini per fascia di sconto.">
-      {conSconto === 0 ? (
-        <EmptyState compatta icon="Percent" title="Nessuno sconto calcolabile" description="Nessun box dei volantini ha un prezzo barrato o uno sconto stampato." />
-      ) : (
-        <ColonneFasce fasce={fasce} />
-      )}
-    </Sezione>
-  );
-}
+import { meccanicheImpilate } from "./analisi";
 
 /* ---------- Reparti, meccaniche, marche ---------- */
 
@@ -185,18 +100,14 @@ function Marche({ marche }: { marche: readonly MarcaPromozione[] }) {
 }
 
 /**
- * L'assortimento della promozione sommando tutti i kit: prodotti comuni o locali, profondità dello
- * sconto, reparti, meccaniche per insegna e marche. In due colonne sugli schermi larghi.
- */
-/**
- * Quanto è profondo lo sconto, reparti, meccaniche per insegna e marche: i numeri dell'assortimento di
- * tutti i volantini mostrati. Il confronto dei prodotti fra i volantini sta in ConfrontoAssortimento.
+ * Reparti, meccaniche per insegna e marche: i numeri dell'assortimento di tutti i volantini mostrati.
+ * Niente box per fascia di sconto (spec volantini-pop). Il confronto dei prodotti fra i volantini sta in
+ * ConfrontoAssortimento.
  */
 export function Assortimento({ assortimento }: { assortimento: AssortimentoPromozioneConsultazione }) {
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
       <div className="flex min-w-0 flex-col gap-6">
-        <ProfonditaSconto fasce={assortimento.fasceSconto} />
         <Reparti reparti={assortimento.reparti} />
       </div>
       <div className="flex min-w-0 flex-col gap-6">

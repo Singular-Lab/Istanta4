@@ -2,6 +2,7 @@ import Button from "@/components/Base/Button";
 import CampoRicerca from "@/components/Base/CampoRicerca";
 import { FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
+import Segmenti from "@/components/Base/Segmenti";
 import Sezione from "@/components/Base/Sezione";
 import EmptyState from "@/components/EmptyState";
 import type { Tinta } from "@/components/Grafici";
@@ -25,6 +26,7 @@ import {
   descriviPresenze,
   facceConfronto,
   filtraConfronto,
+  type FiltroPrezzo,
   grigliaVolantini,
   type GrigliaVolantini,
   lineeInVista,
@@ -33,6 +35,7 @@ import {
   ordinamentoElencoInIndirizzo,
   percentualeDi,
   plurale,
+  prezzoDaIndirizzo,
   prezziPerLuogo,
   prodottiConfronto,
   type ProdottoConfronto,
@@ -413,12 +416,16 @@ const INTESTAZIONI: ReadonlyArray<{ colonna: ColonnaElenco; etichetta: string }>
 
 const ICONA_VERSO = { ascending: "ArrowUp", descending: "ArrowDown", none: "ChevronsUpDown" } as const;
 
+/** Le scelte del filtro sul prezzo dell'elenco: tutti, o i soli prodotti con lo stesso prezzo in più volantini. */
+type SceltaPrezzo = "tutti" | FiltroPrezzo;
+
 /**
- * L'elenco di tutti i prodotti (spec volantini-pop): ricerca, reparto e ruoli (a scelta multipla, con i
- * loro conteggi) fuori dal riquadro, con le voci che seguono gli altri filtri; il riquadro scorre da sé.
- * All'apertura prima i prezzi diversi, poi per nome; scegliendo un'intestazione (prodotto, volantini,
- * prezzo, differenza) si riordina e di nuovo si inverte, con l'ordine in ?ordina=. Niente tendina
- * dell'ordine né filtro dei soli prezzi diversi.
+ * L'elenco di tutti i prodotti (spec volantini-pop): ricerca, reparto, prezzo (tutti o lo stesso prezzo
+ * in più volantini, ?prezzo=uguale) e ruoli (a scelta multipla), con i loro conteggi, fuori dal
+ * riquadro, con le voci che seguono gli altri filtri; il riquadro scorre da sé. All'apertura prima i
+ * prezzi diversi, poi per nome; scegliendo un'intestazione (prodotto, volantini, prezzo, differenza) si
+ * riordina e di nuovo si inverte, con l'ordine in ?ordina=. Niente tendina dell'ordine né filtro dei
+ * soli prezzi diversi.
  */
 function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostraTutti }: ElencoProps) {
   const [parametri, aggiorna] = useParametriUrl();
@@ -426,22 +433,23 @@ function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostr
   const reparto = parametri.get("reparto") || null;
   const testoRuoli = parametri.get("ruolo");
   const ruoli = useMemo(() => ruoliDaIndirizzo(testoRuoli), [testoRuoli]);
+  const prezzo = prezzoDaIndirizzo(parametri.get("prezzo"));
   const ordinamento = ordinamentoElencoDaIndirizzo(parametri.get("ordina"));
   const [testoRicerca, setTestoRicerca] = useRicercaDifferita(cerca, testo => aggiorna({ cerca: testo }));
   const [aperti, setAperti] = useState<ReadonlySet<string>>(new Set());
   const riquadro = useRef<HTMLDivElement>(null);
   const radice = useRef<HTMLDivElement>(null);
 
-  const filtro = useMemo(() => ({ vista, punto: punto?.id ?? null, cerca, reparto, ruoli }), [vista, punto, cerca, reparto, ruoli]);
+  const filtro = useMemo(() => ({ vista, punto: punto?.id ?? null, cerca, reparto, ruoli, prezzo }), [vista, punto, cerca, reparto, ruoli, prezzo]);
   // Le voci dei filtri seguono gli altri filtri: scelto un ruolo, solo i reparti che lo hanno
   const facce = useMemo(() => facceConfronto(prodotti, griglia, filtro), [prodotti, griglia, filtro]);
   // Tutti i ruoli dei prodotti, anche quelli esclusi dagli altri filtri: dicono se la colonna serve
   const conRuoli = useMemo(() => prodotti.some(p => (p.referenza.ruoli ?? []).length > 0), [prodotti]);
   const mostrati = useMemo(() => ordinaElenco(filtraConfronto(prodotti, griglia, filtro), ordinamento), [prodotti, griglia, filtro, ordinamento]);
   const titolo = titoloVista(vista, griglia);
-  const conFiltri = Boolean(cerca || reparto || ruoli.length > 0);
+  const conFiltri = Boolean(cerca || reparto || ruoli.length > 0 || prezzo);
   // Un'altra scelta o un altro filtro: il riquadro riparte dal primo prodotto
-  const scelta = [vista ? vistaInIndirizzo(vista) : "", punto?.id ?? "", cerca, reparto ?? "", ruoli.join(","), parametri.get("ordina") ?? ""].join("|");
+  const scelta = [vista ? vistaInIndirizzo(vista) : "", punto?.id ?? "", cerca, reparto ?? "", ruoli.join(","), prezzo ?? "", parametri.get("ordina") ?? ""].join("|");
   useEffect(() => {
     if (riquadro.current) riquadro.current.scrollTop = 0;
   }, [scelta]);
@@ -501,6 +509,15 @@ function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostr
             ))}
             {(facce.senzaReparto || reparto === SENZA_REPARTO) && <option value={SENZA_REPARTO}>Senza reparto</option>}
           </FormSelect>
+          <Segmenti<SceltaPrezzo>
+            etichetta="Prezzo"
+            opzioni={[
+              { valore: "tutti", etichetta: "Tutti i prezzi", conteggio: facce.prezzi.tutti },
+              { valore: "uguale", etichetta: "Stesso prezzo in più volantini", conteggio: facce.prezzi.uguale },
+            ]}
+            valore={prezzo ?? "tutti"}
+            onChange={voce => aggiorna({ prezzo: voce === "tutti" ? null : voce })}
+          />
           <div className="ml-auto flex items-center gap-2">
             {conFiltri && (
               <Button
@@ -509,7 +526,7 @@ function Elenco({ id, prodotti, griglia, vista, punto, tinta, nomePromo, onMostr
                 size="sm"
                 onClick={() => {
                   setTestoRicerca("");
-                  aggiorna({ cerca: null, reparto: null, ruolo: null });
+                  aggiorna({ cerca: null, reparto: null, ruolo: null, prezzo: null });
                 }}
               >
                 <Lucide icon="X" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />

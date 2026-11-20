@@ -26,9 +26,7 @@ const COLONNE: ReadonlyArray<{ id: ColonnaConfronto; etichetta: string; numerica
   { id: "puntiVendita", etichetta: "Punti vendita", numerica: true },
   { id: "referenze", etichetta: "Referenze", numerica: true },
   { id: "pagine", etichetta: "Pagine", numerica: true },
-  { id: "scontoMedio", etichetta: "Sconto medio", numerica: true },
   { id: "quotaFidelity", etichetta: "Quota Fidelity", numerica: true },
-  { id: "sottocosto", etichetta: "Sottocosto", numerica: true },
 ];
 
 const ICONA_VERSO = { ascending: "ArrowUp", descending: "ArrowDown", none: "ChevronsUpDown" } as const;
@@ -46,8 +44,9 @@ function Barretta({ valore, massimo, colore, classe }: { valore: number; massimo
 }
 
 /**
- * "I volantini a confronto": una riga per kit con punti vendita, referenze, pagine, sconto medio,
- * quota Fidelity e box in sottocosto; si ordina cliccando le intestazioni (aria-sort sulla colonna).
+ * "I volantini a confronto": una riga per kit con punti vendita, referenze, pagine e quota Fidelity,
+ * senza sconto medio né sottocosto (spec volantini-pop); si ordina cliccando le intestazioni
+ * (aria-sort sulla colonna).
  * La riga apre gli insight del kit, col mouse o con Invio e Spazio quando ha il focus.
  */
 export function ConfrontoKit({ kit, tinta }: { kit: readonly KitPromozioneConsultazione[]; tinta: (idCanale: string) => Tinta }) {
@@ -135,9 +134,7 @@ export function ConfrontoKit({ kit, tinta }: { kit: readonly KitPromozioneConsul
                     <Barretta valore={k.referenze} massimo={massimoReferenze} classe="bg-theme-1 dark:bg-indigo-300" />
                   </Table.Td>
                   <Table.Td className="text-right tabular-nums dark:text-slate-200">{formatNumero(k.pagine)}</Table.Td>
-                  <Table.Td className="text-right tabular-nums dark:text-slate-200">{formatPercentuale(k.scontoMedio, 0)}</Table.Td>
-                  <Table.Td className="text-right tabular-nums dark:text-slate-200">{formatPercentuale(k.quotaFidelity, 0)}</Table.Td>
-                  <Table.Td className="pr-5 text-right tabular-nums dark:text-slate-200">{formatNumero(k.sottocosto)}</Table.Td>
+                  <Table.Td className="pr-5 text-right tabular-nums dark:text-slate-200">{formatPercentuale(k.quotaFidelity, 0)}</Table.Td>
                 </Table.Tr>
               );
             })}

@@ -55,12 +55,12 @@ function Caricamento() {
 /**
  * Consultazione di una promozione (/volantini/promozioni/:idPromo, "materiali.visualizza"), dalle
  * schede delle viste Volantini: un'infografica di tutti i suoi volantini pubblicati. Banda con
- * validità e insegne, filtri per insegna e area con sotto l'indice delle parti della pagina, griglia
+ * validità e insegne, senza cartellino di quanto manca, filtri per insegna e area con sotto l'indice delle parti della pagina, griglia
  * delle miniature, assortimento a confronto per
  * insegna e area (base comune, % a marchio, % Fidelity) con in primo piano i prodotti in comune, con i
  * loro filtri (?cercaComuni=&repartoComuni=&ruoloComuni=&vistaComuni=), e l'elenco di tutti i prodotti
- * in un riquadro che scorre da sé (?vista=&punto=&cerca=&reparto=&ruolo=&ordina=); sotto, in pannelli
- * chiusi (?analisi=), grafici dell'assortimento e confronto fra i kit; ogni kit apre i suoi insight, e
+ * in un riquadro che scorre da sé (?vista=&punto=&cerca=&reparto=&ruolo=&prezzo=&ordina=); sotto, in pannelli
+ * chiusi (?analisi=), reparti, meccaniche e marche e il confronto fra i kit; ogni kit apre i suoi insight, e
  * tornando indietro la pagina riprende dove l'utente l'aveva lasciata. Niente sezione "Dove arriva" (regioni, mappa ed elenco
  * dei punti vendita stampati). I filtri stanno nell'indirizzo (?canale=&area=) e il server ricalcola
  * tutto sui soli kit filtrati. Solo materiali pubblicati della GDO, dalle API di consultazione:
@@ -130,15 +130,15 @@ function PromozioneVolantini() {
   const pannelli: PannelloAnalisi[] = [
     {
       chiave: "assortimento",
-      titolo: "Sconti, reparti, meccaniche e marche",
-      descrizione: "Quanto è profondo lo sconto, spazio e referenze per reparto, meccaniche per insegna e marche con più spazio.",
+      titolo: "Reparti, meccaniche e marche",
+      descrizione: "Spazio e referenze per reparto, meccaniche per insegna e marche con più spazio.",
       icona: "ChartColumn",
       contenuto: () => <Assortimento assortimento={dettaglio.assortimento} />,
     },
     {
       chiave: "volantini",
       titolo: "Confronto fra i volantini",
-      descrizione: "Punti vendita, referenze, pagine, sconto medio, quota Fidelity e sottocosto di ogni volantino.",
+      descrizione: "Punti vendita, referenze, pagine e quota Fidelity di ogni volantino.",
       icona: "LayoutGrid",
       contenuto: () => <ConfrontoKit kit={dettaglio.kit} tinta={tinta} />,
     },
@@ -152,7 +152,7 @@ function PromozioneVolantini() {
           { etichetta: "Tutti i prodotti", id: ID_TUTTI_I_PRODOTTI },
         ]
       : []),
-    { etichetta: "Sconti e reparti", pannello: "assortimento" },
+    { etichetta: "Reparti e marche", pannello: "assortimento" },
     { etichetta: "Confronto fra i volantini", pannello: "volantini" },
   ];
 

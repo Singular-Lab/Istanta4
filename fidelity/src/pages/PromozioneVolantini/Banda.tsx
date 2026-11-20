@@ -2,18 +2,8 @@ import type { Tinta } from "@/components/Grafici";
 import { twMerge } from "@/utils/twMerge";
 import { ETICHETTA_PERIODO_CONSULTAZIONE } from "../../../lib/consultazione/periodi";
 import type { DettaglioPromozioneVolantiniConsultazione, Riferimento } from "../../../lib/consultazione/tipi";
-import { fraseKit, testoQuantoManca, testoValidita } from "./analisi";
+import { fraseKit, testoValidita } from "./analisi";
 import { LogoInsegna } from "./LogoInsegna";
-
-/** Il cartellino giallo del prezzo, con il foro: dice quanto manca alla fine o all'inizio. */
-function Cartellino({ testo }: { testo: string }) {
-  return (
-    <span className="relative inline-flex -rotate-[2.5deg] items-center self-start bg-amber-300 py-1.5 pl-[1.625rem] pr-4 text-sm font-extrabold text-amber-950 [clip-path:polygon(14px_0,100%_0,100%_100%,14px_100%,0_50%)]">
-      <span aria-hidden="true" className="absolute left-2.5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-theme-1" />
-      {testo}
-    </span>
-  );
-}
 
 export interface BandaProps {
   dettaglio: DettaglioPromozioneVolantiniConsultazione;
@@ -27,14 +17,13 @@ export interface BandaProps {
 }
 
 /**
- * La banda in testa alla pagina: periodo e promozione, validità in grande, quanto manca, quanti
- * volantini per quante insegne e aree (quelli dei filtri). A destra le insegne con il loro logo:
- * ognuna filtra la pagina su di sé, come la tendina Insegna. Le copertine sono nella griglia dei
- * volantini, sotto i filtri.
+ * La banda in testa alla pagina: periodo e promozione, validità in grande, quanti volantini per
+ * quante insegne e aree (quelli dei filtri). Niente cartellino di quanto manca o di quando è finita
+ * (spec volantini-pop). A destra le insegne con il loro logo: ognuna filtra la pagina su di sé, come
+ * la tendina Insegna. Le copertine sono nella griglia dei volantini, sotto i filtri.
  */
 export function Banda({ dettaglio, insegne, tinta, idCanale, onScegliInsegna }: BandaProps) {
   const { promo, periodo, kit } = dettaglio;
-  const quantoManca = testoQuantoManca(periodo, promo);
 
   return (
     <section
@@ -53,7 +42,6 @@ export function Banda({ dettaglio, insegne, tinta, idCanale, onScegliInsegna }: 
           Volantini {ETICHETTA_PERIODO_CONSULTAZIONE[periodo]} · {promo.nome}
         </p>
         <p className="text-4xl font-extrabold leading-[0.98] tracking-tight [text-wrap:balance] sm:text-5xl xl:text-6xl">{testoValidita(promo)}</p>
-        {quantoManca && <Cartellino testo={quantoManca} />}
         {kit.length > 0 && <p className="max-w-[44ch] text-base text-indigo-200">{fraseKit(kit)}.</p>}
       </div>
 
