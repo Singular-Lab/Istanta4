@@ -22,17 +22,24 @@ import type { AnalisiPuntoVendita, EdizioneTimeline, VolantinoAssente } from "..
 import { DIMENSIONI_PAGINA_STORIA, type StoriaPuntoVendita, type VolantinoNellaStoria } from "../../../lib/puntiVendita/storia";
 import { giorniAllaScadenza, testoScadenza } from "../VolantiniKit/scadenza";
 import {
+  assenzaDallUltimo,
+  assenzeDellaStoria,
+  assenzePerAnno,
   assenzeTimeline,
   barreTimeline,
   edizioneScelta,
   edizioniDelPeriodo,
   fasceInsegne,
+  giornoBreve,
   intervalloPeriodo,
   PARAMETRO_VOLANTINO,
   periodoValidita,
   ULTIMI_12_MESI,
+  strisciaCalendario,
   ULTIMI_3_MESI,
   type ContestoPeriodo,
+  type StrisciaCalendario,
+  type TrattoCalendario,
 } from "./analisi";
 import { RigaStampata, StatoBox, type QueryBox } from "./componenti";
 import { nomePdfVolantino, testoSintesi, testoVolantini, urlPdfVolantino } from "./storia";
@@ -144,39 +151,268 @@ function EdizioneSelezionata({
   );
 }
 
+const testoVolantiniSu = (numero: number) => (numero === 1 ? "volantino" : "volantini");
+
+/** Una riga dell'elenco delle assenze: la data, la promo con la validità e il link al volantino. */
+function RigaAssenza({ assenza, puoAprire }: { assenza: VolantinoAssente; puoAprire: boolean }) {
+  return (
+    <li
+      data-volantino-assente={assenza.idKit}
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-3 py-2 sm:grid-cols-[6.5rem_minmax(0,1fr)_auto]"
+    >
+      <span className="col-span-2 text-xs font-semibold tabular-nums text-rose-700 sm:col-span-1 dark:text-rose-300">{giornoBreve(assenza.dal)}</span>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-800 [overflow-wrap:anywhere] dark:text-slate-100">{assenza.promo.nome}</p>
+        <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{periodoValidita(assenza.dal, assenza.al)}</p>
+      </div>
+      {puoAprire && (
+        <Link
+          to={percorsoDettaglioVolantino(assenza.idKit)}
+          aria-label={`Apri il volantino ${assenza.promo.nome}`}
+          className="inline-flex items-center gap-0.5 whitespace-nowrap text-xs font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
+        >
+          Apri
+          <Lucide icon="ChevronRight" aria-hidden="true" className="h-3.5 w-3.5" />
+        </Link>
+      )}
+    </li>
+  );
+}
+
+/**
+ * Le assenze per anno, dal più recente: una riga per anno con il numero, che si apre sulle assenze
+ * di quell'anno. Aperto soltanto il più recente (`primoAperto`), così l'elenco resta corto anche con
+ * anni di volantini.
+ */
+function AssenzePerAnno({
+  assenze,
+  puoAprire,
+  primoAperto,
+  etichetta,
+}: {
+  assenze: readonly VolantinoAssente[];
+  puoAprire: boolean;
+  primoAperto: boolean;
+  etichetta: string;
+}) {
+  const anni = assenzePerAnno(assenze);
+  const [aperti, setAperti] = useState<ReadonlySet<number>>(() => new Set(primoAperto && anni[0] ? [anni[0].anno] : []));
+  const cambia = (anno: number) =>
+    setAperti(attuali => {
+      const nuovi = new Set(attuali);
+      if (nuovi.has(anno)) nuovi.delete(anno);
+      else nuovi.add(anno);
+      return nuovi;
+    });
+  return (
+    <div role="group" aria-label={etichetta} className="divide-y divide-slate-200 rounded-lg border border-slate-200 dark:divide-darkmode-400 dark:border-darkmode-400">
+      {anni.map(({ anno, assenze: dellAnno }) => {
+        const aperto = aperti.has(anno);
+        return (
+          <div key={anno}>
+            <button
+              type="button"
+              aria-expanded={aperto}
+              onClick={() => cambia(anno)}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-theme-1/40 dark:hover:bg-darkmode-400/40"
+            >
+              <Lucide icon="ChevronRight" aria-hidden="true" className={twMerge("h-4 w-4 text-slate-500 transition-transform", aperto && "rotate-90")} />
+              <strong className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">{anno}</strong>{" "}
+              <span className="text-xs tabular-nums text-slate-500">{dellAnno.length === 1 ? "1 assenza" : `${formatNumero(dellAnno.length)} assenze`}</span>
+            </button>
+            {aperto && (
+              <ul aria-label={`Assenze del ${anno}`} className="divide-y divide-dashed divide-slate-200 pb-1 pl-6 dark:divide-darkmode-400">
+                {dellAnno.map(assenza => (
+                  <RigaAssenza key={assenza.idKit} assenza={assenza} puoAprire={puoAprire} />
+                ))}
+              </ul>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Le assenze dopo il primo volantino in cui c'è, per anno: aperto il più recente. */
+function AssenzeFraISuoi({ assenze, puoAprire }: { assenze: readonly VolantinoAssente[]; puoAprire: boolean }) {
+  if (assenze.length === 0) return null;
+  return (
+    <div>
+      <h4 className="mb-1.5 flex items-baseline gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+        Fra i suoi volantini{" "}
+        <span className="text-xs font-normal tabular-nums text-slate-500">{formatNumero(assenze.length)}</span>
+      </h4>
+      {/* Cambiando periodo si riparte con aperto solo l'anno più recente */}
+      <AssenzePerAnno key={`${assenze.length}-${assenze[0].idKit}`} assenze={assenze} puoAprire={puoAprire} primoAperto etichetta="Assenze fra i suoi volantini" />
+    </div>
+  );
+}
+
+/** Le assenze prima del primo volantino in cui c'è: chiuse, con il numero; aperte, per anno e tutte chiuse. */
+function AssenzePrimaDelPrimo({ assenze, puoAprire }: { assenze: readonly VolantinoAssente[]; puoAprire: boolean }) {
+  const [aperte, setAperte] = useState(false);
+  if (assenze.length === 0) return null;
+  return (
+    <div>
+      <button
+        type="button"
+        aria-expanded={aperte}
+        onClick={() => setAperte(attuale => !attuale)}
+        className="flex items-center gap-1.5 text-sm font-semibold text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 dark:text-slate-100"
+      >
+        <Lucide icon="ChevronRight" aria-hidden="true" className={twMerge("h-4 w-4 text-slate-500 transition-transform", aperte && "rotate-90")} />
+        Prima del suo primo volantino{" "}
+        <span className="text-xs font-normal tabular-nums text-slate-500">{formatNumero(assenze.length)}</span>
+      </button>
+      {aperte && (
+        <div className="ml-5 mt-1">
+          <p className="mb-1.5 text-xs text-slate-500">Volantini della sua insegna e area usciti prima che comparisse: spesso il negozio non era ancora aperto.</p>
+          <AssenzePerAnno assenze={assenze} puoAprire={puoAprire} primoAperto={false} etichetta="Assenze prima del suo primo volantino" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SFONDO_ASSENZA =
+  "bg-[repeating-linear-gradient(135deg,theme(colors.rose.500)_0_3px,theme(colors.rose.100)_3px_6px)] ring-1 ring-inset ring-rose-500 dark:bg-[repeating-linear-gradient(135deg,theme(colors.rose.400)_0_3px,transparent_3px_6px)] dark:ring-rose-400";
+const SFONDO_PRESENZA = "bg-slate-400/60 dark:bg-slate-400/50";
+const SFONDO_VUOTO = "bg-slate-100 dark:bg-darkmode-400/60";
+
+const statoTratto = (tratto: TrattoCalendario) => (tratto.volantini === 0 ? "vuoto" : tratto.mancanti > 0 ? "assente" : "presente");
+
+const descriviTratto = (tratto: TrattoCalendario) =>
+  tratto.volantini === 0
+    ? `${tratto.etichetta} · nessun volantino`
+    : tratto.mancanti === 0
+      ? `${tratto.etichetta} · c'era in ${tratto.volantini === 1 ? "1 volantino" : `tutti i ${formatNumero(tratto.volantini)} volantini`}`
+      : `${tratto.etichetta} · ${formatNumero(tratto.mancanti)} su ${formatNumero(tratto.volantini)} senza il punto vendita`;
+
+/**
+ * La striscia del calendario del periodo: un riquadro per mese (o per settimana nei periodi brevi),
+ * grigio se c'era in tutti i volantini, rosa tratteggiato se ne mancava almeno uno, chiaro senza
+ * volantini. Tre stati, nessuna intensità; larga quanto la Storia qualunque sia il numero dei volantini.
+ */
+function StrisciaCalendarioPresenze({ striscia }: { striscia: StrisciaCalendario }) {
+  const { tratti, passo } = striscia;
+  const gruppi: Array<{ gruppo: string; tratti: number }> = [];
+  for (const tratto of tratti) {
+    const ultimo = gruppi[gruppi.length - 1];
+    if (ultimo?.gruppo === tratto.gruppo) ultimo.tratti += 1;
+    else gruppi.push({ gruppo: tratto.gruppo, tratti: 1 });
+  }
+  const conAssenze = tratti.filter(t => t.mancanti > 0).length;
+  const unita = passo === "mese" ? ["mese", "mesi"] : ["settimana", "settimane"];
+  return (
+    <div className="grid gap-1.5">
+      <div
+        role="img"
+        aria-label={`${formatNumero(tratti.length)} ${tratti.length === 1 ? unita[0] : unita[1]} del periodo, ${formatNumero(conAssenze)} con almeno un volantino senza il punto vendita`}
+        data-passo={passo}
+        className={twMerge("flex h-4", tratti.length > 80 ? "gap-px" : "gap-0.5")}
+      >
+        {tratti.map(tratto => {
+          const stato = statoTratto(tratto);
+          return (
+            <span
+              key={tratto.inizio}
+              data-tratto={stato}
+              title={descriviTratto(tratto)}
+              className={twMerge("min-w-0 flex-1 rounded-sm", stato === "assente" ? SFONDO_ASSENZA : stato === "presente" ? SFONDO_PRESENZA : SFONDO_VUOTO)}
+            />
+          );
+        })}
+      </div>
+      {/* Gli anni (o i mesi) sotto i loro riquadri; il nome solo dove c'è posto */}
+      <div aria-hidden="true" className="flex text-2xs tabular-nums text-slate-500">
+        {gruppi.map(g => (
+          <span key={g.gruppo} style={{ flexGrow: g.tratti, flexBasis: 0 }} className="min-w-0 truncate border-l border-slate-200 pl-1 dark:border-darkmode-400">
+            {g.tratti >= 2 || gruppi.length <= 6 ? g.gruppo : ""}
+          </span>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className={twMerge("h-2.5 w-3 rounded-sm", SFONDO_PRESENZA)} />
+          c'era in tutti i volantini {passo === "mese" ? "del mese" : "della settimana"}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className={twMerge("h-2.5 w-3 rounded-sm", SFONDO_ASSENZA)} />
+          mancava da almeno uno
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden="true" className={twMerge("h-2.5 w-3 rounded-sm ring-1 ring-inset ring-slate-200 dark:ring-darkmode-400", SFONDO_VUOTO)} />
+          nessun volantino
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** L'avviso: il volantino più recente della sua insegna e area non lo stampa. */
+function AvvisoUltimoVolantino({ assenza }: { assenza: VolantinoAssente }) {
+  return (
+    <p role="note" className="flex gap-2.5 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-slate-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-slate-200">
+      <Lucide icon="TriangleAlert" aria-hidden="true" className="mt-0.5 h-4 w-4 flex-none text-rose-600 dark:text-rose-400" />
+      <span>
+        <strong className="font-semibold">Non c'è nell'ultimo volantino</strong> ({assenza.promo.nome}, {periodoValidita(assenza.dal, assenza.al)}). Controlla se il punto
+        vendita è ancora aperto o se la lista del volantino è incompleta.
+      </span>
+    </p>
+  );
+}
+
 /**
  * "Quando non c'era": i volantini del periodo della sua insegna e area, con la lista dei punti
- * vendita registrata, in cui il punto vendita non compare, dal più vecchio. Ognuno si apre per
- * vedere la lista stampata. Senza assenze non c'è.
+ * vendita registrata, in cui il punto vendita non compare. In alto quanti su quanti e la striscia
+ * del calendario; l'avviso se manca dall'ultimo volantino (`ultimaAssente`, su tutta la storia);
+ * poi le assenze fra i suoi volantini per anno, aperto il più recente, e quelle prima del suo
+ * primo volantino, chiuse. Nulla cresce con il numero dei volantini: la striscia va per mese o
+ * settimana, gli elenchi per anno. Senza assenze né avviso non c'è (spec anagrafica-punti-vendita,
+ * "Assenze in evidenza nella Storia del punto vendita").
  */
-export function AssenzeDelPeriodo({ assenze, volantini }: { assenze: readonly VolantinoAssente[]; volantini: number }) {
+export function AssenzeDelPeriodo({
+  assenze,
+  edizioni,
+  primoDelPv,
+  ultimaAssente = null,
+  intervallo,
+}: {
+  assenze: readonly VolantinoAssente[];
+  edizioni: readonly Pick<EdizioneTimeline, "dal">[];
+  /** Il primo volantino in cui c'è, di tutta la storia. */
+  primoDelPv: string | null;
+  ultimaAssente?: VolantinoAssente | null;
+  /** I giorni del periodo scelto; senza, dal primo all'ultimo volantino. */
+  intervallo?: { dal: string; al: string };
+}) {
   const puoConsultareVolantini = usePermission(PERMISSIONS.MATERIALI.VISUALIZZA);
-  if (assenze.length === 0) return null;
-  const totale = assenze.length + volantini;
+  if (assenze.length === 0 && !ultimaAssente) return null;
+  if (assenze.length === 0 && ultimaAssente) {
+    return (
+      <div className="mt-5">
+        <AvvisoUltimoVolantino assenza={ultimaAssente} />
+      </div>
+    );
+  }
+  const { fraISuoi, primaDelPrimo, volantini } = assenzeDellaStoria(edizioni, assenze, primoDelPv);
   return (
-    <section aria-label="Quando non c'era" className="mt-5 rounded-card border border-rose-200 bg-rose-50/60 p-4 dark:border-rose-400/30 dark:bg-rose-400/10">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
-        <Lucide icon="CalendarX" aria-hidden="true" className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-        Quando non c'era
-      </h3>
-      <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">
-        Manca da {formatNumero(assenze.length)} {assenze.length === 1 ? "volantino" : "volantini"} su {formatNumero(totale)} della sua insegna e area: la loro lista dei punti vendita non lo stampa.
-      </p>
-      <ul className="mt-3 divide-y divide-rose-100 dark:divide-rose-400/20">
-        {assenze.map(assenza => (
-          <li key={assenza.idKit} data-volantino-assente={assenza.idKit} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-slate-800 [overflow-wrap:anywhere] dark:text-slate-100">{assenza.promo.nome}</p>
-              <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{periodoValidita(assenza.dal, assenza.al)}</p>
-            </div>
-            {puoConsultareVolantini && (
-              <Button as={Link} to={percorsoDettaglioVolantino(assenza.idKit)} variant="outline-secondary" size="sm" aria-label={`Apri il volantino ${assenza.promo.nome}`}>
-                Apri
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
+    <section aria-label="Quando non c'era" className="mt-5 grid gap-4 rounded-card border border-slate-200 p-4 dark:border-darkmode-400">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <Lucide icon="CalendarX" aria-hidden="true" className="h-4 w-4 text-rose-600 dark:text-rose-400" />
+          Quando non c'era
+        </h3>
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          <strong className="text-2xl font-semibold tabular-nums text-rose-700 dark:text-rose-300">{formatNumero(assenze.length)}</strong>{" "}
+          {testoVolantiniSu(assenze.length)} su {formatNumero(volantini)} della sua insegna e area senza il punto vendita
+        </p>
+      </div>
+      <StrisciaCalendarioPresenze striscia={strisciaCalendario(edizioni, assenze, intervallo)} />
+      {ultimaAssente && <AvvisoUltimoVolantino assenza={ultimaAssente} />}
+      <AssenzeFraISuoi assenze={fraISuoi} puoAprire={puoConsultareVolantini} />
+      <AssenzePrimaDelPrimo assenze={primaDelPrimo} puoAprire={puoConsultareVolantini} />
     </section>
   );
 }
@@ -231,7 +467,13 @@ function TimelineStoria({
       ) : (
         <EmptyState compatta icon="CalendarX" title="Nessun volantino in questo anno" description="Scegli un altro anno o tutto il periodo." />
       )}
-      <AssenzeDelPeriodo assenze={assenze} volantini={edizioni.length} />
+      <AssenzeDelPeriodo
+        assenze={assenze}
+        edizioni={edizioni}
+        primoDelPv={analisi.timeline[0]?.dal ?? null}
+        ultimaAssente={assenzaDallUltimo(analisi.timeline, analisi.assenze)}
+        intervallo={intervalloPeriodo(contesto.periodo, edizioni, contesto.oggi)}
+      />
     </>
   );
 }

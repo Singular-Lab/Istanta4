@@ -15,11 +15,15 @@ interface FiltroChipProps {
   attivo: string;
   onScegli: (id: string) => void;
   colore?: (id: string) => string;
+  /** Il numero accanto a "tutti", quando le voci si sovrappongono e la somma non lo darebbe. */
+  totaleTutti?: number;
+  /** "assenza": la voce scelta in rosa, il colore delle assenze, invece che nel colore del tema. */
+  tono?: "tema" | "assenza";
   className?: string;
 }
 
 /** Una riga di chip: "Tutte" e una voce per canale o area, ciascuna col numero di punti vendita. */
-export function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore, className }: FiltroChipProps) {
+export function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore, totaleTutti, tono = "tema", className }: FiltroChipProps) {
   const chip = (id: string, testo: string, totale: number) => (
     <button
       key={id || "tutti"}
@@ -30,7 +34,9 @@ export function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore, c
         "inline-flex h-7 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-xs transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40",
         attivo === id
-          ? "border-primary bg-primary/10 font-medium text-primary"
+          ? tono === "assenza" && id
+            ? "border-rose-500 bg-rose-50 font-medium text-rose-700 dark:border-rose-400 dark:bg-rose-400/10 dark:text-rose-300"
+            : "border-primary bg-primary/10 font-medium text-primary"
           : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-darkmode-400 dark:text-slate-300 dark:hover:bg-darkmode-400"
       )}
     >
@@ -42,7 +48,7 @@ export function FiltroChip({ etichetta, tutti, voci, attivo, onScegli, colore, c
 
   return (
     <div role="group" aria-label={etichetta} className={twMerge("flex flex-wrap items-center gap-1.5", className)}>
-      {chip("", tutti, voci.reduce((somma, v) => somma + v.totale, 0))}
+      {chip("", tutti, totaleTutti ?? voci.reduce((somma, v) => somma + v.totale, 0))}
       {voci.map(v => chip(v.id, v.nome, v.totale))}
     </div>
   );
@@ -55,6 +61,8 @@ export interface FiltriPuntiVenditaProps<T extends PuntoVenditaInElenco> {
   placeholder?: string;
   /** A destra della barra, per esempio la scelta fra tabella e mappa. */
   destra?: ReactNode;
+  /** Un'altra riga di filtri sotto le insegne, per esempio le assenze della consultazione. */
+  sotto?: ReactNode;
 }
 
 /**
@@ -69,6 +77,7 @@ export function FiltriPuntiVendita<T extends PuntoVenditaInElenco>({
   aggiornamento = false,
   placeholder = "Nome, città, indirizzo o codice",
   destra,
+  sotto,
 }: FiltriPuntiVenditaProps<T>) {
   const campoScelto = elenco.campiRicerca.find(c => c.campo === elenco.campoRicerca);
   return (
@@ -134,6 +143,7 @@ export function FiltriPuntiVendita<T extends PuntoVenditaInElenco>({
           colore={elenco.coloreDelCanale}
         />
       )}
+      {sotto}
     </div>
   );
 }

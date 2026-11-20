@@ -437,18 +437,29 @@ describe('assenze nella scheda del PV', () => {
     { idKit: 'k-assente-2', data: '2022-02-03', dal: '2022-02-03', al: null, promo: { id: 'p-a2', nome: 'Promo A2' } },
   ];
 
-  it('i volantini della combinazione attuale del PV senza il PV, dopo la sua prima apparizione, qualunque sia il periodo', async () => {
+  it('i volantini della combinazione attuale del PV senza il PV, qualunque sia il periodo', async () => {
     const { servizio, storia } = creaServizio({ puntoVendita: CON_COMBINAZIONE, assenze: ASSENZE });
 
     const analisi = await servizio.analisi(PV, GDO, { dal: '2022-01-10', al: '2022-01-15' });
 
     expect(storia.volantiniSenzaPuntoVendita).toHaveBeenCalledWith({
-      idPuntoVendita: PV, idGdo: GDO, idCanale: 'SS', idArea: 'LI', dopo: '2022-01-06',
+      idPuntoVendita: PV, idGdo: GDO, idCanale: 'SS', idArea: 'LI',
     });
     expect(analisi.assenze).toEqual([
       { idKit: 'k-assente-1', dal: '2022-01-27', al: '2022-02-02', promo: { id: 'p-a1', nome: 'Promo A1' } },
       { idKit: 'k-assente-2', dal: '2022-02-03', al: null, promo: { id: 'p-a2', nome: 'Promo A2' } },
     ]);
+  });
+
+  it('anche le assenze prima della sua prima apparizione, con il loro anno fra gli anni della scheda', async () => {
+    const prima: VolantinoSenzaPuntoVendita = { idKit: 'k-assente-0', data: '2021-12-09', dal: '2021-12-09', al: '2021-12-22', promo: { id: 'p-a0', nome: 'Promo A0' } };
+    const { servizio, storia } = creaServizio({ puntoVendita: CON_COMBINAZIONE, assenze: [prima, ...ASSENZE] });
+
+    const analisi = await servizio.analisi(PV, GDO);
+
+    expect(storia.volantiniSenzaPuntoVendita.mock.calls[0][0]).not.toHaveProperty('dopo');
+    expect(analisi.assenze.map(assenza => assenza.idKit)).toEqual(['k-assente-0', 'k-assente-1', 'k-assente-2']);
+    expect(analisi.anni[0]).toBe(2021);
   });
 
   it('un PV senza combinazione canale/area, o mai stampato, non ha assenze', async () => {

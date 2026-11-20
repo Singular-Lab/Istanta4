@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { tintaCategoria, TINTA_NEUTRA } from "@/components/Grafici";
+import dayjs from "dayjs";
 import { describe, expect, it, vi } from "vitest";
 import type { EdizioneTimeline } from "../../../lib/puntiVendita/analisi";
 import type { PeriodoRecapito } from "../../../lib/puntiVendita/storia";
@@ -7,6 +8,9 @@ import type { PeriodoRecapito } from "../../../lib/puntiVendita/storia";
 vi.mock("@/query/query", () => ({ useFetchReteInsegne: () => ({ data: undefined }) }));
 
 import {
+  assenzaDallUltimo,
+  assenzeDellaStoria,
+  assenzePerAnno,
   assenzeTimeline,
   barreTimeline,
   contestoPeriodo,
@@ -33,6 +37,7 @@ import {
   repartiInBarre,
   righeRecapiti,
   sintesiPeriodo,
+  strisciaCalendario,
   tintaBox,
   tintaMeccanica,
   tinteCanali,
@@ -219,6 +224,90 @@ describe("timeline della scheda", () => {
       ["rombo", "2022-09-12", "Nuovo indirizzo"],
       ["croce", "2026-02-01", "Non compare più"],
     ]);
+  });
+});
+
+describe("assenze della Storia", () => {
+  const assente = (idKit: string, dal: string) => ({ idKit, dal, al: null, promo: { id: `p-${idKit}`, nome: `Promo ${idKit}` } });
+  const EDIZIONI = [edizione("k1", "2025-03-03"), edizione("k2", "2025-10-06")];
+
+  it("divide le assenze fra quelle dopo il suo primo volantino e quelle prima, dalla più recente, e conta i volantini del periodo", () => {
+    const divise = assenzeDellaStoria(EDIZIONI, [assente("a0", "2024-11-04"), assente("a1", "2025-06-02"), assente("a2", "2025-12-01"), assente("a00", "2024-06-03")], "2025-03-03");
+
+    expect(divise.fraISuoi.map(a => a.idKit)).toEqual(["a2", "a1"]);
+    expect(divise.primaDelPrimo.map(a => a.idKit)).toEqual(["a0", "a00"]);
+    expect(divise.volantini).toBe(6);
+  });
+
+  it("per anno, dal più recente, e dentro l'anno dalla più recente", () => {
+    const anni = assenzePerAnno([assente("a1", "2024-03-07"), assente("a2", "2026-02-05"), assente("a3", "2024-11-14"), assente("a4", "2026-09-10")]);
+
+    expect(anni.map(({ anno, assenze }) => [anno, assenze.map(a => a.idKit)])).toEqual([
+      [2026, ["a4", "a2"]],
+      [2024, ["a3", "a1"]],
+    ]);
+  });
+
+  it("senza il suo primo volantino nessuna assenza è prima", () => {
+    expect(assenzeDellaStoria([], [assente("a1", "2025-06-02")], null).primaDelPrimo).toEqual([]);
+  });
+
+  it("l'ultimo volantino della sua insegna e area senza il punto vendita: solo se più nuovo dell'ultimo in cui c'è", () => {
+    expect(assenzaDallUltimo(EDIZIONI, [assente("a1", "2025-06-02"), assente("a2", "2025-12-01")])?.idKit).toBe("a2");
+    expect(assenzaDallUltimo(EDIZIONI, [assente("a1", "2025-06-02")])).toBeNull();
+    // Lo stesso giorno dell'ultimo in cui c'è: non manca dall'ultimo
+    expect(assenzaDallUltimo(EDIZIONI, [assente("a3", "2025-10-06")])).toBeNull();
+    expect(assenzaDallUltimo(EDIZIONI, [])).toBeNull();
+  });
+});
+
+describe("striscia del calendario delle assenze", () => {
+  const assente = (dal: string) => ({ idKit: `a-${dal}`, dal, al: null, promo: { id: `p-${dal}`, nome: `Promo ${dal}` } });
+
+  it("un riquadro per mese, con tre stati: senza volantini, c'era in tutti, mancava da almeno uno", () => {
+    // Da settembre ad aprile: più di 6 mesi, quindi per mese
+    const striscia = strisciaCalendario(
+      [edizione("k1", "2025-09-29"), edizione("k2", "2026-02-05"), edizione("k3", "2026-02-19")],
+      [assente("2026-02-12"), assente("2026-04-02")]
+    );
+
+    expect(striscia.passo).toBe("mese");
+    expect(striscia.tratti.map(t => [t.inizio, t.volantini, t.mancanti])).toEqual([
+      ["2025-09-01", 1, 0],
+      ["2025-10-01", 0, 0],
+      ["2025-11-01", 0, 0],
+      ["2025-12-01", 0, 0],
+      ["2026-01-01", 0, 0],
+      ["2026-02-01", 3, 1],
+      ["2026-03-01", 0, 0],
+      ["2026-04-01", 1, 1],
+    ]);
+    expect(striscia.tratti[5]).toMatchObject({ etichetta: "feb 2026", gruppo: "2026" });
+  });
+
+  it("per settimana, da lunedì, quando il periodo dura al più 6 mesi, anche col cambio dell'ora legale", () => {
+    const striscia = strisciaCalendario([edizione("k1", "2026-10-22")], [assente("2026-10-29")], { dal: "2026-10-19", al: "2026-11-08" });
+
+    expect(striscia.passo).toBe("settimana");
+    expect(striscia.tratti.map(t => [t.inizio, t.volantini, t.mancanti])).toEqual([
+      ["2026-10-19", 1, 0],
+      ["2026-10-26", 1, 1],
+      ["2026-11-02", 0, 0],
+    ]);
+    expect(striscia.tratti[1]).toMatchObject({ etichetta: "settimana del 26 ott 2026", gruppo: "ott 2026" });
+  });
+
+  it("con 333 volantini in 5 anni i riquadri sono i mesi, non i volantini", () => {
+    const edizioni = Array.from({ length: 333 }, (_, i) => edizione(`k${i}`, dayjs("2021-01-04").add(i * 5, "day").format("YYYY-MM-DD")));
+
+    const striscia = strisciaCalendario(edizioni, [assente("2023-07-10")]);
+
+    expect(striscia.tratti).toHaveLength(55);
+    expect(striscia.tratti.reduce((somma, t) => somma + t.volantini, 0)).toBe(334);
+  });
+
+  it("senza volantini non ha riquadri", () => {
+    expect(strisciaCalendario([], []).tratti).toEqual([]);
   });
 });
 

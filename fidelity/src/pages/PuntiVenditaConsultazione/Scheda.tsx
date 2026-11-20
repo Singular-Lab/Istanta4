@@ -1,5 +1,6 @@
 import Badge from "@/components/Base/Badge";
 import Button from "@/components/Base/Button";
+import { FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
@@ -46,9 +47,13 @@ import { VolantiniAttivi } from "./VolantiniAttivi";
 /** Oltre tanti giorni di storia la scelta comprende gli ultimi 12 mesi: prima sarebbero tutto il periodo. */
 const GIORNI_PER_ULTIMI_12_MESI = 400;
 
+/** Oltre tanti anni, gli anni passano in una tendina: i bottoni scorrerebbero fuori dalla scheda. */
+export const MASSIMO_ANNI_A_BOTTONI = 5;
+
 /**
  * La scelta del periodo, per tutta la scheda: dal primo anno, ogni anno, gli ultimi 12 mesi (con più
- * di un anno di storia) e gli ultimi 3 mesi. Cambiandolo si torna al volantino più recente del periodo.
+ * di un anno di storia) e gli ultimi 3 mesi. Con più di MASSIMO_ANNI_A_BOTTONI anni, gli anni stanno
+ * in una tendina accanto ai bottoni. Cambiandolo si torna al volantino più recente del periodo.
  */
 function SceltaPeriodo({
   contesto,
@@ -63,20 +68,35 @@ function SceltaPeriodo({
 }) {
   const primoAnno = Number(primoVolantino.slice(0, 4));
   const lunga = dayjs(contesto.oggi).diff(dayjs(primoVolantino), "day") > GIORNI_PER_ULTIMI_12_MESI;
+  // Con un anno solo, l'anno e "Dal" sarebbero lo stesso periodo
+  const anniDaScegliere = anni.length > 1 ? anni : [];
+  const anniInTendina = anniDaScegliere.length > MASSIMO_ANNI_A_BOTTONI;
+  const annoScelto = typeof contesto.periodo === "number" ? String(contesto.periodo) : "";
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Segmenti
         etichetta="Periodo"
         opzioni={[
           { valore: "tutti", etichetta: `Dal ${primoAnno}` },
-          // Con un anno solo, l'anno e "Dal" sarebbero lo stesso periodo
-          ...(anni.length > 1 ? anni.map(a => ({ valore: String(a), etichetta: String(a) })) : []),
+          ...(anniInTendina ? [] : anniDaScegliere.map(a => ({ valore: String(a), etichetta: String(a) }))),
           ...(lunga ? [{ valore: ULTIMI_12_MESI, etichetta: "Ultimi 12 mesi" }] : []),
           { valore: ULTIMI_3_MESI, etichetta: "Ultimi 3 mesi" },
         ]}
         valore={contesto.periodo === null ? "tutti" : String(contesto.periodo)}
         onChange={valore => onCambia(valore === "tutti" ? null : valore)}
       />
+      {anniInTendina && (
+        <FormSelect aria-label="Anno" className="w-36" value={annoScelto} onChange={evento => onCambia(evento.target.value || null)}>
+          <option value="" disabled={annoScelto === ""}>
+            Un anno…
+          </option>
+          {anniDaScegliere.map(a => (
+            <option key={a} value={String(a)}>
+              {a}
+            </option>
+          ))}
+        </FormSelect>
+      )}
     </div>
   );
 }
@@ -208,7 +228,8 @@ function SchedaPuntoVendita() {
   const analisi = useFetchAnalisiPuntoVendita(id, periodoAnalisi(periodo, oggi));
   const pv = query.data;
   const timeline = analisi.data?.timeline;
-  const primoVolantino = timeline?.[0]?.dal ?? null;
+  // La storia parte dal primo volantino della sua insegna e area, anche se il PV allora mancava
+  const primoVolantino = [timeline?.[0]?.dal, analisi.data?.assenze[0]?.dal].filter((data): data is string => Boolean(data)).sort()[0] ?? null;
   const contesto = contestoPeriodo(periodo, primoVolantino, oggi);
   const anni = [...(analisi.data?.anni ?? [])].sort((a, b) => b - a);
 

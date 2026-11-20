@@ -374,6 +374,48 @@ describeConDatabase('AnalisiPuntiVenditaRepository', () => {
     expect(await new ConsultazionePuntiVenditaRepository().puntiVenditaConCambioInsegna(idGdo)).toEqual([cambiato]);
   });
 
+  it('assenze per l\'elenco: volantini con la lista della combinazione del PV dalla finestra e dalla prima comparsa, presenze, assenza dall\'ultimo', async () => {
+    const x1 = await creaKitRuntime({ validitaDal: giorno('2026-01-08') });
+    const idGdo = x1.idGdo;
+    const x2 = await creaKitRuntime({ stessaCombinazioneDi: x1, idGdo, validitaDal: giorno('2026-01-22') });
+    const x3 = await creaKitRuntime({ stessaCombinazioneDi: x1, idGdo, validitaDal: giorno('2026-02-05') });
+    // Lista non registrata: non conta, anche se e' il piu' recente
+    await creaKitRuntime({ stessaCombinazioneDi: x1, idGdo, validitaDal: giorno('2026-02-19') });
+    // Un'altra area con la stessa lista: non conta ne' fra i volantini ne' fra le presenze
+    const z1 = await creaKitRuntime({ idGdo, validitaDal: giorno('2026-02-05') });
+
+    const combo = await creaCombinazione(x1);
+    const pisa = await creaPuntoVendita(x1, combo, { citta: 'Pisa', indirizzo: 'Via Pisa 1', telefono: '050 1111111' });
+    const lucca = await creaPuntoVendita(x1, combo, { citta: 'Lucca', indirizzo: 'Via Lucca 2', telefono: '0583 2222222' });
+    await creaPuntoVendita(x1, combo, { citta: 'Prato', indirizzo: 'Via Prato 3', telefono: '0574 3333333' });
+    const PISA = { localita: 'PISA', indirizzo: 'Via Pisa 1', telefono: '050 1111111' };
+    const LUCCA = { localita: 'LUCCA', indirizzo: 'Via Lucca 2', telefono: '0583 2222222' };
+    const liste: Array<[KitDiProva, Array<typeof PISA>]> = [
+      [x1, [LUCCA]], [x2, [PISA, LUCCA]], [x3, [LUCCA]], [z1, [PISA]],
+    ];
+    for (const [kit, righe] of liste) {
+      await storia.sostituisciRigheKit(kit.idRuntime, righe.map((dati, i) => riga(kit, i + 1, dati)));
+    }
+    const perLocalita: Record<string, string> = { PISA: pisa, LUCCA: lucca };
+    const daAbbinare = await storia.righeDaRiabbinare(idGdo);
+    await storia.aggiornaAbbinamenti(daAbbinare.map(r => ({ id: r.id, idPuntoVendita: perLocalita[r.localita as string], abbinamento: 'telefono' as const })));
+
+    const consultazione = new ConsultazionePuntiVenditaRepository();
+    const perPv = async (dal: string) => new Map((await consultazione.assenzeInElenco(idGdo, dal)).map(r => [r.id_punto_vendita, r]));
+
+    // Pisa c'e' solo il 22 gennaio: l'8 gennaio, prima della sua prima comparsa, non conta; manca dall'ultimo.
+    // Lucca c'e' sempre. Prato non compare mai: nessuna riga
+    const tutte = await perPv('2025-01-01');
+    expect(tutte.get(pisa)).toEqual({ id_punto_vendita: pisa, volantini: 2, presenze: 1, assente_ultimo: true });
+    expect(tutte.get(lucca)).toEqual({ id_punto_vendita: lucca, volantini: 3, presenze: 3, assente_ultimo: false });
+    expect(tutte.size).toBe(2);
+
+    // Dal 30 gennaio: solo il volantino del 5 febbraio
+    const recenti = await perPv('2026-01-30');
+    expect(recenti.get(pisa)).toMatchObject({ volantini: 1, presenze: 0, assente_ultimo: true });
+    expect(recenti.get(lucca)).toMatchObject({ volantini: 1, presenze: 1, assente_ultimo: false });
+  });
+
   it('combinazioni dei volantini: storico e produzione, una volta sola; non POP, kit o promo eliminati, altre GDO', async () => {
     const storico = await creaKitRuntime({ statoPromo: 'ARCHIVIATA' });
     const idGdo = storico.idGdo;

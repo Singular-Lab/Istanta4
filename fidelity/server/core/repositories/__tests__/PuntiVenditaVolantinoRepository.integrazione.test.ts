@@ -363,6 +363,29 @@ describeConDatabase('PuntiVenditaVolantinoRepository', () => {
     }]);
   });
 
+  it('senza la data, anche i volantini precedenti della stessa insegna e area senza il PV', async () => {
+    const primo = await creaKitRuntime({ validitaDal: giorno('2022-01-06') });
+    const prima = await creaKitRuntime({
+      stessaCombinazioneDi: primo, validitaDal: giorno('2021-12-09'), validitaAl: giorno('2021-12-22'), nomePromo: 'Promo del 9 dicembre',
+    });
+    const dopo = await creaKitRuntime({
+      stessaCombinazioneDi: primo, validitaDal: giorno('2022-01-13'), validitaAl: giorno('2022-01-19'), nomePromo: 'Promo del 13 gennaio',
+    });
+    const combinazione = await creaCombinazione(primo);
+    const pra = await creaPuntoVendita(primo, combinazione, { citta: 'Genova', indirizzo: 'Via Murtola 12/14' });
+    for (const kit of [prima, dopo]) {
+      await repository.sostituisciRigheKit(kit.idRuntime, [riga(kit, 1, { localita: 'STRUPPA', indirizzo: 'Via Trossarelli 1/F' })]);
+    }
+    const criteri = { idPuntoVendita: pra, idGdo: primo.idGdo, idCanale: primo.idCanale, idArea: primo.idArea };
+
+    expect((await repository.volantiniSenzaPuntoVendita(criteri)).map(v => [v.idKit, v.dal, v.promo.nome])).toEqual([
+      [prima.idRuntime, '2021-12-09', 'Promo del 9 dicembre'],
+      [dopo.idRuntime, '2022-01-13', 'Promo del 13 gennaio'],
+    ]);
+    // Con la data restano le sole edizioni successive (la storia dell'elenco)
+    expect((await repository.volantiniSenzaPuntoVendita({ ...criteri, dopo: '2022-01-06' })).map(v => v.idKit)).toEqual([dopo.idRuntime]);
+  });
+
   it('volantini del PV dal piu\' recente, a pagine, solo nella combinazione corrente, col PDF e le referenze', async () => {
     const vecchio = await creaKitRuntime({ validitaDal: giorno('2022-01-06'), titolo: 'SS LI vecchio' });
     const recente = await creaKitRuntime({ stessaCombinazioneDi: vecchio, validitaDal: giorno('2023-05-04'), titolo: 'SS LI recente' });

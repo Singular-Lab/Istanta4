@@ -508,14 +508,116 @@ describe("Scheda del punto vendita", () => {
     expect(within(timeline).queryByText(/^Indirizzo stampato/)).not.toBeInTheDocument();
   });
 
-  it("Storia: quando non c'era, con i volantini della sua insegna e area senza il punto vendita, apribili", () => {
+  it("Storia: quando non c'era, con quanti su quanti, la striscia per mese e le assenze dell'anno apribili", () => {
     apri();
 
     const assenze = within(sezione("Storia")).getByRole("region", { name: "Quando non c'era" });
-    expect(assenze).toHaveTextContent("Manca da 1 volantino su 4 della sua insegna e area");
-    expect(assenze).toHaveTextContent("Promo assente");
-    expect(assenze).toHaveTextContent("2 – 15 giugno 2025");
-    expect(within(assenze).getByRole("link", { name: "Apri il volantino Promo assente" })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=a1");
+    expect(assenze).toHaveTextContent("1 volantino su 4 della sua insegna e area senza il punto vendita");
+    // La striscia va per mese, da marzo 2025 a ottobre 2026: giugno 2025 ha l'assenza
+    const striscia = within(assenze).getByRole("img", { name: "20 mesi del periodo, 1 con almeno un volantino senza il punto vendita" });
+    const tratti = [...striscia.querySelectorAll("[data-tratto]")];
+    expect(tratti).toHaveLength(20);
+    expect(tratti[0]).toHaveAttribute("data-tratto", "presente");
+    expect(tratti[1]).toHaveAttribute("data-tratto", "vuoto");
+    expect(tratti[3]).toHaveAttribute("data-tratto", "assente");
+    expect(tratti[3]).toHaveAttribute("title", "giu 2025 · 1 su 1 senza il punto vendita");
+    // Per anno, aperto il più recente con le sue assenze
+    const fraISuoi = within(assenze).getByRole("group", { name: "Assenze fra i suoi volantini" });
+    expect(within(fraISuoi).getByRole("button", { name: "2025 1 assenza" })).toHaveAttribute("aria-expanded", "true");
+    const del2025 = within(fraISuoi).getByRole("list", { name: "Assenze del 2025" });
+    expect(del2025).toHaveTextContent("Promo assente");
+    expect(del2025).toHaveTextContent("2 – 15 giugno 2025");
+    expect(within(del2025).getByRole("link", { name: "Apri il volantino Promo assente" })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=a1");
+    // L'ultimo volantino lo stampa: nessun avviso, nessun gruppo prima del primo volantino
+    expect(within(assenze).queryByRole("note")).not.toBeInTheDocument();
+    expect(within(assenze).queryByRole("button", { name: /Prima del suo primo volantino/ })).not.toBeInTheDocument();
+  });
+
+  it("Storia: le assenze prima della sua prima comparsa stanno a parte, chiuse, e il periodo parte da lì", () => {
+    const prima = { idKit: "a0", dal: "2024-11-04", al: "2024-11-17", promo: { id: "pa0", nome: "Promo prima" } };
+    finti.analisi = caricato({ ...ANALISI, assenze: [prima, ...ANALISI.assenze], anni: [2024, 2025, 2026] });
+    apri();
+
+    expect(screen.getAllByRole("radio").map(r => r.textContent)).toEqual(["Dal 2024", "2026", "2025", "2024", "Ultimi 12 mesi", "Ultimi 3 mesi"]);
+    const assenze = within(sezione("Storia")).getByRole("region", { name: "Quando non c'era" });
+    expect(assenze).toHaveTextContent("2 volantini su 5 della sua insegna e area senza il punto vendita");
+    expect(within(assenze).getByRole("group", { name: "Assenze fra i suoi volantini" })).not.toHaveTextContent("Promo prima");
+    const gruppo = within(assenze).getByRole("button", { name: "Prima del suo primo volantino 1" });
+    expect(gruppo).toHaveAttribute("aria-expanded", "false");
+    expect(within(assenze).queryByRole("link", { name: "Apri il volantino Promo prima" })).not.toBeInTheDocument();
+
+    fireEvent.click(gruppo);
+
+    // Aperto, per anno e tutti gli anni chiusi
+    const anni = within(assenze).getByRole("group", { name: "Assenze prima del suo primo volantino" });
+    const del2024 = within(anni).getByRole("button", { name: "2024 1 assenza" });
+    expect(del2024).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(del2024);
+    expect(within(anni).getByRole("link", { name: "Apri il volantino Promo prima" })).toHaveAttribute("href", "/volantini/tutti_i_volantini?kit=a0");
+  });
+
+  it("Storia: in un anno in cui mancava soltanto, l'anno dice che non ci sono volantini e quando non c'era", () => {
+    const prima = { idKit: "a0", dal: "2024-11-04", al: "2024-11-17", promo: { id: "pa0", nome: "Promo prima" } };
+    finti.analisi = caricato({ ...ANALISI, assenze: [prima, ...ANALISI.assenze], anni: [2024, 2025, 2026] });
+    apri("/punti-vendita/pv1?anno=2024");
+
+    const storia = sezione("Storia");
+    expect(within(storia).getByText("Nessun volantino in questo anno")).toBeInTheDocument();
+    const assenze = within(storia).getByRole("region", { name: "Quando non c'era" });
+    expect(assenze).toHaveTextContent("1 volantino su 1 della sua insegna e area senza il punto vendita");
+    // L'anno intero, da gennaio a dicembre
+    expect(within(assenze).getByRole("img", { name: "12 mesi del periodo, 1 con almeno un volantino senza il punto vendita" })).toBeInTheDocument();
+    expect(within(assenze).getByRole("button", { name: "Prima del suo primo volantino 1" })).toBeInTheDocument();
+  });
+
+  it("Storia: se manca dall'ultimo volantino della sua insegna e area lo dice, con promo e validità, in ogni periodo", () => {
+    const ultimo = { idKit: "a9", dal: "2026-11-06", al: "2026-11-19", promo: { id: "pa9", nome: "Promo ultima" } };
+    finti.analisi = caricato({ ...ANALISI, assenze: [...ANALISI.assenze, ultimo] });
+    apri();
+
+    const assenze = within(sezione("Storia")).getByRole("region", { name: "Quando non c'era" });
+    expect(within(assenze).getByRole("note")).toHaveTextContent("Non c'è nell'ultimo volantino (Promo ultima, 6 – 19 novembre 2026)");
+    expect(within(within(assenze).getByRole("list", { name: "Assenze del 2026" })).getAllByRole("listitem").map(r => r.getAttribute("data-volantino-assente"))).toEqual(["a9"]);
+    // Il 2025 resta chiuso: aperto soltanto l'anno più recente
+    expect(within(assenze).getByRole("button", { name: "2025 1 assenza" })).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("Storia: con 333 volantini la striscia resta per mese e le assenze per anno, aperto il più recente", () => {
+    const giorno = (i: number) => {
+      const data = new Date(Date.UTC(2021, 0, 4 + i * 5));
+      return data.toISOString().slice(0, 10);
+    };
+    const timeline = Array.from({ length: 330 }, (_, i) => edizione(`v${i}`, giorno(i), giorno(i + 2), SUPERSTORE));
+    const mancanti = [40, 120, 121, 200, 280].map(i => ({ idKit: `m${i}`, dal: giorno(i), al: null, promo: { id: `pm${i}`, nome: `Promo mancante ${i}` } }));
+    // Le assenze cadono fra i volantini: spostate di un giorno per non coincidere con un volantino
+    const assenze = mancanti.map(a => ({ ...a, dal: new Date(Date.parse(a.dal) + 86_400_000).toISOString().slice(0, 10) }));
+    finti.analisi = caricato({ ...ANALISI, timeline, assenze, anni: [2021, 2022, 2023, 2024, 2025] });
+    apri();
+
+    const quando = within(sezione("Storia")).getByRole("region", { name: "Quando non c'era" });
+    expect(quando).toHaveTextContent("5 volantini su 335 della sua insegna e area senza il punto vendita");
+    const striscia = within(quando).getByRole("img", { name: /mesi del periodo/ });
+    expect(striscia).toHaveAttribute("data-passo", "mese");
+    expect(striscia.querySelectorAll("[data-tratto]")).toHaveLength(55);
+    const anni = within(within(quando).getByRole("group", { name: "Assenze fra i suoi volantini" })).getAllByRole("button");
+    expect(anni.map(b => [b.textContent, b.getAttribute("aria-expanded")])).toEqual([
+      ["2024 1 assenza", "true"],
+      ["2023 1 assenza", "false"],
+      ["2022 2 assenze", "false"],
+      ["2021 1 assenza", "false"],
+    ]);
+    // Le righe aperte sono solo quelle dell'anno più recente
+    expect(within(quando).getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("Periodo: con più di 5 anni gli anni stanno in una tendina accanto ai bottoni", () => {
+    finti.analisi = caricato({ ...ANALISI, anni: [2020, 2021, 2022, 2023, 2024, 2025, 2026] });
+    apri("/punti-vendita/pv1?anno=2023");
+
+    expect(screen.getAllByRole("radio").map(r => r.textContent)).toEqual(["Dal 2025", "Ultimi 12 mesi", "Ultimi 3 mesi"]);
+    const anno = screen.getByRole("combobox", { name: "Anno" });
+    expect(anno).toHaveValue("2023");
+    expect([...anno.querySelectorAll("option")].map(o => o.textContent)).toEqual(["Un anno…", "2026", "2025", "2024", "2023", "2022", "2021", "2020"]);
   });
 
   it("Storia: in un periodo senza assenze l'elenco di quando non c'era non compare", () => {

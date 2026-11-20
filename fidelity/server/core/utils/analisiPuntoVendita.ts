@@ -239,7 +239,7 @@ function edizioneTimeline(
 export interface OpzioniSchedaPuntoVendita {
   /** Il periodo di numeri, marche, prodotti e copertura; null (o assente) per tutta la storia. */
   periodo?: PeriodoAnalisi | null;
-  /** I volantini della combinazione del PV, dopo la sua prima apparizione, in cui il PV non c'e'. */
+  /** I volantini della combinazione del PV in cui il PV non c'e', anche prima della sua prima apparizione. */
   assenze?: readonly VolantinoSenzaPuntoVendita[];
   /**
    * Il nome da mostrare per un reparto dei riepiloghi salvati (descrizione, sigla o "Reparto NN"):
@@ -269,7 +269,8 @@ export function calcolaAnalisiPuntoVendita(
   const nomeReparto = opzioni.nomeReparto ?? (reparto => reparto);
   const lineaDellaMarca = opzioni.lineaDellaMarca ?? null;
   const timeline = edizioni.map(edizione => edizioneTimeline(edizione, aggregatiDelKit(aggregati, edizione.idKit), oggi, nomeReparto));
-  const anni = [...new Set(timeline.map(edizione => annoDi(edizione.dal)))].sort((a, b) => a - b);
+  // Anche gli anni delle sole assenze: si sceglie l'anno in cui il PV mancava
+  const anni = [...new Set([...timeline, ...(opzioni.assenze ?? [])].map(volantino => annoDi(volantino.dal)))].sort((a, b) => a - b);
 
   const insegne = new Map<string, RiferimentoStoria>();
   const copertura = { conCodice: 0, conReparto: 0, conPrezzo: 0, conMarca: 0 };
