@@ -24,6 +24,9 @@ const finti = vi.hoisted(() => ({
   propVolantino: [] as string[],
   propAnalisi: null as { isLoading?: boolean } | null,
   scarica: vi.fn(),
+  /** I volantini della promozione per la tendina, e le promo chieste. */
+  volantiniPromo: { data: undefined } as Record<string, unknown>,
+  idPromoRichiesti: [] as Array<string | undefined>,
 }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
@@ -43,6 +46,10 @@ vi.mock("@/query/consultazione", () => ({
     finti.richiestaFile = { idKit, abilitata };
     return finti.file;
   },
+  useVolantiniPromozione: (idPromo: string | undefined) => {
+    finti.idPromoRichiesti.push(idPromo);
+    return finti.volantiniPromo;
+  },
 }));
 vi.mock("@/utils/scaricaFileConsultazione", () => ({
   useScaricaFileConsultazione: () => ({ inCorso: null, scarica: finti.scarica }),
@@ -55,7 +62,7 @@ vi.mock("@/components/FlyerInsights/report", () => ({
     </button>
   ),
 }));
-// Le sezioni Reparti e Meccaniche e sconti hanno i loro test
+// Le sezioni Reparti e Meccaniche hanno i loro test
 vi.mock("@/components/FlyerInsights", () => ({
   FlyerInsights: (props: { insights: { guidIdKitRuntime: string } | null; isLoading?: boolean }) => {
     finti.propAnalisi = props;
@@ -328,13 +335,14 @@ describe("Dettaglio del volantino", () => {
     expect(document.querySelector("[data-direzione]")).toBeNull();
   });
 
-  it("i numeri chiave in riquadri: referenze, pagine, sconto e Prezzo Fidelity, senza sottocosto e marche", () => {
+  it("i numeri chiave in riquadri: referenze, pagine e Prezzo Fidelity, senza sconto medio, sottocosto e marche", () => {
     apri();
 
     expect(numero("Referenze")).toHaveTextContent("4");
     expect(numero("Referenze")).toHaveTextContent("3 box");
     expect(numero("Pagine")).toHaveTextContent("8");
-    expect(numero("Sconto medio")).toHaveTextContent("30%");
+    // TASK-26449b2d: lo sconto medio non è più fra i numeri chiave
+    expect(within(numeri()).queryByText("Sconto medio")).not.toBeInTheDocument();
     expect(numero("Prezzo Fidelity")).toHaveTextContent("33,3%");
     expect(numero("Prezzo Fidelity")).toHaveTextContent("1 box");
     expect(within(numeri()).queryByText("Sottocosto")).not.toBeInTheDocument();
@@ -662,5 +670,126 @@ describe("Dettaglio del volantino: Scarica il volantino", () => {
     const ALTRO_PDF = { ...WEB, id: "f4", nome: "Locandina.pdf", tipoExport: "POP", mime: "application/pdf" };
     const VOL_ZIP = { ...WEB, id: "f5", nome: "Sorgenti.zip", tipoExport: "VOL" };
     expect(fileInOrdine([WEB, ALTRO_PDF, VOL_ZIP, VOL]).map(voce => voce.nome)).toEqual(["Roma.pdf", "Sorgenti.zip", "Locandina.pdf", "Banner web.zip"]);
+  });
+});
+
+const VOLANTINI_PROMO = {
+  promo: { id: "p1", nome: "Ottobre 2020", validitaDal: "2020-01-01", validitaAl: "2020-01-14" },
+  periodo: "storico",
+  volantini: [
+    { id: "k3", titolo: "VOL CITY", area: { id: "a-nord", nome: "Nord" }, canale: { id: "c-city", nome: "City" }, numeroFile: 1, numeroPuntiVendita: 4, copertina: null },
+    { id: "k1", titolo: "VOL SUPER", area: { id: "a-nord", nome: "Nord" }, canale: { id: "c-super", nome: "Super" }, numeroFile: 1, numeroPuntiVendita: 9, copertina: null },
+    { id: "k2", titolo: "VOL SUPER SUD", area: { id: "a-sud", nome: "Sud" }, canale: { id: "c-super", nome: "Super" }, numeroFile: 1, numeroPuntiVendita: 6, copertina: null },
+  ],
+  loghiInsegne: {},
+};
+
+const barraPromo = () => screen.getByRole("region", { name: "Promozione del volantino" });
+const tendina = () => within(barraPromo()).queryByRole("button", { name: /cambia volantino della promozione/ });
+const apriTendina = () => fireEvent.click(tendina() as HTMLElement);
+
+describe("Dettaglio del volantino: promozione e altri volantini", () => {
+  beforeEach(() => {
+    finti.permessi = new Set(["materiali.visualizza"]);
+    finti.insights = caricato({ ...datiInsight, contesto: { ...datiInsight.contesto, nomePromo: "Ottobre 2020" } });
+    finti.configurazione = caricato({});
+    finti.file = caricato(PUBBLICATO);
+    finti.volantiniPromo = caricato(VOLANTINI_PROMO);
+    finti.idPromoRichiesti = [];
+    finti.idKitRichiesti = [];
+  });
+
+  it("la promozione è sempre indicata, in grande, e il suo nome è la tendina per cambiare volantino", () => {
+    apri();
+
+    expect(finti.idPromoRichiesti).toContain("p1");
+    const promozione = tendina() as HTMLElement;
+    expect(promozione).toHaveTextContent("Ottobre 2020");
+    expect(promozione).toHaveAttribute("aria-label", "Ottobre 2020: cambia volantino della promozione");
+    expect(within(promozione).getByText("Ottobre 2020")).toHaveClass("text-xl", "font-bold");
+    // Il nome non porta al dettaglio della promozione: si cambia volantino da qui
+    expect(within(barraPromo()).queryByRole("link")).not.toBeInTheDocument();
+    expect(barraPromo()).toHaveTextContent("Promozione · 3 volantini in 2 insegne");
+    expect(barraPromo()).toHaveTextContent("Stai guardando Super · Nord");
+    // Nella barra, non nell'intestazione: il titolo resta insegna e area
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Super · Nord");
+  });
+
+  it("senza i volantini della promozione resta il nome, senza tendina", () => {
+    finti.volantiniPromo = { data: undefined, isLoading: false, isError: true, error: new Error("Promozione non disponibile") };
+    apri();
+
+    expect(within(barraPromo()).getByText("Ottobre 2020")).toBeInTheDocument();
+    expect(tendina()).not.toBeInTheDocument();
+  });
+
+  it("con un solo volantino nella promozione la tendina non c'è", () => {
+    finti.volantiniPromo = caricato({ ...VOLANTINI_PROMO, volantini: VOLANTINI_PROMO.volantini.filter(v => v.id === "k1") });
+    apri();
+
+    expect(within(barraPromo()).getByText("Ottobre 2020")).toBeInTheDocument();
+    expect(tendina()).not.toBeInTheDocument();
+  });
+
+  it("la tendina elenca i volantini della promozione per insegna, con copertina e area, e segna quello aperto", () => {
+    apri();
+    apriTendina();
+
+    const voci = screen.getAllByRole("menuitem");
+    expect(voci.map(voce => voce.getAttribute("aria-label"))).toEqual(["City · Nord", "Super · Nord, stai guardando", "Super · Sud"]);
+    expect(voci.map(voce => voce.textContent)).toEqual(["Nord", "NordQui", "Sud"]);
+    expect(voci[1]).toHaveAttribute("aria-current", "page");
+    expect(voci[0]).not.toHaveAttribute("aria-current");
+    // La miniatura della copertina: senza anteprima il foglio segnaposto
+    expect(voci[0]?.querySelector("[aria-hidden='true']")).not.toBeNull();
+    // Le insegne fanno da titolo ai gruppi
+    const pannello = screen.getByRole("menu");
+    expect(within(pannello).getByText("City")).toBeInTheDocument();
+    expect(within(pannello).getByText("Super")).toBeInTheDocument();
+    expect(within(pannello).getByText("3 volantini · 2 aree")).toBeInTheDocument();
+  });
+
+  // Ciclo 2: niente copertine a lato, tutta la barra è il comando della tendina
+  it("la barra è un comando solo, che occupa tutta la barra: niente copertine a lato", () => {
+    apri();
+
+    expect(within(barraPromo()).queryByRole("list", { name: "Altri volantini della promozione" })).not.toBeInTheDocument();
+    expect(within(barraPromo()).getAllByRole("button")).toEqual([tendina()]);
+    expect(tendina()).toHaveClass("w-full");
+    // Dentro il comando: copertina del volantino aperto, promozione, volantino guardato e "Cambia volantino"
+    expect(tendina()).toHaveTextContent("Ottobre 2020");
+    expect(tendina()).toHaveTextContent("Stai guardando Super · Nord");
+    expect(tendina()).toHaveTextContent("Cambia volantino");
+  });
+
+  it("scegliendo un altro volantino si apre la sua pagina, e Torna indietro riporta alla pagina di partenza", async () => {
+    const router = apriDa(["/storico-volantini?pagina=3", "/volantini/tutti_i_volantini?kit=k1"]);
+    apriTendina();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Sud/ }));
+
+    expect(router.state.location.search).toBe("?kit=k2");
+    expect(finti.idKitRichiesti).toContain("k2");
+    fireEvent.click(screen.getByRole("button", { name: "Torna indietro" }));
+
+    expect(await screen.findByRole("status", { name: "Indirizzo" })).toBeInTheDocument();
+    expect(indirizzo()).toBe("/storico-volantini?pagina=3");
+  });
+
+  it("aperto direttamente e passato a un altro volantino, il ritorno porta ancora al dettaglio della promozione", () => {
+    const router = apriDa(["/volantini/tutti_i_volantini?kit=k1"]);
+    apriTendina();
+    fireEvent.click(screen.getByRole("menuitem", { name: /City/ }));
+
+    expect(router.state.location.search).toBe("?kit=k3");
+    expect(screen.getByRole("link", { name: "Torna alla promozione" })).toHaveAttribute("href", "/volantini/promozioni/p1");
+    expect(screen.queryByRole("button", { name: "Torna indietro" })).not.toBeInTheDocument();
+  });
+
+  it("il volantino aperto nella tendina non ricarica la pagina", () => {
+    const router = apriDa(["/storico-volantini", "/volantini/tutti_i_volantini?kit=k1"]);
+    apriTendina();
+    fireEvent.click(screen.getByRole("menuitem", { name: /stai guardando/ }));
+
+    expect(router.state.location.search).toBe("?kit=k1");
   });
 });

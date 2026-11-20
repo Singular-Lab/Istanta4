@@ -31,7 +31,8 @@ function NonDisponibile() {
 }
 
 /**
- * Le analisi del volantino come sezioni della pagina, senza schede: Reparti e Meccaniche e sconti,
+ * Le analisi del volantino come sezioni della pagina, senza schede: Reparti (spazio e referenze, senza
+ * sconto medio) e Meccaniche (i box in sottocosto, senza fasce di sconto né sconto medio per meccanica),
  * affiancate sugli schermi larghi. La config della GDO puo' spegnere reparti e meccaniche (enabled:
  * false). Niente sezione delle marche con piu' spazio (spec insight-volantino, "Prezzi, sconti,
  * spazio e marche del volantino"): il numero delle marche e la quota del distributore stanno negli
@@ -92,17 +93,17 @@ const FlyerInsights: FC<FlyerInsightsProps> = ({ insights, isLoading = false, cl
       {(conReparti || conMeccaniche) && (
         <div className={clsx("grid grid-cols-1 items-start gap-6", conReparti && conMeccaniche && "lg:grid-cols-2")}>
           {conReparti && (
-            <Sezione titolo="Reparti" descrizione="Spazio, referenze e sconto medio di ogni reparto." className="min-w-0">
+            <Sezione titolo="Reparti" descrizione="Spazio e referenze di ogni reparto." className="min-w-0">
               {insights.spazio ? (
-                <RepartiVolantino perReparto={insights.spazio.perReparto} scontoPerReparto={insights.prezziSconti?.perReparto} copertura={copertura} />
+                <RepartiVolantino perReparto={insights.spazio.perReparto} copertura={copertura} />
               ) : (
                 <NonDisponibile />
               )}
             </Sezione>
           )}
           {conMeccaniche && (
-            <Sezione titolo="Meccaniche e sconti" descrizione="Fasce di sconto, sconto medio per meccanica e box in sottocosto." className="min-w-0">
-              {insights.prezziSconti ? <PrezziSconti prezziSconti={insights.prezziSconti} box={box} copertura={copertura} /> : <NonDisponibile />}
+            <Sezione titolo="Meccaniche" descrizione="I box in sottocosto." className="min-w-0">
+              {insights.prezziSconti ? <PrezziSconti prezziSconti={insights.prezziSconti} box={box} /> : <NonDisponibile />}
             </Sezione>
           )}
         </div>

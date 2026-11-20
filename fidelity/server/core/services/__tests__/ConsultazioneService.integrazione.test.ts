@@ -656,6 +656,29 @@ describeConDatabase('ConsultazioneService', () => {
     expect(idDi(incompatibili.opzioni.aree)).toEqual([a.idArea, b.idArea].sort());
   });
 
+  it('volantini della promozione per la tendina: i kit pubblicati del dettaglio, senza insight, solo della GDO', async () => {
+    const { a, b, c, ambito, idPromo } = await promoConTreKit();
+    // Non sono volantini pubblicati: non compaiono nella tendina
+    await creaKitRuntime({ promo: { idGdo: a.idGdo, idPromo }, titolo: 'In revisione', statoLavorazione: 'IN_REVISIONE' });
+    await creaKitRuntime({ promo: { idGdo: a.idGdo, idPromo }, titolo: 'Espositore', tipoLavorazione: 2 });
+    const altra = await creaKitRuntime({ nomePromo: 'Altrui' });
+
+    const volantini = await service.getVolantiniPromozione(idPromo, ambito);
+    const dettaglio = await service.getPromozioneVolantini(idPromo, ambito);
+
+    expect(volantini).toMatchObject({ promo: { id: idPromo, nome: 'Filtrata' }, periodo: 'attivi', loghiInsegne: {} });
+    // Gli stessi kit, nello stesso ordine, del dettaglio della promozione
+    expect(volantini.volantini.map(v => v.id)).toEqual(dettaglio.kit.map(k => k.id));
+    expect(volantini.volantini.map(v => v.id).sort()).toEqual([a.idRuntime, b.idRuntime, c.idRuntime].sort());
+    // Niente numeri degli insight: solo insegna, area e copertina di ogni volantino
+    expect(volantini.volantini[0]).not.toHaveProperty('referenze');
+    expect(volantini).not.toHaveProperty('assortimento');
+    senzaDatiDiLavorazione(volantini);
+    // Una promo di un'altra GDO non si trova; il Superadmin la vede
+    await expect(service.getVolantiniPromozione(altra.idPromo, ambito)).rejects.toBeInstanceOf(NotFoundError);
+    expect((await service.getVolantiniPromozione(altra.idPromo, 'tutte')).volantini).toHaveLength(1);
+  });
+
   it('dettaglio della promozione: un filtro che non e\' un UUID e\' rifiutato; una promo di un\'altra GDO resta non trovata anche con i filtri', async () => {
     const { a, idPromo, ambito } = await promoConTreKit();
     const altra = await creaKitRuntime({ nomePromo: 'Altrui' });

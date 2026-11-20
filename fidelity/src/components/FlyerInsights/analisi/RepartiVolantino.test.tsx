@@ -68,32 +68,14 @@ describe("RepartiVolantino", () => {
   });
 });
 
-describe("RepartiVolantino: sconto medio per reparto", () => {
-  it("mostra lo sconto medio di ogni reparto, dal più alto, senza i reparti senza sconto", () => {
-    render(
-      <RepartiVolantino
-        perReparto={REPARTI}
-        scontoPerReparto={[
-          { chiave: "01", etichetta: "Ortofrutta", box: 3, scontoMedio: 20 },
-          { chiave: "02", etichetta: "Latticini", box: 2, scontoMedio: 35 },
-          { chiave: "03", etichetta: "Surgelati", box: 1, scontoMedio: null },
-        ]}
-      />
-    );
-
-    expect(screen.getByRole("heading", { name: "Sconto medio per reparto" })).toBeInTheDocument();
-    const tabella = screen.getByRole("table", { name: "Sconto medio per reparto" });
-    expect(within(tabella).getAllByRole("rowheader").map(cella => cella.textContent)).toEqual(["Latticini", "Ortofrutta"]);
-    expect(within(tabella).getByText("35%")).toBeInTheDocument();
-  });
-
-  it("senza reparti con uno sconto lo dice; senza il dato dal server il blocco non c'è", () => {
-    const { unmount } = render(<RepartiVolantino perReparto={REPARTI} scontoPerReparto={[]} />);
-    expect(screen.getByText("Nessun reparto con uno sconto calcolabile.")).toBeInTheDocument();
-    unmount();
-
+describe("RepartiVolantino: niente sconto medio per reparto", () => {
+  // TASK-26449b2d: i reparti dicono spazio e referenze, senza sconti
+  it("mostra solo spazio e referenze, senza il blocco dello sconto medio per reparto", () => {
     render(<RepartiVolantino perReparto={REPARTI} />);
+
+    expect(screen.getByRole("heading", { name: "Spazio e referenze" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Sconto medio per reparto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Sconto medio per reparto" })).not.toBeInTheDocument();
   });
 });
 

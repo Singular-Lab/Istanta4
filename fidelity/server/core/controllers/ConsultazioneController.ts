@@ -111,6 +111,8 @@ export class ConsultazioneController extends BaseController {
     this.router.get('/volantini/promozioni', ...volantini, this.getPromozioniVolantini.bind(this));
     // Come gli insight del volantino, che riassume: con "materiali.visualizza" (contratto in lib/consultazione/tipi.ts)
     this.router.get('/volantini/promozioni/:idPromo', ...materiali, this.getPromozioneVolantini.bind(this));
+    // I volantini della promo per la tendina degli insight: gli stessi kit del dettaglio, senza i loro insight
+    this.router.get('/volantini/promozioni/:idPromo/volantini', ...materiali, this.getVolantiniPromozione.bind(this));
     this.router.get('/volantini/:idKit', ...volantini, this.getVolantino.bind(this));
 
     this.router.get('/pop/promozioni', ...materiali, this.getPromozioniPop.bind(this));
@@ -180,6 +182,10 @@ export class ConsultazioneController extends BaseController {
       };
       return this.consultazione.getPromozioneVolantini(req.params.idPromo, ambito, filtri);
     });
+  }
+
+  private getVolantiniPromozione(req: Request<{ idPromo: string }>, res: Response): Promise<void> {
+    return this.rispondi(req, res, ambito => this.consultazione.getVolantiniPromozione(req.params.idPromo, ambito));
   }
 
   private getVolantino(req: Request<{ idKit: string }>, res: Response): Promise<void> {

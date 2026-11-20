@@ -1,7 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DettaglioPromozioneVolantiniConsultazione } from '../../../../lib/consultazione/tipi';
+import type { DettaglioPromozioneVolantiniConsultazione, VolantiniPromozioneConsultazione } from '../../../../lib/consultazione/tipi';
 import { TIPO_UTENTI } from '../../../../lib/enums';
 import { NotFoundError } from '../../../../lib/errors';
 import type { IConsultazioneService } from '../../interfaces/IConsultazioneService';
@@ -40,6 +40,13 @@ import { ConsultazioneController } from '../ConsultazioneController';
 
 const ID = '7f4c2b1e-1d2a-4c3b-9e8f-0a1b2c3d4e5f';
 
+const VOLANTINI_PROMOZIONE: VolantiniPromozioneConsultazione = {
+  promo: { id: ID, nome: 'Volantino novembre', validitaDal: '2026-11-05', validitaAl: '2026-11-18' },
+  periodo: 'attivi',
+  volantini: [{ id: ID, titolo: 'VOL', area: { id: 'a1', nome: 'Liguria' }, canale: { id: 'c1', nome: 'Superstore' }, numeroFile: 1, numeroPuntiVendita: 12, copertina: null }],
+  loghiInsegne: {},
+};
+
 const DETTAGLIO_PROMOZIONE: DettaglioPromozioneVolantiniConsultazione = {
   promo: { id: 'PROMO-2026-45', nome: 'Volantino 45', validitaDal: '2026-11-05', validitaAl: '2026-11-18' },
   periodo: 'attivi',
@@ -58,6 +65,7 @@ function creaApp(tipo: TIPO_UTENTI = TIPO_UTENTI.GDO) {
     getVolantini: vi.fn(async () => vuota),
     getPromozioniVolantini: vi.fn(),
     getPromozioneVolantini: vi.fn(async () => DETTAGLIO_PROMOZIONE),
+    getVolantiniPromozione: vi.fn(async () => VOLANTINI_PROMOZIONE),
     getVolantino: vi.fn(async () => ({
       id: ID,
       titolo: 'Volantino',
@@ -215,6 +223,40 @@ describe('dettaglio di consultazione della promozione', () => {
       new NotFoundError({ message: 'Promozione non disponibile', entityType: 'Promo', entityId: 'PROMO-2026-45' })
     );
     const risposta = await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45');
+
+    expect(risposta.status).toBe(404);
+    expect(risposta.body.message).toBe('Promozione non disponibile');
+  });
+});
+
+describe('volantini della promozione per la tendina degli insight', () => {
+  it('chiedono materiali.visualizza, come gli insight, e non leggono il dettaglio della promozione', async () => {
+    for (const permesso of ['volantini.visualizza', 'analisi.dashboard_category']) {
+      permessi.concessi = new Set([permesso]);
+      const { app, servizio } = creaApp();
+      const risposta = await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45/volantini');
+      expect([risposta.status, risposta.body.codici], permesso).toEqual([403, ['materiali.visualizza']]);
+      expect(servizio.getVolantiniPromozione).not.toHaveBeenCalled();
+    }
+
+    permessi.concessi = new Set(['materiali.visualizza']);
+    const { app, servizio } = creaApp(TIPO_UTENTI.GDO);
+    const risposta = await request(app).get(`/api/consultazione/volantini/promozioni/${encodeURIComponent('PROMO/2026 45')}/volantini?gdo=altra-gdo`);
+    expect(risposta.status).toBe(200);
+    expect(risposta.body).toEqual(VOLANTINI_PROMOZIONE);
+    // La GDO e' quella della sessione; il dettaglio pesante della promozione non si legge
+    expect(servizio.getVolantiniPromozione).toHaveBeenCalledWith('PROMO/2026 45', { idGdo: 'gdo-sessione' });
+    expect(servizio.getPromozioneVolantini).not.toHaveBeenCalled();
+    expect(servizio.getVolantino).not.toHaveBeenCalled();
+  });
+
+  it('una promozione non disponibile risponde 404 in JSON', async () => {
+    permessi.concessi = new Set(['materiali.visualizza']);
+    const { app, servizio } = creaApp();
+    servizio.getVolantiniPromozione.mockRejectedValueOnce(
+      new NotFoundError({ message: 'Promozione non disponibile', entityType: 'Promo', entityId: 'PROMO-2026-45' })
+    );
+    const risposta = await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45/volantini');
 
     expect(risposta.status).toBe(404);
     expect(risposta.body.message).toBe('Promozione non disponibile');

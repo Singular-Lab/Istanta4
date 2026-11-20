@@ -1,76 +1,21 @@
-import EmptyState from "@/components/EmptyState";
-import { BarreOrizzontali, Colonne, type VoceBarra } from "@/components/Grafici";
-import { coperturaParziale, formatEuro, formatPercentuale, marcaFormato } from "@/pages/PuntiVenditaConsultazione/analisi";
+import { formatEuro, marcaFormato } from "@/pages/PuntiVenditaConsultazione/analisi";
 import { formatNumero } from "@/utils/format";
 import { useId, useMemo, useState } from "react";
-import type {
-  BoxInsight,
-  CoperturaDati,
-  FasciaSconto,
-  PrezziSconti as DatiPrezziSconti,
-  ScontoPerGruppo,
-} from "../../../../lib/insightVolantino/tipi";
+import type { BoxInsight, PrezziSconti as DatiPrezziSconti } from "../../../../lib/insightVolantino/tipi";
 import { NOTA_PREZZO_CALCOLATO } from "../volantino/box";
-import { Blocco, MostraTutte, Nota, RIGHE_INIZIALI } from "./comuni";
+import { Blocco, MostraTutte, RIGHE_INIZIALI } from "./comuni";
 
 /**
- * Sezione "Meccaniche e sconti": come si distribuiscono gli sconti, quanto sconta ogni meccanica e i
- * box in sottocosto. Sta in mezza pagina accanto ai reparti: i blocchi vanno uno sotto l'altro. Per
- * ogni GDO e per i kit di Istanta e dello storico: i dati arrivano dalla lettura generica delle
- * referenze (EstensioneInsight.prezziSconti).
+ * Sezione "Meccaniche": i box in sottocosto. Niente fasce di sconto né sconto medio per meccanica (spec
+ * insight-volantino, "Prezzi, sconti, spazio e marche del volantino"). Sta in mezza pagina accanto ai
+ * reparti. Per ogni GDO e per i kit di Istanta e dello storico: i dati arrivano dalla lettura generica
+ * delle referenze (EstensioneInsight.prezziSconti).
  */
 
 export interface PrezziScontiProps {
   prezziSconti: DatiPrezziSconti;
   /** I box del volantino, per i nomi dei box in sottocosto. */
   box: readonly BoxInsight[];
-  /** Copertura dei dati (sintesi.copertura): sotto la soglia la scheda dice che il dato e' parziale. */
-  copertura?: CoperturaDati;
-}
-
-/** "10–20%", "≥ 50%". */
-export const etichettaFascia = (fascia: Pick<FasciaSconto, "da" | "a">): string =>
-  fascia.a === null ? `≥ ${formatNumero(fascia.da)}%` : `${formatNumero(fascia.da)}–${formatNumero(fascia.a)}%`;
-
-/** Le voci delle barre dello sconto medio: solo i gruppi con lo sconto, dal piu' alto. */
-export const vociScontoMedio = (gruppi: readonly ScontoPerGruppo[]): VoceBarra[] =>
-  gruppi
-    .filter((gruppo): gruppo is ScontoPerGruppo & { scontoMedio: number } => gruppo.scontoMedio !== null)
-    .sort((a, b) => b.scontoMedio - a.scontoMedio || a.etichetta.localeCompare(b.etichetta, "it"))
-    .map(gruppo => ({
-      id: gruppo.chiave || gruppo.etichetta,
-      etichetta: gruppo.etichetta,
-      valore: gruppo.scontoMedio,
-      dettagli: [{ etichetta: "Box", valore: formatNumero(gruppo.box) }],
-    }));
-
-function FasceSconto({ fasce }: { fasce: readonly FasciaSconto[] }) {
-  const conSconto = fasce.reduce((somma, fascia) => somma + fascia.box, 0);
-  if (conSconto === 0) {
-    return (
-      <EmptyState
-        compatta
-        icon="Percent"
-        title="Nessuno sconto calcolabile"
-        description="Nessun box di questo volantino ha un prezzo barrato o uno sconto stampato."
-      />
-    );
-  }
-  return (
-    <Colonne
-      voci={fasce.map(fascia => ({
-        id: `fascia-${fascia.da}`,
-        etichetta: etichettaFascia(fascia),
-        titolo: `Sconto ${etichettaFascia(fascia)}`,
-        valore: fascia.box,
-        dettagli: [{ etichetta: "Quota dei box con sconto", valore: formatPercentuale((fascia.box / conSconto) * 100) }],
-      }))}
-      titolo="Box per fascia di sconto"
-      descrizioneValore="Box"
-      descrizioneVoce="Fascia di sconto"
-      altezza={140}
-    />
-  );
 }
 
 function Sottocosto({ idBox, box }: { idBox: readonly string[]; box: readonly BoxInsight[] }) {
@@ -106,39 +51,14 @@ function Sottocosto({ idBox, box }: { idBox: readonly string[]; box: readonly Bo
   );
 }
 
-export function PrezziSconti({ prezziSconti, box, copertura }: PrezziScontiProps) {
-  const perMeccanica = useMemo(() => vociScontoMedio(prezziSconti.perMeccanica), [prezziSconti.perMeccanica]);
-  const prezzoParziale = copertura !== undefined && box.length > 0 && coperturaParziale(copertura.prezzo);
-
+export function PrezziSconti({ prezziSconti, box }: PrezziScontiProps) {
   return (
-    <div className="space-y-6">
-      <Blocco titolo="Fasce di sconto" descrizione="Quanti box hanno lo sconto in ciascuna fascia.">
-        <FasceSconto fasce={prezziSconti.fasce} />
-      </Blocco>
-
-      <Blocco titolo="Sconto medio per meccanica" descrizione="Media degli sconti dei box di ogni meccanica.">
-        <BarreOrizzontali
-          voci={perMeccanica}
-          titolo="Sconto medio per meccanica"
-          descrizioneValore="Sconto medio"
-          formatta={valore => formatPercentuale(valore)}
-          vuoto="Nessuna meccanica con uno sconto calcolabile."
-        />
-      </Blocco>
-
-      <Blocco
-        titolo="Sottocosto"
-        descrizione={`${formatNumero(prezziSconti.sottocosto.length)} ${prezziSconti.sottocosto.length === 1 ? "box venduto" : "box venduti"} sotto il costo.`}
-      >
-        <Sottocosto idBox={prezziSconti.sottocosto} box={box} />
-      </Blocco>
-
-      {prezzoParziale && copertura && (
-        <Nota>
-          Dato parziale: il prezzo c&apos;è nel {formatPercentuale(copertura.prezzo, 0)} dei box, quindi fasce e sconti medi valgono su quelli.
-        </Nota>
-      )}
-    </div>
+    <Blocco
+      titolo="Sottocosto"
+      descrizione={`${formatNumero(prezziSconti.sottocosto.length)} ${prezziSconti.sottocosto.length === 1 ? "box venduto" : "box venduti"} sotto il costo.`}
+    >
+      <Sottocosto idBox={prezziSconti.sottocosto} box={box} />
+    </Blocco>
   );
 }
 
