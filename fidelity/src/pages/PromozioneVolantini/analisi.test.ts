@@ -22,7 +22,6 @@ import {
   conValoreScelto,
   csvConfronto,
   descriviPresenze,
-  etichettaFascia,
   filtraConfronto,
   fraseKit,
   chiaveCella,
@@ -36,6 +35,7 @@ import {
   ordinaKit,
   prezziPerLuogo,
   prodottiConfronto,
+  prezzoDaIndirizzo,
   prodottiInComune,
   type ProdottoConfronto,
   prossimoOrdinamento,
@@ -47,7 +47,7 @@ import {
   SENZA_RUOLO,
   sintesiConfronto,
   stessaVista,
-  testoQuantoManca,
+  stessoPrezzoInPiuVolantini,
   testoValidita,
   tinteCanaliPromozione,
   type VistaConfronto,
@@ -80,27 +80,6 @@ const kit = (id: string, campi: Partial<KitPromozioneConsultazione> = {}): KitPr
 
 describe("testi della banda", () => {
   const promo = { validitaDal: "2026-11-05", validitaAl: "2026-11-18" };
-  const adesso = new Date("2026-11-09T10:00:00+01:00");
-
-  it("negli Attivi dice quanto manca alla fine, nei Prossimi all'inizio", () => {
-    expect(testoQuantoManca("attivi", promo, adesso)).toBe("Scade tra 9 giorni");
-    expect(testoQuantoManca("prossimi", { validitaDal: "2026-11-10", validitaAl: "2026-11-20" }, adesso)).toBe("Inizia domani");
-  });
-
-  it("nello Storico dice quando si è conclusa, con l'anno solo se non è quello di adesso", () => {
-    expect(testoQuantoManca("storico", { validitaDal: "2026-10-22", validitaAl: "2026-11-04" }, adesso)).toBe("Conclusa il 4 novembre");
-    expect(testoQuantoManca("storico", { validitaDal: "2025-12-18", validitaAl: "2025-12-31" }, adesso)).toBe("Conclusa il 31 dicembre 2025");
-  });
-
-  it("nei Prossimi una promo già cominciata non ha nulla da contare, come nelle schede", () => {
-    expect(testoQuantoManca("prossimi", { validitaDal: "2026-11-01", validitaAl: "2026-11-20" }, adesso)).toBeNull();
-  });
-
-  it("senza la data che serve non c'è cartellino", () => {
-    expect(testoQuantoManca("attivi", { validitaDal: "2026-11-05", validitaAl: null }, adesso)).toBeNull();
-    expect(testoQuantoManca("prossimi", { validitaDal: null, validitaAl: "2026-11-30" }, adesso)).toBeNull();
-    expect(testoQuantoManca("storico", { validitaDal: null, validitaAl: null }, adesso)).toBeNull();
-  });
 
   it("la validità si legge in grande, e senza date lo dice", () => {
     expect(testoValidita(promo)).toBe("5 – 18 novembre 2026");
@@ -152,11 +131,6 @@ describe("filtri del dettaglio", () => {
 });
 
 describe("assortimento", () => {
-  it("scrive le fasce di sconto come negli insight", () => {
-    expect(etichettaFascia({ da: 10, a: 20 })).toBe("10–20%");
-    expect(etichettaFascia({ da: 50, a: null })).toBe("≥ 50%");
-  });
-
   it("impila le meccaniche per canale, con quella non riconosciuta in fondo e 0 dove il canale non ce l'ha", () => {
     const perCanale: MeccanichePerCanale[] = [
       {
@@ -452,6 +426,59 @@ describe("assortimento a confronto", () => {
     expect(facceConfronto(prodotti, griglia, { ...SENZA_FILTRI, cerca: "pasta" }).ruoli).toEqual([{ ruolo: "Base", prodotti: 1 }]);
   });
 
+  it("lo stesso prezzo in più volantini: almeno due prezzi stampati e tutti uguali", () => {
+    const [acqua, pasta, birra, sale, olio, senzaPrezzo] = prodottiConfronto(
+      [
+        referenza("Acqua", ["ct", "cl", "ot", "ol", "st"].map(id => presenza(id, 0.25))),
+        referenza("Pasta", [presenza("ct", 0.89), presenza("cl", 0.89), presenza("st", 0.99)]),
+        referenza("Birra", [presenza("st", 1.19)]),
+        // Un solo prezzo stampato: non è lo stesso prezzo in più volantini
+        referenza("Sale", [presenza("ct", 0.5), presenza("cl", null)]),
+        // Il volantino senza prezzo non conta: restano due prezzi uguali
+        referenza("Olio", [presenza("ct", 5), presenza("cl", 5), presenza("st", null)]),
+        referenza("Tovaglioli", [presenza("ct", null), presenza("cl", null)]),
+      ],
+      griglia
+    ) as [ProdottoConfronto, ProdottoConfronto, ProdottoConfronto, ProdottoConfronto, ProdottoConfronto, ProdottoConfronto];
+    expect(stessoPrezzoInPiuVolantini(acqua)).toBe(true);
+    expect(stessoPrezzoInPiuVolantini(pasta)).toBe(false);
+    expect(stessoPrezzoInPiuVolantini(birra)).toBe(false);
+    expect(stessoPrezzoInPiuVolantini(sale)).toBe(false);
+    expect(stessoPrezzoInPiuVolantini(olio)).toBe(true);
+    expect(stessoPrezzoInPiuVolantini(senzaPrezzo)).toBe(false);
+  });
+
+  it("il filtro sul prezzo dell'elenco: nell'indirizzo solo \"uguale\", con i conteggi e i reparti che lo seguono", () => {
+    expect(prezzoDaIndirizzo("uguale")).toBe("uguale");
+    expect(prezzoDaIndirizzo("diversi")).toBeNull();
+    expect(prezzoDaIndirizzo(null)).toBeNull();
+
+    const tutti = ["ct", "cl", "ot", "ol", "st"];
+    const LAT = { codice: "LAT", descrizione: "Latticini" };
+    const DRO = { codice: "DRO", descrizione: "Drogheria" };
+    const prodotti = prodottiConfronto(
+      [
+        referenza("Burro", tutti.map(id => presenza(id, 2.1)), { reparto: LAT }),
+        referenza("Latte", [presenza("ct", 1.19), presenza("cl", 1.29)], { reparto: LAT }),
+        referenza("Pasta", tutti.map(id => presenza(id, 0.89)), { reparto: DRO }),
+        referenza("Yogurt", [presenza("st", 0.6)], { reparto: LAT }),
+      ],
+      griglia
+    );
+    const nomi = (filtro: Partial<Parameters<typeof filtraConfronto>[2]>) => filtraConfronto(prodotti, griglia, { ...SENZA_FILTRI, ...filtro }).map(p => p.referenza.nome);
+    expect(nomi({ prezzo: "uguale" })).toEqual(["Burro", "Pasta"]);
+    expect(nomi({ prezzo: "uguale", reparto: "LAT" })).toEqual(["Burro"]);
+    expect(nomi({ prezzo: null })).toEqual(["Burro", "Latte", "Pasta", "Yogurt"]);
+
+    // I conteggi del prezzo seguono gli altri filtri, non sé stessi
+    expect(facceConfronto(prodotti, griglia, SENZA_FILTRI).prezzi).toEqual({ tutti: 4, uguale: 2 });
+    expect(facceConfronto(prodotti, griglia, { ...SENZA_FILTRI, reparto: "LAT", prezzo: "uguale" }).prezzi).toEqual({ tutti: 3, uguale: 1 });
+    // Con lo stesso prezzo scelto, i reparti sono quelli dei soli prodotti con lo stesso prezzo
+    const latte = facceConfronto(prodotti, griglia, { ...SENZA_FILTRI, cerca: "latte", prezzo: "uguale" });
+    expect(latte.reparti).toEqual([]);
+    expect(facceConfronto(prodotti, griglia, { ...SENZA_FILTRI, prezzo: "uguale" }).reparti.map(voce => voce.nome)).toEqual(["Drogheria", "Latticini"]);
+  });
+
   it("i prodotti in comune: solo quelli in tutti i volantini, prima i prezzi diversi dalla differenza più grande, poi per nome", () => {
     const tutti = ["ct", "cl", "ot", "ol", "st"];
     const prodotti = prodottiConfronto(
@@ -514,9 +541,9 @@ describe("assortimento a confronto", () => {
 
 describe("confronto fra i kit", () => {
   const kitPromo = [
-    kit("k1", { canale: CITY, area: TOSCANA, numeroPuntiVendita: 102, referenze: 109, scontoMedio: 30 }),
-    kit("k2", { canale: SUPERSTORE, area: TOSCANA, numeroPuntiVendita: 13, referenze: 266, scontoMedio: null }),
-    kit("k3", { canale: CITY, area: LAZIO, numeroPuntiVendita: 28, referenze: 109, scontoMedio: 22 }),
+    kit("k1", { canale: CITY, area: TOSCANA, numeroPuntiVendita: 102, referenze: 109, quotaFidelity: 30 }),
+    kit("k2", { canale: SUPERSTORE, area: TOSCANA, numeroPuntiVendita: 13, referenze: 266, quotaFidelity: 8 }),
+    kit("k3", { canale: CITY, area: LAZIO, numeroPuntiVendita: 28, referenze: 109, quotaFidelity: 22 }),
   ];
   const ids = (ordinati: KitPromozioneConsultazione[]) => ordinati.map(k => k.id);
 
@@ -533,9 +560,9 @@ describe("confronto fra i kit", () => {
     expect(ids(ordinaKit(kitPromo, { colonna: "referenze", verso: "crescente" }))).toEqual(["k3", "k1", "k2"]);
   });
 
-  it("lo sconto medio mancante resta in fondo in entrambi i versi", () => {
-    expect(ids(ordinaKit(kitPromo, { colonna: "scontoMedio", verso: "decrescente" }))).toEqual(["k1", "k3", "k2"]);
-    expect(ids(ordinaKit(kitPromo, { colonna: "scontoMedio", verso: "crescente" }))).toEqual(["k3", "k1", "k2"]);
+  it("ordina per quota Fidelity in entrambi i versi", () => {
+    expect(ids(ordinaKit(kitPromo, { colonna: "quotaFidelity", verso: "decrescente" }))).toEqual(["k1", "k3", "k2"]);
+    expect(ids(ordinaKit(kitPromo, { colonna: "quotaFidelity", verso: "crescente" }))).toEqual(["k2", "k3", "k1"]);
   });
 
   it("sulla stessa colonna inverte il verso, su un'altra parte dal verso naturale", () => {

@@ -3,8 +3,6 @@ import { periodoValidita, tintaMeccanica } from "@/pages/PuntiVenditaConsultazio
 import { ETICHETTA_MECCANICA } from "../../../lib/puntiVendita/analisi";
 import { UNITA_ETTO } from "../../../lib/insightVolantino/unita";
 import { formatNumero } from "@/utils/format";
-import type { FasciaSconto } from "../../../lib/insightVolantino/tipi";
-import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
 import type {
   KitPromozioneConsultazione,
   MeccanichePerCanale,
@@ -12,7 +10,6 @@ import type {
   ReferenzaPromozione,
   Riferimento,
 } from "../../../lib/consultazione/tipi";
-import { tempoDellaPromo } from "../VolantiniKit/testi";
 
 /**
  * Logica della pagina di consultazione di una promozione (/volantini/promozioni/:idPromo, contratto
@@ -35,16 +32,6 @@ export const nomeKit = (kit: Pick<Kit, "canale" | "area">): string => `${kit.can
 /** "5 – 18 novembre 2026"; senza date lo dice, invece di un "N/D" grande quanto la banda. */
 export const testoValidita = (promo: Pick<PromoConsultazione, "validitaDal" | "validitaAl">): string =>
   promo.validitaDal || promo.validitaAl ? periodoValidita(promo.validitaDal, promo.validitaAl) : "Validità non indicata";
-
-/**
- * Quanto manca, nel cartellino della banda: lo stesso testo delle schede delle viste Volantini
- * (tempoDellaPromo), cosi' scheda e dettaglio dicono la stessa cosa. null senza la data che serve.
- */
-export const testoQuantoManca = (
-  periodo: PeriodoConsultazione,
-  promo: Pick<PromoConsultazione, "validitaDal" | "validitaAl">,
-  adesso: Date = new Date()
-): string | null => tempoDellaPromo(periodo, promo, adesso)?.testo ?? null;
 
 const distinti = (valori: readonly string[]): number => new Set(valori).size;
 
@@ -119,10 +106,6 @@ export const numeriNellaCella = (kit: readonly Pick<Kit, "id" | "canale" | "area
 export const chiaveCella = (idCanale: string, idArea: string): string => `${idCanale}\u0000${idArea}`;
 
 /* ---------- Assortimento ---------- */
-
-/** "10–20%", "≥ 50%", come nelle fasce degli insight del volantino. */
-export const etichettaFascia = (fascia: Pick<FasciaSconto, "da" | "a">): string =>
-  fascia.a === null ? `≥ ${formatNumero(fascia.da)}%` : `${formatNumero(fascia.da)}–${formatNumero(fascia.a)}%`;
 
 /**
  * Le meccaniche per canale come barre impilate: le categorie nell'ordine di MECCANICHE (come arrivano
@@ -443,6 +426,16 @@ export const SENZA_REPARTO = "senza-reparto";
 /** Il prodotto senza ruolo, nel filtro per ruolo. */
 export const SENZA_RUOLO = "senza-ruolo";
 
+/**
+ * Il filtro sul prezzo dell'elenco di tutti i prodotti (spec volantini-pop, "Ruolo e filtri dei prodotti
+ * della promozione"): "uguale", i soli prodotti con lo stesso prezzo in più volantini. Niente filtro dei
+ * soli prezzi diversi.
+ */
+export type FiltroPrezzo = "uguale";
+
+/** Nell'indirizzo (?prezzo=): solo "uguale"; un valore storpiato non filtra. */
+export const prezzoDaIndirizzo = (valore: string | null): FiltroPrezzo | null => (valore === "uguale" ? "uguale" : null);
+
 export interface FiltroConfronto {
   vista: VistaConfronto | null;
   /** Il punto di vista: i soli prodotti che questa insegna stampa. */
@@ -455,10 +448,19 @@ export interface FiltroConfronto {
    * ruoli valgono in alternativa: il prodotto risponde con almeno uno.
    */
   ruoli: readonly string[];
+  /** "uguale": i soli prodotti con lo stesso prezzo in più volantini; null per tutti. */
+  prezzo: FiltroPrezzo | null;
 }
 
 /** Nessun filtro: tutti i prodotti. */
-export const SENZA_FILTRI: FiltroConfronto = { vista: null, punto: null, cerca: "", reparto: null, ruoli: [] };
+export const SENZA_FILTRI: FiltroConfronto = { vista: null, punto: null, cerca: "", reparto: null, ruoli: [], prezzo: null };
+
+/**
+ * Lo stesso prezzo in più volantini: il prezzo stampato in almeno due dei volantini mostrati, uguale in
+ * tutti quelli che lo stampano. Un volantino senza prezzo non conta; un prodotto di un solo volantino no.
+ */
+export const stessoPrezzoInPiuVolantini = (p: ProdottoConfronto): boolean =>
+  p.min !== null && p.differenza === 0 && p.referenza.presenze.filter(presenza => presenza.prezzo !== null && Number.isFinite(presenza.prezzo)).length >= 2;
 
 /** I ruoli del prodotto nei kit mostrati; il ?? tiene in piedi la pagina con un server che non li manda. */
 const ruoliDi = (p: ProdottoConfronto): readonly string[] => p.referenza.ruoli ?? [];
@@ -515,6 +517,7 @@ export const filtraConfronto = (prodotti: readonly ProdottoConfronto[], griglia:
     if (filtro.reparto && (filtro.reparto === SENZA_REPARTO ? reparto !== null : reparto?.codice !== filtro.reparto)) return false;
     const ruoli = ruoliDi(p);
     if (filtro.ruoli.length > 0 && !filtro.ruoli.some(scelto => (scelto === SENZA_RUOLO ? ruoli.length === 0 : ruoli.includes(scelto)))) return false;
+    if (filtro.prezzo === "uguale" && !stessoPrezzoInPiuVolantini(p)) return false;
     if (!cercato) return true;
     const r = p.referenza;
     return testoConfrontabile(`${r.nome} ${r.marca ?? ""} ${r.codice ?? ""} ${r.ean ?? ""}`).includes(cercato);
@@ -642,20 +645,31 @@ export const ruoliDelConfronto = (prodotti: readonly ProdottoConfronto[]): { ruo
   };
 };
 
+/** I conteggi del filtro sul prezzo: tutti i prodotti e quelli con lo stesso prezzo in più volantini. */
+export interface ConteggiPrezzo {
+  tutti: number;
+  uguale: number;
+}
+
 /**
  * Le voci dei filtri a faccette (spec volantini-pop, "Ruolo e filtri dei prodotti della promozione"):
- * i reparti dei prodotti che rispondono a tutti gli altri filtri (vista, punto di vista, testo, ruoli)
- * e i ruoli, con i loro conteggi, di quelli che rispondono a tutti gli altri (testo e reparto compresi).
+ * i reparti dei prodotti che rispondono a tutti gli altri filtri (vista, punto di vista, testo, ruoli,
+ * prezzo), i ruoli, con i loro conteggi, di quelli che rispondono a tutti gli altri (testo, reparto e
+ * prezzo compresi) e i conteggi del filtro sul prezzo su quelli che rispondono a tutti gli altri.
  * Così scegliendo un ruolo il filtro dei reparti propone solo i reparti che hanno quel ruolo.
  */
 export const facceConfronto = (
   prodotti: readonly ProdottoConfronto[],
   griglia: GrigliaVolantini,
   filtro: FiltroConfronto
-): ReturnType<typeof repartiDelConfronto> & ReturnType<typeof ruoliDelConfronto> => ({
-  ...repartiDelConfronto(filtraConfronto(prodotti, griglia, { ...filtro, reparto: null })),
-  ...ruoliDelConfronto(filtraConfronto(prodotti, griglia, { ...filtro, ruoli: [] })),
-});
+): ReturnType<typeof repartiDelConfronto> & ReturnType<typeof ruoliDelConfronto> & { prezzi: ConteggiPrezzo } => {
+  const senzaPrezzo = filtraConfronto(prodotti, griglia, { ...filtro, prezzo: null });
+  return {
+    ...repartiDelConfronto(filtraConfronto(prodotti, griglia, { ...filtro, reparto: null })),
+    ...ruoliDelConfronto(filtraConfronto(prodotti, griglia, { ...filtro, ruoli: [] })),
+    prezzi: { tutti: senzaPrezzo.length, uguale: senzaPrezzo.filter(stessoPrezzoInPiuVolantini).length },
+  };
+};
 
 /** "1,19" per Excel: virgola decimale, niente simbolo. */
 const numeroExcel = (valore: number | null) => (valore === null ? "" : formatNumero(valore, 2).replace(/\./g, ""));
@@ -694,7 +708,8 @@ export const csvConfronto = (prodotti: readonly ProdottoConfronto[], griglia: Gr
 
 /* ---------- Confronto fra i kit ---------- */
 
-export type ColonnaConfronto = "volantino" | "puntiVendita" | "referenze" | "pagine" | "scontoMedio" | "quotaFidelity" | "sottocosto";
+/** Le colonne del confronto fra i kit: niente sconto medio né sottocosto (spec volantini-pop). */
+export type ColonnaConfronto = "volantino" | "puntiVendita" | "referenze" | "pagine" | "quotaFidelity";
 
 export type VersoOrdinamento = "crescente" | "decrescente";
 
@@ -706,7 +721,7 @@ export interface OrdinamentoConfronto {
 /** All'apertura i kit che arrivano a più punti vendita stanno in cima. */
 export const ORDINAMENTO_INIZIALE: OrdinamentoConfronto = { colonna: "puntiVendita", verso: "decrescente" };
 
-const valoreConfronto = (kit: Kit, colonna: Exclude<ColonnaConfronto, "volantino">): number | null => {
+const valoreConfronto = (kit: Kit, colonna: Exclude<ColonnaConfronto, "volantino">): number => {
   switch (colonna) {
     case "puntiVendita":
       return kit.numeroPuntiVendita;
@@ -714,30 +729,20 @@ const valoreConfronto = (kit: Kit, colonna: Exclude<ColonnaConfronto, "volantino
       return kit.referenze;
     case "pagine":
       return kit.pagine;
-    case "scontoMedio":
-      return kit.scontoMedio;
     case "quotaFidelity":
       return kit.quotaFidelity;
-    case "sottocosto":
-      return kit.sottocosto;
   }
 };
 
 const perNomeKit = (a: Kit, b: Kit) =>
   a.canale.nome.localeCompare(b.canale.nome, "it") || a.area.nome.localeCompare(b.area.nome, "it") || a.titolo.localeCompare(b.titolo, "it");
 
-/**
- * I kit nell'ordine della colonna scelta. Un valore mancante (lo sconto medio senza box scontati)
- * resta in fondo in entrambi i versi; a parità decide il nome (canale, area, titolo).
- */
+/** I kit nell'ordine della colonna scelta; a parità decide il nome (canale, area, titolo). */
 export const ordinaKit = (kit: readonly Kit[], { colonna, verso }: OrdinamentoConfronto): Kit[] => {
   const segno = verso === "crescente" ? 1 : -1;
   return [...kit].sort((a, b) => {
     if (colonna === "volantino") return segno * perNomeKit(a, b);
-    const va = valoreConfronto(a, colonna);
-    const vb = valoreConfronto(b, colonna);
-    if (va === null || vb === null) return va === vb ? perNomeKit(a, b) : va === null ? 1 : -1;
-    return segno * (va - vb) || perNomeKit(a, b);
+    return segno * (valoreConfronto(a, colonna) - valoreConfronto(b, colonna)) || perNomeKit(a, b);
   });
 };
 

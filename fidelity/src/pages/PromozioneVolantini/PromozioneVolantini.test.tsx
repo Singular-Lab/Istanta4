@@ -76,10 +76,11 @@ const KIT: KitPromozioneConsultazione[] = [
     numeroPuntiVendita: 3,
     referenze: 109,
     scontoMedio: 31,
+    quotaFidelity: 31,
     copertina: { id: "f1", nome: "volantino.pdf", tipoExport: "VOL", mime: "application/pdf", pagine: 12, anteprima: ANTEPRIMA },
   }),
-  kit("k3", { area: LAZIO, numeroPuntiVendita: 1, referenze: 120, scontoMedio: 22 }),
-  kit("k2", { canale: SUPERSTORE, numeroPuntiVendita: 2, referenze: 266, scontoMedio: null }),
+  kit("k3", { area: LAZIO, numeroPuntiVendita: 1, referenze: 120, scontoMedio: 22, quotaFidelity: 22 }),
+  kit("k2", { canale: SUPERSTORE, numeroPuntiVendita: 2, referenze: 266, scontoMedio: null, quotaFidelity: 8 }),
 ];
 
 const LATTICINI = { codice: "LAT", descrizione: "Latticini", colore: "#0ea5e9" };
@@ -244,21 +245,23 @@ describe("Consultazione di una promozione", () => {
     const banda = screen.getByRole("region", { name: "La promozione" });
     expect(within(banda).getByText("Volantini Attivi · Volantino novembre")).toBeInTheDocument();
     expect(within(banda).getByText("5 – 18 novembre 2026")).toBeInTheDocument();
-    expect(within(banda).getByText("Scade tra 9 giorni")).toBeInTheDocument();
+    // Niente cartellino di quanto manca: la validità in grande basta
+    expect(within(banda).queryByText("Scade tra 9 giorni")).not.toBeInTheDocument();
     expect(within(banda).getByText(/3 volantini per 2 insegne in 2 aree/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Torna a Volantini Attivi" })).toHaveAttribute("href", "/volantini/attivi");
   });
 
-  it.each<{ periodo: PeriodoConsultazione; dal: string; al: string; cartellino: string; vista: string; indirizzo: string }>([
-    { periodo: "prossimi", dal: "2026-11-19", al: "2026-12-02", cartellino: "Inizia tra 10 giorni", vista: "Volantini Prossimi", indirizzo: "/volantini/prossimi" },
-    { periodo: "storico", dal: "2026-10-22", al: "2026-11-04", cartellino: "Conclusa il 4 novembre", vista: "Volantini Storico", indirizzo: "/volantini/storico" },
-  ])("nel periodo $periodo il cartellino dice $cartellino", async ({ periodo, dal, al, cartellino, vista, indirizzo }) => {
+  it.each<{ periodo: PeriodoConsultazione; dal: string; al: string; validita: string; cartellino: string; vista: string; indirizzo: string }>([
+    { periodo: "prossimi", dal: "2026-11-19", al: "2026-12-02", validita: "19 novembre – 2 dicembre 2026", cartellino: "Inizia tra 10 giorni", vista: "Volantini Prossimi", indirizzo: "/volantini/prossimi" },
+    { periodo: "storico", dal: "2026-10-22", al: "2026-11-04", validita: "22 ottobre – 4 novembre 2026", cartellino: "Conclusa il 4 novembre", vista: "Volantini Storico", indirizzo: "/volantini/storico" },
+  ])("nel periodo $periodo la banda ha la validità e non il cartellino \"$cartellino\"", async ({ periodo, dal, al, validita, cartellino, vista, indirizzo }) => {
     oggiE("2026-11-09T10:00:00+01:00");
     finti.risultato = caricato(dettaglio({ periodo, promo: { id: "p1", nome: "Volantino novembre", validitaDal: dal, validitaAl: al } }));
     await apri();
 
     const banda = screen.getByRole("region", { name: "La promozione" });
-    expect(within(banda).getByText(cartellino)).toBeInTheDocument();
+    expect(within(banda).getByText(validita)).toBeInTheDocument();
+    expect(within(banda).queryByText(cartellino)).not.toBeInTheDocument();
     expect(within(banda).getByText(`${vista} · Volantino novembre`)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: `Torna a ${vista}` })).toHaveAttribute("href", indirizzo);
   });
@@ -380,18 +383,18 @@ describe("Consultazione di una promozione", () => {
   it("le analisi dopo l'elenco sono in due pannelli chiusi, che si aprono uno per uno e restano nell'indirizzo", async () => {
     const router = await apri();
 
-    const assortimento = screen.getByRole("button", { name: /Sconti, reparti, meccaniche e marche/ });
+    const assortimento = screen.getByRole("button", { name: /Reparti, meccaniche e marche/ });
     const confronto = within(screen.getByRole("region", { name: "Confronto fra i volantini" })).getByRole("button", { name: /Confronto fra i volantini/ });
     expect(assortimento).toHaveAttribute("aria-expanded", "false");
     expect(confronto).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("img", { name: /^Box per fascia di sconto/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Meccaniche per insegna" })).not.toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "I volantini della promozione a confronto" })).not.toBeInTheDocument();
     // I pannelli vengono dopo l'elenco di tutti i prodotti
     expect(screen.getByRole("table", { name: "Tutti i prodotti" }).compareDocumentPosition(assortimento) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(assortimento);
     expect(assortimento).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("img", { name: /^Box per fascia di sconto/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Meccaniche per insegna" })).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "I volantini della promozione a confronto" })).not.toBeInTheDocument();
     expect(router.state.location.search).toBe("?analisi=assortimento");
 
@@ -400,16 +403,19 @@ describe("Consultazione di una promozione", () => {
     expect(router.state.location.search).toBe("?analisi=assortimento%2Cvolantini");
 
     fireEvent.click(assortimento);
-    expect(screen.queryByRole("img", { name: /^Box per fascia di sconto/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "Meccaniche per insegna" })).not.toBeInTheDocument();
     expect(router.state.location.search).toBe("?analisi=volantini");
   });
 
-  it("mostra l'assortimento: fasce di sconto, reparti, meccaniche e marche; la barra comune o locale non c'è più", async () => {
+  it("mostra l'assortimento: reparti, meccaniche e marche, senza la profondità dello sconto né la barra comune o locale", async () => {
     await apri("/volantini/promozioni/p1?analisi=assortimento");
 
     expect(screen.queryByRole("heading", { name: "Comune o locale" })).not.toBeInTheDocument();
     expect(screen.queryByRole("img", { name: /prodotti in tutti i volantini/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: /^Box per fascia di sconto: 0–10%: 5 box, 10–20%: 30 box/ })).toBeInTheDocument();
+    // Niente box per fascia di sconto, anche se il server li manda
+    expect(screen.queryByRole("heading", { name: "Quanto è profondo lo sconto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /Box per fascia di sconto/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("10–20%")).not.toBeInTheDocument();
     expect(screen.getAllByText("Drogheria alimentare").length).toBeGreaterThan(0);
     expect(screen.getByRole("img", { name: "Meccaniche per insegna" })).toBeInTheDocument();
     const marche = screen.getByRole("table", { name: "Marche con più spazio" });
@@ -439,7 +445,7 @@ describe("Consultazione di una promozione", () => {
       expect(within(indice).getAllByRole("button").map(voce => voce.textContent)).toEqual([
         "Prodotti in comune",
         "Tutti i prodotti",
-        "Sconti e reparti",
+        "Reparti e marche",
         "Confronto fra i volantini",
       ]);
 
@@ -448,7 +454,7 @@ describe("Consultazione di una promozione", () => {
       expect(router.state.location.search).toBe("?analisi=volantini");
       await waitFor(() => expect(scorri.mock.contexts.some(elemento => (elemento as HTMLElement).id === "pannello-volantini")).toBe(true));
       // L'altro pannello resta chiuso
-      expect(screen.getByRole("button", { name: /Sconti, reparti, meccaniche e marche/ })).toHaveAttribute("aria-expanded", "false");
+      expect(screen.getByRole("button", { name: /Reparti, meccaniche e marche/ })).toHaveAttribute("aria-expanded", "false");
       // Le destinazioni si fermano sotto la barra dei filtri
       expect(document.getElementById("pannello-volantini")?.className).toMatch(/scroll-mt-/);
 
@@ -466,7 +472,7 @@ describe("Consultazione di una promozione", () => {
     Element.prototype.scrollIntoView = scorri;
     try {
       await apri();
-      fireEvent.click(screen.getByRole("button", { name: /Sconti, reparti, meccaniche e marche/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Reparti, meccaniche e marche/ }));
       await waitFor(() => expect(scorri.mock.contexts.some(elemento => (elemento as HTMLElement).id === "pannello-assortimento")).toBe(true));
     } finally {
       Element.prototype.scrollIntoView = originale;
@@ -973,6 +979,66 @@ describe("Consultazione di una promozione", () => {
       await waitFor(() => expect(router.state.location.search).toBe(""));
     });
 
+    it("il filtro Prezzo: stesso prezzo in più volantini, con i conteggi che seguono gli altri filtri, nell'indirizzo; i prodotti in comune non cambiano", async () => {
+      const router = await apri();
+      const prezzo = () => screen.getByRole("radiogroup", { name: "Prezzo" });
+      const voci = () => within(prezzo()).getAllByRole("radio").map(voce => voce.textContent);
+      const comuni = () => within(screen.getByRole("list", { name: "Prodotti in comune" })).getAllByRole("listitem");
+
+      // Solo l'olio ha lo stesso prezzo in più volantini: la pasta ha prezzi diversi, gli altri un volantino solo
+      expect(voci()).toEqual(["Tutti i prezzi 5", "Stesso prezzo in più volantini 1"]);
+      expect(within(prezzo()).getByRole("radio", { name: /^Tutti i prezzi/ })).toHaveAttribute("aria-checked", "true");
+      // Niente scelta dei soli prezzi diversi
+      expect(within(prezzo()).queryByRole("radio", { name: /diversi/i })).not.toBeInTheDocument();
+      expect(comuni()).toHaveLength(1);
+
+      fireEvent.click(within(prezzo()).getByRole("radio", { name: /^Stesso prezzo in più volantini/ }));
+      expect(nomiDi("Tutti i prodotti")).toEqual(["Olio extravergine"]);
+      expect(router.state.location.search).toBe("?prezzo=uguale");
+      // Il reparto propone solo le voci dei prodotti con lo stesso prezzo
+      expect(within(screen.getByRole("combobox", { name: "Reparto" })).getAllByRole("option").map(o => o.textContent)).toEqual(["Tutti i reparti", "Drogheria"]);
+      // I prodotti in comune non cambiano
+      expect(comuni()).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "Azzera filtri" }));
+      await waitFor(() => expect(router.state.location.search).toBe(""));
+      expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
+
+      // I conteggi seguono gli altri filtri: nei Latticini nessun prodotto ha lo stesso prezzo in più volantini
+      fireEvent.change(screen.getByRole("combobox", { name: "Reparto" }), { target: { value: "LAT" } });
+      expect(voci()).toEqual(["Tutti i prezzi 2", "Stesso prezzo in più volantini 0"]);
+    });
+
+    it("con lo stesso prezzo scelto Scarica Excel salva i soli prodotti mostrati", async () => {
+      const creati: Blob[] = [];
+      const originale = { crea: URL.createObjectURL, revoca: URL.revokeObjectURL };
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        creati.push(blob);
+        return "blob:assortimento";
+      }) as typeof URL.createObjectURL;
+      URL.revokeObjectURL = vi.fn();
+      const clic = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+      try {
+        await apri("/volantini/promozioni/p1?prezzo=uguale");
+        fireEvent.click(screen.getByRole("button", { name: "Scarica Excel" }));
+
+        const righe = (await (creati[0] as Blob).text()).split("\r\n");
+        expect(righe).toHaveLength(2);
+        expect(righe[1]).toContain('"Olio extravergine";"Monini"');
+      } finally {
+        clic.mockRestore();
+        URL.createObjectURL = originale.crea;
+        URL.revokeObjectURL = originale.revoca;
+      }
+    });
+
+    it("un indirizzo con un prezzo che non esiste mostra tutti i prodotti", async () => {
+      await apri("/volantini/promozioni/p1?prezzo=diversi");
+
+      expect(nomiDi("Tutti i prodotti")).toHaveLength(5);
+      expect(within(screen.getByRole("radiogroup", { name: "Prezzo" })).getByRole("radio", { name: /^Tutti i prezzi/ })).toHaveAttribute("aria-checked", "true");
+    });
+
     it("un vecchio indirizzo con solo prezzo diverso e ordine mostra tutti i prodotti, nell'ordine di apertura", async () => {
       await apri("/volantini/promozioni/p1?diversi=1&ordina=nome&vista=prezzi");
 
@@ -1043,11 +1109,20 @@ describe("Consultazione di una promozione", () => {
     expect(intestazione("Volantino")).toHaveAttribute("aria-sort", "descending");
     expect(nomi()).toEqual(["Superstore · Toscana", "City · Toscana", "City · Lazio"]);
 
-    // Lo sconto medio mancante resta in fondo
-    fireEvent.click(within(intestazione("Sconto medio")).getByRole("button"));
-    expect(intestazione("Sconto medio")).toHaveAttribute("aria-sort", "descending");
+    fireEvent.click(within(intestazione("Quota Fidelity")).getByRole("button"));
+    expect(intestazione("Quota Fidelity")).toHaveAttribute("aria-sort", "descending");
     expect(nomi()).toEqual(["City · Toscana", "City · Lazio", "Superstore · Toscana"]);
-    expect(within(righeDi(tabellaConfronto())[2]).getByText("N/D")).toBeInTheDocument();
+  });
+
+  it("il confronto fra i volantini non ha sconto medio né sottocosto", async () => {
+    await apri(CON_CONFRONTO);
+
+    const intestazioni = within(tabellaConfronto()).getAllByRole("columnheader").map(colonna => colonna.textContent);
+    expect(intestazioni).toEqual(["Volantino", "Punti vendita", "Referenze", "Pagine", "Quota Fidelity"]);
+    // Una cella per colonna in ogni riga: nessun valore di sconto o sottocosto
+    for (const riga of righeDi(tabellaConfronto())) expect(within(riga).getAllByRole("cell")).toHaveLength(5);
+    const pannello = within(screen.getByRole("region", { name: "Confronto fra i volantini" })).getByRole("button", { name: /Confronto fra i volantini/ });
+    expect(pannello).toHaveTextContent("Punti vendita, referenze, pagine e quota Fidelity di ogni volantino.");
   });
 
   it("una riga del confronto apre gli insight del kit col clic", async () => {
