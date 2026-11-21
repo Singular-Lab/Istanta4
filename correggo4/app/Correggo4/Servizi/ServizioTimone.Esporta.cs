@@ -577,7 +577,9 @@ public sealed partial class ServizioTimone
         t.AppendLine("Il «limite» di una pagina e' il numero di caselle della sua griglia MENO le");
         t.AppendLine("caselle che il Marketing ha bloccato (quelle col divieto d'accesso, dove ci");
         t.AppendLine("andra' un qualcosa di grafico). «Ill.» vuol dire senza limite: e' una pagina");
-        t.AppendLine("a cui nel timone non e' stata data nessuna griglia.");
+        t.AppendLine("a cui nel timone non e' stata data nessuna griglia. Una pagina «come impaginata»");
+        t.AppendLine("ha una casella per ogni box che aveva nell'impaginato: il suo limite e' quel");
+        t.AppendLine("numero di box, sempre meno le caselle bloccate.");
         if (fineFinestra != null)
         {
             t.AppendLine();

@@ -358,6 +358,27 @@ test("I20-1233: uno scambio senza il rettangolo di destinazione non si approva",
     assert.strictEqual(v.approvabile, false);
 });
 
+test("Pagina come impaginata: lo scambio porta il box vero di destinazione, anche di un'altra misura", () => {
+    // Pagina 14, come impaginata nel menabò avanzato: la 9003 (riga di tre box) va nel box della 9004
+    // (riga di due), piu' largo e piu' basso; il box della 9003 sborda dalla pagina come nell'impaginato.
+    // Correggo4 la manda come uno scambio qualunque, nel rettangolo del box vero, non da sistemare a mano.
+    const sulBox = (idVoce, basecode, destinazione, bounds) => Object.assign(scambi()[0], {
+        id: "timone:" + idVoce, basecode: basecode, codice: basecode, labelBox: "BOX_STD_" + basecode, pagina: 14,
+        basecodeDestinazione: destinazione, labelBoxDestinazione: "BOX_STD_" + destinazione, boundsDestinazione: bounds
+    });
+    const voci = correggo.importa([
+        sulBox(61, "9003", "9004", [112, 8.5, 192, 103.5]),
+        sulBox(62, "9004", "9003", [26, 138.7, 108, 230.5])
+    ], COOP, true);
+
+    const v = voce(voci, "timone:61", TIPO.scambio);
+    assert.strictEqual(v.testo, "Menabò avanzato: 9003 va al posto di 9004");
+    assert.strictEqual(v.daSistemareAMano, "");
+    assert.strictEqual(v.approvabile, true);
+    assert.deepStrictEqual(v.boundsDestinazione, [112, 8.5, 192, 103.5]);
+    assert.deepStrictEqual(voce(voci, "timone:62", TIPO.scambio).boundsDestinazione, [26, 138.7, 108, 230.5]);
+});
+
 test("I20-1233: il piano mette gli scambi approvati a parte, per pagina, fuori dai box", () => {
     const voci = correggo.importa(scambi().concat(correzioni()), COOP, true);
     voci.filter(v => v.tipo === TIPO.scambio).forEach(v => correggo.scegli(v, SCELTA.approva, true));

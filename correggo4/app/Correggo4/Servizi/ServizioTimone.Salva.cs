@@ -81,8 +81,12 @@ public sealed partial class ServizioTimone
         var perIdVoce = righeVoci.ToDictionary(v => v.Id);
 
         // ---------------------------------------------------------------- le pagine
+        // la griglia come impaginata ha tante caselle quanti box aveva la pagina nell'impaginato
+        var boxPerPagina = BoxPerPagina(righeVoci);
+        int BoxDi(VolantiniTimonePagine p) => boxPerPagina.GetValueOrDefault(p.Numero);
+
         var grigliaDi = new Dictionary<long, Griglia?>();
-        foreach (var p in righePagine) grigliaDi[p.Id] = GriglieFormato.Trova(p.Griglia);
+        foreach (var p in righePagine) grigliaDi[p.Id] = GriglieFormato.DellaPagina(p.Griglia, BoxDi(p));
 
         foreach (var p in pagine ?? new List<PaginaSalvata>())
         {
@@ -92,6 +96,14 @@ public sealed partial class ServizioTimone
             if (string.IsNullOrWhiteSpace(p.Griglia))
             {
                 grigliaDi[p.Id] = null;
+            }
+            else if (GriglieFormato.EImpaginata(p.Griglia))
+            {
+                var g = GriglieFormato.DellaPagina(p.Griglia, BoxDi(riga));
+                if (g == null)
+                    return Esito.No(400, "impaginata_senza_box",
+                        $"La pagina {riga.Numero} non aveva box nell'impaginato: non si puo' tenere come impaginata.");
+                grigliaDi[p.Id] = g;
             }
             else
             {
@@ -289,6 +301,12 @@ public sealed partial class ServizioTimone
                     return Esito.No(400, "posizione_non_valida",
                         $"In pagina {numero} la referenza «{f.Riga.Codice}» finirebbe nella casella {f.Posizione}, " +
                         $"ma la {g.Nome} ne ha {g.Posti}.");
+
+                // come impaginata ogni casella e' un box: una referenza non si allarga su due box
+                if (GriglieFormato.EImpaginata(g.Nome) && (f.Colonne != 1 || f.Righe != 1))
+                    return Esito.No(400, "ingombro_su_impaginata",
+                        $"In pagina {numero} la referenza «{f.Riga.Codice}» e' allargata, ma la pagina e' come " +
+                        "impaginata: per allargarla serve una griglia a sistema.");
 
                 int i = f.Posizione.Value - 1;
                 int riga0 = i / g.Colonne, col0 = i % g.Colonne;
