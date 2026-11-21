@@ -475,3 +475,11 @@ describe("coopfi menabo con lo stato in volantino core", () => {
     expect(canale1.raggruppamento[0].records[0]["Scatto.CodiceGruppo"]).toBe("G001");
   });
 });
+
+describe("coopfi menabo: identità delle referenze", () => {
+  it("riconosce una referenza dal codice del gruppo di scatto, altrimenti dal codice referenza", () => {
+    const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
+
+    expect(sut.CAMPI_IDENTITA_MENABO).toEqual(["Scatto.CodiceGruppo", "Referenza.Codice"]);
+  });
+});

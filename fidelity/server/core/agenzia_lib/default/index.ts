@@ -306,6 +306,8 @@ export class DefaultAgenziaLib implements IAgenziaLib {
   }
   CHIAVE_CAMPO_MENABO = '';
   CHIAVE_DEDUP_MENABO = '';
+  // Nessun campo dichiarato: il menabò salvato si ricollega confrontando la referenza intera
+  CAMPI_IDENTITA_MENABO: readonly string[] = [];
 
   getReportOptions(): import('../types.js').ReportOption[] {
     return [];

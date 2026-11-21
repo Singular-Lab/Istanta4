@@ -2657,6 +2657,12 @@ export interface MenaboRisultato {
   tipoDivisione: 'canale' | 'area' | 'area_e_canale';
   risultati: MenaboRisultatoCanale[];
   nomePromo?: string;
+  /**
+   * Campi che identificano una referenza del menabò, in ordine di priorità, dichiarati dalla
+   * libreria agenzia (CAMPI_IDENTITA_MENABO). Servono a ricollegare un menabò salvato alle
+   * referenze attuali; vuoto = si confronta la referenza intera.
+   */
+  campi_identita?: string[];
 }
 
 export interface MenaboLayoutLabelSalvata {

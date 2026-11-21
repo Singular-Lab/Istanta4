@@ -393,6 +393,12 @@ export interface IAgenziaLib {
 
   CHIAVE_CAMPO_MENABO: string;
   CHIAVE_DEDUP_MENABO: string;
+  /**
+   * Campi che identificano una referenza del menabò, in ordine di priorità: vale il primo non
+   * vuoto. Con essi un menabò salvato si ricollega alle referenze attuali anche se l'ordine o i
+   * gruppi sono cambiati (spec menabo-promo). Vuoto = si confronta la referenza intera.
+   */
+  CAMPI_IDENTITA_MENABO: readonly string[];
   elaboraDatoPerAgenzia(data: RisultatoConfrontoMomento): Promise<TracciatoReport>;
 
   normalizzaDatoConfrontoPerScore(confrontiData: PromoScoreboardInput): Promise<PromoScoreboardInput>;

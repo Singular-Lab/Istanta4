@@ -17,6 +17,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { TIPO_UTENTI } from "../../../lib/enums";
 import type { MenaboLayoutDivisioneSalvata, MenaboRisultatoCanale, MenaboSottogruppoChiave } from "../../../lib/types";
 import MenaboCanvas, { DRAG_TYPE_LABEL, DRAG_TYPE_NOTE, DRAG_TYPE_SIDEBAR, type CanvasRecordsPayload, type LabelDragPayload, type SidebarDragPayload } from "./MenaboCanvas";
+import { getGroupSourceKey, getRecordKey, getSubgroupSourceKey } from "./menaboChiavi";
 import { useMenaboPresence } from "./useMenaboPresence";
 
 const PALETTE = [
@@ -40,22 +41,6 @@ function getInitials(nome: string): string {
         .slice(0, 2)
         .map(p => p[0]?.toUpperCase() ?? "")
         .join("");
-}
-
-function getGroupSourceKey(
-    guidCanale: string,
-    item: MenaboRisultatoCanale["raggruppamento"][number],
-    index: number,
-) {
-    return JSON.stringify([guidCanale, item.nome_campo, item.valore_campo, index]);
-}
-
-function getSubgroupSourceKey(groupSourceKey: string, nomeCampo: string, valoreCampo: string) {
-    return JSON.stringify([groupSourceKey, "sub", nomeCampo, valoreCampo]);
-}
-
-function getRecordKey(sourceKey: string, index: number) {
-    return JSON.stringify([sourceKey, index]);
 }
 
 function getRecordCodice(record: Record<string, string>): string {
@@ -921,6 +906,7 @@ function MenaboPromoPage() {
                         isSavingLayout={isSavingMenaboLayout}
                         regoleMenabo={regoleMenabo!}
                         canaleSelezionato={canaleSelezionato}
+                        campiIdentita={data?.campi_identita}
                         idPromo={idPromo!}
                         nomePromo={data?.nomePromo}
                     />

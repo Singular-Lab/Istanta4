@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ServerCall } from "../../../lib/server_call";
 import type { MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, RegoleMenabo } from "../../../lib/types";
 import { useUser } from "../../context/UserContext";
+import { ricollegaElementiSalvati } from "./menaboChiavi";
 import { pagineDelGruppo, referenzeDellaPagina } from "./menaboSelezione";
 // ── Document dimensions (A4 in points at 72 dpi) ──────────────────────────
 const DOC_W = 595;
@@ -290,6 +291,8 @@ interface MenaboCanvasProps {
     savedLayout?: MenaboLayoutSalvato | null;
     isSavingLayout?: boolean;
     regoleMenabo?: RegoleMenabo;
+    /** Campi che identificano una referenza, dalla libreria agenzia: ricollegano il menabò salvato. */
+    campiIdentita?: string[];
     idPromo: string;
     nomePromo?: string;
 }
@@ -304,6 +307,7 @@ export default function MenaboCanvas({
     isSavingLayout = false,
     regoleMenabo,
     canaleSelezionato,
+    campiIdentita,
     idPromo,
     nomePromo,
 }: MenaboCanvasProps & { canaleSelezionato: import("../../../lib/types").MenaboRisultatoCanale | undefined }) {
@@ -544,7 +548,13 @@ export default function MenaboCanvas({
                 });
             }
         }
-        const restoredItems = Array.from(groupMergeMap.values());
+        // Le chiavi salvate sono posizionali: si ricollegano alle referenze come arrivano oggi
+        // (ordinamento merceologico, gruppi cambiati), così l'elenco dei gruppi non le ripropone.
+        const restoredItems = ricollegaElementiSalvati(
+            Array.from(groupMergeMap.values()),
+            canaleSelezionato,
+            campiIdentita ?? [],
+        );
         const restoredLabels = Object.fromEntries(
             savedDivision.pages
                 .filter(page => page.label && page.label.source !== "regole")
@@ -596,7 +606,7 @@ export default function MenaboCanvas({
                 recordKeys: item.recordKeys,
             }))
         );
-    }, [canaleSelezionato, onHydratedRecordsChange, pagesFromRegole, savedLayout]);
+    }, [campiIdentita, canaleSelezionato, onHydratedRecordsChange, pagesFromRegole, savedLayout]);
 
     // Zoom adattivo: finché l'utente non zooma manualmente, lo zoom segue il fit-to-width
     // (mai oltre lo 0.82 di default). Lo zoom manuale resta libero: oltre il fit il

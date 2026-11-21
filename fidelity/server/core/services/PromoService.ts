@@ -1578,7 +1578,12 @@ export class PromoService implements IPromoService {
         }
       }
 
-      return { ...risultatoDatiDaAgenziaLib, nomePromo: promoValues.nome_promo as string };
+      return {
+        ...risultatoDatiDaAgenziaLib,
+        // Con questi campi il client ricollega il menabò salvato alle referenze attuali
+        campi_identita: [...(this.agenziaLib.CAMPI_IDENTITA_MENABO ?? [])],
+        nomePromo: promoValues.nome_promo as string,
+      };
     } catch (error: any) {
       throw new DatabaseError({
         message: "Errore durante il recupero delle promozioni in corso",
