@@ -21,11 +21,12 @@ const record = (codice: string, reparto: string, categoria: string) => ({
   tema: 'SPRINT',
 });
 
-function makeService(ordinamentoLetto: OrdinamentoMerceologico) {
+function makeService(ordinamentoLetto: OrdinamentoMerceologico, campiIdentita?: readonly string[]) {
   vi.spyOn(TracciatiMomento, 'findAll').mockResolvedValue([
     { risultato: { tracciati: [{ guidCanale: '', guidArea: '', context: '[]', records: [record('B', 'macelleria', 'bovino'), record('A', 'ortofrutta', 'mele')] }] } },
   ] as any);
   const agenziaLib = {
+    ...(campiIdentita ? { CAMPI_IDENTITA_MENABO: campiIdentita } : {}),
     // Restituisce i codici nell'ordine in cui la libreria li riceve
     getDatoPerMenabo: vi.fn(async (risultati: any[]) => ({
       tipoDivisione: 'canale',
@@ -73,5 +74,25 @@ describe('PromoService.getDatoPerMenabo: ordine merceologico', () => {
 
     expect(dato.codiciRicevuti).toEqual(['B', 'A']);
     expect(ordinamentoService.getOrdinamento).not.toHaveBeenCalled();
+  });
+});
+
+describe('PromoService.getDatoPerMenabo: campi che identificano le referenze', () => {
+  const richiesta = {} as Parameters<PromoService['getDatoPerMenabo']>[2];
+
+  it('restituisce i campi identificativi dichiarati dalla libreria agenzia', async () => {
+    const { service } = makeService(ordinamento, ['Scatto.CodiceGruppo', 'Referenza.Codice']);
+
+    const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
+
+    expect(dato.campi_identita).toEqual(['Scatto.CodiceGruppo', 'Referenza.Codice']);
+  });
+
+  it('con una libreria che non li dichiara restituisce un elenco vuoto', async () => {
+    const { service } = makeService(ordinamento);
+
+    const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
+
+    expect(dato.campi_identita).toEqual([]);
   });
 });

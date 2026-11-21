@@ -173,6 +173,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     }];
     private TEMI_ESCLUSI_DA_FORMAT_PLUS = ["PIU VALORE", "SPENDI PUNTI"];
     public CHIAVE_DEDUP_MENABO = "Scatto.CodiceGruppo";
+    /** Una referenza del menabò si riconosce dal codice del gruppo di scatto, altrimenti dal suo codice. */
+    public CAMPI_IDENTITA_MENABO: readonly string[] = [this.CHIAVE_DEDUP_MENABO, "Referenza.Codice"];
 
     /** La lista soci contiene tutti i canali/aree: ogni promo tiene solo i suoi (I20-958). */
     public visibilitaPromo: DimensioneVisibilitaPromo[] = ["canale", "area"];
