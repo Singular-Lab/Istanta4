@@ -50,33 +50,6 @@ public static class GriglieFormato
     };
 
     /// <summary>
-    /// La griglia «come impaginata» (ricalco della pagina): una casella per ogni box dell'impaginato
-    /// della pagina, nella posizione e con la misura di quel box, numerate in ordine di lettura.
-    /// Serve alle pagine che nessuna griglia a sistema disegna come nell'impaginato (una riga di tre
-    /// box sopra due righe di due). Non sta fra le sette: quante caselle ha dipende dalla pagina.
-    /// </summary>
-    public const string Impaginata = "impaginata";
-
-    /// <summary>Se il nome e' quello della griglia come impaginata.</summary>
-    public static bool EImpaginata(string? nome) =>
-        string.Equals(nome?.Trim(), Impaginata, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// La griglia come impaginata di una pagina con «posti» box. E' una riga sola di «posti» caselle:
-    /// cosi' i conti sulle posizioni (caselle occupate, scambi, blocchi) restano quelli di ogni
-    /// griglia. Dove sta ogni casella lo dice il box, non la riga: il disegno sta in timone.js.
-    /// </summary>
-    public static Griglia ComeImpaginata(int posti) => new(Impaginata, 1, Math.Max(1, posti));
-
-    /// <summary>
-    /// La griglia di una pagina dal nome salvato: una delle sette, oppure quella come impaginata con
-    /// tante caselle quanti box ha la pagina nell'impaginato. Null se il nome e' vuoto o sconosciuto,
-    /// o se la pagina come impaginata non ha box suoi.
-    /// </summary>
-    public static Griglia? DellaPagina(string? nome, int boxDellaPagina) =>
-        EImpaginata(nome) ? (boxDellaPagina > 0 ? ComeImpaginata(boxDellaPagina) : null) : Trova(nome);
-
-    /// <summary>
     /// Le griglie che si possono scegliere. Oggi sono sempre tutte e sette, per qualsiasi
     /// volantino di qualsiasi cliente.
     ///
