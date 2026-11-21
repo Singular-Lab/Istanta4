@@ -32,6 +32,9 @@
     bool legendaAttiva = false;
     // I20-1243: il riquadro «Notifiche email» in basso e' tolto; si riattivera' in futuro.
     bool emailVisibili = false;
+    // La campanella delle notifiche in testata e' nascosta per ora, non tolta: script, tendina e
+    // contatore restano. Si rimette con true qui.
+    bool campanellaVisibile = false;
 }
 <!DOCTYPE html>
 <html lang="it">
@@ -99,6 +102,8 @@ svg.i{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-widt
   position:relative;width:40px;height:40px;border-radius:50%;border:0;background:transparent;cursor:pointer;
   display:grid;place-items:center;color:var(--ink-2);
 }
+/* senza questa, display:grid qui sopra vincerebbe sull'attributo hidden (campanellaVisibile) */
+.bell[hidden]{display:none}
 .bell:hover{background:var(--bg)}
 .bell svg.i{width:22px;height:22px}
 .bell .n{
@@ -230,7 +235,7 @@ h2.sec small{font-size:12.5px;font-weight:500;color:var(--ink-3)}
 @@keyframes flash{0%,35%{box-shadow:0 0 0 3px var(--teal),var(--shadow-hi)}100%{box-shadow:var(--shadow)}}
 .camp-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .camp-top .pill{margin-top:2px}
-.camp-name{font-size:17px;font-weight:700;letter-spacing:-.2px}
+.camp-name{font-size:13px;font-weight:700;letter-spacing:-.2px}
 .camp-meta{display:flex;justify-content:space-between;margin-top:8px;font-size:13px;color:var(--ink-2)}
 .camp-meta .open{color:var(--ink-3)}
 .camp-meta .open.has{color:var(--lock);font-weight:600}
@@ -448,8 +453,9 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
         @* GESTISCI PROMO (j209): solo Agenzia, come Home.aspx:299 dell'originale *@
         <a class="logout" href="~/Promo/Gestisci" style="display:inline-flex;align-items:center;text-decoration:none;background:var(--teal-700);border-color:var(--teal-700);color:#fff">Gestisci promo</a>
     }
-    @* j243: la campanella apre la tendina delle notifiche. Prima non faceva niente. *@
-    <button class="bell" type="button" id="bell" title="Notifiche"
+    @* j243: la campanella apre la tendina delle notifiche. Prima non faceva niente.
+       Nascosta per ora con campanellaVisibile, in cima alla pagina. *@
+    <button class="bell" type="button" id="bell" title="Notifiche" hidden="@(!campanellaVisibile)"
             aria-label="Notifiche, @Model.NotificheNonLette non lette">
       <svg class="i"><use href="#i-bell"/></svg>
       <span class="n" id="bellN" hidden="@bellNascosto">@bellNumero</span>

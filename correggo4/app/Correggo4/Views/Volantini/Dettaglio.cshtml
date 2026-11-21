@@ -52,7 +52,6 @@
     }
     .barra_alta .titolo_zona .titolo_testo { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .barra_alta .titolo_zona img { flex: none; }
-    .barra_alta .titolo_zona .dropdown { width: 20px; margin-right: 5px; cursor: pointer; }
     .barra_alta .postit { width: 50px; margin-left: 15px; margin-top: -5px; cursor: pointer; }
     .barra_alta .destra { flex: none; margin-left: auto; display: flex; align-items: center; height: 80px; }
     .barra_alta .pagine_btn { width: 100px; margin: 5px; cursor: pointer; }
@@ -790,7 +789,6 @@
 <div class="barra_alta">
     <img class="logo" src="@img/Icon_Correggo.png" alt="Correggo" onclick="location.href='@Url.Content("~/Volantini")'">
     <div class="titolo_zona">
-        <img class="dropdown" src="@img/dropdown_titvol.png" alt="" title="Cambia volantino">
         <span class="titolo_testo" title="@Model.Titolo &ndash; VERSIONE N&deg; @Model.Versione">@Model.Titolo &ndash; VERSIONE N&deg; @Model.Versione</span>
         <img class="postit" src="@img/post-it.png" alt="" title="APPUNTI">
     </div>

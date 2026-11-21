@@ -499,7 +499,7 @@ body.tim_on .modale {
 .tim_casella .sk .foto img.nofoto { opacity: .6; }
 .tim_casella .sk .foto .carico { font-size: 9px; color: #a4b0b6; text-align: center; }
 .tim_casella .sk .bolli { position: absolute; left: 2px; bottom: 2px; display: flex; gap: 2px; }
-.tim_casella .sk .bolli img { width: 17px; height: 17px; object-fit: contain; }
+.tim_casella .sk .bolli img { width: 30px; height: 30px; object-fit: contain; }
 .tim_casella .sk .info { flex: 1 1 auto; min-width: 0; padding: 1px 6px 2px;
                          display: flex; flex-direction: column; }
 .tim_casella .sk .riga1 { display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
