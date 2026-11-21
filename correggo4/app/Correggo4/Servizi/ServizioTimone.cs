@@ -294,17 +294,6 @@ public sealed partial class ServizioTimone
     }
 
     /// <summary>
-    /// Quanti box aveva nell'impaginato ogni pagina del piano (per numero di pagina): le posizioni
-    /// d'origine diverse delle voci nate li'. Le referenze di uno stesso box hanno la stessa
-    /// posizione d'origine, e una voce spostata altrove la tiene: il posto della pagina resta.
-    /// Sono le caselle della griglia come impaginata (GriglieFormato.DellaPagina).
-    /// </summary>
-    internal static Dictionary<short, int> BoxPerPagina(IEnumerable<VolantiniTimoneVoci> voci) =>
-        voci.Where(v => v.PaginaOrigine != null && v.PosizioneOrigine != null)
-            .GroupBy(v => v.PaginaOrigine!.Value)
-            .ToDictionary(g => g.Key, g => g.Select(v => v.PosizioneOrigine!.Value).Distinct().Count());
-
-    /// <summary>
     /// Dal dna del box tira fuori il codice della referenza e una descrizione leggibile.
     /// Il dna è un jsonb con le chiavi codice, codici, gruppo, descrizione (verificato sui dati
     /// veri il 28/09). Se manca o è rotto non si butta via il box: si usa il basecode.
@@ -564,15 +553,13 @@ public sealed partial class ServizioTimone
         // Si costruiscono le due liste con cicli normali invece che dentro le Select: il codice e'
         // piu' lungo ma si legge, e non si finisce a chiamare tre volte lo stesso dizionario.
         var pagineFuori = new List<object>();
-        var boxPerPagina = BoxPerPagina(voci);
         foreach (var p in pagine)
         {
             decimal larghezza = 0m, altezza = 0m;
             if (dimPagina.TryGetValue(p.Numero, out var dim)) { larghezza = dim.Larghezza; altezza = dim.Altezza; }
             // j254: righe e colonne servono al browser per disegnare le caselle. Il primo numero
-            // del nome sono le righe (3x4 = 3 righe, 4 colonne). Come impaginata: una riga di
-            // tante caselle quanti box ha la pagina.
-            var gr = GriglieFormato.DellaPagina(p.Griglia, boxPerPagina.GetValueOrDefault(p.Numero));
+            // del nome sono le righe (3x4 = 3 righe, 4 colonne).
+            var gr = GriglieFormato.Trova(p.Griglia);
             pagineFuori.Add(new
             {
                 id = p.Id,

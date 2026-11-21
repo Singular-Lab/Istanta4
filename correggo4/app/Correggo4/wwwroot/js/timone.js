@@ -218,9 +218,6 @@ body.tim_sbircia .tim_bloccata { display: none; }
 #tim_scelta .opzioni button[disabled]:hover { border-color: #dfe5e8; }
 #tim_scelta .mini { display: grid; gap: 2px; width: 46px; height: 46px; }
 #tim_scelta .mini i { background: #9cdcd8; border-radius: 1px; display: block; }
-/* come impaginata: i box della pagina al loro posto, non una griglia */
-#tim_scelta .mini.ricalco { display: block; position: relative; width: 33px; background: #f1f4f5; }
-#tim_scelta .mini.ricalco i { position: absolute; box-sizing: border-box; border: 1px solid #fff; }
 #tim_scelta .opzioni button.scelta .mini i { background: #1d5b55; }
 #tim_scelta .nome { font-size: 12px; font-weight: 800; line-height: 1; }
 #tim_scelta .posti { font-size: 10.5px; color: #7c8a91; line-height: 1; }
@@ -1522,11 +1519,8 @@ var STILE_REPORT = `
                     '>&#8722;</button>';
                 c.appendChild(m);
             }
-            // come impaginata ogni casella e' un box: niente maniglie, una referenza non si allarga
-            if (!eImpaginata(pagina.griglia)) {
-                maniglia('largo', 'Stringi di una casella', 'Allarga di una casella');
-                maniglia('alto', 'Abbassa di una casella', 'Alza di una casella');
-            }
+            maniglia('largo', 'Stringi di una casella', 'Allarga di una casella');
+            maniglia('alto', 'Abbassa di una casella', 'Alza di una casella');
         } else if (v.posizione) {
             /* j286: LA MATITA C'E' ANCHE QUANDO IL TIMONE E' IN SOLA LETTURA per chi guarda.
                Non e' una dimenticanza: la scheda dell'Edit avanzato ha permessi suoi - il
@@ -1642,99 +1636,9 @@ var STILE_REPORT = `
         return { x: l * 0.04, y: h * 0.06, w: l * 0.92, h: h * 0.88 };
     }
 
-    /* ---------- LA PAGINA COME IMPAGINATA (il ricalco) ----------
-       Una pagina come la 14 di 0S26_26_B_UFI_B (tre box nella prima riga, due nella seconda e
-       nella terza) non la disegna nessuna griglia a sistema: in una 2x4 le referenze finivano
-       lontano da dove stanno. «Come impaginata» la pagina ha una casella per ogni box
-       dell'impaginato, sul box stesso, numerate in ordine di lettura come la fotografia del
-       piano (posizioneOrigine). Dentro e' una riga sola di N caselle: cosi' tutti i conti sulle
-       posizioni - caselle occupate, scorrimento, blocchi, salvataggio - restano quelli delle
-       altre griglie; cambia solo DOVE si disegna la casella. Le referenze non si allargano: una
-       casella e' un box. Lo stesso nome e le stesse regole stanno nel server
-       (GriglieFormato.Impaginata, ServizioTimone.GrigliaDiPartenza). */
-    var IMPAGINATA = 'impaginata';
-
-    function eImpaginata(nome) {
-        return String(nome || '').trim().toLowerCase() === IMPAGINATA;
-    }
-
-    // come si chiama una griglia scritta per chi guarda
-    function nomeGriglia(nome) {
-        return eImpaginata(nome) ? 'come impaginata' : 'griglia ' + nome;
-    }
-
-    /* I box dell'impaginato della pagina, per posizione d'origine (indice = posizione - 1), come
-       li ha fotografati il piano. Le voci arrivate da altre pagine non contano; quelle partite si',
-       perche' il loro box resta sulla pagina. «voci» e' il piano da cui leggere, se non e' quello
-       del timone: la preview del report li legge dal piano salvato e li lascia sulla pagina
-       (boxImpaginato), perche' i box di una fotografia non cambiano. */
-    function boxDellaPagina(pagina, voci) {
-        if (!voci && pagina && pagina.boxImpaginato) return pagina.boxImpaginato;
-        var posti = [];
-        (voci || (piano && piano.voci) || []).forEach(function (v) {
-            if (!pagina || v.paginaOrigine !== pagina.numero || !v.posizioneOrigine) return;
-            var k = v.posizioneOrigine - 1;
-            if (!posti[k]) posti[k] = { x: Number(v.x), y: Number(v.y), w: Number(v.w), h: Number(v.h) };
-        });
-        return posti.filter(function (b) { return !!b; });
-    }
-
-    /* La griglia come impaginata di una pagina: una riga di tante caselle quanti box. */
-    function grigliaImpaginata(pagina) {
-        var n = boxDellaPagina(pagina).length;
-        return n ? { nome: IMPAGINATA, righe: 1, colonne: n, posti: n } : null;
-    }
-
-    /* La casella «posizione» di una pagina come impaginata: il suo box, ritagliato ai bordi della
-       pagina (un box dell'impaginato puo' sbordare: quello di pagina 14 arrivava al 109%). */
-    function postoImpaginato(pagina, posizione) {
-        var b = boxDellaPagina(pagina)[posizione - 1];
-        if (!b) return null;
-        var pw = Number(pagina.larghezza), ph = Number(pagina.altezza);
-        var x1 = Math.max(0, b.x), y1 = Math.max(0, b.y);
-        var x2 = pw ? Math.min(pw, b.x + b.w) : b.x + b.w, y2 = ph ? Math.min(ph, b.y + b.h) : b.y + b.h;
-        if (x2 <= x1 || y2 <= y1) return null;
-        return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
-    }
-
-    /* Se una griglia disegna i box della pagina come stanno nell'impaginato, cioe' se le posizioni
-       relative tornano a due a due: stessa riga nel disegno e nell'impaginato, nello stesso ordine
-       da sinistra; righe diverse nello stesso ordine dall'alto; stessa colonna nella stessa
-       colonna. Le misure non contano. E' ServizioTimone.PaginaDisegnataComeImpaginato: se cambia
-       la', va cambiata anche qui. */
-    function stessaRiga(a, b) {
-        return Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) >= Math.min(a.h, b.h) / 2;
-    }
-
-    function stessaColonna(a, b) {
-        return Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) >= Math.min(a.w, b.w) / 2;
-    }
-
-    function disegnataComeImpaginato(g, box) {
-        var col = g.colonne;
-        for (var i = 0; i < box.length; i++) {
-            for (var j = i + 1; j < box.length; j++) {
-                var a = box[i], b = box[j];
-                var ra = Math.floor(i / col), rb = Math.floor(j / col), xa = i % col, xb = j % col;
-                var cxa = a.x + a.w / 2, cxb = b.x + b.w / 2, cya = a.y + a.h / 2, cyb = b.y + b.h / 2;
-                if (ra === rb) {
-                    if (!stessaRiga(a, b)) return false;
-                    if (xa !== xb && (xa < xb) !== (cxa < cxb)) return false;
-                } else {
-                    if (stessaRiga(a, b)) return false;
-                    if ((ra < rb) !== (cya < cyb)) return false;
-                    if (xa === xb && !stessaColonna(a, b)) return false;
-                }
-            }
-        }
-        return true;
-    }
-
     /* Le caselle vuote della griglia, disegnate sotto le referenze: si vede subito quanti posti
-       ci sono e quali sono liberi. Si contano per righe, da sinistra a destra. Come impaginata la
-       casella e' il box (il riquadro non serve). */
+       ci sono e quali sono liberi. Si contano per righe, da sinistra a destra. */
     function cellaDi(r, pagina, posizione) {
-        if (eImpaginata(pagina.griglia)) return postoImpaginato(pagina, posizione);
         var col = pagina.colonne, rig = pagina.righe;
         if (!col || !rig || !r) return null;
         var i = posizione - 1;
@@ -1748,14 +1652,10 @@ var STILE_REPORT = `
        tiene tutte le caselle. Null se sfora: in quel caso non si disegna, perche' sarebbe una
        bugia. */
     function rettangoloDi(r, pagina, posizione, colonne, righe) {
-        colonne = Math.max(1, Number(colonne) || 1);
-        righe = Math.max(1, Number(righe) || 1);
-        // come impaginata una referenza sta in un box solo: allargata non ha un posto vero
-        if (eImpaginata(pagina.griglia)) {
-            return colonne === 1 && righe === 1 && posizione ? postoImpaginato(pagina, posizione) : null;
-        }
         var col = pagina.colonne, rig = pagina.righe;
         if (!col || !rig || !r || !posizione) return null;
+        colonne = Math.max(1, Number(colonne) || 1);
+        righe = Math.max(1, Number(righe) || 1);
         var i = posizione - 1;
         if (i < 0 || i >= col * rig) return null;
         var c0 = i % col, r0 = Math.floor(i / col);
@@ -1768,7 +1668,6 @@ var STILE_REPORT = `
         var pw = Number(pagina.larghezza), ph = Number(pagina.altezza);
         for (var k = 1; k <= pagina.righe * pagina.colonne; k++) {
             var q = cellaDi(r, pagina, k);
-            if (!q) continue;
             var d = document.createElement('div');
             d.className = 'tim_cella';
             d.dataset.k = k;
@@ -1820,9 +1719,7 @@ var STILE_REPORT = `
             // salire, stringendo si torna fin qui
             if (!pagina.grigliaBase && pagina.griglia) pagina.grigliaBase = pagina.griglia;
             var r = riquadro(nativi, pagina);
-            // come impaginata le caselle sono i box: il riquadro non serve
-            var conGriglia = eImpaginata(pagina.griglia) ? !!grigliaDi(pagina)
-                                                         : pagina.righe > 0 && pagina.colonne > 0 && r;
+            var conGriglia = pagina.righe > 0 && pagina.colonne > 0 && r;
             if (conGriglia) disegnaGriglia(foglio, pagina, r);
             dentro.forEach(function (v) {
                 disegnaCasella(foglio, v, pagina,
@@ -1989,18 +1886,6 @@ var STILE_REPORT = `
         return g || null;
     }
 
-    /* IL RICALCO. Se la griglia indovinata non disegna la pagina come nell'impaginato (una riga di
-       tre box sopra due righe di due), la pagina e' come impaginata, una casella per box - purche'
-       i box bastino per le caselle da mettere. Si guardano tutti i box della pagina in ordine di
-       lettura: e' la stessa regola di ServizioTimone.GrigliaDiPartenza, che la usa per gli scambi
-       del Report Correggo. Se la si cambia qui, va cambiata anche la'. */
-    function ricalcoSeServe(pagina, g, quante) {
-        var box = boxDellaPagina(pagina);
-        if (!box.length || box.length < quante) return g;
-        if (g && disegnataComeImpaginato(g, box)) return g;
-        return grigliaImpaginata(pagina);
-    }
-
     /* Se la pagina non ha ancora una griglia, le si mette quella indovinata. Non conta come una
        modifica dell'utente: non ha scelto niente lui, si sta solo mostrando com'e' fatta la
        pagina. Al primo SALVA quella griglia diventa ufficiale, ed e' giusto cosi'.
@@ -2015,7 +1900,6 @@ var STILE_REPORT = `
     function grigliaDiPartenza(pagina, nativi, quante) {
         if (pagina.griglia) return;
         var g = indovinaGriglia(nativi, quante);
-        if (nativi && nativi.length) g = ricalcoSeServe(pagina, g, quante || nativi.length);
         if (!g && quante > 0) g = piuPiccolaCheBasta(quante);
         if (!g) return;
         pagina.griglia = g.nome;
@@ -2042,13 +1926,12 @@ var STILE_REPORT = `
         if (!si) { chiudiScelta(); return; }
 
         bGriglia.textContent = pagina.griglia
-            ? nomeGriglia(pagina.griglia) + '  \u25BE'
+            ? 'griglia ' + pagina.griglia + '  \u25BE'
             : 'scegli la griglia  \u25BE';
-        bGriglia.title = !pagina.griglia ? 'Scegli come dividere la pagina'
-            : eImpaginata(pagina.griglia)
-            ? 'Una casella per ogni box dell\'impaginato, ' + pagina.capienza + ' posti'
-            : pagina.colonne + (pagina.colonne === 1 ? ' colonna' : ' colonne') + ' \u00D7 ' +
-              pagina.righe + (pagina.righe === 1 ? ' riga' : ' righe') + ', ' + pagina.capienza + ' posti';
+        bGriglia.title = pagina.griglia
+            ? pagina.colonne + (pagina.colonne === 1 ? ' colonna' : ' colonne') + ' \u00D7 ' +
+              pagina.righe + (pagina.righe === 1 ? ' riga' : ' righe') + ', ' + pagina.capienza + ' posti'
+            : 'Scegli come dividere la pagina';
         bGriglia.dataset.pagina = pagina.id;
         bGriglia.dataset.quante = quante;
 
@@ -2076,34 +1959,6 @@ var STILE_REPORT = `
                      '<div class="quante">' + quante +
                      (quante === 1 ? ' referenza in pagina' : ' referenze in pagina') +
                      (puo ? '' : ' \u00B7 sola lettura') + '</div><div class="opzioni">';
-
-        /* Come impaginata: la pagina disegnata in piccolo con i suoi box, se ne ha. Si puo' scegliere
-           se i box bastano per le caselle e nessuna referenza e' allargata (un box non si allarga). */
-        var gi = grigliaImpaginata(pagina);
-        if (gi) {
-            var pw = Number(pagina.larghezza), ph = Number(pagina.altezza);
-            var mini = '';
-            for (var b = 1; b <= gi.posti; b++) {
-                var q = postoImpaginato(pagina, b);
-                if (!q || !pw || !ph) continue;
-                mini += '<i style="left:' + (q.x / pw * 100) + '%;top:' + (q.y / ph * 100) + '%;width:' +
-                        (q.w / pw * 100) + '%;height:' + (q.h / ph * 100) + '%"></i>';
-            }
-            var allargate = qualcunoAllargato((piano.voci || []).filter(function (v) {
-                return v.stato === 0 && v.idPagina === idPag;
-            }));
-            var spentaI = !puo || gi.posti < quante || allargate;
-            dentro += '<button type="button" data-g="' + IMPAGINATA + '"' +
-                      (eImpaginata(pagina.griglia) ? ' class="scelta"' : '') +
-                      (spentaI ? ' disabled' : '') +
-                      ' title="Una casella per ogni box dell\'impaginato, dove sta il box' +
-                      (gi.posti < quante ? ' \u2014 non bastano per le ' + quante + ' referenze' : '') +
-                      (allargate ? ' \u2014 prima vanno ristrette le referenze allargate' : '') + '">' +
-                      '<span class="mini ricalco">' + mini + '</span>' +
-                      '<span class="nome">come impaginata</span>' +
-                      '<span class="posti">' + gi.posti + ' posti</span>' +
-                      '</button>';
-        }
 
         (piano.griglieAmmesse || []).forEach(function (g) {
             var celle = '';
@@ -2143,18 +1998,9 @@ var STILE_REPORT = `
         var pagina = (piano.pagine || []).filter(function (p) { return p.id === idPag; })[0];
         if (!pagina || nome === pagina.griglia) { chiudiScelta(); return; }
 
-        var g = eImpaginata(nome) ? grigliaImpaginata(pagina)
-            : (piano.griglieAmmesse || []).filter(function (x) { return x.nome === nome; })[0];
+        var g = (piano.griglieAmmesse || []).filter(function (x) { return x.nome === nome; })[0];
         var dentro = (piano.voci || []).filter(function (v) { return v.stato === 0 && v.idPagina === idPag; });
         if (!g) return;
-        // come impaginata una casella e' un box: con referenze allargate non ci si passa
-        if (eImpaginata(g.nome) && qualcunoAllargato(dentro)) {
-            chiudiScelta();
-            messaggio('Ci sono referenze allargate',
-                'Come impaginata ogni casella e\' un box dell\'impaginato e le referenze non si allargano. ' +
-                'Restringi prima le referenze allargate di questa pagina.');
-            return;
-        }
 
         /* CASELLE E REFERENZE NON SONO LA STESSA COSA, e qui stava un bug che Michele ha chiamato
            «gigantesco» - a ragione.
@@ -2183,8 +2029,7 @@ var STILE_REPORT = `
                 (dentro.length !== caselle.length ? ' (' + dentro.length + ' referenze, perche\' i ' +
                  'gruppi stanno in una casella sola)' : '') +
                 (bl.length ? ' e ' + bl.length + (bl.length === 1 ? ' casella bloccata' : ' caselle bloccate') : '') +
-                ', e ' + (eImpaginata(nome) ? 'come impaginata' : 'nella ' + nome) +
-                ' di posti ce ne sono ' + g.posti + '. ' +
+                ', e nella ' + nome + ' di posti ce ne sono ' + g.posti + '. ' +
                 (basta ? 'La piu\' piccola che le contiene tutte e\' la ' + basta.nome + '.'
                        : 'Nessuna griglia e\' abbastanza grande: vanno prima tolte delle referenze.'));
             return;
@@ -2192,14 +2037,7 @@ var STILE_REPORT = `
 
         var gVecchia = grigliaDi(pagina);
 
-        if ((gVecchia && eImpaginata(gVecchia.nome)) || eImpaginata(g.nome)) {
-            /* Da o verso come impaginata le caselle si leggono in ordine di lettura in tutte e due:
-               ognuno tiene il suo numero se ci sta, altrimenti si ricompatta tenendo l'ordine. Le
-               caselle bloccate vanno con gli altri, sempre nello stesso ordine. */
-            var inOrdine = caselle.concat(bl).sort(function (a, b2) { return a.posizione - b2.posizione; });
-            var ultimo = inOrdine.length ? inOrdine[inOrdine.length - 1].posizione : 0;
-            if (ultimo > g.posti) inOrdine.forEach(function (x, i2) { x.posizione = i2 + 1; });
-        } else if (qualcunoAllargato(dentro) || bl.length) {
+        if (qualcunoAllargato(dentro) || bl.length) {
             /* Con referenze allargate - o con caselle bloccate (j280) - non si puo' rinumerare
                alla cieca: si prova a sistemare la pagina nella griglia scelta, tenendo ognuno
                dov'e' se ci sta. I blocchi non si spostano mai: se non ci stanno, la griglia non
@@ -2527,21 +2365,7 @@ var STILE_REPORT = `
     }
 
     function grigliaDi(pagina) {
-        if (eImpaginata(pagina.griglia)) return grigliaImpaginata(pagina);
         return (piano.griglieAmmesse || []).filter(function (g) { return g.nome === pagina.griglia; })[0] || null;
-    }
-
-    /* La griglia in cui passa una pagina che non basta piu': deve avere abbastanza colonne e righe
-       per lasciare tutti dove sono, e abbastanza posti. Da una pagina come impaginata (una riga di
-       N caselle, una per box) colonne e righe non vogliono dire niente: si passa alla piu' piccola
-       griglia a sistema che basta, e le caselle restano in ordine di lettura (rifaiPosizioni da
-       una riga sola lascia i numeri come sono). */
-    function grigliaPiuGrande(g, serveCol, serveRig, area) {
-        var amm = piano.griglieAmmesse || [];
-        if (g && eImpaginata(g.nome)) return amm.filter(function (x) { return x.posti >= area; })[0] || null;
-        return amm.filter(function (x) {
-            return x.colonne >= serveCol && x.righe >= serveRig && x.posti >= area;
-        })[0] || null;
     }
 
     /* ---------- I GRUPPI, NEL BROWSER (j291) ----------
@@ -2873,8 +2697,6 @@ var STILE_REPORT = `
         if (!piano || !pagina) return null;
         var g = grigliaDi(pagina);
         if (!g) return null;
-        // una pagina come impaginata non scende: le sue caselle sono i box, non una griglia piu' grande
-        if (eImpaginata(g.nome)) return null;
 
         var dentro = vociInPagina(pagina.id);
         var bl = blocchiDi(pagina.id);
@@ -2995,19 +2817,19 @@ var STILE_REPORT = `
                 serveCol = Math.max(serveCol, (q % g.colonne) + cc);
                 serveRig = Math.max(serveRig, Math.floor(q / g.colonne) + rr);
             });
-            var nuova = grigliaPiuGrande(g, serveCol, serveRig, area);
+            var nuova = (piano.griglieAmmesse || []).filter(function (x) {
+                return x.colonne >= serveCol && x.righe >= serveRig && x.posti >= area;
+            })[0];
             if (!nuova) {
                 messaggio('Non ci sta da nessuna parte',
                     'La pagina ' + dest.numero + ' e\' piena e non c\'e\' nessuna griglia abbastanza ' +
                     'grande per una referenza in piu\'. Va tolto prima qualcosa da quella pagina.');
                 return;
             }
-            cambiata = (eImpaginata(g.nome) ? 'come impaginata' : g.nome) + ' a ' + nuova.nome;
+            cambiata = g.nome + ' a ' + nuova.nome;
             // il numero della casella cambia significato con le colonne: si ricalcola (j275).
             // Anche le caselle bloccate devono seguire, sennò il divieto si sposterebbe da solo.
             rifaiPosizioni(conBlocchi(dentro, dest.id), g, nuova);
-            // lasciata la pagina come impaginata, il pavimento e' la griglia in cui si e' passati
-            if (eImpaginata(g.nome)) dest.grigliaBase = nuova.nome;
             dest.griglia = nuova.nome;
             dest.righe = nuova.righe;
             dest.colonne = nuova.colonne;
@@ -4244,17 +4066,18 @@ var STILE_REPORT = `
                 serveCol = Math.max(serveCol, (q % g.colonne) + Math.max(1, x.colonne || 1));
                 serveRig = Math.max(serveRig, Math.floor(q / g.colonne) + Math.max(1, x.righe || 1));
             });
-            var nuova = grigliaPiuGrande(g, serveCol, serveRig, area);
+            var nuova = (piano.griglieAmmesse || []).filter(function (x) {
+                return x.colonne >= serveCol && x.righe >= serveRig && x.posti >= area;
+            })[0];
             if (!nuova) {
                 messaggio('Non c\'e\' dove farla scorrere',
                     'La pagina ' + pagina.numero + ' e\' piena e non c\'e\' nessuna griglia piu\' ' +
                     'grande fra quelle a sistema. Va prima tolta una referenza da questa pagina.');
                 return;
             }
-            cambiata = (eImpaginata(g.nome) ? 'come impaginata' : g.nome) + ' a ' + nuova.nome;
+            cambiata = g.nome + ' a ' + nuova.nome;
             rifaiPosizioni(dentro.concat(bl), g, nuova);
             posizione = rifaiUna(posizione, g, nuova);
-            if (eImpaginata(g.nome)) pagina.grigliaBase = nuova.nome;
             pagina.griglia = nuova.nome;
             pagina.righe = nuova.righe;
             pagina.colonne = nuova.colonne;
@@ -4569,13 +4392,6 @@ var STILE_REPORT = `
         if (!pagina) return;
         var g = grigliaDi(pagina);
         if (!g) { messaggio('Prima la griglia', 'Per allargare una referenza la pagina deve avere una griglia.'); return; }
-        // come impaginata ogni casella e' un box: le maniglie non ci sono, e qui non si passa
-        if (eImpaginata(g.nome)) {
-            messaggio('Pagina come impaginata',
-                'In una pagina come impaginata ogni casella e\' un box dell\'impaginato e le referenze ' +
-                'non si allargano. Per allargarla scegli prima una griglia a sistema dal pulsante della griglia.');
-            return;
-        }
 
         var col = Math.max(1, (v.colonne || 1) + dcol);
         var rig = Math.max(1, (v.righe || 1) + drig);
@@ -5404,7 +5220,7 @@ function rpCostruisci(piano, opzioni) {
         var libere = Math.max(0, p.capienza - occupate - bloccateQui.length);
         var gri;
         if (p.griglia) {
-            gri = rpEsc(nomeGriglia(p.griglia)) + ' = ' + p.capienza + ' caselle &middot; ' +
+            gri = 'griglia ' + p.griglia + ' = ' + p.capienza + ' caselle &middot; ' +
                   occupate + ' ' + rpPlurale(occupate, 'occupata', 'occupate') + ' &middot; ' +
                   libere + ' ' + rpPlurale(libere, 'libera', 'libere');
             if (bloccateQui.length)
@@ -5575,14 +5391,11 @@ function rpCostruisci(piano, opzioni) {
         var dentro = voci.filter(function (v) { return !!v.posizione; });
         var nativi = dentro.filter(function (v) { return v.paginaOrigine === numero; });
         var conGriglia = pagina.righe > 0 && pagina.colonne > 0;
-        // la griglia sta nel riquadro dei prodotti nati qui, come nel timone; come impaginata le
-        // caselle sono i box della pagina, letti dal piano del report
-        var imp = eImpaginata(pagina.griglia);
-        if (imp) pagina.boxImpaginato = boxDellaPagina(pagina, p.voci);
+        // la griglia sta nel riquadro dei prodotti nati qui, come nel timone
         var r = conGriglia ? riquadro(nativi, pagina) : null;
         var nuova = [];
         if (pw && ph) {
-            if (conGriglia && (r || imp)) {
+            if (conGriglia && r) {
                 for (var k = 1; k <= pagina.righe * pagina.colonne; k++) {
                     var c = cellaDi(r, pagina, k);
                     if (c) nuova.push('<div class="cl" style="' + pc(c) + '"></div>');
@@ -5606,7 +5419,7 @@ function rpCostruisci(piano, opzioni) {
                     '<span class="cod">' + rpEsc(gruppo.map(function (x) { return x.codice; }).join(', ')) + '</span>' +
                     (v.prezzo ? '<span class="pz">' + rpEsc(v.prezzo) + '</span>' : '') + '</div>');
             });
-            if (conGriglia && (r || imp)) (p.blocchi || []).forEach(function (b) {
+            if (conGriglia && r) (p.blocchi || []).forEach(function (b) {
                 if (b.idPagina !== pagina.id) return;
                 var c = cellaDi(r, pagina, b.posizione);
                 if (c) nuova.push('<div class="cs blo" style="' + pc(c) + '" title="casella tenuta per la grafica">&#8856;</div>');
@@ -5615,7 +5428,7 @@ function rpCostruisci(piano, opzioni) {
         return '<div class="rp_ante">' +
             '<div class="lato"><div class="tit">PRIMA <small>arrivata su Correggo</small></div>' + vecchia + '</div>' +
             '<div class="lato"><div class="tit">DOPO <small>' +
-            (conGriglia ? rpEsc(nomeGriglia(pagina.griglia)) : 'senza griglia: referenze al loro posto') +
+            (conGriglia ? 'griglia ' + rpEsc(pagina.griglia) : 'senza griglia: referenze al loro posto') +
             '</small></div><div class="pg" style="' + forma + '">' + nuova.join('') + '</div></div></div>';
     }
 

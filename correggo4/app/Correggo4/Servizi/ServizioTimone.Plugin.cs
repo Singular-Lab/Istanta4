@@ -64,10 +64,6 @@ public sealed partial class ServizioTimone
     /// la griglia e' un'altra (l'ha cambiata il Marketing, o il timone allargando una referenza: in
     /// tutti e due i casi rinumera le caselle).
     ///
-    /// Una pagina COME IMPAGINATA (GriglieFormato.Impaginata, il ricalco delle pagine che nessuna griglia
-    /// a sistema disegna) ha la casella N sul box N dell'impaginato: non e' mai ridisegnata, e ogni
-    /// referenza cambiata va nel rettangolo del box vero.
-    ///
     /// Una referenza allargata (Colonne o Righe oltre 1) prende il box che nell'impaginato stava nella sua
     /// casella in alto a sinistra, allargato ai box delle altre caselle che copre se stanno sulla stessa
     /// riga (per le colonne) o sulla stessa colonna (per le righe): RettangoloAllargato.
@@ -204,20 +200,16 @@ public sealed partial class ServizioTimone
                                             && paginaPerId.ContainsKey(v.IdPaginaTimone.Value))
                                 .Select(v => paginaPerId[v.IdPaginaTimone!.Value])
                                 .Distinct().OrderBy(p => p.Numero).ToList();
-        var boxPerPagina = BoxPerPagina(voci);
         foreach (var pagina in pagineToccate)
         {
-            var griglia = GriglieFormato.DellaPagina(pagina.Griglia, boxPerPagina.GetValueOrDefault(pagina.Numero));
+            var griglia = GriglieFormato.Trova(pagina.Griglia);
             var caselle = InCasella(pagina);
             var originiPagina = origine.Where(o => o.Key.Pagina == pagina.Numero)
                 .Select(o => (o.Key.Posizione, R: RettangoloDi(o.Value.IdElemento)))
                 .Where(x => x.R != null).Select(x => (x.Posizione, x.R!)).ToList();
             var partenza = GrigliaDiPartenza(originiPagina.OrderBy(x => x.Posizione)
                 .Select(x => (x.Item2.X1, x.Item2.Y1, x.Item2.Larghezza, x.Item2.Altezza)).ToList());
-            // Come impaginata la casella N e' il box N dell'impaginato: la pagina non e' ridisegnata,
-            // e ogni referenza cambiata va nel rettangolo del box vero.
             bool ridisegnata = griglia != null
-                && !GriglieFormato.EImpaginata(griglia.Nome)
                 && (!string.Equals(griglia.Nome, partenza?.Nome, StringComparison.OrdinalIgnoreCase)
                     || !PaginaDisegnataComeImpaginato(griglia, originiPagina));
 
@@ -483,10 +475,6 @@ public sealed partial class ServizioTimone
     /// righe sono quante file di box si contano in orizzontale e in verticale; poi la prima griglia ammessa
     /// che combacia, altrimenti la piu' piccola con quelle colonne che li contiene tutti, altrimenti la piu'
     /// piccola che li contiene tutti.
-    ///
-    /// Se quella griglia non disegna la pagina come nell'impaginato (PaginaDisegnataComeImpaginato:
-    /// una riga di tre box sopra due righe di due), la pagina e' come impaginata, con una casella per
-    /// box: e' il ricalco della pagina, che nessuna griglia a sistema sa fare.
     /// </summary>
     public static Griglia? GrigliaDiPartenza(IReadOnlyList<(decimal X, decimal Y, decimal W, decimal H)> box)
     {
@@ -500,9 +488,6 @@ public sealed partial class ServizioTimone
              ?? amm.FirstOrDefault(x => x.Colonne == colonne && x.Posti >= quante)
              ?? amm.FirstOrDefault(x => x.Posti >= quante);
         if (g != null && g.Posti < quante) g = amm.FirstOrDefault(x => x.Posti >= quante);
-
-        var caselle = box.Select((b, i) => ((short)(i + 1), new Rettangolo(b.X, b.Y, b.X + b.W, b.Y + b.H))).ToList();
-        if (g == null || !PaginaDisegnataComeImpaginato(g, caselle)) return GriglieFormato.ComeImpaginata(quante);
         return g;
     }
 
