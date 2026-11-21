@@ -117,6 +117,16 @@ public sealed partial class ServizioTimone
                 ? new Rettangolo(b.PosizioneX, b.PosizioneY, b.PosizioneX + b.Larghezza, b.PosizioneY + b.Altezza)
                 : null;
 
+        // TASK-6c41ad00: le misure delle pagine vere, le stesse che il timone riceve nel piano (larghezza e
+        // altezza della versione): servono a tenere il riquadro della griglia dentro la pagina.
+        var misurePagina = await ctx.VolantiniPagines.AsNoTracking()
+            .Where(p => p.IdVol == idVolantino && p.Versione == versione)
+            .Select(p => new { p.Numero, p.Larghezza, p.Altezza })
+            .ToListAsync();
+        var bordiPerNumero = misurePagina.GroupBy(p => p.Numero)
+            .ToDictionary(g => g.Key, g => new Rettangolo(0m, 0m, g.First().Larghezza, g.First().Altezza));
+        Rettangolo? BordiPagina(short numero) => bordiPerNumero.TryGetValue(numero, out var r) ? r : null;
+
         // Il box che nell'impaginato stava nella casella N di una pagina: la voce con PosizioneOrigine N.
         var origine = voci.Where(v => v.PaginaOrigine != null && v.PosizioneOrigine != null && v.IdElemento != null)
             .GroupBy(v => (Pagina: v.PaginaOrigine!.Value, Posizione: v.PosizioneOrigine!.Value))
@@ -227,7 +237,8 @@ public sealed partial class ServizioTimone
                         aMano = $"{v.Codice} arriva da pagina {v.PaginaOrigine}: da sistemare a mano";
                     else
                     {
-                        r = CasellaNellaPagina(griglia!, v.Posizione!.Value, v.Colonne, v.Righe, nativi, SpazioFraBox(originiPagina.Select(x => x.Item2).ToList()));
+                        r = CasellaNellaPagina(griglia!, v.Posizione!.Value, v.Colonne, v.Righe, nativi, SpazioFraBox(originiPagina.Select(x => x.Item2).ToList()),
+                                               BordiPagina(pagina.Numero));
                         if (r == null)
                             aMano = $"{v.Codice} nella casella {v.Posizione} di pagina {pagina.Numero} esce dalla griglia {griglia!.Nome}: da sistemare a mano";
                     }
@@ -256,7 +267,7 @@ public sealed partial class ServizioTimone
                     var nativi = caselle.Where(x => x.PaginaOrigine == pagina.Numero).Select(x => RettangoloDi(x.IdElemento))
                                         .Where(x => x != null).Select(x => x!).ToList();
                     var (allargato, motivo) = RettangoloAllargato(griglia, v.Posizione!.Value, v.Colonne, v.Righe, nativi,
-                                                                  k => BoxDellaCasella(pagina.Numero, k));
+                                                                  k => BoxDellaCasella(pagina.Numero, k), BordiPagina(pagina.Numero));
                     if (allargato == null)
                         aMano = $"{v.Codice} allargata su {v.Colonne}×{v.Righe} caselle dalla casella {v.Posizione} di pagina {pagina.Numero}: {motivo}, da sistemare a mano";
                     r = allargato;
@@ -359,9 +370,12 @@ public sealed partial class ServizioTimone
     /// gli stessi conti del timone (riquadro e rettangoloDi in timone.js): il riquadro che contiene i box
     /// della pagina, diviso per la griglia. Fra una casella e l'altra si lascia lo spazio che c'era fra i
     /// box dell'impaginato; sul bordo del riquadro no. Null se le caselle escono dalla griglia.
+    /// "pagina" sono i bordi della pagina vera (0, 0, larghezza, altezza): il riquadro non ne esce mai
+    /// (TASK-6c41ad00, vedi RiquadroNellaPagina).
     /// </summary>
     public static Rettangolo? CasellaNellaPagina(Griglia griglia, short posizione, short colonne, short righe,
-                                                 IReadOnlyList<Rettangolo> boxDellaPagina, decimal spazio)
+                                                 IReadOnlyList<Rettangolo> boxDellaPagina, decimal spazio,
+                                                 Rettangolo? pagina = null)
     {
         if (boxDellaPagina.Count == 0) return null;
         colonne = colonne < 1 ? (short)1 : colonne;
@@ -371,7 +385,7 @@ public sealed partial class ServizioTimone
         int c0 = i % griglia.Colonne, r0 = i / griglia.Colonne;
         if (c0 + colonne > griglia.Colonne || r0 + righe > griglia.Righe) return null;
 
-        var q = boxDellaPagina.Aggregate((a, b) => a.Unione(b));
+        var q = RiquadroNellaPagina(boxDellaPagina, pagina);
         decimal cw = q.Larghezza / griglia.Colonne, ch = q.Altezza / griglia.Righe, m = spazio / 2m;
         decimal x1 = q.X1 + c0 * cw, y1 = q.Y1 + r0 * ch;
         decimal x2 = x1 + colonne * cw, y2 = y1 + righe * ch;
@@ -400,6 +414,23 @@ public sealed partial class ServizioTimone
                 if (d > 0m && (minimo == null || d < minimo)) minimo = d;
             }
         return minimo ?? 2.83m;
+    }
+
+    /// <summary>
+    /// TASK-6c41ad00, IL PARACADUTE: il riquadro della griglia e' l'unione dei box della pagina, ma
+    /// ritagliato ai bordi della pagina vera, cosi' non esce mai a sinistra, a destra, in alto o in basso.
+    /// Un box dell'export che sporge (volantino 125: pagina 16 un box da 36.61 largo 181.89 su 210, pagina
+    /// 9 uno da -24.82) allargava la griglia e la mandava fuori ricalco. Senza i bordi della pagina, o se il
+    /// ritaglio non lascia niente, resta l'unione dei box com'era. E' la stessa regola di riquadro() in
+    /// wwwroot/js/timone.js: se cambia la', va cambiata anche qui.
+    /// </summary>
+    public static Rettangolo RiquadroNellaPagina(IReadOnlyList<Rettangolo> boxDellaPagina, Rettangolo? pagina)
+    {
+        var q = boxDellaPagina.Aggregate((a, b) => a.Unione(b));
+        if (pagina == null || pagina.Larghezza <= 0m || pagina.Altezza <= 0m) return q;
+        var dentro = new Rettangolo(Math.Max(q.X1, pagina.X1), Math.Max(q.Y1, pagina.Y1),
+                                    Math.Min(q.X2, pagina.X2), Math.Min(q.Y2, pagina.Y2));
+        return dentro.Larghezza > 0m && dentro.Altezza > 0m ? dentro : q;
     }
 
     /// <summary>Un rettangolo della pagina, X1 Y1 in alto a sinistra, X2 Y2 in basso a destra.</summary>
@@ -431,7 +462,7 @@ public sealed partial class ServizioTimone
     /// </summary>
     public static (Rettangolo? Rettangolo, string Motivo) RettangoloAllargato(
         Griglia? griglia, short posizione, short colonne, short righe,
-        IReadOnlyList<Rettangolo> boxDellaPagina, Func<short, Rettangolo?> boxDellaCasella)
+        IReadOnlyList<Rettangolo> boxDellaPagina, Func<short, Rettangolo?> boxDellaCasella, Rettangolo? pagina = null)
     {
         if (griglia == null) return (null, "la pagina non ha una griglia");
         int c0 = (posizione - 1) % griglia.Colonne, r0 = (posizione - 1) / griglia.Colonne;
@@ -458,7 +489,7 @@ public sealed partial class ServizioTimone
 
         if (boxDellaPagina.Count > 0)
         {
-            var riquadro = boxDellaPagina.Aggregate((a, b) => a.Unione(b));
+            var riquadro = RiquadroNellaPagina(boxDellaPagina, pagina);
             decimal cella = riquadro.Larghezza / griglia.Colonne, fila = riquadro.Altezza / griglia.Righe;
             if (unione.Larghezza < (colonne - 0.5m) * cella || unione.Altezza < (righe - 0.5m) * fila)
                 return (null, "nell'impaginato non ci sono box da unire per farle posto");
