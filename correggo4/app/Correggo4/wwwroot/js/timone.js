@@ -1625,6 +1625,18 @@ var STILE_REPORT = `
             x1 = Math.min(x1, Number(v.x)); y1 = Math.min(y1, Number(v.y));
             x2 = Math.max(x2, Number(v.x) + Number(v.w)); y2 = Math.max(y2, Number(v.y) + Number(v.h));
         });
+        /* PARACADUTE (TASK-6c41ad00): il riquadro non esce mai dalla pagina. Un box dell'export
+           che sporge (volantino 125: pagina 16 un box da 36.61 largo 181.89 su 210, pagina 9 uno
+           da -24.82) allargava tutta la griglia e la mandava fuori ricalco. Si ritaglia a 0 ...
+           larghezza e 0 ... altezza della pagina. La stessa regola e' in
+           ServizioTimone.RiquadroNellaPagina (Servizi/ServizioTimone.Plugin.cs): se cambia qui,
+           va cambiata anche la'. */
+        var pl = pagina ? Number(pagina.larghezza) : 0, ph = pagina ? Number(pagina.altezza) : 0;
+        if (isFinite(x1) && pl > 0 && ph > 0) {
+            x1 = Math.max(0, x1); y1 = Math.max(0, y1);
+            x2 = Math.min(pl, x2); y2 = Math.min(ph, y2);
+            if (x2 <= x1 || y2 <= y1) x1 = Infinity;   // tutto fuori pagina: si usa il ripiego sotto
+        }
         if (isFinite(x1)) return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
 
         // Nessun prodotto nato su questa pagina (per esempio perche' sono stati spostati tutti
