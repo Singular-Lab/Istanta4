@@ -360,6 +360,11 @@ export interface MenaboAgenzia {
   nome?(valore: string): string | null;
 }
 
+/** I20-1256: il numero di pagine del menabò della promo scritto a mano. */
+export interface MenaboPagineAMano {
+  confermaDaPagineTolte: number;
+}
+
 /** Testi stampati da cui ricavare la linea quando Istanta non l'ha assegnata (volantini dello storico). */
 export interface TestiPerLinea {
   /** Marca (es. "Conad Sapori & Dintorni"), la Descrizione2 di Istanta. */
@@ -399,6 +404,12 @@ export interface IAgenziaLib {
    * gruppi sono cambiati (spec menabo-promo). Vuoto = si confronta la referenza intera.
    */
   CAMPI_IDENTITA_MENABO: readonly string[];
+  /**
+   * I20-1256: il numero di pagine del menabò si scrive a mano (spec menabo-promo, "Numero di pagine
+   * scritto a mano"). Assente = solo le frecce, come per tutti i clienti che non lo dichiarano.
+   * confermaDaPagineTolte: da quante pagine tolte in una volta si chiede conferma anche se sono vuote.
+   */
+  MENABO_PAGINE_A_MANO?: MenaboPagineAMano;
   elaboraDatoPerAgenzia(data: RisultatoConfrontoMomento): Promise<TracciatoReport>;
 
   normalizzaDatoConfrontoPerScore(confrontiData: PromoScoreboardInput): Promise<PromoScoreboardInput>;

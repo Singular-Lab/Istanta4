@@ -281,6 +281,53 @@ function paginatePlacedItems(
     };
 }
 
+/** I20-1256: l'esito del numero di pagine scritto a mano (spec menabo-promo). */
+export interface CambioNumeroPagine {
+    da: number;
+    a: number;
+    /** Pagine tolte dal fondo: 0 se se ne aggiungono. */
+    tolte: number;
+    /** Referenze sulle pagine tolte, che tornano disponibili nell'elenco dei gruppi. */
+    referenze: number;
+    /** Etichette sulle pagine tolte. */
+    etichette: number;
+    chiediConferma: boolean;
+}
+
+/**
+ * I20-1256: cosa succede scrivendo a mano il numero di pagine del menabò (solo per i clienti la cui
+ * libreria agenzia lo dichiara, oggi Coop). Null se il testo non è un numero intero maggiore di zero
+ * o se il numero non cambia. Togliendo pagine si chiede conferma quando sono almeno
+ * «confermaDaPagineTolte», oppure quando su quelle pagine ci sono referenze o etichette, come fa la
+ * freccia che toglie una pagina.
+ */
+export function cambioNumeroPagine(
+    attuali: number,
+    scritto: string,
+    pagine: ReadonlyArray<ReadonlyArray<{ records: readonly unknown[] }>>,
+    etichette: Readonly<Record<number, unknown>>,
+    confermaDaPagineTolte: number,
+): CambioNumeroPagine | null {
+    const testo = scritto.trim();
+    if (!/^\d+$/.test(testo)) return null;
+    const a = Number(testo);
+    if (!Number.isSafeInteger(a) || a < 1 || a === attuali) return null;
+
+    const tolte = Math.max(0, attuali - a);
+    const referenze = pagine.slice(a).reduce(
+        (somma, pagina) => somma + pagina.reduce((s, porzione) => s + porzione.records.length, 0), 0);
+    const etichetteTolte = tolte === 0 ? 0 : Object.keys(etichette).filter(k => Number(k) >= a).length;
+
+    return {
+        da: attuali,
+        a,
+        tolte,
+        referenze: tolte === 0 ? 0 : referenze,
+        etichette: etichetteTolte,
+        chiediConferma: tolte > 0 && (tolte >= confermaDaPagineTolte || referenze > 0 || etichetteTolte > 0),
+    };
+}
+
 // ── Canvas component ──────────────────────────────────────────────────────
 interface MenaboCanvasProps {
     onSidebarItemPlaced?: (placement: CanvasRecordsPayload) => void;
@@ -293,6 +340,8 @@ interface MenaboCanvasProps {
     regoleMenabo?: RegoleMenabo;
     /** Campi che identificano una referenza, dalla libreria agenzia: ricollegano il menabò salvato. */
     campiIdentita?: string[];
+    /** I20-1256: dalla libreria agenzia; presente = il numero di pagine si scrive a mano. */
+    pagineAMano?: { conferma_da_pagine_tolte: number };
     idPromo: string;
     nomePromo?: string;
 }
@@ -308,6 +357,7 @@ export default function MenaboCanvas({
     regoleMenabo,
     canaleSelezionato,
     campiIdentita,
+    pagineAMano,
     idPromo,
     nomePromo,
 }: MenaboCanvasProps & { canaleSelezionato: import("../../../lib/types").MenaboRisultatoCanale | undefined }) {
@@ -348,6 +398,11 @@ export default function MenaboCanvas({
         referenceCount: number;
         hasLabel: boolean;
     } | null>(null);
+    // I20-1256: il numero di pagine mentre lo si scrive (null = mostra quello vero) e il cambio da confermare
+    const [testoPagine, setTestoPagine] = useState<string | null>(null);
+    const [pendingPageCountChange, setPendingPageCountChange] = useState<CambioNumeroPagine | null>(null);
+    // Esc nel campo: si esce senza applicare (il blur arriva prima che lo stato si aggiorni)
+    const annullaTestoPagineRef = useRef(false);
     const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
     const workspaceRef = useRef<HTMLDivElement | null>(null);
     const hydratedDivisionRef = useRef<string>("");
@@ -853,6 +908,54 @@ export default function MenaboCanvas({
 
         removePageAtIndex(removedPageIndex);
     }, [effectivePageCount, mergedPageLabels, paginated, removePageAtIndex]);
+
+    // I20-1256: applica il numero di pagine scritto a mano. Togliendo, spariscono le ultime pagine
+    // con referenze, etichette e note: le referenze tornano disponibili, le etichette delle regole
+    // si nascondono (altrimenti le pagine si ricreerebbero da sole per tenerle).
+    const applyPageCount = useCallback((nuove: number) => {
+        if (nuove === effectivePageCount || nuove < 1) return;
+        pushHistory();
+        if (nuove > effectivePageCount) {
+            setPageCount(nuove);
+            markDirty();
+            return;
+        }
+
+        const removedSlices = paginated.slice(nuove).flat();
+        notifyRemoved(removedSlices.map(item => ({
+            sourceKey: item.sourceKey,
+            recordKeys: item.recordKeys,
+        })));
+        removeRecordKeysFromItems(new Set(removedSlices.flatMap(item => item.recordKeys)));
+        setItems(prev => prev.filter(item => !(item.records.length === 0 && item.pageIndex >= nuove)));
+        const soloPrima = <T,>(prev: Record<number, T>) =>
+            Object.fromEntries(Object.entries(prev).filter(([k]) => Number(k) < nuove)) as Record<number, T>;
+        setPageLabels(soloPrima);
+        setPageMaxOverrides(soloPrima);
+        setPageNotes(soloPrima);
+        setHiddenRegoleLabelPages(prev => {
+            const next = { ...prev };
+            pagesFromRegole.forEach((p, idx) => { if (idx >= nuove && p.etichetta) next[idx] = true; });
+            return next;
+        });
+        setOpenNotesPage(prev => (prev !== null && prev >= nuove ? null : prev));
+        setSelectedId(prev => (removedSlices.some(item => item.id === prev) ? null : prev));
+        setPageCount(nuove);
+        markDirty();
+    }, [effectivePageCount, markDirty, notifyRemoved, pagesFromRegole, paginated, pushHistory, removeRecordKeysFromItems]);
+
+    const confermaTestoPagine = useCallback(() => {
+        const scritto = testoPagine;
+        const annullato = annullaTestoPagineRef.current;
+        annullaTestoPagineRef.current = false;
+        setTestoPagine(null);
+        if (annullato || scritto === null || !pagineAMano) return;
+        const cambio = cambioNumeroPagine(
+            effectivePageCount, scritto, paginated, mergedPageLabels, pagineAMano.conferma_da_pagine_tolte);
+        if (!cambio) return;
+        if (cambio.chiediConferma) { setPendingPageCountChange(cambio); return; }
+        applyPageCount(cambio.a);
+    }, [applyPageCount, effectivePageCount, mergedPageLabels, pagineAMano, paginated, testoPagine]);
 
     const insertPageAt = useCallback((insertIdx: number) => {
         pushHistory();
@@ -1491,9 +1594,31 @@ export default function MenaboCanvas({
                     >
                         <Lucide aria-hidden="true" icon="ChevronLeft" className="h-3.5 w-3.5" />
                     </button>
-                    <span className="min-w-14 text-center text-xs font-medium text-slate-600 dark:text-slate-300">
-                        {effectivePageCount} {effectivePageCount === 1 ? "pagina" : "pagine"}
-                    </span>
+                    {pagineAMano ? (
+                        // I20-1256: per i clienti che lo dichiarano il numero di pagine si scrive a mano
+                        <label className="flex min-w-14 items-center justify-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                aria-label="Numero di pagine"
+                                title="Scrivi il numero di pagine e premi Invio"
+                                value={testoPagine ?? String(effectivePageCount)}
+                                onFocus={e => { setTestoPagine(String(effectivePageCount)); e.currentTarget.select(); }}
+                                onChange={e => setTestoPagine(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
+                                    if (e.key === "Escape") { e.preventDefault(); annullaTestoPagineRef.current = true; e.currentTarget.blur(); }
+                                }}
+                                onBlur={confermaTestoPagine}
+                                className="h-6 w-9 rounded-control border border-slate-200 bg-white px-1 text-center text-xs text-slate-700 focus:border-primary focus:outline-none dark:border-darkmode-400 dark:bg-darkmode-700 dark:text-slate-200"
+                            />
+                            {effectivePageCount === 1 ? "pagina" : "pagine"}
+                        </label>
+                    ) : (
+                        <span className="min-w-14 text-center text-xs font-medium text-slate-600 dark:text-slate-300">
+                            {effectivePageCount} {effectivePageCount === 1 ? "pagina" : "pagine"}
+                        </span>
+                    )}
                     <button
                         onClick={() => {
                             pushHistory();
@@ -2329,6 +2454,50 @@ export default function MenaboCanvas({
                             }}
                         >
                             Rimuovi
+                        </Button>
+                    </Dialog.Footer>
+                </Dialog.Panel>
+            </Dialog>
+
+            {/* I20-1256: conferma del numero di pagine scritto a mano */}
+            <Dialog
+                open={!!pendingPageCountChange}
+                onClose={() => setPendingPageCountChange(null)}
+                className="z-[100000]"
+                centered
+            >
+                <Dialog.Panel>
+                    <Dialog.Title>Elimina pagine</Dialog.Title>
+                    <Dialog.Description>
+                        {pendingPageCountChange && (
+                            <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                                Stai passando da {pendingPageCountChange.da} a {pendingPageCountChange.a}{" "}
+                                {pendingPageCountChange.a === 1 ? "pagina" : "pagine"}: si eliminano{" "}
+                                {pendingPageCountChange.tolte === 1 ? "l'ultima pagina" : `le ultime ${pendingPageCountChange.tolte} pagine`}
+                                {pendingPageCountChange.etichette > 0
+                                    ? `, con ${pendingPageCountChange.etichette} ${pendingPageCountChange.etichette === 1 ? "etichetta" : "etichette"}`
+                                    : ""}
+                                {pendingPageCountChange.referenze > 0
+                                    ? `, e ${pendingPageCountChange.referenze} ${pendingPageCountChange.referenze === 1 ? "referenza torna disponibile" : "referenze tornano disponibili"} nell'elenco dei gruppi`
+                                    : ""}
+                                . Confermi?
+                            </p>
+                        )}
+                    </Dialog.Description>
+                    <Dialog.Footer>
+                        <Button type="button" variant="outline-secondary" onClick={() => setPendingPageCountChange(null)}>
+                            Annulla
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="danger"
+                            onClick={() => {
+                                if (!pendingPageCountChange) return;
+                                applyPageCount(pendingPageCountChange.a);
+                                setPendingPageCountChange(null);
+                            }}
+                        >
+                            Elimina pagine
                         </Button>
                     </Dialog.Footer>
                 </Dialog.Panel>

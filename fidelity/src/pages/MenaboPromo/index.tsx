@@ -907,6 +907,7 @@ function MenaboPromoPage() {
                         regoleMenabo={regoleMenabo!}
                         canaleSelezionato={canaleSelezionato}
                         campiIdentita={data?.campi_identita}
+                        pagineAMano={data?.pagine_a_mano}
                         idPromo={idPromo!}
                         nomePromo={data?.nomePromo}
                     />

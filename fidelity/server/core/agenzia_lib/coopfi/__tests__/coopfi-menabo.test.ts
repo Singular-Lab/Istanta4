@@ -483,3 +483,11 @@ describe("coopfi menabo: identità delle referenze", () => {
     expect(sut.CAMPI_IDENTITA_MENABO).toEqual(["Scatto.CodiceGruppo", "Referenza.Codice"]);
   });
 });
+
+describe("coopfi menabo: numero di pagine scritto a mano (I20-1256)", () => {
+  it("per Coop il numero di pagine si scrive a mano e da 5 pagine tolte si chiede conferma", () => {
+    const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
+
+    expect(sut.MENABO_PAGINE_A_MANO).toEqual({ confermaDaPagineTolte: 5 });
+  });
+});
