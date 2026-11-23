@@ -2023,7 +2023,7 @@ namespace Istanta.Controllers
                 if (_file.idLavorazione != 0)
                 {
                     //I20-1088: la riga dell'impaginazione del box, non la prima che contiene il codice.
-                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == _file.idLavorazione && plr.CodiceGruppo!.Contains(_file.codice)), _file.idRec, _file.codice);
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == _file.idLavorazione && plr.CodiceGruppo!.Contains(_file.codice)), _file.idRec, _file.codice, _file.idLavorazione, _file.idLavRec);
 
                     if (plrItem == null)
                         throw new Exception($"Nessun elemento trovato con ID Record Tracciato {_file.idRec} trovato, Codice {_file.codice} non disponibile");
@@ -2432,7 +2432,7 @@ namespace Istanta.Controllers
                 if (data.idLavorazione != 0)
                 {
                     //I20-1088: la riga dell'impaginazione del box, non la prima che contiene il codice.
-                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == data.idLavorazione && plr.CodiceGruppo!.Contains(data.Codice)), data.idRec, data.Codice);
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == data.idLavorazione && plr.CodiceGruppo!.Contains(data.Codice)), data.idRec, data.Codice, data.idLavorazione, data.idLavRec);
 
                     if (plrItem == null)
                         throw new Exception($"Nessun elemento trovato con Codice {data.Codice}");
@@ -2838,7 +2838,7 @@ namespace Istanta.Controllers
 
         [HttpGet]
         [Route("SyncFoto/RimuoviFotoDaMeta/{codice}/{tipo}/{idLavorazione}/{idRec}/{id_operazione}")]
-        public async Task<IActionResult> RimuoviFotoDaMeta(string codice, TipoFoto tipo, Int32 idLavorazione, Int64 idRec, int id_operazione = 0)
+        public async Task<IActionResult> RimuoviFotoDaMeta(string codice, TipoFoto tipo, Int32 idLavorazione, Int64 idRec, int id_operazione = 0, long idLavRec = 0)
         {
             fotoResult result = new fotoResult();
             try
@@ -2848,7 +2848,7 @@ namespace Istanta.Controllers
                 if (idLavorazione != 0)
                 {
                     //I20-1088: la riga dell'impaginazione del box, non la prima che contiene il codice.
-                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == idLavorazione && plr.CodiceGruppo!.Contains(codice)), idRec, codice);
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == idLavorazione && plr.CodiceGruppo!.Contains(codice)), idRec, codice, idLavorazione, idLavRec);
 
                     if (plrItem == null)
                         throw new Exception($"Nessun elemento trovato con ID Record Tracciato {idRec} trovato, Codice {codice} non disponibile");
@@ -2932,7 +2932,7 @@ namespace Istanta.Controllers
                 if(dato.tipo == TipoFoto.Foto)
                 {
                     //I20-1088: la riga dell'impaginazione del box, non la prima del codice gruppo.
-                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == dato.idLavorazione && plr.CodiceGruppo == dato.codice), dato.idRec, dato.codice);
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2, this.ctx2.PromoLavorazioniRecords.Include(i1 => i1.IdPromoTracciatiRecordNavigation).Where(plr => plr.IdLavorazione == dato.idLavorazione && plr.CodiceGruppo == dato.codice), dato.idRec, dato.codice, dato.idLavorazione, dato.idLavRec);
 
                     if (plrItem == null)
                         throw new Exception($"Nessun elemento trovato, Codice {dato.codice} non disponibile");

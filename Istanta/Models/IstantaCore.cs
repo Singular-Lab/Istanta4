@@ -1021,6 +1021,8 @@ namespace Istanta.Models
         /// in cui vanno i testiDalBox e la loro versione. 0 per i client che non lo mandano.
         /// </summary>
         public long idRec { get; set; } = 0;
+        /// TASK-22d7fad2: l'Id della riga della lavorazione quando il box e' un derivato; 0 per gli altri box.
+        public long idLavRec { get; set; } = 0;
 
     }
 
@@ -2110,6 +2112,8 @@ namespace Istanta.Models
     {
         public string codice { get; set; } = "";
         public int idRec { get; set; } = 0;
+        /// TASK-22d7fad2: l'Id della riga della lavorazione quando il box e' un derivato; 0 per gli altri box.
+        public long idLavRec { get; set; } = 0;
     }
 
     public class Filtro
@@ -2176,6 +2180,8 @@ namespace Istanta.Models
         public string? codice { get; set; }
         public int idLavorazione { get; set; }
         public Int64 idRec { get; set; }
+        /// TASK-22d7fad2: l'Id della riga della lavorazione quando il box e' un derivato; 0 per gli altri box.
+        public long idLavRec { get; set; } = 0;
         public TipoFoto tipo { get; set; }
         public FileInddUploadMethod uploadMethod { get; set; }
         public string? guidId { get; set; }
@@ -2223,6 +2229,8 @@ namespace Istanta.Models
         public bool propaga { get; set; }
         //I20-1088: il record del box, per trovare la riga della lavorazione dei meta. 0 se il client non lo manda.
         public long idRec { get; set; } = 0;
+        /// TASK-22d7fad2: l'Id della riga della lavorazione quando il box e' un derivato; 0 per gli altri box.
+        public long idLavRec { get; set; } = 0;
         /// TASK-60aaf10d: la foto che il tracciato indica per la referenza, senza estensione, per
         /// legarvi una scelta fatta solo per la lavorazione. Null se il Plugin non la manda.
         public string? nomeFotoTracciato { get; set; }
@@ -2259,6 +2267,8 @@ namespace Istanta.Models
     {
         public string? codiceGruppo { get; set; }
         public int idRec { get; set; } = 0;
+        /// TASK-22d7fad2: l'Id della riga della lavorazione quando il box e' un derivato; 0 per gli altri box.
+        public long idLavRec { get; set; } = 0;
         public int idLavorazione { get; set; }
         public byte pagina { get; set; }
         public bool byPassBloccoGiaImpaginato { get; set; }
@@ -2285,6 +2295,8 @@ namespace Istanta.Models
         public string codiceGruppo { get; set; }
 
         public int idRec { get; set; } = 0;
+        /// TASK-22d7fad2: l'Id della riga della lavorazione quando il box e' un derivato; 0 per gli altri box.
+        public long idLavRec { get; set; } = 0;
         public Byte pag {  get; set; }
         public Byte idAddestramento {  get; set; }
         public bool forzaloAllaPaginaIndicata { get; set; }
@@ -2310,6 +2322,8 @@ namespace Istanta.Models
     {
         public string? originalGroup { get; set; }
         public int idRec { get; set; } = 0;
+        /// TASK-22d7fad2: l'Id della riga della lavorazione quando il box e' un derivato; 0 per gli altri box.
+        public long idLavRec { get; set; } = 0;
         public List<GruppoSgruppato>? ListaGruppi { get; set; }
     }
 
@@ -2373,6 +2387,8 @@ namespace Istanta.Models
     {
         public string? codiceGruppo { get; set; }//Identificativo della prestazione coinvolta nell'alterazione
         public int idRec { get; set; } = 0;//Id del record coinvolto nell'alterazione, se disponibile
+        /// TASK-22d7fad2: l'Id della riga della lavorazione quando il box e' un derivato; 0 per gli altri box.
+        public long idLavRec { get; set; } = 0;
         public List<CambioMetaRecordTracciatoAzioneRequest>? azioni { get; set; }
     }
 

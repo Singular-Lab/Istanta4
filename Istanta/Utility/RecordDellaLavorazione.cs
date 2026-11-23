@@ -1,4 +1,5 @@
 ﻿using Istanta.Models_2;
+using IstantaLib;
 using Microsoft.EntityFrameworkCore;
 
 namespace Istanta.Utility
@@ -124,7 +125,7 @@ namespace Istanta.Utility
             //quella tracciata, con il valore nuovo.
             var disattivate = ctx2.PromoLavorazioniRecords
                 .IgnoreQueryFilters()
-                .Where(r => r.IdLavorazione == idLavorazione && !r.Attivo && r.CodiceGruppo == codiceGruppo)
+                .Where(r => r.IdLavorazione == idLavorazione && !r.Attivo && r.DerivatoDi == null && r.CodiceGruppo == codiceGruppo)
                 .ToList()
                 .Where(r => !r.Attivo)
                 .ToList();
@@ -182,6 +183,134 @@ namespace Istanta.Utility
                 .Where(r => !r.Attivo)
                 .ToList();
             ctx2.PromoLavorazioniRecords.RemoveRange(disattivate);
+        }
+
+        /* ---- TASK-22d7fad2: box derivati ---- */
+
+        /// Perche' non si puo' creare un derivato del box, o null se si puo'. originale e' la riga del
+        /// box di partenza come la trovano le letture normali: null se il box non e' impaginato, o se
+        /// e' a sua volta un derivato (che quelle letture non vedono).
+        public static string? MotivoDelDerivatoRifiutato(PromoLavorazioniRecord? originale, int pagina, TipoLavorazione? tipoLavorazione, string? codiceGruppo)
+        {
+            if (tipoLavorazione != TipoLavorazione.Volantino)
+                return "i box derivati esistono solo nelle lavorazioni Volantino.";
+            if (pagina <= 0 || pagina > byte.MaxValue)
+                return $"la pagina {pagina} non e' valida.";
+            if (originale == null)
+                return $"il box {codiceGruppo} non e' impaginato in questa lavorazione: un derivato nasce da un box impaginato.";
+            if (originale.DerivatoDi != null)
+                return $"il box {codiceGruppo} e' un derivato: un derivato non puo' essere derivato a sua volta.";
+            return null;
+        }
+
+        /// La riga di un derivato nuovo: stesso record e stesso gruppo dell'originale, alla pagina
+        /// chiesta, con una copia dei suoi meta, che da qui in poi sono indipendenti.
+        public static PromoLavorazioniRecord NuovoDerivato(PromoLavorazioniRecord originale, byte pagina, short idAutore, DateTime adesso)
+        {
+            return new PromoLavorazioniRecord
+            {
+                IdLavorazione = originale.IdLavorazione,
+                IdRecordTracciato = originale.IdRecordTracciato,
+                Codice = originale.Codice,
+                CodiceGruppo = originale.CodiceGruppo,
+                Pagina = pagina,
+                Indice = (byte)0,
+                IdAutore = idAutore,
+                RegisterDate = adesso,
+                Meta = originale.Meta,
+                Attivo = true,
+                DerivatoDi = originale.Id
+            };
+        }
+
+        /// Aggiunge al contesto la riga di un derivato nuovo. Non salva.
+        public static PromoLavorazioniRecord RegistraDerivato(Edro21_DbContext2 ctx2, PromoLavorazioniRecord originale, byte pagina, short idAutore)
+        {
+            var nuovo = NuovoDerivato(originale, pagina, idAutore, DateTime.Now);
+            ctx2.PromoLavorazioniRecords.Add(nuovo);
+            return nuovo;
+        }
+
+        /// Cancella i derivati della query, con i loro meta: e' cosi' che un derivato esce. Non salva.
+        public static void EliminaDerivati(Edro21_DbContext2 ctx2, IQueryable<PromoLavorazioniRecord> derivati)
+        {
+            ctx2.PromoLavorazioniRecords.RemoveRange(derivati.ToList().Where(r => r.DerivatoDi != null));
+        }
+
+        /// I derivati impaginati: le sole righe che il filtro del contesto nasconde pur essendo attive.
+        public static IQueryable<PromoLavorazioniRecord> Derivati(Edro21_DbContext2 ctx2)
+        {
+            return ctx2.PromoLavorazioniRecords.IgnoreQueryFilters().Where(r => r.Attivo && r.DerivatoDi != null);
+        }
+
+        /// Tutte le impaginazioni in corso, derivati compresi: per chi deve sapere se un record e'
+        /// impaginato (prima di eliminarlo) o quali box stanno su una pagina.
+        public static IQueryable<PromoLavorazioniRecord> ImpaginatiConDerivati(Edro21_DbContext2 ctx2)
+        {
+            return ctx2.PromoLavorazioniRecords.IgnoreQueryFilters().Where(r => r.Attivo);
+        }
+
+        /// Il derivato con quell'Id nella lavorazione. Eccezione se non c'e': e' stato rimosso (un
+        /// derivato rimosso si cancella), o l'Id non e' di un derivato di questa lavorazione.
+        public static PromoLavorazioniRecord IlDerivato(Edro21_DbContext2 ctx2, int idLavorazione, long idLavRec)
+        {
+            return Derivati(ctx2)
+                .Include(r => r.IdPromoTracciatiRecordNavigation)
+                .FirstOrDefault(r => r.Id == idLavRec && r.IdLavorazione == idLavorazione)
+                ?? throw new ErroreIstanta("lettura del derivato", $"il box derivato {idLavRec} non esiste nella lavorazione {idLavorazione}: e' stato rimosso.");
+        }
+
+        /// La riga di un'impaginazione in corso per Id, derivato o no: per chi ha gia' l'Id della riga
+        /// (il registro delle operazioni) e deve scriverne i meta.
+        public static PromoLavorazioniRecord? PerId(Edro21_DbContext2 ctx2, long id)
+        {
+            return ImpaginatiConDerivati(ctx2).FirstOrDefault(r => r.Id == id);
+        }
+
+        /// La riga del box: con idLavRec quella del derivato, altrimenti quella del codice gruppo come prima.
+        public static PromoLavorazioniRecord Trova(Edro21_DbContext2 ctx2, int idLavorazione, string? codiceGruppo, long idRec, long idLavRec)
+        {
+            return idLavRec > 0
+                ? IlDerivato(ctx2, idLavorazione, idLavRec)
+                : Trova(ctx2, idLavorazione, codiceGruppo, idRec);
+        }
+
+        /// Come Trova sulla query, ma con idLavRec la riga e' quella del derivato.
+        public static PromoLavorazioniRecord Trova(Edro21_DbContext2 ctx2, IQueryable<PromoLavorazioniRecord> query, long idRec, string? codice, int idLavorazione, long idLavRec)
+        {
+            return idLavRec > 0
+                ? IlDerivato(ctx2, idLavorazione, idLavRec)
+                : Trova(ctx2, query, idRec, codice);
+        }
+
+        /// Le operazioni che cambiano dati fuori dalla riga della lavorazione (revisione, azioni sul
+        /// box, struttura, sgruppa e raggruppa) non si fanno da un derivato: cambierebbero anche
+        /// l'originale e gli altri derivati senza che l'operatore li veda.
+        public static void RifiutaSulDerivato(long idLavRec, string operazione)
+        {
+            if (idLavRec > 0)
+                throw new ErroreIstanta("controllo del derivato", $"{operazione} non si fa da un box derivato: va fatta dal box originale.");
+        }
+
+        /// Il box esce dalla lavorazione: un derivato si cancella con i suoi meta, gli altri si
+        /// disattivano e li conservano (TASK-bb04f9aa).
+        public static void Esce(Edro21_DbContext2 ctx2, PromoLavorazioniRecord? riga)
+        {
+            if (riga == null)
+                return;
+            if (riga.DerivatoDi != null)
+                ctx2.PromoLavorazioniRecords.Remove(riga);
+            else
+                Disattiva(riga);
+        }
+
+        /// Gli Id dei record, fra quelli dati, che hanno un derivato impaginato.
+        public static List<long> ConDerivati(Edro21_DbContext2 ctx2, IEnumerable<long>? idRecord)
+        {
+            var ids = (idRecord ?? Enumerable.Empty<long>()).Distinct().ToList();
+            if (ids.Count == 0)
+                return new List<long>();
+            return Derivati(ctx2).Where(r => ids.Contains(r.IdRecordTracciato)).Select(r => r.IdRecordTracciato).Distinct().ToList();
         }
 
         /// La riga su cui registrare una modifica dell'operatore fatta sul box del record idRec: il

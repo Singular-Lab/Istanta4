@@ -1009,6 +1009,9 @@ namespace Istanta.Migrations.Contesto1
                     b.Property<string>("CodiceGruppo")
                         .HasColumnType("text");
 
+                    b.Property<long?>("DerivatoDi")
+                        .HasColumnType("bigint");
+
                     b.Property<short>("IdAutore")
                         .HasColumnType("smallint");
 

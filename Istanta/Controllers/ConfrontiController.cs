@@ -1996,7 +1996,8 @@ namespace Istanta.Controllers
 
             var righe = idLavorazioni.Count == 0
                 ? new List<PromoLavorazioniRecord>()
-                : await this.ctx2.PromoLavorazioniRecords.Where(r => idLavorazioni.Contains(r.IdLavorazione)).AsNoTracking().ToListAsync();
+                //TASK-22d7fad2: anche i box derivati: un record con un derivato in pagina e' impaginato.
+                : await RecordDellaLavorazione.ImpaginatiConDerivati(this.ctx2).Where(r => idLavorazioni.Contains(r.IdLavorazione)).AsNoTracking().ToListAsync();
 
             var idPrimari = righe.Select(r => r.IdRecordTracciato).Distinct().ToList();
             var labelDeiPrimari = idPrimari.Count == 0

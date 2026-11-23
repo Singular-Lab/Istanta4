@@ -110,6 +110,8 @@ namespace Istanta.Models
         public string? Meta { get; set; }
         /// <summary>TASK-bb04f9aa: false per una riga disattivata. I backup di prima non l'hanno: vale true.</summary>
         public bool Attivo { get; set; } = true;
+        /// <summary>TASK-22d7fad2: l'Id del box originale per un derivato. I backup di prima non l'hanno: null.</summary>
+        public long? DerivatoDi { get; set; }
 
         public static RigaLavorazioneBackup Da(PromoLavorazioniRecord r)
         {
@@ -125,7 +127,8 @@ namespace Istanta.Models
                 Indice = r.Indice,
                 Pagina = r.Pagina,
                 Meta = r.Meta,
-                Attivo = r.Attivo
+                Attivo = r.Attivo,
+                DerivatoDi = r.DerivatoDi
             };
         }
 
@@ -141,6 +144,7 @@ namespace Istanta.Models
             r.Pagina = Pagina;
             r.Meta = Meta;
             r.Attivo = Attivo;
+            r.DerivatoDi = DerivatoDi;
         }
 
         public PromoLavorazioniRecord NuovaEntita()

@@ -58,7 +58,8 @@ namespace Istanta.Utility
                 //Salvo i META
                 if (operazione.FormData != null && operazione.idPromoLavorazioniRecord.HasValue)
                 {
-                    PromoLavorazioniRecord? plrItem = this.ctx2.PromoLavorazioniRecords.FirstOrDefault(f => f.Id == operazione.idPromoLavorazioniRecord.Value);
+                    //TASK-22d7fad2: per Id anche la riga di un box derivato, che le letture normali non vedono.
+                    PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.PerId(this.ctx2, operazione.idPromoLavorazioniRecord.Value);
                     if (plrItem != null)
                     {
                         //Controllo se esiste il META altrimenti lo costruisco
