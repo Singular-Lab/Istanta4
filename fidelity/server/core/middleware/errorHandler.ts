@@ -1,6 +1,9 @@
 import { NextFunction, Request, Response } from 'express';
 import { HttpStatusCode } from '../../../lib/enums';
 import { AppError } from '../../../lib/errors/AppError';
+import { ApplicationError } from '../../../lib/errors/ApplicationError';
+import { BadRequestError } from '../../../lib/errors/application/BadRequestError';
+import { ErrorCodes } from '../../../lib/errors/ErrorCodes';
 import { GENERIC_ERROR_MESSAGE, redactErrorForClient, serializeError, wrapExternalError } from '../../../lib/errors/errorUtils';
 import { log } from '../logger';
 import { AuditLogService } from '../services/AuditLogService';
@@ -28,9 +31,21 @@ export function errorHandler(options?: ErrorHandlerOptions) {
   const includeStackTrace = options?.includeStackTrace ?? true;
   const logger = options?.logger ?? defaultLogger;
 
-  return (error: any, req: Request, res: Response, next: NextFunction): void => {
+  return (rawError: any, req: Request, res: Response, next: NextFunction): void => {
+    // Errori del client nella lettura del corpo (JSON rotto, corpo troppo grande):
+    // sono richieste sbagliate, non guasti. Messaggio fisso, nessun dettaglio interno.
+    const errorePerCorpo = convertiErroreCorpoRichiesta(rawError);
+    const error = errorePerCorpo ?? rawError;
+
     // Log dell'errore
-    logger(error, req);
+    if (errorePerCorpo) {
+      log.warn(`${req.method} ${req.originalUrl} - corpo della richiesta rifiutato (${rawError.type})`, {
+        ip: req.ip,
+        userId: req.session?.id_utente || 'guest',
+      });
+    } else {
+      logger(error, req);
+    }
 
     // Determina lo status code e il payload di risposta
     const statusCode = determineStatusCode(error);
@@ -44,6 +59,40 @@ export function errorHandler(options?: ErrorHandlerOptions) {
     // Invia la risposta
     res.status(statusCode).json(payload);
   };
+}
+
+/** Tipi di errore di body-parser che dipendono dal client e non dal server. */
+const ERRORI_CORPO_RICHIESTA = new Set([
+  'entity.parse.failed',
+  'entity.too.large',
+  'entity.verify.failed',
+  'encoding.unsupported',
+  'charset.unsupported',
+  'request.aborted',
+  'request.size.invalid',
+  'stream.encoding.set',
+  'parameters.too.many',
+]);
+
+/**
+ * Converte un errore di body-parser (corpo non leggibile) in un errore applicativo
+ * 4xx con messaggio fisso. Restituisce null per qualunque altro errore.
+ */
+export function convertiErroreCorpoRichiesta(errore: unknown): AppError | null {
+  const error = errore as { type?: string; status?: number; statusCode?: number } | null | undefined;
+  const status = Number(error?.status ?? error?.statusCode);
+  if (!error || !error.type || !ERRORI_CORPO_RICHIESTA.has(error.type) || !(status >= 400 && status < 500)) {
+    return null;
+  }
+  if (status === HttpStatusCode.PAYLOAD_TOO_LARGE) {
+    return new ApplicationError({
+      name: 'PayloadTooLargeError',
+      message: 'Corpo della richiesta troppo grande',
+      code: ErrorCodes.INVALID_REQUEST,
+      httpStatus: status,
+    });
+  }
+  return new BadRequestError({ message: 'Corpo della richiesta non valido' });
 }
 
 /**
