@@ -8,10 +8,12 @@ import Lucide from "@/components/Base/Lucide";
 import { useAppDispatch, useAppSelector } from "@/stores/hooks";
 import { fetchSideMenu, selectSideMenu, selectSideMenuError } from "@/stores/sideMenuSlice_istanta";
 import clsx from "clsx";
-import { createRef, startTransition, useContext, useEffect, useState } from "react";
+import { startTransition, useContext, useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ElementoMenuFormattato, FormattedMenu, nestedMenu } from "./side-menu";
 import SideMenu from "./SideMenu";
+import { useSimpleBar } from "./useSimpleBar";
+import { useSorvoloMenu } from "./useSorvoloMenu";
 //@ts-ignore
 // import logo from "@/assets/images/logo.svg";
 import userIcon from "@/assets/images/users/user_icon_profile.png";
@@ -32,7 +34,6 @@ import { useUser } from "@/context/UserContext.tsx";
 import { SocketProvider } from "@/hooks/useSocket";
 import { useFetchAttivita, useFetchAvvisoManutenzione } from "@/query/query";
 import { useMutation } from "@tanstack/react-query";
-import SimpleBar from "simplebar";
 import { eSezioneMenu } from "../../../lib/accessi/sezioni";
 import { TIPO_UTENTI } from "../../../lib/enums";
 import { ServerCall } from "../../../lib/server_call";
@@ -89,7 +90,8 @@ function Layout() {
     }
   });
   // Il menu compresso si riapre al passaggio del mouse, sopra al contenuto
-  const [menuSorvolato, setMenuSorvolato] = useState(false);
+  const sorvoloMenu = useSorvoloMenu(menuCompresso);
+  const menuSorvolato = sorvoloMenu.sorvolato;
   const menuRidotto = menuCompresso && !menuSorvolato;
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [maintenanceModal, setMaintenanceModal] = useState(false);
@@ -140,8 +142,7 @@ function Layout() {
   const sideMenuStore = useAppSelector(selectSideMenu);
   const sideMenuError = useAppSelector(selectSideMenuError);
   const sideMenu = () => nestedMenu(sideMenuStore, location);
-  const scrollableRefMenu = createRef<HTMLDivElement>();
-  const scrollBar = createRef<HTMLDivElement>()
+  const scrollableRefMenu = useSimpleBar<HTMLDivElement>();
 
   const [topBarActive, setTopBarActive] = useState(false);
 
@@ -226,12 +227,6 @@ function Layout() {
   };
 
   useEffect(() => {
-    if (scrollableRefMenu.current) {
-      new SimpleBar(scrollableRefMenu.current);
-    }
-    if (scrollBar.current) {
-      new SimpleBar(scrollBar.current)
-    }
     setFormattedMenu(sideMenu());
 
     // Il resize viene gestito nel nuovo useEffect con addEventListener
@@ -286,8 +281,8 @@ function Layout() {
               { "side-menu--collapsed": menuCompresso },
               { "side-menu--on-hover": menuCompresso && menuSorvolato },
             ])}
-            onMouseEnter={() => setMenuSorvolato(true)}
-            onMouseLeave={() => setMenuSorvolato(false)}
+            onMouseEnter={sorvoloMenu.onMouseEnter}
+            onMouseLeave={sorvoloMenu.onMouseLeave}
 
           >
             <div
