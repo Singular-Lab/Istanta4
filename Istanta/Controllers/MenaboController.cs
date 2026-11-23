@@ -136,6 +136,8 @@ namespace Istanta.Controllers
                     //passa cosi' com'e', invece di diventare il messaggio di una nuova eccezione.
                     result.error = DescrizioneErrori.Breve("getListaTracciatoNew", ErroreIstanta.DiProcessaKit(risposta?.error, risposta != null, idLavorazione));
                     result.dettaglio = risposta?.dettaglio;
+                    //I20-1251: anche il codice, con cui il Plugin riconosce la promo senza tracciati del kit.
+                    result.errorCode = risposta?.errorCode ?? 0;
                     result.esito = false;
                     Console.WriteLine($"getListaTracciatoNew (lavorazione {idLavorazione}): {result.error}");
                     return Ok(result);

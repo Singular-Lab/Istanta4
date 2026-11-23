@@ -2235,8 +2235,9 @@ namespace Istanta.Controllers
                             Context = JsonConvert.DeserializeObject<List<FicoContextField>>(s.Context!)
                         });
 
+                        //I20-1251: la frase per l'operatore, senza chiamata ne' passo; la lavorazione la scrive il log del catch.
                         if (punteggioTracciati.Count() <= 0)
-                            throw new ErroreIstanta("scelta dei tracciati", $"la promo {plItem.GuidPromo} non ha tracciati per l'area, il canale e il PV del kit della lavorazione {id}.");
+                            throw ErroreIstanta.PromoSenzaTracciati(plItem.GuidPromo);
 
                         //Console.WriteLine($"Step 4");
 
@@ -2372,6 +2373,8 @@ namespace Istanta.Controllers
 
                         result.error = DescrizioneErrori.Breve("processaKit", ex);
                         result.dettaglio = DescrizioneErrori.Dettaglio(ex);
+                        //I20-1251: il Plugin riconosce dal codice gli errori da mostrare cosi' come sono.
+                        result.errorCode = (int)DescrizioneErrori.Codice(ex);
                         result.esito = false;
                         return Ok(result);
                     }
