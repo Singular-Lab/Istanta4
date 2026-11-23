@@ -71,6 +71,18 @@ describe("Storico volantini", () => {
     finti.permessiNegati = new Set();
   });
 
+  it("mentre il server risponde la pagina c'e' gia': titolo, filtri e segnaposto con la forma dei numeri e dell'elenco", async () => {
+    // Nessuna risposta finche' il test non finisce: e' il momento del caricamento
+    finti.get.mockImplementation(() => new Promise(() => undefined));
+    apri();
+
+    expect(screen.getByRole("heading", { level: 1, name: "Storico volantini" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Area" })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Caricamento dei numeri dello storico" })).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Caricamento dei volantini" })).toBeInTheDocument();
+    expect(screen.queryByRole("status", { name: "Caricamento dello storico volantini" })).not.toBeInTheDocument();
+  });
+
   it("mostra i KPI sopra l'elenco e i volantini con le date nel formato DD/MM/YYYY", async () => {
     finti.get.mockImplementation((url: string) =>
       Promise.resolve(url.startsWith(URL_STORICO) ? pagina([kit]) : [])

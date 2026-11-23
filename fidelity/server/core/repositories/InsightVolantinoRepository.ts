@@ -67,6 +67,56 @@ interface RigaKit {
   gdo: string | null;
 }
 
+const COLONNE_KIT = `k.id::text AS id, k.titolo, k.id_promo::text AS id_promo, p.nome_promo,
+            k.id_area::text AS id_area, k.id_canale::text AS id_canale,
+            ${NOME_AREA} AS area, ${NOME_CANALE} AS canale,
+            ${giorno('p.validita_dal')} AS validita_dal, ${giorno('p.validita_al')} AS validita_al,
+            ${DATA_EDIZIONE} AS data,
+            (jsonb_typeof(k.import_storico) = 'object') IS TRUE AS storico,
+            CASE WHEN jsonb_typeof(k.import_storico) = 'object' THEN k.import_storico END AS import_storico,
+            p.gdo::text AS gdo`;
+
+const kitDa = (riga: RigaKit): KitInsight => ({
+  id: riga.id,
+  titolo: riga.titolo,
+  idPromo: riga.id_promo,
+  nomePromo: riga.nome_promo ?? null,
+  idArea: riga.id_area,
+  idCanale: riga.id_canale,
+  area: riga.area ?? '',
+  canale: riga.canale ?? '',
+  validitaDal: riga.validita_dal ?? null,
+  validitaAl: riga.validita_al ?? null,
+  data: riga.data,
+  storico: riga.storico === true,
+  importStorico: riga.import_storico ?? null,
+  gdo: riga.gdo ?? null,
+});
+
+/**
+ * I kit della GDO dell'ambito in una sola lettura, per id (maiuscole come nel database).
+ * Un id che non e' un UUID, o di un'altra GDO, non compare: come per kitNellAmbito.
+ */
+export async function kitNeiAmbito(idKit: readonly string[], ambito: AmbitoGdo): Promise<Map<string, KitInsight>> {
+  const ids = [...new Set(idKit.filter(id => UUID.test(id)))];
+  if (ids.length === 0) return new Map();
+  const sostituzioni: Sostituzioni = { idKit: ids };
+  const condizioni = ['k.id IN (:idKit)'];
+  const gdo = condizioneAmbitoGdo(ambito, sostituzioni);
+  if (gdo) condizioni.push(gdo);
+
+  const righe = await seleziona<RigaKit>(
+    `SELECT ${COLONNE_KIT}
+     FROM runtime_kit k
+     JOIN promo p ON p.id_promo = k.id_promo
+     LEFT JOIN aree a ON a.id_aree = k.id_area
+     LEFT JOIN canali c ON c.id_canali = k.id_canale
+     WHERE ${condizioni.join(' AND ')}`,
+    sostituzioni
+  );
+  return new Map(righe.map(riga => [riga.id, kitDa(riga)]));
+}
+
 /** Il kit, se esiste ed e' della GDO dell'ambito; null altrimenti, senza dire quale dei due. */
 export async function kitNellAmbito(idKit: string, ambito: AmbitoGdo): Promise<KitInsight | null> {
   if (!UUID.test(idKit)) return null;
@@ -76,14 +126,7 @@ export async function kitNellAmbito(idKit: string, ambito: AmbitoGdo): Promise<K
   if (gdo) condizioni.push(gdo);
 
   const [riga] = await seleziona<RigaKit>(
-    `SELECT k.id::text AS id, k.titolo, k.id_promo::text AS id_promo, p.nome_promo,
-            k.id_area::text AS id_area, k.id_canale::text AS id_canale,
-            ${NOME_AREA} AS area, ${NOME_CANALE} AS canale,
-            ${giorno('p.validita_dal')} AS validita_dal, ${giorno('p.validita_al')} AS validita_al,
-            ${DATA_EDIZIONE} AS data,
-            (jsonb_typeof(k.import_storico) = 'object') IS TRUE AS storico,
-            CASE WHEN jsonb_typeof(k.import_storico) = 'object' THEN k.import_storico END AS import_storico,
-            p.gdo::text AS gdo
+    `SELECT ${COLONNE_KIT}
      FROM runtime_kit k
      JOIN promo p ON p.id_promo = k.id_promo
      LEFT JOIN aree a ON a.id_aree = k.id_area
@@ -92,23 +135,7 @@ export async function kitNellAmbito(idKit: string, ambito: AmbitoGdo): Promise<K
      LIMIT 1`,
     sostituzioni
   );
-  if (!riga) return null;
-  return {
-    id: riga.id,
-    titolo: riga.titolo,
-    idPromo: riga.id_promo,
-    nomePromo: riga.nome_promo ?? null,
-    idArea: riga.id_area,
-    idCanale: riga.id_canale,
-    area: riga.area ?? '',
-    canale: riga.canale ?? '',
-    validitaDal: riga.validita_dal ?? null,
-    validitaAl: riga.validita_al ?? null,
-    data: riga.data,
-    storico: riga.storico === true,
-    importStorico: riga.import_storico ?? null,
-    gdo: riga.gdo ?? null,
-  };
+  return riga ? kitDa(riga) : null;
 }
 
 /**
@@ -128,6 +155,47 @@ export async function pdfDelKit(idKit: string): Promise<PdfVolantino | null> {
   if (!riga?.id_olimpo_cloud) return null;
   const pagine = Number(riga.pages);
   return { idOlimpoCloud: riga.id_olimpo_cloud, pagine: Number.isInteger(pagine) && pagine > 0 ? pagine : 0 };
+}
+
+/** Il PDF del volantino di piu' kit in una sola lettura, scelto come pdfDelKit. */
+export async function pdfDeiKit(idKit: readonly string[]): Promise<Map<string, PdfVolantino>> {
+  const ids = [...new Set(idKit.filter(id => UUID.test(id)))];
+  if (ids.length === 0) return new Map();
+  const righe = await seleziona<{ id: string; id_olimpo_cloud: string | null; pages: number | string | null }>(
+    `SELECT k.id::text AS id, vol.id_olimpo_cloud, vol.pages
+     FROM runtime_kit k
+     ${PDF_VOLANTINO}
+     WHERE k.id IN (:idKit)`,
+    { idKit: ids }
+  );
+  const pdf = new Map<string, PdfVolantino>();
+  for (const riga of righe) {
+    if (!riga.id_olimpo_cloud) continue;
+    const pagine = Number(riga.pages);
+    pdf.set(riga.id, { idOlimpoCloud: riga.id_olimpo_cloud, pagine: Number.isInteger(pagine) && pagine > 0 ? pagine : 0 });
+  }
+  return pdf;
+}
+
+/**
+ * La versione delle referenze di ogni kit, in una sola lettura senza portare le righe: numero e
+ * ultima modifica. Cambia quando una referenza nasce, sparisce o viene modificata; serve a
+ * riconoscere un risultato in cache ancora valido. Un kit senza referenze vale "0".
+ */
+export async function versioniRigheDeiKit(idKit: readonly string[]): Promise<Map<string, string>> {
+  const ids = [...new Set(idKit.filter(id => UUID.test(id)))];
+  if (ids.length === 0) return new Map();
+  const righe = await seleziona<{ id: string; righe: number | string; ultima: string | null }>(
+    `SELECT r.id_runtime_kit::text AS id, COUNT(*)::int AS righe,
+            to_char(MAX(r."updatedAt") AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US') AS ultima
+     FROM referenze r
+     WHERE r.id_runtime_kit IN (:idKit)
+     GROUP BY r.id_runtime_kit`,
+    { idKit: ids }
+  );
+  const versioni = new Map<string, string>(ids.map(id => [id.toLowerCase(), '0']));
+  for (const riga of righe) versioni.set(riga.id.toLowerCase(), `${riga.righe}@${riga.ultima ?? ''}`);
+  return versioni;
 }
 
 /**

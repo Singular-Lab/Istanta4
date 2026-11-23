@@ -1,17 +1,16 @@
 import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
 import Sezione from "@/components/Base/Sezione";
-import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
 import { useRipristinoScorrimento } from "@/hooks/useRipristinoScorrimento";
-import { useDettaglioPromozioneVolantini } from "@/query/consultazione";
+import { useDettaglioPromozioneVolantini, useVolantiniPromozione } from "@/query/consultazione";
 import { twMerge } from "@/utils/twMerge";
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ETICHETTA_PERIODO_CONSULTAZIONE, percorsoVolantini, type PeriodoConsultazione } from "../../../lib/consultazione/periodi";
-import type { OpzioniDettaglioPromozioneVolantini } from "../../../lib/consultazione/tipi";
+import type { OpzioniDettaglioPromozioneVolantini, VarianteConsultazione, VolantiniPromozioneConsultazione } from "../../../lib/consultazione/tipi";
 import type { CustomError } from "../../../lib/server_call";
 import { idFiltro, tinteCanaliPromozione } from "./analisi";
 import { Assortimento } from "./Assortimento";
@@ -23,6 +22,7 @@ import { GrigliaVolantini } from "./GrigliaVolantini";
 import { ID_PRODOTTI_IN_COMUNE, ID_TUTTI_I_PRODOTTI, IndicePromozione, type VoceIndice } from "./IndicePromozione";
 import { LoghiInsegneContext } from "./LogoInsegna";
 import { PannelliAnalisi, type PannelloAnalisi } from "./PannelliAnalisi";
+import { SegnapostoAnalisi, SegnapostoBandaEFiltri, SegnapostoGriglia } from "./SegnapostoPromozione";
 
 const titoloVista = (periodo: PeriodoConsultazione) => `Volantini ${ETICHETTA_PERIODO_CONSULTAZIONE[periodo]}`;
 
@@ -35,21 +35,47 @@ const TITOLO_PREDEFINITO = "Promozione";
 
 const OPZIONI_VUOTE: OpzioniDettaglioPromozioneVolantini = { insegne: [], aree: [] };
 
+/** Prima di ogni dato: la forma della pagina (banda, filtri, schede dei volantini, analisi). */
 function Caricamento() {
   return (
     <Pagina titolo={TITOLO_PREDEFINITO} indietro={INDIETRO_PREDEFINITO}>
       <div role="status" aria-label="Caricamento della promozione" className="flex flex-col gap-6">
-        <Skeleton className="h-56 rounded-2xl" />
-        <Sezione>
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-6 w-1/3" />
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-          </div>
-        </Sezione>
+        <SegnapostoBandaEFiltri />
+        <SegnapostoGriglia />
+        <SegnapostoAnalisi />
       </div>
     </Pagina>
   );
+}
+
+const stessoId = (a: string, b: string | undefined) => b === undefined || a.toLowerCase() === b.toLowerCase();
+
+const riferimentiUnici = (voci: readonly { id: string; nome: string }[]) => {
+  const visti = new Set<string>();
+  return voci.filter(v => (visti.has(v.id.toLowerCase()) ? false : (visti.add(v.id.toLowerCase()), true)));
+};
+
+/**
+ * Quello che si sa della promozione prima del dettaglio, dai suoi volantini (query leggera, senza
+ * il calcolo degli insight): promo, periodo, insegne, aree e le schede dei volantini filtrati. Con
+ * questo la pagina mostra subito banda, filtri e copertine; assortimento e analisi arrivano dopo.
+ */
+function provvisorioDa(leggera: VolantiniPromozioneConsultazione | undefined, idCanale: string | undefined, idArea: string | undefined) {
+  if (!leggera) return null;
+  const tutti: readonly VarianteConsultazione[] = leggera.volantini;
+  const mostrati = tutti.filter(v => stessoId(v.canale.id, idCanale) && stessoId(v.area.id, idArea));
+  return {
+    promo: leggera.promo,
+    periodo: leggera.periodo,
+    kit: mostrati,
+    numeroKitTotale: tutti.length,
+    insegne: riferimentiUnici(tutti.map(v => v.canale)),
+    opzioni: {
+      insegne: riferimentiUnici(tutti.filter(v => stessoId(v.area.id, idArea) || idCanale !== undefined).map(v => v.canale)),
+      aree: riferimentiUnici(tutti.filter(v => stessoId(v.canale.id, idCanale) || idArea !== undefined).map(v => v.area)),
+    } satisfies OpzioniDettaglioPromozioneVolantini,
+    loghiInsegne: leggera.loghiInsegne,
+  };
 }
 
 /**
@@ -76,19 +102,25 @@ function PromozioneVolantini() {
   const idArea = idFiltro(parametri.get("area"));
   const query = useDettaglioPromozioneVolantini(idPromo, { idCanale, idArea });
   const dettaglio = query.data;
+  // Finche' il dettaglio calcola gli insight dei kit, la pagina si costruisce dai volantini della promo (query leggera)
+  const leggera = useVolantiniPromozione(idPromo);
+  const volantiniLeggeri = leggera.data;
+  const provvisorio = useMemo(
+    () => (dettaglio ? null : provvisorioDa(volantiniLeggeri, idCanale, idArea)),
+    [dettaglio, volantiniLeggeri, idCanale, idArea]
+  );
+  const base = dettaglio ?? provvisorio;
   // I colori di tutte le insegne della promo: un filtro non li cambia. Il ?. tiene in piedi la
   // pagina con un server non ancora aggiornato al contratto: allora valgono le insegne dei kit
-  const insegne = dettaglio?.insegne;
-  const kit = dettaglio?.kit;
+  const insegne = base?.insegne;
+  const kit = base?.kit;
   const tinta = useMemo(() => tinteCanaliPromozione(insegne ?? (kit ?? []).map(k => k.canale)), [insegne, kit]);
   // Il pannello chiesto dall'indice: si apre e la pagina lo porta in vista
   const [pannelloDaMostrare, setPannelloDaMostrare] = useState<string | null>(null);
   // Tornando dagli insight di un kit la pagina riprende dove l'utente l'aveva lasciata
   useRipristinoScorrimento(!query.isLoading && Boolean(dettaglio));
 
-  if (query.isLoading) return <Caricamento />;
-
-  if (query.isError || !dettaglio) {
+  if (query.isError || (!dettaglio && !query.isLoading)) {
     // Promo di un'altra GDO, eliminata o senza volantini pubblicati: non è un errore del servizio
     const nonDisponibile = (query.error as CustomError | null)?.httpStatus === 404;
     return (
@@ -117,7 +149,10 @@ function PromozioneVolantini() {
     );
   }
 
-  const inAttesa = query.isPlaceholderData;
+  if (!base) return <Caricamento />;
+
+  // Con il dettaglio di prima ma filtri nuovi, o con i soli volantini: la barra dei filtri lo dice
+  const inAttesa = query.isPlaceholderData || !dettaglio;
   // Cambiando i volantini mostrati la scelta nel confronto dell'assortimento (vista, punto di vista) potrebbe non esserci più
   const senzaVista = { vista: null } as const;
   const cambiaInsegna = (id: string) => aggiorna({ canale: id || null, ...senzaVista });
@@ -125,9 +160,9 @@ function PromozioneVolantini() {
   const azzera = () => aggiorna({ canale: null, area: null, ...senzaVista });
   // Dalla banda: la stessa insegna una seconda volta toglie il filtro
   const scegliInsegna = (id: string) => cambiaInsegna(idCanale?.toLowerCase() === id.toLowerCase() ? "" : id);
-  const conKit = dettaglio.kit.length > 0;
-  const opzioni = dettaglio.opzioni ?? OPZIONI_VUOTE;
-  const pannelli: PannelloAnalisi[] = [
+  const conKit = base.kit.length > 0;
+  const opzioni = base.opzioni ?? OPZIONI_VUOTE;
+  const pannelli: PannelloAnalisi[] = !dettaglio ? [] : [
     {
       chiave: "assortimento",
       titolo: "Reparti, meccaniche e marche",
@@ -144,7 +179,7 @@ function PromozioneVolantini() {
     },
   ];
   // I prodotti in comune e l'elenco ci sono solo con più volantini e qualche prodotto (ConfrontoAssortimento)
-  const conConfronto = dettaglio.kit.length > 1 && (dettaglio.assortimento.referenze ?? []).length > 0;
+  const conConfronto = Boolean(dettaglio) && base.kit.length > 1 && ((dettaglio?.assortimento.referenze ?? []).length > 0);
   const voci: VoceIndice[] = [
     ...(conConfronto
       ? [
@@ -157,13 +192,13 @@ function PromozioneVolantini() {
   ];
 
   return (
-    <LoghiInsegneContext.Provider value={dettaglio.loghiInsegne ?? {}}>
+    <LoghiInsegneContext.Provider value={base.loghiInsegne ?? {}}>
       <Pagina
-        titolo={dettaglio.promo.nome}
+        titolo={base.promo.nome}
         descrizione="I volantini pubblicati della promozione, il loro assortimento e il confronto fra i kit."
-        indietro={indietro(dettaglio.periodo)}
+        indietro={indietro(base.periodo)}
       >
-        <Banda dettaglio={dettaglio} insegne={opzioni.insegne} tinta={tinta} idCanale={idCanale} onScegliInsegna={scegliInsegna} />
+        <Banda dettaglio={base} insegne={opzioni.insegne} tinta={tinta} idCanale={idCanale} onScegliInsegna={scegliInsegna} />
         <FiltriPromozione
           opzioni={opzioni}
           idCanale={idCanale ?? parametri.get("canale") ?? undefined}
@@ -171,20 +206,27 @@ function PromozioneVolantini() {
           onCambiaInsegna={cambiaInsegna}
           onCambiaArea={cambiaArea}
           onAzzera={azzera}
-          mostrati={dettaglio.kit.length}
-          totale={dettaglio.numeroKitTotale ?? dettaglio.kit.length}
+          mostrati={base.kit.length}
+          totale={base.numeroKitTotale ?? base.kit.length}
           inAttesa={inAttesa}
         />
-        {conKit && <IndicePromozione voci={voci} onApriPannello={setPannelloDaMostrare} />}
+        {conKit && dettaglio && <IndicePromozione voci={voci} onApriPannello={setPannelloDaMostrare} />}
         {/* Mentre arriva il dettaglio dei filtri nuovi resta quello di prima, attenuato */}
-        <div aria-busy={inAttesa || undefined} className={twMerge("flex flex-col gap-6 transition-opacity", inAttesa && "opacity-60")}>
+        <div aria-busy={inAttesa || undefined} className={twMerge("flex flex-col gap-6 transition-opacity", dettaglio && inAttesa && "opacity-60")}>
           {conKit ? (
             <>
-              <GrigliaVolantini kit={dettaglio.kit} tinta={tinta} />
-              {/* Il ?. tiene in piedi la pagina con un server che non manda ancora i prodotti */}
-              <ConfrontoAssortimento referenze={dettaglio.assortimento.referenze ?? []} kit={dettaglio.kit} tinta={tinta} nomePromo={dettaglio.promo.nome} />
-              {/* Le analisi dopo l'elenco dei prodotti: chiuse all'apertura, si aprono una per una */}
-              <PannelliAnalisi pannelli={pannelli} daMostrare={pannelloDaMostrare} onMostra={setPannelloDaMostrare} />
+              <GrigliaVolantini kit={base.kit} tinta={tinta} />
+              {dettaglio ? (
+                <>
+                  {/* Il ?. tiene in piedi la pagina con un server che non manda ancora i prodotti */}
+                  <ConfrontoAssortimento referenze={dettaglio.assortimento.referenze ?? []} kit={dettaglio.kit} tinta={tinta} nomePromo={dettaglio.promo.nome} />
+                  {/* Le analisi dopo l'elenco dei prodotti: chiuse all'apertura, si aprono una per una */}
+                  <PannelliAnalisi pannelli={pannelli} daMostrare={pannelloDaMostrare} onMostra={setPannelloDaMostrare} />
+                </>
+              ) : (
+                // Il calcolo degli insight dei kit non e' ancora arrivato: la pagina e' gia' usabile, queste parti seguono
+                <SegnapostoAnalisi />
+              )}
             </>
           ) : (
             <Sezione>

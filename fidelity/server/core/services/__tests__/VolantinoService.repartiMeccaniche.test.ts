@@ -19,6 +19,7 @@ vi.mock('../../repositories/InsightVolantinoRepository', () => ({
   kitNellAmbito: vi.fn(),
   pdfDelKit: vi.fn(),
   righeDelKit: vi.fn(),
+  versioniRigheDeiKit: vi.fn(async () => new Map()),
 }));
 
 // Reparti e meccaniche di /api/flyer-insights uguali per Istanta e storico (spec insight-volantino).

@@ -60,6 +60,10 @@ export interface LettureKitInsight {
   kitNellAmbito(idKit: string, ambito: AmbitoGdo): Promise<KitInsight | null>;
   pdfDelKit(idKit: string): Promise<PdfVolantino | null>;
   righeDelKit(idKit: string): Promise<RigaReferenza[]>;
+  /** Letture di piu' kit in una sola query, per il dettaglio della promozione; senza, si leggono un kit alla volta. */
+  kitNeiAmbito?(idKit: readonly string[], ambito: AmbitoGdo): Promise<Map<string, KitInsight>>;
+  pdfDeiKit?(idKit: readonly string[]): Promise<Map<string, PdfVolantino>>;
+  versioniRigheDeiKit?(idKit: readonly string[]): Promise<Map<string, string>>;
 }
 
 const LETTURE_PREDEFINITE: LettureKitInsight = { kitNellAmbito, pdfDelKit, righeDelKit };

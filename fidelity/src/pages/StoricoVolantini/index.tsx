@@ -5,7 +5,6 @@ import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
 import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
 import Sezione from "@/components/Base/Sezione";
-import Spinner from "@/components/Base/Spinner";
 import StatCard, { StatCardGrid } from "@/components/Base/StatCard";
 import TomSelect from "@/components/Base/TomSelect";
 import EmptyState from "@/components/EmptyState";
@@ -13,6 +12,7 @@ import withSessionCheck from "@/components/SessionChecker";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
 import clsx from "clsx";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Skeleton from "@/components/Base/Skeleton";
 import { ServerCall } from "../../../lib/server_call";
 import type { PaginaVolantiniConsultazione } from "../../../lib/consultazione/tipi";
 import { STATO_PROMO } from "../../../lib/enums";
@@ -132,16 +132,6 @@ const StoricoVolantiniPage = () => {
     const puoScaricare = usePermission(PERMISSIONS.MATERIALI.SCARICA);
     const descrizione = "Panoramica completa di tutti i volantini pubblicati dalle promozioni scadute.";
 
-    if (isLoading) {
-        return (
-            <Pagina titolo="Storico volantini" descrizione={descrizione}>
-                <div className="flex justify-center py-16">
-                    <Spinner size="lg" etichetta="Caricamento dello storico volantini" />
-                </div>
-            </Pagina>
-        );
-    }
-
     if (errore) {
         return (
             <Pagina titolo="Storico volantini" descrizione={descrizione}>
@@ -152,11 +142,20 @@ const StoricoVolantiniPage = () => {
 
     return (
         <Pagina titolo="Storico volantini" descrizione={descrizione}>
-            <StatCardGrid className="lg:grid-cols-3">
-                <StatCard densita="compatta" icona="History" tono="info" etichetta="Volantini totali" valore={totale} />
-                <StatCard densita="compatta" icona="FileStack" tono="brand" etichetta="In questa pagina" valore={paginatedKits.length} />
-                <StatCard densita="compatta" icona="BookOpen" tono="success" etichetta="Pagine totali" valore={totalPages} />
-            </StatCardGrid>
+            {/* La pagina compare subito: i numeri e l'elenco hanno un segnaposto finche' il server risponde */}
+            {isLoading ? (
+                <div role="status" aria-label="Caricamento dei numeri dello storico" className="grid gap-4 lg:grid-cols-3">
+                    {[0, 1, 2].map(indice => (
+                        <Skeleton key={indice} className="h-[4.5rem] rounded-card dark:bg-darkmode-400 dark:from-darkmode-400 dark:via-darkmode-300 dark:to-darkmode-400" />
+                    ))}
+                </div>
+            ) : (
+                <StatCardGrid className="lg:grid-cols-3">
+                    <StatCard densita="compatta" icona="History" tono="info" etichetta="Volantini totali" valore={totale} />
+                    <StatCard densita="compatta" icona="FileStack" tono="brand" etichetta="In questa pagina" valore={paginatedKits.length} />
+                    <StatCard densita="compatta" icona="BookOpen" tono="success" etichetta="Pagine totali" valore={totalPages} />
+                </StatCardGrid>
+            )}
 
             <Sezione senzaPadding aria-label="Volantini pubblicati" aria-busy={isFiltering || undefined}>
                 <BarraFiltri
@@ -220,7 +219,15 @@ const StoricoVolantiniPage = () => {
 
                 {/* Lista volantini */}
                 <div className={clsx("transition-opacity duration-150", isFiltering && "pointer-events-none opacity-50")}>
-                    {paginatedKits.length === 0 ? (
+                    {isLoading ? (
+                        <ul aria-busy="true" aria-label="Caricamento dei volantini" className="space-y-3 p-5">
+                            {Array.from({ length: 5 }, (_, indice) => (
+                                <li key={indice}>
+                                    <Skeleton className="h-28 rounded-card dark:bg-darkmode-400 dark:from-darkmode-400 dark:via-darkmode-300 dark:to-darkmode-400" />
+                                </li>
+                            ))}
+                        </ul>
+                    ) : paginatedKits.length === 0 ? (
                         <EmptyState
                             compatta
                             icon={hasActiveFilters ? "SearchX" : "Archive"}

@@ -1,4 +1,4 @@
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery, keepPreviousData, type QueryClient } from "@tanstack/react-query";
 import {
   PERCORSO_CONSULTAZIONE,
   percorsoPromozioneVolantiniConsultazione,
@@ -147,22 +147,50 @@ export const usePromozioniVolantiniConsultazione = (filtri: FiltriPromozioniVola
 export const chiaveDettaglioPromozioneVolantini = (idPromo: string | undefined) =>
   [CHIAVE_CONSULTAZIONE, "volantini", "promozione", idPromo] as const;
 
+const chiaveDettaglioFiltrato = (idPromo: string | undefined, filtri: FiltriDettaglioPromozioneVolantini) =>
+  [...chiaveDettaglioPromozioneVolantini(idPromo), filtri.idCanale ?? "", filtri.idArea ?? ""] as const;
+
+const leggiDettaglioPromozioneVolantini = (idPromo: string | undefined, filtri: FiltriDettaglioPromozioneVolantini) => {
+  const parametri = parametriMateriali({ idCanale: filtri.idCanale, idArea: filtri.idArea });
+  const percorso = percorsoPromozioneVolantiniConsultazione(idPromo ?? "");
+  return ServerCall.get<DettaglioPromozioneVolantiniConsultazione>(parametri ? `${percorso}?${parametri}` : percorso);
+};
+
 export const useDettaglioPromozioneVolantini = (
   idPromo: string | undefined,
   filtri: FiltriDettaglioPromozioneVolantini = {}
 ) =>
   useQuery({
-    queryKey: [...chiaveDettaglioPromozioneVolantini(idPromo), filtri.idCanale ?? "", filtri.idArea ?? ""],
-    queryFn: () => {
-      const parametri = parametriMateriali({ idCanale: filtri.idCanale, idArea: filtri.idArea });
-      const percorso = percorsoPromozioneVolantiniConsultazione(idPromo ?? "");
-      return ServerCall.get<DettaglioPromozioneVolantiniConsultazione>(parametri ? `${percorso}?${parametri}` : percorso);
-    },
+    queryKey: chiaveDettaglioFiltrato(idPromo, filtri),
+    queryFn: () => leggiDettaglioPromozioneVolantini(idPromo, filtri),
     enabled: Boolean(idPromo),
     staleTime: STALE_VISTE,
     // Solo il dettaglio della stessa promo: un'altra promo riparte dal caricamento
     placeholderData: (precedente, query) => (query?.queryKey[3] === idPromo ? precedente : undefined),
   });
+
+/**
+ * Avvia in anticipo la lettura del dettaglio di una promozione (e dei suoi volantini, che bastano a
+ * mostrare la pagina): lo si chiama quando l'utente si ferma sulla scheda, cosi' il clic trova i dati
+ * gia' arrivati o in arrivo. Non rilegge quello che e' ancora fresco.
+ */
+export const anticipaPromozioneVolantini = (
+  client: QueryClient,
+  idPromo: string | undefined,
+  filtri: FiltriDettaglioPromozioneVolantini = {}
+): void => {
+  if (!idPromo) return;
+  void client.prefetchQuery({
+    queryKey: chiaveDettaglioFiltrato(idPromo, filtri),
+    queryFn: () => leggiDettaglioPromozioneVolantini(idPromo, filtri),
+    staleTime: STALE_VISTE,
+  });
+  void client.prefetchQuery({
+    queryKey: [CHIAVE_CONSULTAZIONE, "volantini", "promozione-volantini", idPromo],
+    queryFn: () => ServerCall.get<VolantiniPromozioneConsultazione>(percorsoVolantiniPromozioneConsultazione(idPromo)),
+    staleTime: STALE_VISTE,
+  });
+};
 
 /**
  * I volantini pubblicati di una promozione, senza i loro insight, per la tendina degli insight del

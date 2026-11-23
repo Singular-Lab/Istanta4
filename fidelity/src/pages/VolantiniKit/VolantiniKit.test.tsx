@@ -16,14 +16,20 @@ const finti = vi.hoisted(() => ({
   /** Le promozioni con i loro kit pubblicati. */
   risultato: {} as Record<string, unknown>,
   filtri: [] as unknown[],
+  /** Le letture anticipate del dettaglio: [idPromo, filtri] */
+  anticipi: [] as unknown[][],
 }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
 vi.mock("../../../lib/server_call", () => ({ ServerCall: { getUrl: () => "" } }));
+vi.mock("@tanstack/react-query", () => ({ useQueryClient: () => ({}) }));
 vi.mock("@/query/consultazione", () => ({
   usePromozioniVolantiniConsultazione: (filtri: unknown) => {
     finti.filtri.push(filtri);
     return finti.risultato;
+  },
+  anticipaPromozioneVolantini: (_client: unknown, idPromo: string, filtri: unknown) => {
+    finti.anticipi.push([idPromo, filtri]);
   },
 }));
 
@@ -146,10 +152,45 @@ const oggiE = (iso: string) => {
 beforeEach(() => {
   finti.risultato = caricato(pagina());
   finti.filtri = [];
+  finti.anticipi = [];
 });
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe("Lettura anticipata del dettaglio dalla scheda", () => {
+  it("fermandosi sulla scheda per un attimo parte la lettura del dettaglio della promozione, con gli stessi filtri", async () => {
+    await apri("/volantini/attivi");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+    fireEvent.pointerEnter(scheda());
+    expect(finti.anticipi).toEqual([]);
+    vi.advanceTimersByTime(250);
+
+    expect(finti.anticipi).toEqual([["p1", { idCanale: undefined, idArea: undefined }]]);
+  });
+
+  it("il puntatore che attraversa la scheda senza fermarsi non avvia nessuna lettura", async () => {
+    await apri("/volantini/attivi");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+    fireEvent.pointerEnter(scheda());
+    vi.advanceTimersByTime(100);
+    fireEvent.pointerLeave(scheda());
+    vi.advanceTimersByTime(500);
+
+    expect(finti.anticipi).toEqual([]);
+  });
+
+  it("raggiungendo la scheda da tastiera la lettura parte subito", async () => {
+    await apri("/volantini/attivi");
+
+    fireEvent.focus(scheda());
+
+    expect(finti.anticipi).toHaveLength(1);
+    expect(finti.anticipi[0][0]).toBe("p1");
+  });
 });
 
 describe("Volantini per periodo", () => {

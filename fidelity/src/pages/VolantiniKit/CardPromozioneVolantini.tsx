@@ -1,7 +1,10 @@
 import Lucide from "@/components/Base/Lucide";
 import StatusBadge from "@/components/Base/StatusBadge";
 import type { TonoStato } from "@/constants/stati";
+import { anticipaPromozioneVolantini } from "@/query/consultazione";
 import { twMerge } from "@/utils/twMerge";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
   percorsoPromozioneVolantini,
@@ -51,6 +54,21 @@ function CardPromozioneVolantini({
   className,
 }: CardPromozioneVolantiniProps) {
   const { promo, kit, numeroKit } = promozione;
+  // Fermandosi sulla scheda (o raggiungendola da tastiera) il dettaglio comincia ad arrivare: il clic lo trova pronto
+  const client = useQueryClient();
+  const attesa = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const annullaAnticipo = () => {
+    if (attesa.current) clearTimeout(attesa.current);
+    attesa.current = null;
+  };
+  useEffect(() => annullaAnticipo, []);
+  const anticipa = (subito: boolean) => {
+    annullaAnticipo();
+    const avvia = () => anticipaPromozioneVolantini(client, promo.id, { idCanale: filtri?.idCanale, idArea: filtri?.idArea });
+    // Il mouse che attraversa l'elenco non avvia una lettura per scheda: serve una sosta
+    if (subito) avvia();
+    else attesa.current = setTimeout(avvia, 200);
+  };
   const adesso = new Date();
   const numeri = numeriDeiKit(promozione);
   const storico = periodo === "storico";
@@ -84,6 +102,9 @@ function CardPromozioneVolantini({
     <Link
       to={percorsoPromozioneVolantini(promo.id, filtri)}
       aria-label={etichetta}
+      onPointerEnter={() => anticipa(false)}
+      onPointerLeave={annullaAnticipo}
+      onFocus={() => anticipa(true)}
       className={twMerge(
         "group/promo flex h-full flex-col overflow-hidden rounded-card border border-slate-200 bg-white shadow-card transition-[border-color,box-shadow,transform] duration-200 hover:border-theme-1/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 motion-safe:hover:-translate-y-0.5 dark:border-darkmode-400 dark:bg-darkmode-600 dark:hover:border-indigo-300/40 dark:focus-visible:ring-indigo-300/50",
         className
