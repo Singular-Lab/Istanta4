@@ -68,7 +68,7 @@ test("referenzaDelBox e il Fix referenza usano la stessa ricerca, e la riserva d
 
     const fix = indexNew.substring(indexNew.indexOf("async function fixRefImpaginata("), indexNew.indexOf("async function referenzaDelBox(box) {"));
     assert.match(fix, /if \(schedaRef\.primariaDelBox\(schedaRef\.schedeRefDati, codiceGruppo, idRec\) != null\) \{\s*originalBounds = schedaRef\.refSelected\.boxOriginalBounds;/);
-    assert.match(fix, /datiRef = schedaRef\.primariaDelBox\(schedaRef\.schedeRefDati, codiceGruppo, idRec\);\s*if \(datiRef == null\) \{\s*datiRef = schedaRef\.primariaDellaRisposta\(await getSchedaRefAsync\(schedaRef, codiceGruppo, idRec\)\);/);
+    assert.match(fix, /datiRef = schedaRef\.primariaDelBox\(schedaRef\.schedeRefDati, codiceGruppo, idRec\);\s*if \(datiRef == null\) \{\s*datiRef = schedaRef\.primariaDellaRisposta\(await getSchedaRefAsync\(schedaRef, codiceGruppo, idRec, DnaBox\.idLavRecDi\(dna\)\)\);/);
     assert.match(fix, /throw new Error\("la referenza primaria del box non si trova"\);/);
     assert.doesNotMatch(fix + referenza, /getIdRecFromItemRef\(s\.recordInTracciato\) === idRec/);
 });

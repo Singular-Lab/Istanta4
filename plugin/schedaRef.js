@@ -2,6 +2,9 @@
 const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const NoRenderElementi = require('./noRenderElementi');
+//TASK-22d7fad2: lo slot dell'idRec nel DNA e l'Id della riga di un box derivato.
+const DnaBox = require('./dnaBox');
+const BoxDerivati = require('./boxDerivati');
 //I20-1105: l'altezza in pixel della lista noRender, l'unico modo perche' in UXP scorra davvero.
 const AltezzaScorrimento = require('./altezzaScorrimento');
 const RicollegaEsiti = require('./ricollegaEsiti');
@@ -134,8 +137,10 @@ const schedaRef = {
     /// Le azioni strutturali offerte dalla schermata di edit. I20-1083: ci sono anche quando si
     /// arriva dal report o dalla schermata delle segnalazioni (vista controllata), ma li' l'azione
     /// cambia il dato senza reimpaginare il box (aggiornaDopoAzioneInVistaControllata).
+    /// TASK-22d7fad2: non da un box derivato, e non con un derivato nella selezione multipla: le
+    /// azioni sul box cambiano il dato del record, e si fanno dall'originale.
     mostraAzioniStrutturaliInEdit() {
-        return true;
+        return this.inSelezioneMultipla ? !this.selezioneConDerivati() : this.idLavRecDelBoxAperto() === 0;
     },
 
     /// I20-1083: la scheda e' aperta in vista controllata, dal Report Integrita' o dalla schermata
@@ -516,6 +521,7 @@ const schedaRef = {
             codice: dna.codice,
             codiceGruppo: dna.codice_gruppo,
             idRec: dna.idRec,
+            idLavRec: dna.idLavRec,
             meccanica: dna.box
         };
     },
@@ -658,7 +664,7 @@ const schedaRef = {
                     me.apriSuFotoExtra = false;
                     me.vaiAFotoExtra();
                 }
-            }, me.refSelected.idRec);
+            }, me.refSelected.idRec, false, me.refSelected.idLavRec);
             // }
             // else {
             //     messaggioUtente("Elemento " + me.refSelected.codice + " non trovato nel tracciato", "error");
@@ -703,9 +709,12 @@ const schedaRef = {
             indesignEvents.setBusy(true);
             var listaCodiciGruppo = [];
             var listaIdRec = [];
+            //TASK-22d7fad2: l'idLavRec dei box derivati della selezione, 0 per gli altri.
+            var listaIdLavRec = [];
             $("#editReferenza").empty();
             for (let i = 0; i < refs.length; i++) {
                 listaCodiciGruppo.push(refs[i].codiceGruppo);
+                listaIdLavRec.push(me.idLavRecDelDettaglio(refs[i]));
 
                 var idRec = null;
                 if (refs[i].idRec != null && refs[i].idRec !== "" && !isNaN(parseInt(refs[i].idRec))) {
@@ -745,7 +754,7 @@ const schedaRef = {
                 }
 
                 me.mostraSchedaMultipla();
-            });
+            }, listaIdLavRec);
         }
         catch (error) {
 
@@ -836,7 +845,26 @@ const schedaRef = {
                 .join(" ");
         }
 
+        //TASK-22d7fad2: un derivato si riconosce nell'elenco.
+        if (this.idLavRecDelDettaglio(dettaglio) > 0) {
+            descrizione = ("[derivato] " + descrizione).trim();
+        }
+
         return { codice: codice, descrizione: descrizione };
+    },
+
+    /// TASK-22d7fad2: cosa si dice quando fra i box selezionati ci sono dei derivati.
+    testoDerivatiInSelezioneMultipla(codici) {
+        const elenco = (Array.isArray(codici) ? codici : []).map(c => String(c == null ? "" : c)).filter(c => c !== "");
+        if (elenco.length <= 1) {
+            return "Code SRF-168 Il box " + (elenco[0] || "") + " e' un derivato e non puo' essere alterato con una multi selezione";
+        }
+        return "Code SRF-168 I box " + elenco.join("; ") + " sono derivati e non possono essere alterati con una multi selezione";
+    },
+
+    /// TASK-22d7fad2: se fra i box della selezione multipla c'e' un derivato.
+    selezioneConDerivati() {
+        return (this.boxSelezioneMultipla || []).some(b => b != null && this.idLavRecDelDettaglio(b.dettaglio) > 0);
     },
 
     /// Le voci di tutti i box della selezione multipla, nell'ordine della selezione.
@@ -919,6 +947,19 @@ const schedaRef = {
             me.riapriFotoExtraPiuBox = false;
 
             me.resetInitSchedaRef();
+
+            //TASK-22d7fad2: un box derivato non si lavora in selezione multipla: da li' partono
+            //operazioni che cambiano anche l'originale. La selezione non si apre, e si dice quale box.
+            const derivatiSelezionati = me.boxSelezioneMultipla.filter(b => b != null && me.idLavRecDelDettaglio(b.dettaglio) > 0);
+            if (derivatiSelezionati.length > 0) {
+                me.impostaVociSelezioneMultipla(false);
+                $("#refImage").hide();
+                $("#raggruppaImage").hide();
+                messaggioUtente(me.testoDerivatiInSelezioneMultipla(derivatiSelezionati.map(b => b.dettaglio != null ? b.dettaglio.codiceGruppo : "")), "warning", false, 8);
+                jsIndexControls.changeSubMenu($("#homeImage").attr("subTab"));
+                jsIndexControls.changeImage($("#homeImage"));
+                return;
+            }
 
             if (stato === stati.misti || stato === stati.nonLeggibili) {
                 me.impostaVociSelezioneMultipla(false);
@@ -1223,6 +1264,12 @@ const schedaRef = {
 
         let params = "codiceGruppo=" + enc(primo.recordInTracciato["Scatto.CodiceGruppo"]);
         params += "&idRec=" + enc(primo.idRec);
+        //TASK-22d7fad2: i record della scheda di un box derivato portano il suo idLavRec. Lo si
+        //manda: Istanta rifiuta le azioni sul box per quel derivato, e lo dice per quel box.
+        const idLavRec = DnaBox.idValido(primo.recordInTracciato["idLavRec"]);
+        if (idLavRec > 0) {
+            params += "&idLavRec=" + enc(idLavRec);
+        }
         if (diGruppo && opzione == "primario") {
             params += "&" + kAz + ".codice=" + enc(primo.recordInTracciato["Referenza.Codice"]);
         }
@@ -1537,7 +1584,9 @@ const schedaRef = {
         return valore != null && !isNaN(parseInt(valore)) ? parseInt(valore) : null;
     },
 
-    getSchedaRef(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false) {
+    /// TASK-22d7fad2: idLavRec e' l'Id della riga di un box derivato (0 per gli altri box): con
+    /// quello Istanta compone la scheda con i meta del derivato, non con quelli dell'originale.
+    getSchedaRef(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false, idLavRec = 0) {
         let me = this;
 
         var xhr = new XMLHttpRequestClient();
@@ -1588,6 +1637,7 @@ const schedaRef = {
         var formData = new FormData();
         formData.append("codiceGruppo", codiceGruppo);
         formData.append("idRec", idRec);
+        formData.append("idLavRec", DnaBox.idValido(idLavRec));
 
         xhr.send("Menabo/getSchedaRef/" + idKitLavorazione + "/" + false, formData, "PUT");
     },
@@ -1833,6 +1883,8 @@ const schedaRef = {
         var area = areaObj != null ? areaObj.sigla : "";
 
         var idRec = (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) ? parseInt(dna.idRec) : 0;
+        //TASK-22d7fad2: un box derivato si ricollega solo alla sua riga.
+        var idLavRec = DnaBox.idLavRecDi(dna);
 
         //I20-986: un box appoggiato fuori dalla pagina non ha una pagina, e chiederne il
         //nome faceva fallire tutto con l'errore generico, che non dice cosa fare. Si
@@ -1858,6 +1910,7 @@ const schedaRef = {
             elementoDaRicollegare: {
                 codiceGruppo: codiceGruppo,
                 idRec: idRec,
+                idLavRec: idLavRec,
                 pag: nomePagina,
                 forzaloAllaPaginaIndicata: true,
             }
@@ -1877,18 +1930,10 @@ const schedaRef = {
 
         dna.idRec = idRecSelezionato.toString();
         if (dna.item != null) {
-            let labelParts = dna.item.label.split("$");
-            if (dna.oldBoxFormat) {
-                if (labelParts.length > 4) {
-                    labelParts[4] = idRecSelezionato.toString();
-                    dna.item.label = labelParts.join("$");
-                }
-            }
-            else {
-                if (labelParts.length > 5) {
-                    labelParts[5] = idRecSelezionato.toString();
-                    dna.item.label = labelParts.join("$");
-                }
+            //TASK-22d7fad2: cambia il record, non la riga di un derivato: l'idLavRec dello slot resta.
+            let nuovaLabel = DnaBox.labelConIdRec(dna.item.label, dna.oldBoxFormat ? 4 : 5, idRecSelezionato);
+            if (nuovaLabel != null) {
+                dna.item.label = nuovaLabel;
             }
         }
         return true;
@@ -2341,6 +2386,12 @@ const schedaRef = {
             return;
         }
         var refEditabile = pluginMiddleware.getEditabilitaSchedaRef != null ? pluginMiddleware.getEditabilitaSchedaRef(primario.recordInTracciato) : true;
+        //TASK-22d7fad2: un box derivato non si revisiona: i campi nascono in sola lettura, come
+        //per una ref non modificabile, e la revisione si fa dal box originale.
+        var schedaDiDerivato = me.idLavRecDelBoxAperto() > 0;
+        if (schedaDiDerivato) {
+            refEditabile = false;
+        }
 
         //I20-1132: le descrizioni fondamentali che l'agenzia dichiara in sola lettura per questo
         //record, con la nota: la casella nasce readonly e il salvataggio non le manda.
@@ -2369,7 +2420,8 @@ const schedaRef = {
         console.log("COMPILO REF");
         var codice = primario.recordInTracciato["Scatto.CodiceGruppo"];
         this.componiTitoloCodice(codice);
-        if (codice.includes(",")) {
+        this.segnaSchedaDiDerivato(schedaDiDerivato);
+        if (codice.includes(",") && !schedaDiDerivato) {
             $("#sgruppa").show();
         }
 
@@ -2379,6 +2431,9 @@ const schedaRef = {
 
         //Inserisco lo spazio per far immettere le info di MISMATCH se ci sono
         $("#editReferenza").append('<div id="mismatchWarningPanel" style="padding:5px;"></div>');
+        if (schedaDiDerivato) {
+            $("#editReferenza").append($('<div id="avvisoSchedaDerivato" style="padding:5px; font-size:12px; color:#ffd24d;"></div>').text(me.TESTO_SCHEDA_DERIVATO));
+        }
 
         //I20-981: la descrizione del server si puo' riportare nel box senza passare dal
         //salvataggio, per quando il dato e' gia' a posto a monte e il box e' rimasto indietro.
@@ -3171,6 +3226,10 @@ const schedaRef = {
             };
 
             $("#salvaButton").css("display", "");
+            //TASK-22d7fad2: su un derivato non c'e' niente da salvare con la revisione.
+            if (schedaDiDerivato) {
+                $("#salvaButton").remove();
+            }
 
             //writeDebugMessageForCrash("Inizio cambio strutturale");
 
@@ -3418,6 +3477,10 @@ const schedaRef = {
                 me.editRefFieldController = new InputEditController($("#editReferenza"), convalidaFirmaRevisione, archivioDelController, compiledFields, descrizioniInSolaLettura.map(function (d) { return d.fondamentale; }), me.testiCompostiDelPrimario(me.schedeRefDati));
                 //I20-1090: la descrizione nei meta (sola lettura, niente revisione) e i suoi pulsanti.
                 me.applicaStatoMetaDescrizione();
+                //TASK-22d7fad2: su un derivato anche gli altri campi restano fermi.
+                if (schedaDiDerivato) {
+                    me.editRefFieldController.solaLettura = true;
+                }
                 //writeDebugMessageForCrash("Fine try descrizioni regionali e canale");
             }, 5);
 
@@ -3585,6 +3648,79 @@ const schedaRef = {
         catch (error) {
             console.error(error);
             messaggioUtente("Code SRF-94 Errore applicando la descrizione dal server: " + error.message, "error", false, 5);
+        }
+    },
+
+    /// TASK-22d7fad2: l'icona Reimpagina box del footer. Con un box solo chiede conferma, e nel
+    /// Volantino, per un box che non e' un derivato, offre "Impagina come derivato" con la pagina:
+    /// in quel caso il box resta com'e' e ne nasce un derivato a quella pagina. Con piu' box la
+    /// conferma e' quella della selezione multipla. Chi rifa' il box da codice (l'allineamento dopo
+    /// il Salva, i meta del box) chiama applicaReimpaginazione, senza domande.
+    async chiediReimpaginazione() {
+        var schedaRef = this.schedeRefDati;
+        if (this.inSelezioneMultipla || schedaRef == null || schedaRef.length == 0 || this.refSelected == null) {
+            return await this.applicaReimpaginazione();
+        }
+
+        var idLavRec = this.idLavRecDelBoxAperto();
+        var voce = this.voceDellaSelezioneMultipla(this.refSelected, schedaRef);
+        var tipoLavorazione = typeof ficoProcess !== "undefined" && ficoProcess != null && typeof ficoProcess.getTipoLavorazioneCorrente === "function"
+            ? ficoProcess.getTipoLavorazioneCorrente()
+            : null;
+        var scelta = await BoxDerivati.chiediReimpagina({
+            codiceGruppo: voce.codice,
+            descrizione: voce.descrizione,
+            eDerivato: idLavRec > 0,
+            puoDerivare: BoxDerivati.puoDerivare(tipoLavorazione, idLavRec),
+            nomiPagine: BoxDerivati.nomiPagine(docInLavorazione)
+        });
+
+        if (scelta.azione === "reimpagina") {
+            return await this.applicaReimpaginazione();
+        }
+        if (scelta.azione === "derivato") {
+            return await BoxDerivati.creaEImpagina({ codiceGruppo: voce.codice, idRec: this.idRecDelBoxAperto(), idLavRec: idLavRec, pagina: scelta.pagina });
+        }
+        return null;
+    },
+
+    /// TASK-22d7fad2: cosa si dice in cima alla scheda di un box derivato.
+    TESTO_SCHEDA_DERIVATO: "Box derivato: revisione dei campi, azioni sul box, Struttura e Sgruppa si fanno dal box originale. Da qui: foto, noRender, foto extra, testi del box, Reimpagina ed Elimina.",
+
+    /// TASK-22d7fad2: il contrassegno "DERIVATO" accanto al codice nel titolo della scheda, e la voce
+    /// Struttura del sottomenu, che su un derivato non si offre. In vista controllata la voce
+    /// resta nascosta comunque (la nasconde il report).
+    segnaSchedaDiDerivato(eDerivato) {
+        $("#segnoDerivato").remove();
+        var voceStruttura = $(".subTab5").find('img[tab="Tab13"]');
+        if (eDerivato) {
+            $("#testoCodiceTitolo").before($('<span id="segnoDerivato" style="flex: 0 0 auto; margin-right: 6px; padding: 0 4px; font-size: 10px; line-height: 14px; border-radius: 3px; background-color: #ffd24d; color: black;"></span>').text("DERIVATO"));
+            voceStruttura.hide();
+        }
+        else if (!this.inVistaControllata()) {
+            voceStruttura.show();
+        }
+    },
+
+    /// TASK-22d7fad2: dopo una modifica registrata dal box originale (revisione, azione sul box,
+    /// struttura), se nel documento ci sono suoi derivati lo si dice: vanno reimpaginati per
+    /// prendere il dato nuovo. Non si rifanno da soli.
+    avvisaDerivatiDelBoxAperto() {
+        try {
+            if (this.inSelezioneMultipla || this.refSelected == null) {
+                return;
+            }
+            var dna = Utility.getDnaOfBox(this.refSelected.item);
+            if (dna == null || DnaBox.idLavRecDi(dna) > 0) {
+                return;
+            }
+            var testo = BoxDerivati.testoAvvisoDerivati(BoxDerivati.derivatiNelDocumento(docInLavorazione, dna.codice_gruppo, dna.idRec, Utility.getDnaOfBox));
+            if (testo != null) {
+                messaggioUtente(testo, "warning", false, 10);
+            }
+        }
+        catch (e) {
+            console.warn("Avviso dei derivati non dato:", e);
         }
     },
 
@@ -5015,6 +5151,12 @@ const schedaRef = {
 
             let me = this;
 
+            //TASK-22d7fad2: la revisione non si fa da un derivato, da qualunque parte arrivi il Salva.
+            if (me.idLavRecDelBoxAperto() > 0) {
+                messaggioUtente("Code SRF-167 Questo box e' un derivato: la revisione dei campi si fa dal box originale", "warning", false, 6);
+                return;
+            }
+
             //cerchiamo il primario nella schedaRef
             let primario = schedaRef.find(f => f.recordInTracciato.StatoSelezione == 1);
             if (primario == null) {
@@ -5082,6 +5224,7 @@ const schedaRef = {
             }
             //I20-1088: il record del box, per la riga della lavorazione dei meta e la loro versione.
             req.idRec = this.idRecDelBoxAperto();
+            req.idLavRec = this.idLavRecDelBoxAperto();
 
             //creiamo una funzione richiamabile
             let applicaCambiStrutturali = function () {
@@ -5180,6 +5323,7 @@ const schedaRef = {
                                 this.editRefFieldController.segnaComeSalvati();
                             }
                             messaggioUtente("SalvaModifiche: Richiesta completata con successo", "success", false, 5);
+                            this.avvisaDerivatiDelBoxAperto();
                             //I20-1090: a revisione salvata, il meta della descrizione.
                             if (metaDescrizioneDopo != null) {
                                 await this.metaDescrizioneDopoLaRevisione(metaDescrizioneDopo);
@@ -5240,6 +5384,8 @@ const schedaRef = {
         let params = "";
         params += "codiceGruppo=" + encodeURIComponent(this.schedeRefDati[0].recordInTracciato["Scatto.CodiceGruppo"]);
         params += "&idRec=" + encodeURIComponent(this.schedeRefDati[0].idRec);
+        //TASK-22d7fad2: da un box derivato Istanta rifiuta il cambio, che e' del box originale.
+        params += "&idLavRec=" + encodeURIComponent(this.idLavRecDelBoxAperto());
 
         let kAz = "azioni[0]";
         //I20-1049: con una sola opzione valida la tendina non si vede, e l'opzione e' quella.
@@ -5809,7 +5955,7 @@ const schedaRef = {
      * getSchedaRef con la callback avvolta in una promessa: dentro un flusso async si legge
      * meglio. Scarica soltanto: la navigazione fra le schermate non la tocca nessuno.
      */
-    async ricaricaDatiScheda(codiceGruppo, idRec) {
+    async ricaricaDatiScheda(codiceGruppo, idRec, idLavRec = 0) {
         let me = this;
 
         return new Promise(function (resolve) {
@@ -5824,7 +5970,7 @@ const schedaRef = {
                     me.schedeRefDati = scheda.records;
                     me.idRecordLavorazione = scheda.idRecInLavorazione;
                     resolve(true);
-                }, idRec);
+                }, idRec, false, idLavRec);
             }
             catch (e) {
                 console.error("Code SRF-47 Riscaricamento della scheda non riuscito: " + e);
@@ -6542,6 +6688,11 @@ const schedaRef = {
             if (this.statoMetaDescrizione(this.schedeRefDati) != null) {
                 return ["usaMetaDescrizione", "aggiornaMetaDescrizione"];
             }
+            //TASK-22d7fad2: un derivato non si revisiona: la descrizione del box puo' solo diventare
+            //il suo meta, dovunque stia la differenza.
+            if (this.idLavRecDelBoxAperto() > 0) {
+                return ["descrizioneServer", "impostaMetaDescrizione"];
+            }
             return ["descrizioneServer", this.sceltaDelBoxPerLaDescrizione(this.dovePortaLaDescrizioneDelBox())];
         }
         //I20-1077: e cosi' su ogni altro campo di testo con il contenuto diverso.
@@ -6701,6 +6852,20 @@ const schedaRef = {
         return sigla;
     },
 
+    /// TASK-22d7fad2: l'Id della riga del box aperto se e' un derivato, dal suo DNA; 0 per gli altri
+    /// box o se non si legge. Va in ogni richiesta che porta l'idRec del box aperto: senza, la
+    /// decisione finirebbe sulla riga dell'originale, che ha lo stesso codice gruppo e idRec.
+    idLavRecDelBoxAperto() {
+        try {
+            var dna = this.refSelected != null ? Utility.getDnaOfBox(this.refSelected.item) : null;
+            return DnaBox.idLavRecDi(dna);
+        }
+        catch (e) {
+            console.warn("Impossibile recuperare idLavRec dal box", e);
+        }
+        return 0;
+    },
+
     /// L'idRec del box aperto, dal suo DNA; 0 se non si legge.
     idRecDelBoxAperto() {
         try {
@@ -6731,6 +6896,7 @@ const schedaRef = {
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
             formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
+            formData.append("idLavRec", destinazione != null ? DnaBox.idLavRecDi(destinazione) : me.idLavRecDelBoxAperto());
             formData.append("richiesta", JSON.stringify(richiesta));
 
             var xhr = new XMLHttpRequestClient();
@@ -6859,7 +7025,7 @@ const schedaRef = {
         }
         var schedaRef = this.schedeRefDati;
         var codice = schedaRef != null && schedaRef.length > 0 ? schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"] : this.codiceDellaRefAperta();
-        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto());
+        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto(), this.idLavRecDelBoxAperto());
         if (!ricaricata) {
             messaggioUtente("Code SRF-103 Decisione tolta, ma la scheda non si e' riscaricata: riaprila per vedere il dato aggiornato", "warning", false, 6);
         }
@@ -7084,11 +7250,18 @@ const schedaRef = {
                         me.tieniDescrizioneDelBox(true);
                     }
                     else if (azione === "impostaMetaDescrizione" || azione === "aggiornaMetaDescrizione" || azione === "usaMetaDescrizione") {
+                        //TASK-22d7fad2: registrato il meta la scheda sotto si ridisegna: banner, bordi gialli
+                        //e icone del server erano quelli di prima del meta, e restavano finche' non la
+                        //si riapriva.
                         if (azione === "impostaMetaDescrizione") {
-                            await me.impostaDescrizioneComeMeta();
+                            if (await me.impostaDescrizioneComeMeta()) {
+                                await me.ridisegnaSchedaDopoIlMeta();
+                            }
                         }
                         else if (azione === "aggiornaMetaDescrizione") {
-                            await me.aggiornaMetaDescrizioneColBox();
+                            if (await me.aggiornaMetaDescrizioneColBox()) {
+                                await me.ridisegnaSchedaDopoIlMeta();
+                            }
                         }
                         else {
                             //Con il meta il campo compilato e' il meta: e' quello che si riscrive nel box.
@@ -7177,6 +7350,7 @@ const schedaRef = {
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
             formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
+            formData.append("idLavRec", destinazione != null ? DnaBox.idLavRecDi(destinazione) : me.idLavRecDelBoxAperto());
             formData.append("richiesta", JSON.stringify(richiesta));
 
             var xhr = new XMLHttpRequestClient();
@@ -7207,10 +7381,20 @@ const schedaRef = {
 
     /// Dopo una modifica a un meta la scheda si riscarica: il meta si applica sul server, e il dato
     /// in memoria ha ancora lo stato di prima.
+    /// TASK-22d7fad2: la scheda di modifica ridisegnata da capo dopo un meta della descrizione
+    /// registrato dalla finestra delle differenze, con i dati gia' riscaricati. Le segnalazioni in
+    /// memoria sono di prima del meta e si dimenticano; le caselle nuove vanno a riposo subito,
+    /// perche' la finestra e' ancora aperta sopra (I20-1123).
+    async ridisegnaSchedaDopoIlMeta() {
+        this.dimenticaSegnalazioni();
+        await this.selectSchedaRef(1);
+        CampiARiposo.giro();
+    },
+
     async riscaricaDopoIlMeta() {
         var schedaRef = this.schedeRefDati;
         var codice = schedaRef != null && schedaRef.length > 0 ? schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"] : this.codiceDellaRefAperta();
-        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto());
+        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto(), this.idLavRecDelBoxAperto());
         if (!ricaricata) {
             messaggioUtente("Code SRF-118 Meta registrato, ma la scheda non si e' riscaricata: riaprila per vedere il dato aggiornato", "warning", false, 6);
         }
@@ -7768,7 +7952,7 @@ const schedaRef = {
             showLoading("Aggiornamento della scheda in corso...");
             var schedaRicaricata = false;
             try {
-                schedaRicaricata = await me.ricaricaDatiScheda(codiceGruppo, idRec);
+                schedaRicaricata = await me.ricaricaDatiScheda(codiceGruppo, idRec, me.idLavRecDelBoxAperto());
             }
             finally {
                 hideLoading();
@@ -8029,6 +8213,8 @@ const schedaRef = {
 
         let params = "codiceGruppo=" + encodeURIComponent(cambioMetaRequest.codiceGruppo);
         params += "&idRec=" + encodeURIComponent(idRec);
+        //TASK-22d7fad2: da un box derivato Istanta rifiuta il cambio, che e' del box originale.
+        params += "&idLavRec=" + encodeURIComponent(me.idLavRecDelBoxAperto());
         for (let a = 0; a < cambioMetaRequest.azioni.length; a++) {
             let azione = cambioMetaRequest.azioni[a];
             let kAz = "azioni[" + a + "]";
@@ -8069,6 +8255,8 @@ const schedaRef = {
                 }
 
                 if (objResult.esito) {
+                    //TASK-22d7fad2: il dato del record e' cambiato: i derivati vanno reimpaginati.
+                    me.avvisaDerivatiDelBoxAperto();
                     //I20-1083: in vista controllata l'azione cambia solo il dato: niente box nuovo.
                     if (me.inVistaControllata()) {
                         me.aggiornaDopoAzioneInVistaControllata();
@@ -8557,6 +8745,8 @@ const schedaRef = {
         }
         params += "originalGroup=" + CodiceGruppoOriginale;
         params += "&idRec=" + encodeURIComponent(idRec);
+        //TASK-22d7fad2: da un box derivato Istanta rifiuta lo sgruppamento, che e' del box originale.
+        params += "&idLavRec=" + encodeURIComponent(me.idLavRecDelBoxAperto());
         console.log(params);
 
 
@@ -8676,6 +8866,24 @@ const schedaRef = {
 
     },
 
+    /// TASK-22d7fad2: l'idLavRec di un box della selezione (0 se non e' un derivato): quello che la
+    /// selezione ha letto dal DNA, altrimenti il DNA del box.
+    idLavRecDelDettaglio(dettaglio) {
+        if (dettaglio == null) {
+            return 0;
+        }
+        const letto = DnaBox.idLavRecDi(dettaglio);
+        if (letto > 0) {
+            return letto;
+        }
+        try {
+            return dettaglio.item != null && dettaglio.item.isValid ? DnaBox.idLavRecDi(Utility.getDnaOfBox(dettaglio.item)) : 0;
+        }
+        catch (e) {
+            return 0;
+        }
+    },
+
     getCodiciConIdFromMultiSelection(multiSelection) {
         var lista = [];
         if (!Array.isArray(multiSelection)) {
@@ -8703,7 +8911,13 @@ const schedaRef = {
                 }
             }
 
-            lista.push({ codice: codice, idRec: idRec });
+            //TASK-22d7fad2: la voce di un box derivato porta il suo idLavRec, le altre restano com'erano.
+            var voce = { codice: codice, idRec: idRec };
+            var idLavRec = this.idLavRecDelDettaglio(item);
+            if (idLavRec > 0) {
+                voce.idLavRec = idLavRec;
+            }
+            lista.push(voce);
         }
 
         return lista;
@@ -8793,6 +9007,10 @@ const schedaRef = {
 
                 params += "ListaCodiciConId[" + i + "].codice=" + encodeURIComponent(codice) + "&";
                 params += "ListaCodiciConId[" + i + "].idRec=" + encodeURIComponent(idRec) + "&";
+                //TASK-22d7fad2: con un derivato nella selezione Istanta rifiuta il raggruppamento.
+                if (DnaBox.idLavRecDi(listaCodiciConId[i]) > 0) {
+                    params += "ListaCodiciConId[" + i + "].idLavRec=" + encodeURIComponent(DnaBox.idLavRecDi(listaCodiciConId[i])) + "&";
+                }
             }
 
             var xhr = new XMLHttpRequestClient();
@@ -9202,6 +9420,7 @@ const schedaRef = {
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
             formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
+            formData.append("idLavRec", destinazione != null ? DnaBox.idLavRecDi(destinazione) : me.idLavRecDelBoxAperto());
             formData.append("elementi", JSON.stringify(elementi || []));
 
             var xhr = new XMLHttpRequestClient();
@@ -9432,7 +9651,13 @@ const schedaRef = {
             const elementi = NoRenderElementi.elementiDaSalvare(voceBox.lista);
             const statoInviato = NoRenderElementi.statoDiRendering(voceBox.lista);
             const idRec = (me.getCodiciConIdFromMultiSelection([b.dettaglio])[0] || {}).idRec || 0;
-            const registrato = await me.inviaNoRender(elementi, { codiceGruppo: b.records[0].recordInTracciato["Scatto.CodiceGruppo"], idRec: idRec });
+            const destinazione = { codiceGruppo: b.records[0].recordInTracciato["Scatto.CodiceGruppo"], idRec: idRec };
+            //TASK-22d7fad2: per un box derivato anche il suo idLavRec, cosi' la lista va ai suoi meta.
+            const idLavRec = me.idLavRecDelDettaglio(b.dettaglio);
+            if (idLavRec > 0) {
+                destinazione.idLavRec = idLavRec;
+            }
+            const registrato = await me.inviaNoRender(elementi, destinazione);
             if (registrato) {
                 voceBox.statoSalvato = statoInviato;
                 me.aggiornaNoRenderNeiRecord(elementi, b.records);

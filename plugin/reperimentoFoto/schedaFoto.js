@@ -17,6 +17,8 @@
 const XMLHttpRequestClient = require('../XMLHttpRequestClient');
 const DataCaricamentoFoto = require('./dataCaricamento');
 const NoRenderElementi = require('../noRenderElementi');
+//TASK-22d7fad2: lo slot dell'idRec nel DNA e l'Id della riga di un box derivato.
+const DnaBox = require('../dnaBox');
 const FotoExtraGruppo = require('./fotoExtraGruppo');
 
 const schedaFoto = {
@@ -139,6 +141,26 @@ const schedaFoto = {
     /// - foto scelta per la lavorazione mentre la lista ne indica una: stesso limite, e l'avviso
     ///   dice quale foto indica la lista (con una lista che ne indica un'altra la scelta decade);
     /// - altrimenti (nessuna foto nella lista, o non trovata in archivio): tutti gli ambiti.
+    /// TASK-22d7fad2: per quali ambiti si puo' cambiare la foto dal box aperto. Da un derivato solo
+    /// per questa lavorazione, perche' il resto cambierebbe l'originale; altrimenti come dice la lista.
+    /// TASK-22d7fad2: l'ambito con cui parte il cambio foto, dal valore della tendina. Quando il
+    /// cambio vale solo per la lavorazione (box derivato, foto della lista) e' quello, qualunque
+    /// cosa mostri la tendina: una tendina senza selezione valeva "globale", e la foto cambiava
+    /// per l'articolo.
+    ambitoScelto(valoreTendina, soloLavorazione) {
+        if (soloLavorazione === true) {
+            return "solo_lavorazione";
+        }
+        return valoreTendina == null || valoreTendina === "" ? "globale" : String(valoreTendina);
+    },
+
+    ambitoDelCambioFoto(record, config, idLavRec) {
+        if (DnaBox.idValido(idLavRec) > 0) {
+            return { soloLavorazione: true, avviso: "Box derivato: la foto si cambia solo per questa lavorazione." };
+        }
+        return this.cambioFotoDallaLista(record, config);
+    },
+
     cambioFotoDallaLista(record, config) {
         const nessuno = { soloLavorazione: false, avviso: null };
         if (record == null || config == null || config.cambioSoloPerLavorazione !== true) {
@@ -249,9 +271,10 @@ const schedaFoto = {
                 fotoList = me.fotoProponibiliNelCambioFoto(fotoList, pluginMiddleware.getRegoleEsclusioneCambioFoto(), { id: fotoAttuale, nome: nomeFotoImpaginata });
 
                 //TASK-60aaf10d: la foto della lista (Edro21) si cambia solo per questa lavorazione.
-                const fotoDallaLista = me.cambioFotoDallaLista(
+                const fotoDallaLista = me.ambitoDelCambioFoto(
                     elementoCercato != null ? elementoCercato.recordInTracciato : null,
-                    pluginMiddleware.getFotoDaTracciato());
+                    pluginMiddleware.getFotoDaTracciato(),
+                    me.idLavRecDelBoxAperto());
 
                 const state = {
                     selectedUploadFile: null,
@@ -405,6 +428,7 @@ const schedaFoto = {
                     if (selectEl != null && selectEl.selectedIndex != null && selectEl.selectedIndex >= 0) {
                         value = selectEl.options[selectEl.selectedIndex].value;
                     }
+                    value = me.ambitoScelto(value, fotoDallaLista.soloLavorazione);
 
                     return {
                         value: value,
@@ -536,8 +560,16 @@ const schedaFoto = {
                         return;
                     }
 
+                    //TASK-22d7fad2: se il valore non e' fra le voci (la tendina ha la sola "Solo
+                    //lavorazione") si sceglie la prima: deselezionarle tutte lasciava la tendina vuota.
+                    let trovata = false;
                     for (let i = 0; i < selectEl.options.length; i++) {
                         selectEl.options[i].selected = (selectEl.options[i].value === value);
+                        trovata = trovata || selectEl.options[i].value === value;
+                    }
+                    if (!trovata && selectEl.options.length > 0) {
+                        selectEl.options[0].selected = true;
+                        selectEl.selectedIndex = 0;
                     }
                 }
                 
@@ -844,7 +876,7 @@ const schedaFoto = {
                 }
 
                 function buildScopeFromSelection() {
-                    const value = $('#selectScopeCambiaFoto').val();
+                    const value = me.ambitoScelto($('#selectScopeCambiaFoto').val(), fotoDallaLista.soloLavorazione);
 
                     return {
                         value: value,
@@ -1904,11 +1936,14 @@ const schedaFoto = {
                 //facciamo il formData dell'objectToSend
                 var formData = new FormData();
                 var idRec = 0;
+                //TASK-22d7fad2: di un box derivato si salvano le sue primarie e secondarie.
+                var idLavRec = 0;
                 try {
                     var dna = Utility.getDnaOfBox(box);
                     if (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
                         idRec = parseInt(dna.idRec);
                     }
+                    idLavRec = DnaBox.idLavRecDi(dna);
                 }
                 catch (e) {
                     console.warn("Impossibile recuperare idRec dal box durante Edit P/S", e);
@@ -1916,6 +1951,7 @@ const schedaFoto = {
                 formData.append("idLavorazione", idKitLavorazione);
                 formData.append("CodiceGruppo", codice_gruppo);
                 formData.append("idRec", idRec);
+                formData.append("idLavRec", idLavRec);
                 formData.append("ps", JSON.stringify(objToSend.ps));
 
                 const xhr = new XMLHttpRequestClient();
@@ -2015,7 +2051,7 @@ const schedaFoto = {
                         //la si riscarica sempre, ed e' dal dato fresco che si capisce se il box in
                         //pagina e' ancora allineato. Prima si riscaricava solo su richiesta di agenzia.
                         showLoading("Aggiornamento della scheda in corso...");
-                        var schedaRicaricata = await me.ricaricaDatiScheda(codice_gruppo, idRec);
+                        var schedaRicaricata = await me.ricaricaDatiScheda(codice_gruppo, idRec, idLavRec);
                         hideLoading();
 
                         if (avvisoCambioPrimario !== "") {
@@ -2183,9 +2219,19 @@ const schedaFoto = {
 
     AMBITO_AZIONE_EXTRA: { tutte: "tutte", lavorazione: "lavorazione" },
 
+    /// TASK-22d7fad2: cosa si dice in cima alle foto extra di un box derivato.
+    TESTO_FOTO_EXTRA_DERIVATO: "Box derivato: le foto extra si aggiungono e si escludono solo per questa lavorazione. Quelle dell'articolo non si eliminano da qui.",
+
     /// Link e Aggiungi chiedono prima per chi valgono: per tutte le lavorazioni (l'anagrafica
     /// dell'articolo, come sempre) o solo per questa. Null se l'operatore annulla.
+    /// TASK-22d7fad2: da un derivato la domanda resta, con la sola scelta "Solo per questa
+    /// lavorazione": cosi' si vede su cosa si sta agendo, e l'articolo dell'originale non cambia.
     async sceltaAmbitoAzioneExtra() {
+        if (this.idLavRecDelBoxAperto() > 0) {
+            var soloQui = await Modali.confirmCustom("Per quali lavorazioni vale?",
+                "Solo per questa lavorazione", this.AMBITO_AZIONE_EXTRA.lavorazione);
+            return soloQui != null && soloQui.result ? soloQui.hiddenVal : null;
+        }
         var risposta = await Modali.confirmCustom("Per quali lavorazioni vale?",
             "Per tutte le lavorazioni", this.AMBITO_AZIONE_EXTRA.tutte,
             "Solo per questa lavorazione", this.AMBITO_AZIONE_EXTRA.lavorazione);
@@ -2306,6 +2352,13 @@ const schedaFoto = {
             FotoExtraGruppo.scriviInMemoria(schedaRef, extraDelGruppo);
         }
         var extra = extraDelGruppo != null ? extraDelGruppo.comuni : primario.recordInTracciato["Foto.Extra"];
+        //TASK-22d7fad2: da un derivato le foto extra dell'articolo non si attivano, non si disattivano e
+        //non si eliminano: cambierebbe l'originale. Si escludono solo per questa lavorazione, e quelle
+        //aggiunte solo qui si tolgono con il Togli della loro decisione.
+        var soloMeta = me.idLavRecDelBoxAperto() > 0;
+        if (soloMeta) {
+            $("#FotoExtra").append($('<div id="avvisoFotoExtraDerivato" style="padding: 4px 0 8px 0; font-size: 12px; color: #ffd24d;"></div>').text(me.TESTO_FOTO_EXTRA_DERIVATO));
+        }
         if (extra != null) {
             for (var $i = 0; $i < this.tipiFotoExtra.length; $i++) {
                 var elemento = this.tipiFotoExtra[$i];
@@ -2354,7 +2407,9 @@ const schedaFoto = {
                     //passiamo ad attivaDisattivaFotoExtra l'id, il val del panel, il nome della foto e il box corrispondente alla current selection
                     me.attivaDisattivaFotoExtra($(this).parent().attr("idFoto"), $(this).closest(".fotoExtraPanel").attr("val"), $(this).parent().attr("nomeFoto"), box, $(this).is(":checked"), sigla);
                 });
-                row.append(checkbox);
+                if (!soloMeta) {
+                    row.append(checkbox);
+                }
                 row.append(text);
                 //prima del nome inseriamo un pulsante con scritto elimina che al click chiama la funzione eliminaFotoExtra passando l'id dell'elemento
                 var button = $('<button id="eliminaFotoExtra" style="color:red; width:25px; height:25px;"><img src="images/icon_small_cestino.png" alt="Elimina" style="width:14px;height:14px;"></button>');
@@ -2365,7 +2420,9 @@ const schedaFoto = {
                     //passiamo ad eliminaFoto l'id, il val del panel, il nome della foto e il box corrispondente alla current selection
                     me.eliminaFotoExtra($(this).parent().attr("idFoto"), $(this).closest(".fotoExtraPanel").attr("val"), $(this).parent().attr("nomeFoto"), me.refSelected.item, sigla);
                 });
-                row.append(button);
+                if (!soloMeta) {
+                    row.append(button);
+                }
 
                 //inseriamo un secondo pulsante con icona impaginazione.png che al click chiama la funzione impaginaFotoExtra passando il nome della foto, il tipo, il box e il path di lavorazione
                 var impaginaButton = $('<button id="impaginaFotoExtra" style="color:lightgreen; width:25px; height:25px;"><img src="images/impaginaRef.png" alt="Impagina" style="width:14px;height:14px;"></button>');
@@ -2492,7 +2549,11 @@ const schedaFoto = {
                         me.escludiIncludiFotoExtraAuto($(this).parent().attr("nomeFoto"), $(this).parent().attr("escluso"), box, $(this).parent(), $(this).parent().attr("tipo"), $(this).parent().attr("sigla"));
                     });
                 }
-                row.append(button);
+                //TASK-22d7fad2: Escludi e Includi valgono per l'articolo: da un derivato resta solo
+                //"Escludi solo qui", sotto. Il Togli di una decisione di questa lavorazione resta.
+                if (decisione != null || !(me.idLavRecDelBoxAperto() > 0)) {
+                    row.append(button);
+                }
                 //I20-1082: un'extra auto inclusa si puo' escludere anche solo per questa lavorazione.
                 if (decisione == null && !elemento.escluso) {
                     row.append(me.pulsanteEscludiSoloQui(elemento, elemento.tipo, box));
@@ -2631,6 +2692,7 @@ const schedaFoto = {
             }
             formData.append("nomeFileOld", nomeFotoOld);
             formData.append("idRec", element != null ? element.idRec : 0);
+            formData.append("idLavRec", me.idLavRecDelBoxAperto());
             //TASK-60aaf10d: la foto che la lista indica, per legarvi la scelta solo per la lavorazione.
             formData.append("nomeFotoTracciato", me.nomeFotoDellaLista(element));
             console.log(obj);
@@ -2806,6 +2868,7 @@ const schedaFoto = {
             formData.append("propaga", propaga ? "true" : "false");
             //I20-1088: il record del box, perche' il meta della foto vada nella riga di questa impaginazione.
             formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("idLavRec", me.idLavRecDelBoxAperto());
 
 
             return await new Promise((resolve) => {
@@ -3097,6 +3160,8 @@ const schedaFoto = {
                     //Su tutte le referenze del gruppo: un logo che sta solo sulla primaria non esce sul gruppo, e
                     //cambiando la primaria spariva dal box.
                     formData.append("codiceReferenza", primario.recordInTracciato["Scatto.CodiceGruppo"]);
+                    //TASK-22d7fad2: Istanta rifiuta da un derivato cio' che cambia l'articolo.
+                    formData.append("idLavRec", me.idLavRecDelBoxAperto());
 
                     xhr.send("SyncFoto/linkLogoBollo/", formData, "PUT");
 
@@ -3135,6 +3200,12 @@ const schedaFoto = {
             const elimina = $('<button type="button" class="eliminaExtraParziale">Elimina</button>').css({ "color": "red" });
             Tooltip.impostaTooltip(elimina[0], "La toglie da tutte le referenze del gruppo che la hanno");
             elimina.on('click', function () { me.eliminaFotoExtraParziale(parziale, box); });
+
+            //TASK-22d7fad2: Elimina ed Estendi cambiano le referenze dell'articolo: non da un derivato.
+            if (me.idLavRecDelBoxAperto() > 0) {
+                panel.append(riga);
+                return;
+            }
             riga.append(elimina);
 
             const estendi = $('<button type="button" class="estendiExtraParziale">Estendi</button>').css({ "color": "lightgreen" });
@@ -3160,6 +3231,7 @@ const schedaFoto = {
         const formData = new FormData();
         formData.append("guidId", parziale.guidId);
         formData.append("codice", primario.recordInTracciato["Scatto.CodiceGruppo"]);
+        formData.append("idLavRec", me.idLavRecDelBoxAperto());
         try {
             showLoading("Estendo " + parziale.nome);
             await me.richiestaFotoExtra("SyncFoto/EstendiFotoExtra/0", formData, "PUT", false, true);
@@ -3212,7 +3284,10 @@ const schedaFoto = {
             const elimina = $('<button type="button" class="eliminaNonASistema">Elimina</button>').css({ "color": "red" });
             Tooltip.impostaTooltip(elimina[0], "Toglie il collegamento dalle referenze che lo hanno: " + (voce.codici || []).join(", "));
             elimina.on('click', function () { me.eliminaNonASistema(voce, box); });
-            riga.append(elimina);
+            //TASK-22d7fad2: toglie il collegamento dalle referenze dell'articolo: non da un derivato.
+            if (!(me.idLavRecDelBoxAperto() > 0)) {
+                riga.append(elimina);
+            }
 
             panel.append(riga);
         });
@@ -3235,6 +3310,7 @@ const schedaFoto = {
         formData.append("idLavorazione", idKitLavorazione);
         formData.append("guidId", voce.guidId);
         formData.append("idRec", me.idRecDelBoxAperto());
+        formData.append("idLavRec", me.idLavRecDelBoxAperto());
         try {
             await me.richiestaFotoExtra("SyncFoto/RimuoviFoto/0", formData, "PUT", false, true);
         }
@@ -3267,6 +3343,7 @@ const schedaFoto = {
         formData.append("idLavorazione", idKitLavorazione);
         formData.append("guidId", parziale.guidId);
         formData.append("idRec", me.idRecDelBoxAperto());
+        formData.append("idLavRec", me.idLavRecDelBoxAperto());
         try {
             await me.richiestaFotoExtra("SyncFoto/RimuoviFoto/0", formData, "PUT", false, true);
         }
@@ -3344,7 +3421,9 @@ const schedaFoto = {
         const record = (records || []).find(r => r && r.recordInTracciato && r.recordInTracciato.StatoSelezione == 1)
             || (records || []).find(r => r && r.recordInTracciato);
         const codice = record ? (record.recordInTracciato["Scatto.CodiceGruppo"] || record.recordInTracciato["Referenza.Codice"] || "") : "";
-        return "SyncFoto/attivaDisattivaFotoExtra/" + guidId + "/" + attiva + "?codice=" + encodeURIComponent(codice);
+        //TASK-22d7fad2: da un derivato la richiesta lo dice, e Istanta la rifiuta.
+        const idLavRec = typeof this.idLavRecDelBoxAperto === "function" ? this.idLavRecDelBoxAperto() : 0;
+        return "SyncFoto/attivaDisattivaFotoExtra/" + guidId + "/" + attiva + "?codice=" + encodeURIComponent(codice) + (idLavRec > 0 ? "&idLavRec=" + idLavRec : "");
     },
 
     attivaDisattivaFotoExtra(guidId, tipo, nomeFoto, box, attiva, sigla = null) {
@@ -3543,6 +3622,7 @@ const schedaFoto = {
         var formData = new FormData();
         formData.append("codiceGruppo", CodiceGruppo);
         formData.append("nomeFoto", nomeFoto);
+        formData.append("idLavRec", me.idLavRecDelBoxAperto());
         xhr.send("SyncFoto/escludiIncludiFotoExtraAuto/" + !attualmenteEscluso, formData, "PUT");
         messaggioUtente("Code SRF-60 Richiesta inviata", "success", true, 3, true);
     },
@@ -3642,7 +3722,7 @@ const schedaFoto = {
             }
             xhr.onreadystatechange = function () { }
             xhr.onerror = function () { }
-            xhr.send("SyncFoto/RimuoviFotoDaMeta" + "/" + codice + "/" + tipo + "/" + idKitLavorazione + "/" + idRec + "/" + 0, null, "GET");
+            xhr.send("SyncFoto/RimuoviFotoDaMeta" + "/" + codice + "/" + tipo + "/" + idKitLavorazione + "/" + idRec + "/" + 0 + "?idLavRec=" + me.idLavRecDelBoxAperto(), null, "GET");
         }
         catch (e) {
             console.log(e);
@@ -3665,6 +3745,7 @@ const schedaFoto = {
         formData.append("guidId", idFoto);
         //I20-1088: il record del box, perche' il meta vada tolto dalla riga di questa impaginazione.
         formData.append("idRec", me.idRecDelBoxAperto());
+        formData.append("idLavRec", me.idLavRecDelBoxAperto());
 
         var xhr = new XMLHttpRequestClient();
         xhr.onload = (objResult, parsed) => {

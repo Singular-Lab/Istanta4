@@ -4,6 +4,7 @@ const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const FotoPlacer = require('./reperimentoFoto/fotoPlacer');
 //I20-1012: i tratti di stile di un campo ora stanno in testoTag.js.
 const TestoTag = require('./testoTag');
+const DnaBox = require('./dnaBox');
 const cssComposizioneBox = require('./cssFramework/composizioneBox');
 
 /// I20-1002: il file in cui era finito tutto quello che non aveva un posto.
@@ -825,7 +826,9 @@ const Utility=
         }
     
         console.log("Menabo/getListaImpaginati/" + idKitLavorazione);
-        xhrInProcess.send("Menabo/getListaImpaginati/" + idKitLavorazione, null, "GET");
+        //TASK-22d7fad2: con conDerivati la lista ha anche i box derivati, ognuno col suo idLavRec.
+        //Senza, e' quella di prima: i soli originali, che dicono se un record e' impaginato.
+        xhrInProcess.send("Menabo/getListaImpaginati/" + idKitLavorazione + (opzioni.conDerivati ? "?conDerivati=true" : ""), null, "GET");
 
         let i = 0;
 
@@ -988,7 +991,8 @@ const Utility=
             var campo = listCampiDNA[i];
             var field = this.getFieldByLabel(campo, box, false);
             if (field != null && field.isValid && this.restaNelBox(field, box)) {
-                field.label += "$DNA$" + box.label + "$" + itemRef["Referenza.Codice"] + "$" + itemRef["Scatto.CodiceGruppo"] + "$" + itemRef["idRec"];
+                //TASK-22d7fad2: per un box derivato lo slot dell'idRec porta anche l'Id della sua riga.
+                field.label += "$DNA$" + box.label + "$" + itemRef["Referenza.Codice"] + "$" + itemRef["Scatto.CodiceGruppo"] + "$" + DnaBox.scriviSlot(itemRef["idRec"], itemRef["idLavRec"]);
                 break;
             }
         }
@@ -1016,13 +1020,16 @@ const Utility=
             var etichetta = item.label;
             if (etichetta && etichetta.includes("$DNA$")) {
                 var parts = etichetta.split("$");
+                //TASK-22d7fad2: lo slot di un box derivato e' idRec*idLavRec.
+                var slot = DnaBox.leggiSlot(parts[5]);
                 result = {
                     label: parts[0], //la parte 1 ora è DNA
                     item: item,
                     boxLabel: parts[2],
                     codice: parts[3],
                     codice_gruppo: parts[4],
-                    idRec: parts[5],
+                    idRec: slot.idRec,
+                    idLavRec: slot.idLavRec,
                     oldBoxFormat: false
                 };
                 break;
@@ -1038,7 +1045,8 @@ const Utility=
             boxLabel: partiBase[1],
             codice: partiBase[2],
             codice_gruppo: partiBase[3],
-            idRec: partiBase[4],
+            idRec: DnaBox.leggiSlot(partiBase[4]).idRec,
+            idLavRec: DnaBox.leggiSlot(partiBase[4]).idLavRec,
             oldBoxFormat: true
         } : null);
 

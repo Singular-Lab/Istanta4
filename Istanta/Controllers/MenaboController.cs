@@ -3240,6 +3240,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 //TASK-bb04f9aa: le righe non si cancellano, si disattivano: i meta restano per quando
                 //lo stesso record verra' reimpaginato.
                 RecordDellaLavorazione.Disattiva(itemsToRemove);
+                //TASK-22d7fad2: i box derivati della pagina invece si cancellano, con i loro meta.
+                RecordDellaLavorazione.EliminaDerivati(this.ctx2, RecordDellaLavorazione.Derivati(this.ctx2).Where(item => item.IdLavorazione == idKit && item.Pagina == pagSelected));
 
                 this.ctx2.SaveChanges();
                 result.Esito = true;
@@ -3266,6 +3268,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 //TASK-bb04f9aa: le righe non si cancellano, si disattivano: i meta restano per quando
                 //lo stesso record verra' reimpaginato.
                 RecordDellaLavorazione.Disattiva(itemsToRemove);
+                //TASK-22d7fad2: i box derivati invece si cancellano, con i loro meta.
+                RecordDellaLavorazione.EliminaDerivati(this.ctx2, RecordDellaLavorazione.Derivati(this.ctx2).Where(item => item.IdLavorazione == idKit));
 
                 this.ctx2.SaveChanges();
                 result.Esito = true;
@@ -3283,6 +3287,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
         {
             public string codiceGruppo = "";
             public long idRec = 0;
+            //TASK-22d7fad2: per un box derivato l'Id della sua riga; 0 e false per gli altri box.
+            public long idLavRec = 0;
+            public bool derivato = false;
             public string nomePagina = "";
             //TASK-19c18841: chi ha impaginato il box o lo ha spostato per ultimo. Con autoreReport lo
             //ha spostato il Report Integrita', e nomeAutore e' l'utente che lo ha avviato.
@@ -3291,11 +3298,90 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             public bool autoreReport = false;
         }
 
+        public class RichiestaDerivato
+        {
+            public int idLavorazione { get; set; }
+            public string? codiceGruppo { get; set; }
+            /// L'idRec del box di partenza, dal suo DNA.
+            public long idRec { get; set; } = 0;
+            /// Se il box di partenza e' a sua volta un derivato, il suo Id: serve a rifiutare con il motivo giusto.
+            public long idLavRec { get; set; } = 0;
+            public int pagina { get; set; }
+        }
+
+        public class RisultatoDerivato
+        {
+            public bool Esito { get; set; }
+            public string error { get; set; } = String.Empty;
+            public string? dettaglio { get; set; }
+            /// L'Id della riga del derivato: va nel DNA del box, dopo l'idRec.
+            public long idLavRec { get; set; }
+            public long idRec { get; set; }
+            public int pagina { get; set; }
+        }
+
+        /// TASK-22d7fad2: registra un box derivato, cioe' una seconda impaginazione del record di un
+        /// box gia' impaginato, alla pagina chiesta. Il derivato ha una riga propria, con una copia
+        /// dei meta dell'originale, e un Id che il Plugin scrive nel DNA del box. Solo nel Volantino,
+        /// e mai da un box che e' a sua volta un derivato.
+        [HttpPut]
+        [Route("Menabo/creaDerivato")]
+        public IActionResult creaDerivato([FromForm] RichiestaDerivato richiesta)
+        {
+            RisultatoDerivato result = new RisultatoDerivato();
+            try
+            {
+                short idUtente = IdUtenteDellaSessione();
+
+                PromoLavorazioni lavorazione = this.ctx2.PromoLavorazionis.FirstOrDefault(l => l.Id == richiesta.idLavorazione)
+                    ?? throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {richiesta.idLavorazione} non esiste.");
+                TipoLavorazione? tipo = Formati.CercaTipo(!string.IsNullOrWhiteSpace(lavorazione.GuidFormato) ? lavorazione.GuidFormato : Utility.Main.getFicoRuntimeKit(lavorazione.Meta)?.guidFormato);
+
+                PromoLavorazioniRecord? originale;
+                if (richiesta.idLavRec > 0)
+                {
+                    originale = RecordDellaLavorazione.Derivati(this.ctx2).FirstOrDefault(r => r.Id == richiesta.idLavRec && r.IdLavorazione == richiesta.idLavorazione);
+                }
+                else
+                {
+                    var candidati = this.ctx2.PromoLavorazioniRecords
+                        .Where(r => r.IdLavorazione == richiesta.idLavorazione && r.CodiceGruppo == richiesta.codiceGruppo)
+                        .ToList();
+                    originale = candidati.Count == 0 ? null : RecordDellaLavorazione.Trova(this.ctx2, richiesta.idLavorazione, richiesta.codiceGruppo, richiesta.idRec);
+                }
+
+                string? motivo = RecordDellaLavorazione.MotivoDelDerivatoRifiutato(originale, richiesta.pagina, tipo, richiesta.codiceGruppo);
+                if (motivo != null)
+                    throw new ErroreIstanta("creazione del derivato", motivo);
+
+                PromoLavorazioniRecord nuovo = RecordDellaLavorazione.RegistraDerivato(this.ctx2, originale!, (byte)richiesta.pagina, idUtente);
+                this.ctx2.SaveChanges();
+
+                result.idLavRec = nuovo.Id;
+                result.idRec = nuovo.IdRecordTracciato;
+                result.pagina = nuovo.Pagina;
+                result.Esito = true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Errore in creaDerivato (codiceGruppo {richiesta?.codiceGruppo}, idLavorazione {richiesta?.idLavorazione}): " + ex.ToString());
+                result.error = DescrizioneErrori.Breve("creaDerivato", ex);
+                result.dettaglio = ex.ToString();
+                result.Esito = false;
+            }
+
+            return Ok(result);
+        }
+
         [HttpGet]
         [Route("Menabo/getListaImpaginati/{idLavorazione}")]
-        public List<elementoImpaginato> getListaImpaginati(int idLavorazione)
+        public List<elementoImpaginato> getListaImpaginati(int idLavorazione, bool conDerivati = false)
         {
             var recordImpaginati = this.ctx2.PromoLavorazioniRecords.Where(f => f.IdLavorazione == idLavorazione).ToList();
+            //TASK-22d7fad2: i box derivati solo a chi li chiede: chi non li conosce li scambierebbe
+            //per l'originale, che ha lo stesso codice gruppo e lo stesso idRec.
+            if (conDerivati)
+                recordImpaginati.AddRange(RecordDellaLavorazione.Derivati(this.ctx2).Where(f => f.IdLavorazione == idLavorazione).ToList());
 
             //TASK-19c18841: i nomi degli autori stanno nell'altro contesto, in una query sola. Senza
             //nomi la lista vale lo stesso: il nome serve all'operatore, non a chi conta i box.
@@ -3325,6 +3411,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             {
                 codiceGruppo = record.CodiceGruppo!,
                 idRec = record.IdRecordTracciato,
+                idLavRec = record.DerivatoDi != null ? record.Id : 0,
+                derivato = record.DerivatoDi != null,
                 nomePagina = record.Pagina.ToString(),
                 idAutore = record.IdAutore,
                 nomeAutore = nomiUtenti.TryGetValue(Math.Abs((int)record.IdAutore), out var nome) ? nome : "",
@@ -5799,7 +5887,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
     [FromForm] string? idsRec,
     int idLavorazione,
     bool byPassLavorazioneRecord = false,
-    FicoCombinazioneKitReadMode mode = FicoCombinazioneKitReadMode.Classic)
+    FicoCombinazioneKitReadMode mode = FicoCombinazioneKitReadMode.Classic,
+    [FromForm] string? idsLavRec = null)
         {
             try
             {
@@ -5814,6 +5903,13 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     .Select(x => long.TryParse(x, out var id) ? id : 0)
                     .ToList();
 
+                //TASK-22d7fad2: un idLavRec per box, nella stessa posizione del suo codice; 0 per un
+                //box che non e' un derivato. La scheda di un derivato si compone con i suoi meta.
+                var listaIdsLavRec = (idsLavRec ?? "")
+                    .Split("-", StringSplitOptions.TrimEntries)
+                    .Select(x => long.TryParse(x, out var id) ? id : 0)
+                    .ToList();
+
                 var resultList = new List<ArticoloInRevisioneKitResult>();
 
                 for (int i = 0; i < listaCodici.Count; i++)
@@ -5824,12 +5920,17 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         ? listaIdsRec[i]
                         : 0;
 
+                    var idLavRec = i < listaIdsLavRec.Count
+                        ? listaIdsLavRec[i]
+                        : 0;
+
                     IActionResult res = await getSchedaRef(
                         cod,
                         idLavorazione,
                         idRec,
                         byPassLavorazioneRecord,
-                        mode
+                        mode,
+                        idLavRec
                     );
 
                     resultList.Add(RisultatoDellaSchedaNelMassivo(cod, res));
@@ -5895,8 +5996,10 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
         [HttpPut]
         [Route("Menabo/getSchedaRef/{idLavorazione}/{byPassLavorazioneRecord}")]
         [Route("Menabo/getSchedaRef/{idLavorazione}/{byPassLavorazioneRecord}/{mode}")]
-        public async Task<IActionResult> getSchedaRef([FromForm] string codiceGruppo, int idLavorazione, [FromForm] long idRec = 0,bool byPassLavorazioneRecord = false, FicoCombinazioneKitReadMode mode = FicoCombinazioneKitReadMode.Classic)
+        public async Task<IActionResult> getSchedaRef([FromForm] string codiceGruppo, int idLavorazione, [FromForm] long idRec = 0,bool byPassLavorazioneRecord = false, FicoCombinazioneKitReadMode mode = FicoCombinazioneKitReadMode.Classic, [FromForm] long idLavRec = 0)
         {
+            //TASK-22d7fad2: con idLavRec la scheda e' quella di un box derivato, composta con i suoi meta.
+            PromoLavorazioniRecord? derivato = null;
             ArticoloInRevisioneKitResult result = new ArticoloInRevisioneKitResult();
             //I record del gruppo che l'esportazione esclude perche' fuori volantino: il Plugin li
             //sposta nella sezione dei fuori volantino della lista del kit.
@@ -6072,6 +6175,12 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 //        throw new Exception("Record con id " + lavoriazioneRecord.IdRecordTracciato + " non trovato in PromoTracciatiRecords");
                 //    }
                 //}
+
+                if (idLavRec > 0)
+                {
+                    derivato = RecordDellaLavorazione.IlDerivato(this.ctx2, idLavorazione, idLavRec);
+                    lavoriazioneRecord = derivato;
+                }
 
                 if (idTracciato == 0 || idTracciato == -1)
                 {
@@ -6522,7 +6631,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     Dictionary<string, List<TestoDalBox>> testiDalBoxPerGruppo = new Dictionary<string, List<TestoDalBox>>();
                     //I20-1103: il POP eredita i meta dal volantino della stessa promo, area e canale.
                     List<FicoProcessController.MetaDelVolantino>? volantinoDelPop = tipoFormatoKit == TipoLavorazione.PoP ? ficoController.metaDeiVolantiniDellaPromo(idLavorazione) : null;
-                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, null, volantinoDelPop);
+                    var listeModificate = ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, null, volantinoDelPop, derivato);
                     prepLista.records = listeModificate;
                     //logAss.WriteLine("GET SCHEDA REF >> step9");
 
@@ -6630,6 +6739,14 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     esito = true,
                 };
 
+                //TASK-22d7fad2: i record della scheda di un box derivato portano l'Id della sua riga: il
+                //Plugin lo scrive nel DNA del box ogni volta che lo rifa' da questa scheda.
+                if (derivato != null)
+                {
+                    foreach (var record in result.records)
+                        record.recordInTracciato["idLavRec"] = derivato.Id;
+                }
+
                 Console.WriteLine($"getSchedaRef tappa 4 (export di agenzia): {swScheda.ElapsedMilliseconds} ms");
 
                 //logAss.WriteLine("GET SCHEDA REF >> step12");
@@ -6687,7 +6804,11 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     throw new ErroreIstanta("controllo della pagina", $"la pagina {richiesta.pagina} richiesta per il gruppo {richiesta.codiceGruppo} non e' valida.");
                 }
 
-                var giaImpaginato = this.ctx2.PromoLavorazioniRecords.Where(f => f.IdLavorazione == richiesta.idLavorazione && f.CodiceGruppo == richiesta.codiceGruppo && (richiesta.idRec != 0 ? richiesta.idRec == f.IdRecordTracciato : true)).FirstOrDefault();
+                //TASK-22d7fad2: con idLavRec il box e' un derivato, gia' impaginato per forza: da qui se
+                //ne cambia solo la pagina (byPassBloccoGiaImpaginato).
+                var giaImpaginato = richiesta.idLavRec > 0
+                    ? RecordDellaLavorazione.IlDerivato(this.ctx2, richiesta.idLavorazione, richiesta.idLavRec)
+                    : this.ctx2.PromoLavorazioniRecords.Where(f => f.IdLavorazione == richiesta.idLavorazione && f.CodiceGruppo == richiesta.codiceGruppo && (richiesta.idRec != 0 ? richiesta.idRec == f.IdRecordTracciato : true)).FirstOrDefault();
                 if(giaImpaginato != null && !richiesta.byPassBloccoGiaImpaginato)
                 {
                     throw new ErroreIstanta("controllo dell'impaginato", $"il gruppo {richiesta.codiceGruppo} e' gia' impaginato a pagina {giaImpaginato.Pagina}.");
@@ -6696,7 +6817,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 {
                     //TASK-19c18841: chi cambia la pagina del box ne diventa l'autore.
                     PortaAPagina(giaImpaginato, richiesta.pagina, () => id_utente);
-                    IActionResult res = await getSchedaRef(richiesta.codiceGruppo!, richiesta.idLavorazione, richiesta.idRec);
+                    IActionResult res = await getSchedaRef(richiesta.codiceGruppo!, richiesta.idLavorazione, richiesta.idRec, idLavRec: richiesta.idLavRec);
                     ArticoloInRevisioneKitResult gruppoResult = new ArticoloInRevisioneKitResult();
                     if (res is OkObjectResult && (res as OkObjectResult)!.Value is ArticoloInRevisioneKitResult)
                     {
@@ -6849,34 +6970,54 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                 f.Pagina.ToString() == pag.nomePagina)
                             .ToList();
 
+                        //TASK-22d7fad2: sulla pagina stanno anche i box derivati, che la lettura sopra
+                        //non vede. Ognuno ha la sua riga e si riconosce dal suo idLavRec: nelle liste
+                        //con l'id della risposta lo porta, cosi' non si confonde con l'originale.
+                        elementiImpaginatiAPagina.AddRange(RecordDellaLavorazione.Derivati(this.ctx2)
+                            .Include(p => p.IdPromoTracciatiRecordNavigation)
+                            .Where(f =>
+                                f.IdLavorazione == id_lavorazione &&
+                                f.Pagina.ToString() == pag.nomePagina)
+                            .ToList());
+
                         void AddNonPiuPresente(PromoLavorazioniRecord elemento)
                         {
                             var codice = elemento.CodiceGruppo ?? "";
+                            var idLavRec = RecordDellaLavorazione.IdLavRecDelBox(elemento);
 
-                            if (!esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciato.Contains(codice))
+                            if (idLavRec == 0 && !esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciato.Contains(codice))
                             {
                                 esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciato.Add(codice);
                             }
 
                             if (!esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Any(c =>
                                     c.codice == codice &&
-                                    c.idRec == elemento.IdRecordTracciato))
+                                    c.idRec == elemento.IdRecordTracciato &&
+                                    c.idLavRec == idLavRec))
                             {
                                 esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Add(new filtroCodici
                                 {
                                     codice = codice,
-                                    idRec = Convert.ToInt32(elemento.IdRecordTracciato)
+                                    idRec = Convert.ToInt32(elemento.IdRecordTracciato),
+                                    idLavRec = idLavRec
                                 });
                             }
                         }
 
                         bool IsNonPiuPresente(filtroCodici item)
                         {
+                            if (item.idLavRec > 0)
+                            {
+                                return esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Any(c =>
+                                    c.idLavRec == item.idLavRec);
+                            }
+
                             if (item.idRec > 0)
                             {
                                 return esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Any(c =>
                                     c.codice == item.codice &&
-                                    c.idRec == item.idRec);
+                                    c.idRec == item.idRec &&
+                                    c.idLavRec == 0);
                             }
 
                             return esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciato.Contains(item.codice);
@@ -6884,7 +7025,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                         void AddCorrispondente(filtroCodici item, PromoLavorazioniRecord elemento)
                         {
-                            if (!esitoPagina.codiciCorrispondenti.Contains(item.codice))
+                            if (item.idLavRec == 0 && !esitoPagina.codiciCorrispondenti.Contains(item.codice))
                             {
                                 esitoPagina.codiciCorrispondenti.Add(item.codice);
                             }
@@ -6895,19 +7036,21 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                             if (!esitoPagina.codiciCorrispondentiConId.Any(c =>
                                     c.codice == item.codice &&
-                                    c.idRec == idRec))
+                                    c.idRec == idRec &&
+                                    c.idLavRec == item.idLavRec))
                             {
                                 esitoPagina.codiciCorrispondentiConId.Add(new filtroCodici
                                 {
                                     codice = item.codice,
-                                    idRec = idRec
+                                    idRec = idRec,
+                                    idLavRec = item.idLavRec
                                 });
                             }
                         }
 
                         void AddPaginaDifferente(filtroCodici item, PromoLavorazioniRecord elemento)
                         {
-                            if (!esitoPagina.codiciImpaginatiAPaginaDifferente.Contains(item.codice))
+                            if (item.idLavRec == 0 && !esitoPagina.codiciImpaginatiAPaginaDifferente.Contains(item.codice))
                             {
                                 esitoPagina.codiciImpaginatiAPaginaDifferente.Add(item.codice);
                             }
@@ -6918,31 +7061,35 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                             if (!esitoPagina.codiciImpaginatiAPaginaDifferenteConId.Any(c =>
                                     c.codice == item.codice &&
-                                    c.idRec == idRec))
+                                    c.idRec == idRec &&
+                                    c.idLavRec == item.idLavRec))
                             {
                                 esitoPagina.codiciImpaginatiAPaginaDifferenteConId.Add(new filtroCodici
                                 {
                                     codice = item.codice,
-                                    idRec = idRec
+                                    idRec = idRec,
+                                    idLavRec = item.idLavRec
                                 });
                             }
                         }
 
                         void AddNonImpaginato(filtroCodici item)
                         {
-                            if (!esitoPagina.codiciNonImpaginatiSulServer.Contains(item.codice))
+                            if (item.idLavRec == 0 && !esitoPagina.codiciNonImpaginatiSulServer.Contains(item.codice))
                             {
                                 esitoPagina.codiciNonImpaginatiSulServer.Add(item.codice);
                             }
 
                             if (!esitoPagina.codiciNonImpaginatiSulServerConId.Any(c =>
                                     c.codice == item.codice &&
-                                    c.idRec == item.idRec))
+                                    c.idRec == item.idRec &&
+                                    c.idLavRec == item.idLavRec))
                             {
                                 esitoPagina.codiciNonImpaginatiSulServerConId.Add(new filtroCodici
                                 {
                                     codice = item.codice,
-                                    idRec = item.idRec
+                                    idRec = item.idRec,
+                                    idLavRec = item.idLavRec
                                 });
                             }
                         }
@@ -6951,20 +7098,23 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         {
                             var codice = elemento.CodiceGruppo ?? "";
                             var idRec = Convert.ToInt32(elemento.IdRecordTracciato);
+                            var idLavRec = RecordDellaLavorazione.IdLavRecDelBox(elemento);
 
-                            if (!esitoPagina.codiciPresentiSoloSulServer.Contains(codice))
+                            if (idLavRec == 0 && !esitoPagina.codiciPresentiSoloSulServer.Contains(codice))
                             {
                                 esitoPagina.codiciPresentiSoloSulServer.Add(codice);
                             }
 
                             if (!esitoPagina.codiciPresentiSoloSulServerConId.Any(c =>
                                     c.codice == codice &&
-                                    c.idRec == idRec))
+                                    c.idRec == idRec &&
+                                    c.idLavRec == idLavRec))
                             {
                                 esitoPagina.codiciPresentiSoloSulServerConId.Add(new filtroCodici
                                 {
                                     codice = codice,
-                                    idRec = idRec
+                                    idRec = idRec,
+                                    idLavRec = idLavRec
                                 });
                             }
                         }
@@ -7023,14 +7173,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                 continue;
                             }
 
-                            PromoTracciatiRecord? recordTarget;
-
-                            var elementoImpaginato = GetLavorazioneRecordConFratelli(
-                                item.codice,
-                                item.idRec,
-                                id_lavorazione,
-                                out recordTarget
-                            );
+                            var elementoImpaginato = RigaDelBoxDelDocumento(item, id_lavorazione);
 
                             if (elementoImpaginato == null)
                             {
@@ -7056,10 +7199,12 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         {
                             var codice = elementoSuServer.CodiceGruppo ?? "";
                             var idRec = Convert.ToInt32(elementoSuServer.IdRecordTracciato);
+                            var idLavRec = RecordDellaLavorazione.IdLavRecDelBox(elementoSuServer);
 
                             bool nonPiuPresente = esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Any(c =>
                                 c.codice == codice &&
-                                c.idRec == idRec);
+                                c.idRec == idRec &&
+                                c.idLavRec == idLavRec);
 
                             if (nonPiuPresente)
                             {
@@ -7173,14 +7318,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                         foreach (var item in codiciPresentiSoloSulServer)
                         {
-                            PromoTracciatiRecord? recordTarget;
-
-                            var record = GetLavorazioneRecordConFratelli(
-                                item.codice,
-                                item.idRec,
-                                id_lavorazione,
-                                out recordTarget
-                            );
+                            var record = RigaDelBoxDelDocumento(item, id_lavorazione);
 
                             if (record != null)
                             {
@@ -7233,21 +7371,19 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                             })
                                             .ToList();
 
-                                return codiciMappa.Any(c =>
-                                {
-                                    if (!string.Equals(c.codice, record.CodiceGruppo, StringComparison.OrdinalIgnoreCase))
-                                        return false;
-
-                                    if (c.idRec > 0)
-                                        return c.idRec == record.IdRecordTracciato;
-
-                                    return true;
-                                });
+                                //TASK-22d7fad2: la voce di un derivato non dice dov'e' l'originale, e un
+                                //derivato si trova solo dalla sua voce.
+                                return codiciMappa.Any(c => RecordDellaLavorazione.EVoceDelBox(record, c.codice, c.idRec, c.idLavRec));
                             });
 
                             if (paginaMappa != null)
                             {
                                 PortaAPagina(record, Byte.Parse(paginaMappa.nomePagina!), AutoreSpostamenti);
+                            }
+                            else if (record.DerivatoDi != null)
+                            {
+                                //TASK-22d7fad2: un derivato che il documento non ha piu' si cancella.
+                                RecordDellaLavorazione.Esce(this.ctx2, record);
                             }
                             else
                             {
@@ -7263,6 +7399,13 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     {
                         foreach (var item in codiciNonImpaginatiSulServer)
                         {
+                            //TASK-22d7fad2: un derivato rimosso non si ricollega e non si registra da
+                            //qui: il suo box resta fra quelli da eliminare del Report Integrita'.
+                            if (item.idLavRec > 0)
+                            {
+                                continue;
+                            }
+
                             RichiestaImpaginazioneSingolo richiesta = new RichiestaImpaginazioneSingolo();
                             richiesta.pagina = Byte.Parse(pag.nomePagina!);
                             richiesta.idLavorazione = id_lavorazione;
@@ -7316,14 +7459,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                     foreach (var item in codiciImpaginatiAPaginaDifferente)
                     {
-                        PromoTracciatiRecord? recordTarget;
-
-                        var recordDaCambiarePagina = GetLavorazioneRecordConFratelli(
-                            item.codice,
-                            item.idRec,
-                            id_lavorazione,
-                            out recordTarget
-                        );
+                        var recordDaCambiarePagina = RigaDelBoxDelDocumento(item, id_lavorazione);
 
                         if (recordDaCambiarePagina == null)
                         {
@@ -7536,6 +7672,14 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     request.idLavorazione,
                     out recordTarget
                 );
+
+                //TASK-22d7fad2: un box derivato si ricollega solo alla sua riga. Se non c'e' piu' il
+                //derivato e' stato rimosso, e un derivato rimosso non torna: se ne crea uno nuovo.
+                if (request.elementoDaRicollegare.idLavRec > 0)
+                {
+                    plr = RecordDellaLavorazione.Derivati(this.ctx2).FirstOrDefault(r => r.Id == request.elementoDaRicollegare.idLavRec && r.IdLavorazione == request.idLavorazione)
+                        ?? throw new ErroreIstanta("ricerca del derivato", $"il box derivato {request.elementoDaRicollegare.idLavRec} del gruppo {request.elementoDaRicollegare.codiceGruppo} non esiste piu' su Istanta: non si ricollega, va ricreato dal box originale.");
+                }
 
                 string recordTargetCodice = "";
                 if (recordTarget != null)
@@ -7858,6 +8002,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             public string? CodiceGruppo { get; set; }
 
             public int idRec { get; set; } = 0;
+            //TASK-22d7fad2: l'Id della riga quando il box e' un derivato; 0 per gli altri box.
+            public long idLavRec { get; set; } = 0;
             public string? ps { get; set; }
         }
 
@@ -7923,7 +8069,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     throw new ErroreIstanta("controllo delle primarie", erroreSelezioni);
 
                 PromoLavorazioniRecord? plrItem = trovaRecordDellaLavorazione(
-                    dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
+                    dato.idLavorazione, dato.CodiceGruppo, dato.idRec, dato.idLavRec);
 
                 //I20-1069: prima l'esito si ignorava e la risposta era sempre "successo", anche con il
                 //salvataggio fallito. Ora si fa come modificaExtraLavorazione.
@@ -7958,6 +8104,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             public string? CodiceGruppo { get; set; }
 
             public int idRec { get; set; } = 0;
+            //TASK-22d7fad2: l'Id della riga quando il box e' un derivato; 0 per gli altri box.
+            public long idLavRec { get; set; } = 0;
             /// <summary>
             /// Elenco completo degli elementi del box in noRender, serializzato dal Plugin.
             /// Sostituisce quello nei meta: contiene solo gli elementi marcati, quindi un
@@ -7980,7 +8128,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     MetaPromoLavorazioni.leggiElementiNoRender(dato.elementi!) ?? new List<RevisioneNoRenderFromIndd>();
 
                 PromoLavorazioniRecord? plrItem = trovaRecordDellaLavorazione(
-                    dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
+                    dato.idLavorazione, dato.CodiceGruppo, dato.idRec, dato.idLavRec);
 
                 //I20-1069: come modificaPrimarieSecondarie, prima la risposta era sempre "successo".
                 string esito = registraAttivitaMenabo(
@@ -8013,6 +8161,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             public string? CodiceGruppo { get; set; }
 
             public int idRec { get; set; } = 0;
+            //TASK-22d7fad2: l'Id della riga quando il box e' un derivato; 0 per gli altri box.
+            public long idLavRec { get; set; } = 0;
             /// <summary>
             /// La decisione, serializzata dal Plugin: { rimuovi, voce: { tipo, sigla, azione, nome, nomeServer, tipoFoto } }.
             /// </summary>
@@ -8039,7 +8189,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 if (nonValida != null)
                     throw new ErroreIstanta("lettura della richiesta", nonValida);
 
-                PromoLavorazioniRecord plrItem = trovaRecordDellaLavorazione(dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
+                PromoLavorazioniRecord plrItem = trovaRecordDellaLavorazione(dato.idLavorazione, dato.CodiceGruppo, dato.idRec, dato.idLavRec);
 
                 string esito = registraAttivitaMenabo(idOperazione, dato.CodiceGruppo!, "modificaExtraLavorazione", tipoOperazione.updateExtraLavorazione,
                     JsonConvert.SerializeObject(richiesta), plrItem.Id);
@@ -8063,6 +8213,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             public int idLavorazione { get; set; }
             public string? CodiceGruppo { get; set; }
             public long idRec { get; set; } = 0;
+            //TASK-22d7fad2: l'Id della riga quando il box e' un derivato; 0 per gli altri box.
+            public long idLavRec { get; set; } = 0;
             /// <summary>
             /// Le modifiche, serializzate dal Plugin: { voci: [ { label, azione (1 Aggiorna, 2 Rimuovi, 3 Crea), contenuto, contenutoServer } ] }.
             /// </summary>
@@ -8088,7 +8240,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 if (nonValida != null)
                     throw new ErroreIstanta("lettura della richiesta", nonValida);
 
-                PromoLavorazioniRecord plrItem = trovaRecordDellaLavorazione(dato.idLavorazione, dato.CodiceGruppo, dato.idRec);
+                PromoLavorazioniRecord plrItem = trovaRecordDellaLavorazione(dato.idLavorazione, dato.CodiceGruppo, dato.idRec, dato.idLavRec);
 
                 byte? versione = RecordDellaLavorazione.VersioneDelRecord(this.ctx2, dato.idRec > 0 ? dato.idRec : plrItem.IdRecordTracciato);
                 //I20-1089: anche i meta nuovi prendono la versione attuale del record.
@@ -8118,8 +8270,11 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
         /// match esatto su idRec, poi il record fratello, poi la sola riga del codice gruppo; per
         /// i client vecchi senza idRec, il primo record del codice gruppo.
         /// </summary>
-        private PromoLavorazioniRecord trovaRecordDellaLavorazione(int idLavorazione, string? codiceGruppo, long idRecRichiesto)
+        private PromoLavorazioniRecord trovaRecordDellaLavorazione(int idLavorazione, string? codiceGruppo, long idRecRichiesto, long idLavRec = 0)
         {
+            //TASK-22d7fad2: con idLavRec la riga e' quella del box derivato.
+            if (idLavRec > 0)
+                return RecordDellaLavorazione.IlDerivato(this.ctx2, idLavorazione, idLavRec);
             return RecordDellaLavorazione.Trova(this.ctx2, idLavorazione, codiceGruppo, idRecRichiesto);
         }
 
@@ -8203,6 +8358,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
             try
             {
+                //TASK-22d7fad2: sgruppare cambia i record del tracciato, che sono di tutti i box.
+                RecordDellaLavorazione.RifiutaSulDerivato(gruppi.idLavRec, "Lo sgruppamento");
                 using var tx = await this.ctx2.Database.BeginTransactionAsync();
                 var session = SessionIstantaObject.GetSession(HttpContext);
                 Int16 id_utente = Int16.Parse(session);
@@ -8527,6 +8684,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             })
             .ToList();
 
+                //TASK-22d7fad2: raggruppare cambia i record del tracciato, che sono di tutti i box.
+                RecordDellaLavorazione.RifiutaSulDerivato(gruppiDaRaggruppare.Select(g => g.idLavRec).FirstOrDefault(id => id > 0), "Il raggruppamento");
+
                 if (gruppiDaRaggruppare.Count == 0)
                 {
                     throw new Exception("Nessun gruppo ricevuto per il raggruppamento");
@@ -8814,6 +8974,18 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 return Ok(result);
             }
             return Ok(result);
+        }
+
+        /// TASK-22d7fad2: la riga di un box del documento, come lo descrive la mappa: con idLavRec
+        /// quella del derivato (null se e' stato rimosso), altrimenti quella del codice gruppo.
+        private PromoLavorazioniRecord? RigaDelBoxDelDocumento(filtroCodici item, int idLavorazione)
+        {
+            if (item.idLavRec > 0)
+            {
+                return RecordDellaLavorazione.DerivatoSeEsiste(this.ctx2, idLavorazione, item.idLavRec);
+            }
+
+            return GetLavorazioneRecordConFratelli(item.codice, item.idRec, idLavorazione, out _);
         }
 
         private PromoLavorazioniRecord? GetLavorazioneRecordConFratelli(
@@ -9229,6 +9401,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 //I20-1069: prima fuori dal try, con Int16.Parse: senza sessione un FormatException al chiamante.
                 if (!Int16.TryParse(session, out Int16 id_utente))
                     throw ErroreIstanta.SessioneScaduta();
+                //TASK-22d7fad2: azioni sul box, struttura e artwork cambiano i record del tracciato, che sono di tutti i box.
+                RecordDellaLavorazione.RifiutaSulDerivato(obj?.idLavRec ?? 0, "Il cambio dei dati del box");
 
                 string key_codice_gruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
                 string keyCodiceRef = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -9633,6 +9807,20 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     string codice = codiceInput.codice;
                     long idRec = codiceInput.idRec;
 
+                    //TASK-22d7fad2: un box derivato esce cancellando la sua riga, con i suoi meta. Il
+                    //record resta nel tracciato: e' anche dell'originale.
+                    if (codiceInput.idLavRec > 0)
+                    {
+                        if (eliminaDaTracciato)
+                            throw new ErroreIstanta("controllo del derivato", $"il box {codice} e' un derivato: dal tracciato si elimina a partire dal box originale.");
+                        var derivato = RecordDellaLavorazione.Derivati(this.ctx2).FirstOrDefault(r => r.Id == codiceInput.idLavRec && r.IdLavorazione == idLavorazione);
+                        if (derivato == null)
+                            result.error += "Il box derivato " + codice + " non era già presente nell'impaginato ";
+                        else
+                            RecordDellaLavorazione.Esce(this.ctx2, derivato);
+                        continue;
+                    }
+
                     PromoTracciatiRecord? recordTarget;
 
                     var refImpaginata = GetLavorazioneRecordConFratelli(
@@ -9689,6 +9877,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                         //TASK-bb04f9aa: le righe disattivate di questi record (quella appena
                         //disattivata compresa) escono con loro, o la chiave esterna rifiuta l'eliminazione.
+                        //TASK-22d7fad2: un record con un box derivato in pagina e' ancora impaginato.
+                        if (RecordDellaLavorazione.ConDerivati(this.ctx2, records.Select(r => r.Id)).Count > 0)
+                            throw new ErroreIstanta("controllo dei derivati", $"il gruppo {codice} ha box derivati impaginati: vanno rimossi prima di eliminarlo dal tracciato.");
                         RecordDellaLavorazione.EliminaLeDisattivateDei(this.ctx2, records.Select(r => r.Id));
                         this.ctx2.PromoTracciatiRecords.RemoveRange(records);
                     }

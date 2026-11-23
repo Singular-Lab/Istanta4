@@ -1218,7 +1218,7 @@ const SchermataSegnalazioni = {
         if (senzaId.length > 0) {
             const perIdRec = new Map();
             elencoRecord.filter(record => !vociDelRecord.has(record)).forEach(record => {
-                aggiungi(perIdRec, Segnalazioni.chiaveRecord(record.elementoMappa != null ? record.elementoMappa.idRec : null), record);
+                aggiungi(perIdRec, Segnalazioni.chiaveBox(record.elementoMappa != null ? record.elementoMappa.idRec : null, record.elementoMappa != null ? record.elementoMappa.idLavRec : 0), record);
             });
             senzaId.forEach(lettura => {
                 let dna = null;
@@ -1228,7 +1228,7 @@ const SchermataSegnalazioni = {
                 catch (e) {
                     dna = null;
                 }
-                const trovati = perIdRec.get(Segnalazioni.chiaveRecord(dna != null ? dna.idRec : null));
+                const trovati = perIdRec.get(Segnalazioni.chiaveBox(dna != null ? dna.idRec : null, dna != null ? dna.idLavRec : 0));
                 if (trovati != null) {
                     trovati.forEach(record => accumula(record, lettura.voci));
                 }
@@ -1359,6 +1359,10 @@ const SchermataSegnalazioni = {
             if (dna != null) {
                 dati.codiceGruppo = dna.codice_gruppo || "";
                 dati.idRec = dna.idRec;
+                //TASK-22d7fad2: solo per un box derivato, che ha lo stesso idRec dell'originale.
+                if (parseInt(dna.idLavRec) > 0) {
+                    dati.idLavRec = parseInt(dna.idLavRec);
+                }
             }
         }
         catch (e) {
@@ -1579,7 +1583,11 @@ const SchermataSegnalazioni = {
     /// I20-1217: una riga della sezione, con la pagina e i dati del box della voce.
     _rigaFotoCambiata(tipo, voce, dati) {
         const datiBox = SchermataSegnalazioni._datiDellaVoce(voce);
-        return Object.assign({ tipo: tipo, pagina: datiBox.pagina, box: voce.box, meccanica: datiBox.meccanica, codiceGruppo: datiBox.codiceGruppo, idRec: datiBox.idRec }, dati);
+        const riga = Object.assign({ tipo: tipo, pagina: datiBox.pagina, box: voce.box, meccanica: datiBox.meccanica, codiceGruppo: datiBox.codiceGruppo, idRec: datiBox.idRec }, dati);
+        if (datiBox.idLavRec > 0) {
+            riga.idLavRec = datiBox.idLavRec;
+        }
+        return riga;
     },
 
     /// I20-1217: le foto che il dato vuole nel box, come le elenca Foto P/S (EditFotoPrimarieSecondarie):
@@ -1633,7 +1641,7 @@ const SchermataSegnalazioni = {
     testoFotoCambiate(righe) {
         const elenco = Array.isArray(righe) ? righe : [];
         const box = new Set(elenco.map((riga, indice) => riga.idRec != null && riga.idRec !== ""
-            ? "rec:" + riga.idRec
+            ? "rec:" + riga.idRec + (riga.idLavRec > 0 ? "*" + riga.idLavRec : "")
             : (riga.box != null && riga.box.id != null ? "id:" + riga.box.id : "riga:" + indice)));
         return elenco.length + (elenco.length === 1 ? " foto cambiata" : " foto cambiate") + " in " + box.size + " box";
     },
@@ -1795,7 +1803,7 @@ const SchermataSegnalazioni = {
         const blocco = $('<div></div>').css({ margin: '4px 0 8px 0', padding: '6px', border: '1px solid #ddd', borderRadius: '4px' });
         const datiBox = SchermataSegnalazioni._datiBox(lettura.box);
         //I20-1056, lotto 2: per ritrovare il box tornando dalla scheda, anche se nel frattempo e' stato rifatto.
-        const chiave = Segnalazioni.chiaveRecord(datiBox.idRec);
+        const chiave = Segnalazioni.chiaveBox(datiBox.idRec, datiBox.idLavRec);
         if (chiave != null) {
             blocco.attr('data-idrec', chiave);
         }
@@ -2067,8 +2075,10 @@ const SchermataSegnalazioni = {
             elenco: elenco,
             popup: popup,
             idRec: dna.idRec,
+            //TASK-22d7fad2: 0 se il box non e' un derivato.
+            idLavRec: parseInt(dna.idLavRec) > 0 ? parseInt(dna.idLavRec) : 0,
             //Per ritrovare il box se la scheda lo rifa': la forma che il Report Integrita' sa leggere.
-            record: { codiceGruppo: dna.codice_gruppo, elementoMappa: { idRec: dna.idRec, pagina: pagina } },
+            record: { codiceGruppo: dna.codice_gruppo, elementoMappa: { idRec: dna.idRec, idLavRec: parseInt(dna.idLavRec) > 0 ? parseInt(dna.idLavRec) : 0, pagina: pagina } },
             timer: null,
             riaggancioInCorso: false
         };
@@ -2188,13 +2198,13 @@ const SchermataSegnalazioni = {
         $("body").append(stato.popup);
         CampiARiposo.tuttiARiposo();
         SchermataSegnalazioni.riempi(stato.elenco);
-        setTimeout(() => SchermataSegnalazioni._evidenziaBox(stato.elenco, stato.idRec), 50);
+        setTimeout(() => SchermataSegnalazioni._evidenziaBox(stato.elenco, stato.idRec, stato.idLavRec), 50);
     },
 
     /// Porta sotto gli occhi il blocco del box e lo evidenzia per un momento. Il ridisegno riparte
     /// dall'alto, e un box che non si vede sembra sparito.
-    _evidenziaBox(elenco, idRec) {
-        const chiave = Segnalazioni.chiaveRecord(idRec);
+    _evidenziaBox(elenco, idRec, idLavRec = 0) {
+        const chiave = Segnalazioni.chiaveBox(idRec, idLavRec);
         if (chiave == null) {
             return;
         }

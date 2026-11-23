@@ -35,12 +35,41 @@ const Modali = {
     /// altezzaPannello: quella del riquadro (l'88% del pannello meno i 10 px di margine sopra e
     /// sotto), meno i suoi 14 px di margine sopra e sotto, il piede e 4 px per gli arrotondamenti.
     /// Pannello di 628 px: 453.
-    altezzaMassimaMessaggio(altezzaPannello) {
+    /// TASK-22d7fad2: righePiede e' quante righe di pulsanti ha il piede (righePiedeConferma): la
+    /// seconda toglie al messaggio la sua altezza.
+    altezzaMassimaMessaggio(altezzaPannello, righePiede) {
         var altezza = Number(altezzaPannello);
         if (!(altezza > 0)) {
             altezza = 600;
         }
-        return Math.max(60, Math.floor((altezza - 20) * 0.88) - 28 - Modali.ALTEZZA_PIEDE_CONFERMA - 4);
+        return Math.max(60, Math.floor((altezza - 20) * 0.88) - 28 - Modali.altezzaPiedeConferma(righePiede) - 4);
+    },
+
+    /// TASK-22d7fad2: una riga di pulsanti in piu' nel piede: i 26 px del pulsante e gli 8 fra le righe.
+    ALTEZZA_RIGA_PIEDE: 34,
+
+    /// TASK-22d7fad2: quanto spazio c'e' per i pulsanti nel riquadro piu' stretto che si incontra (un
+    /// pannello di 465 px: il 92% meno i margini), e quanto ne chiede un pulsante dal suo testo. Sono
+    /// stime: in UXP le misure di un elemento appena inserito possono essere vecchie.
+    LARGHEZZA_UTILE_PIEDE: 400,
+    larghezzaStimataPulsante(testo) {
+        return Math.max(88, 20 + Math.ceil(String(testo == null ? "" : testo).length * 6.5));
+    },
+
+    /// TASK-22d7fad2: le righe del piede di confirmCustom. Con due scelte dalle etichette lunghe i tre
+    /// pulsanti non stanno su una riga: il piede, alto una riga sola, lasciava Annulla fuori dal
+    /// riquadro ("Per tutte le lavorazioni" / "Solo per questa lavorazione"). Allora le righe sono
+    /// due: le scelte sopra, Annulla sotto.
+    righePiedeConferma(testo1, testo2) {
+        if (testo2 == null) {
+            return 1;
+        }
+        var larghezza = Modali.larghezzaStimataPulsante(testo1) + Modali.larghezzaStimataPulsante(testo2) + 88 + 16;
+        return larghezza > Modali.LARGHEZZA_UTILE_PIEDE ? 2 : 1;
+    },
+
+    altezzaPiedeConferma(righePiede) {
+        return Modali.ALTEZZA_PIEDE_CONFERMA + (righePiede === 2 ? Modali.ALTEZZA_RIGA_PIEDE : 0);
     },
 
     /// Chiede una conferma: Conferma da' true, Annulla false, e un errore vale come Annulla.
@@ -335,7 +364,9 @@ const Modali = {
         }
         //TASK-19c18841: il piede dei pulsanti ha un'altezza fissa, cosi' lo spazio del messaggio si
         //calcola senza misurarlo.
-        var pulsanti = $('<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; flex: 0 0 auto; padding-top: 12px; height: ' + Modali.ALTEZZA_PIEDE_CONFERMA + 'px; box-sizing: border-box;"></div>');
+        //TASK-22d7fad2: fissa, ma di due righe quando le due scelte e Annulla non stanno su una.
+        var righePiede = Modali.righePiedeConferma(bottoneConfirm1Text, bottoneConfirm2Text);
+        var pulsanti = $('<div style="display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; width: 100%; flex: 0 0 auto; padding-top: 12px; height: ' + Modali.altezzaPiedeConferma(righePiede) + 'px; box-sizing: border-box;"></div>');
         var conferma1 = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm1Text +'</button>');
         if(bottoneConfirm2Text != null){
             var conferma2 = $('<button style="min-width: 88px; height: 26px; padding: 0 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">'+bottoneConfirm2Text +'</button>');
@@ -380,6 +411,10 @@ const Modali = {
         if(bottoneConfirm2Text != null){
             pulsanti.append(conferma2);
         }
+        //TASK-22d7fad2: con due righe Annulla va a capo da solo, sotto le due scelte.
+        if (righePiede === 2) {
+            pulsanti.append($('<div style="flex-basis: 100%; height: 0;"></div>'));
+        }
     
         pulsanti.append(annulla);
         dialog.append(messaggio);
@@ -402,13 +437,13 @@ const Modali = {
         //scritture su messaggio[0] non arrivavano, quelle sull'elemento preso dalla pagina si').
         //Se l'altezza massima non bastasse a fermarlo, appena il contenuto la supera il messaggio
         //prende un'altezza fissa uguale: quella in pixel UXP la rispetta di sicuro.
-        var massimo = Modali.altezzaMassimaMessaggio(600);
+        var massimo = Modali.altezzaMassimaMessaggio(600, righePiede);
         var altezzaFissata = false;
         try {
             var wrapper = document.getElementById("wrapper");
             var altezzaPannello = wrapper != null && wrapper.clientHeight > 0 ? wrapper.clientHeight
                 : (document.body != null ? document.body.clientHeight : 0);
-            massimo = Modali.altezzaMassimaMessaggio(altezzaPannello);
+            massimo = Modali.altezzaMassimaMessaggio(altezzaPannello, righePiede);
             var elMessaggio = document.getElementById(idMessaggio);
             if (elMessaggio != null) {
                 elMessaggio.style.flex = "0 0 auto";

@@ -66,11 +66,12 @@ function middlewareEdro() {
 //getFieldByLabel e setCampoDNA come sono scritte in utility.js. setCampoDNA chiede il campo
 //senza parseLabel, quindi Utility.parseLabel non viene mai chiamata.
 function utilityVera() {
-    return new Function('Utility', 'return ({\n' + [
+    //TASK-22d7fad2: setCampoDNA scrive lo slot dell'idRec con DnaBox, il modulo vero.
+    return new Function('Utility', 'DnaBox', 'return ({\n' + [
         corpoMembro(utility, 'getFieldByLabel:function(label, box, parseLabel = true)'),
         corpoMembro(utility, 'restaNelBox(field, box) {'),
         corpoMembro(utility, 'setCampoDNA(listCampiDNA, box, itemRef) {')
-    ].join(',\n') + '\n});')({ parseLabel: () => assert.fail('parseLabel non attesa') });
+    ].join(',\n') + '\n});')({ parseLabel: () => assert.fail('parseLabel non attesa') }, require('../../plugin/dnaBox.js'));
 }
 
 const itemRef = { 'Referenza.Codice': '6119227', 'Scatto.CodiceGruppo': '6119227,6119231', idRec: 382329 };

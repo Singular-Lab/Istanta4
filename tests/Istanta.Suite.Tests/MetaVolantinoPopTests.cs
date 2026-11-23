@@ -240,7 +240,7 @@ public class MetaVolantinoPopTests
         Assert.True(stato < fico.IndexOf("togliTestiDalBoxAllineati(testiAllineati, righeDeiTesti);", StringComparison.Ordinal));
 
         // Scheda: lo stesso.
-        Assert.Contains("testiDalBoxPerGruppo, null, volantinoDelPop);", menabo);
+        Assert.Contains("testiDalBoxPerGruppo, null, volantinoDelPop, derivato);", menabo);
         int scheda = menabo.IndexOf("testiEreditati = FicoProcessController.sostituisciConIMetaDelVolantino(", StringComparison.Ordinal);
         Assert.True(scheda > 0 && scheda < menabo.IndexOf("FicoProcessController.applicaNoRenderAiMembriGruppoFoto(itemLista.Records, noRenderPerRef);", StringComparison.Ordinal));
         Assert.True(menabo.IndexOf("FicoProcessController.togliStatoDeiTestiEreditati(resultGlobale.records, testiEreditati);", StringComparison.Ordinal)

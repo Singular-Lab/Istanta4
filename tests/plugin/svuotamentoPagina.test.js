@@ -416,7 +416,7 @@ test("confirmCustom ha il piede fisso: l'altezza del messaggio viene dal pannell
     assert.notStrictEqual(Modali.nuovoIdMessaggio(), Modali.nuovoIdMessaggio());
     assert.match(codice, /var idMessaggio = Modali\.nuovoIdMessaggio\(\);\s*var messaggio = \$\('<div id="' \+ idMessaggio \+ '"/);
 
-    assert.match(codice, /height: ' \+ Modali\.ALTEZZA_PIEDE_CONFERMA \+ 'px; box-sizing: border-box;/);
+    assert.match(codice, /height: ' \+ Modali\.altezzaPiedeConferma\(righePiede\) \+ 'px; box-sizing: border-box;/);
     assert.match(codice, /var elMessaggio = document\.getElementById\(idMessaggio\);\s*if \(elMessaggio != null\) \{\s*elMessaggio\.style\.flex = "0 0 auto";\s*elMessaggio\.style\.overflowY = "auto";\s*elMessaggio\.style\.maxHeight = massimo \+ "px";/);
     //Se l'altezza massima non bastasse, quella fissa, sull'elemento della pagina.
     assert.match(codice, /var el = document\.getElementById\(idMessaggio\);\s*if \(el != null && el\.scrollHeight > massimo\) \{\s*el\.style\.height = massimo \+ "px";\s*altezzaFissata = true;/);

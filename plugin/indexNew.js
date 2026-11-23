@@ -66,6 +66,9 @@ const fs = require('fs');
 const fs2 = require('uxp').storage.localFileSystem;
 //I20-1124: la versione precedente di un box rifatto, messa da parte sul suo livello.
 const VersionePrecedente = require('./versionePrecedente');
+//TASK-22d7fad2: lo slot dell'idRec nel DNA e l'Id della riga di un box derivato.
+const DnaBox = require('./dnaBox');
+const BoxDerivati = require('./boxDerivati');
 const { app, Justification, FitOptions, LocationOptions, File, ColorModel, Folder, ExportFormat, ContentType, SaveOptions, CoordinateSpaces, AnchorPoint, ResizeMethods} = require('indesign');
 //I20-1064: il cliente non si copia piu' in radice. clienteAttivo.json, scritto da
 //monta-cliente.sh, dice quale ipconfig usare, e l'ipconfig quale custom.js d'archivio leggere.
@@ -5299,7 +5302,7 @@ async function fixRefImpaginata(domandaGiaFatta = false) {
                 //regole sulla referenza lavoravano su quella.
                 datiRef = schedaRef.primariaDelBox(schedaRef.schedeRefDati, codiceGruppo, idRec);
                 if (datiRef == null) {
-                    datiRef = schedaRef.primariaDellaRisposta(await getSchedaRefAsync(schedaRef, codiceGruppo, idRec));
+                    datiRef = schedaRef.primariaDellaRisposta(await getSchedaRefAsync(schedaRef, codiceGruppo, idRec, DnaBox.idLavRecDi(dna)));
                 }
                 if (datiRef == null) {
                     throw new Error("la referenza primaria del box non si trova");
@@ -5383,7 +5386,7 @@ async function referenzaDelBox(box) {
         if (primaria != null) {
             return primaria;
         }
-        return schedaRef.primariaDellaRisposta(await getSchedaRefAsync(schedaRef, codiceGruppo, idRec != null ? idRec : 0));
+        return schedaRef.primariaDellaRisposta(await getSchedaRefAsync(schedaRef, codiceGruppo, idRec != null ? idRec : 0, DnaBox.idLavRecDi(dna)));
     }
     catch (e) {
         console.error("Code IDX-202: referenza del box non trovata per il fix foto: " + e);
@@ -5391,7 +5394,8 @@ async function referenzaDelBox(box) {
     }
 }
 
-function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0) {
+/// TASK-22d7fad2: con idLavRec la scheda e' quella di un box derivato, non quella dell'originale.
+function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0, idLavRec = 0) {
     return new Promise(function (resolve, reject) {
         schedaRef.getSchedaRef(codiceGruppo, function (errore, data) {
             if (errore != null) {
@@ -5400,7 +5404,7 @@ function getSchedaRefAsync(schedaRef, codiceGruppo, idRec = 0) {
             }
 
             resolve(data);
-        }, idRec);
+        }, idRec, false, idLavRec);
     });
 }
 
@@ -6765,7 +6769,8 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
                 var idRecSelezionato = dnaSelezionato.idRec != null && dnaSelezionato.idRec !== "" && !isNaN(parseInt(dnaSelezionato.idRec)) ? parseInt(dnaSelezionato.idRec) : 0;
                 itemsDaRimuovere.push(boxDaRimuovere(boxSelezionato));
                 codiciGruppo.push(dnaSelezionato.codice_gruppo);
-                listaCodiciConIdDaInviare.push({ codice: dnaSelezionato.codice_gruppo, idRec: idRecSelezionato });
+                //TASK-22d7fad2: di un box derivato si rimuove la sua riga, non quella dell'originale.
+                listaCodiciConIdDaInviare.push({ codice: dnaSelezionato.codice_gruppo, idRec: idRecSelezionato, idLavRec: DnaBox.idLavRecDi(dnaSelezionato) });
                 vociSelezioneMultipla.push(schedaRef.voceDellaSelezioneMultipla(boxSelezionati[b].dettaglio, boxSelezionati[b].records));
             }
             if (codiciGruppo.length == 0) {
@@ -6792,7 +6797,7 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
                     : 0;
 
                 codiciGruppo.push(codiceGruppoInput);
-                listaCodiciConIdDaInviare.push({ codice: codiceGruppoInput, idRec: idRecInput });
+                listaCodiciConIdDaInviare.push({ codice: codiceGruppoInput, idRec: idRecInput, idLavRec: DnaBox.idLavRecDi(itemCodiceConId) });
             }
             //I20-1221: qui i box si conoscono, e vanno tolti dalla pagina.
             if (eliminazioneConfermata != null && Array.isArray(eliminazioneConfermata.boxes)) {
@@ -6839,7 +6844,7 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
 
             itemsDaRimuovere.push(itemToRemove);
             codiciGruppo.push(codiceGruppo);
-            listaCodiciConIdDaInviare.push({ codice: codiceGruppo, idRec: idRec });
+            listaCodiciConIdDaInviare.push({ codice: codiceGruppo, idRec: idRec, idLavRec: DnaBox.idLavRecDi(dna) });
             //}
     
             if (codiciGruppo.length == 0) {
@@ -6958,6 +6963,8 @@ async function rimuoviRefImpaginata(listaCodiciConId = [], mantieniBusyEsterno =
 
             params += "ListaCodiciConId[" + i + "].codice=" + encodeURIComponent(codiceItem) + "&";
             params += "ListaCodiciConId[" + i + "].idRec=" + encodeURIComponent(idRecItem) + "&";
+            //TASK-22d7fad2: l'Id della riga quando il box e' un derivato.
+            params += "ListaCodiciConId[" + i + "].idLavRec=" + encodeURIComponent(DnaBox.idLavRecDi(listaCodiciConIdDaInviare[i])) + "&";
         }
     
         xhr.send("Menabo/rimuoviRefImpaginata/" + idKitLavorazione + "/" + eliminaDaTracciato, params, "PUT", "application/x-www-form-urlencoded");
@@ -7608,6 +7615,13 @@ function creaRigaSync(contenutoKitInLavorazione) {
 }
 
 /// I20-1141: l'idRec di un record del tracciato, come lo legge la riga per il badge di pagina.
+/// Gli idRec impaginati secondo Istanta (la lista di Menabo/getListaImpaginati, una voce per box
+/// con codiceGruppo, idRec e nomePagina), per i filtri "impaginati" e "da impaginare" del
+/// tracciato. Prima si cercava l'idRec dentro la lista di voci, e non si trovava mai.
+function idRecImpaginati(listImpaginati) {
+    return new Set((Array.isArray(listImpaginati) ? listImpaginati : []).filter(voce => voce != null).map(voce => voce.idRec));
+}
+
 function idRecDelRecordDelTracciato(record) {
     return getIdRecFromItemRef(record != null ? record.recordInTracciato : null);
 }
@@ -7639,6 +7653,7 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
 
         if (resRicerca == null) {
             const listImpaginati = await Utility.getListaCodiciImpaginati();
+            const impaginati = idRecImpaginati(listImpaginati);
 
             if (val === "all") {
                 recordsDaMostrare = contenutoKitInLavorazione.records || [];
@@ -7651,11 +7666,11 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
                 recordsDaMostrare = Segnalazioni.recordConSegnalazioni(contenutoKitInLavorazione.records || [], riepilogoSegnalazioniTracciato(), idRecDelRecordDelTracciato);
             } else if (val === "impaginati") {
                 recordsDaMostrare = (contenutoKitInLavorazione.records || []).filter(r =>
-                    listImpaginati.includes(r.recordInTracciato.idRec)
+                    impaginati.has(r.recordInTracciato.idRec)
                 );
             } else if (val === "da_impaginare") {
                 recordsDaMostrare = (contenutoKitInLavorazione.records || []).filter(r =>
-                    !listImpaginati.includes(r.recordInTracciato.idRec)
+                    !impaginati.has(r.recordInTracciato.idRec)
                 );
             }
         } else {
@@ -8521,7 +8536,9 @@ function creaElementoTracciato(obj, isFirst, riepilogoSegnalazioni = {}) {
 /// guardava solo res, che diventa vero solo sul cammino che va a buon fine: dopo un errore
 /// del server l'operatore ne vedeva il messaggio e, venti secondi dopo, un IDX-94 "Timeout"
 /// che timeout non era e lo copriva.
-async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false, idRec = null) {
+/// TASK-22d7fad2: idLavRec e' l'Id della riga di un box derivato (0 per gli altri): con quello e
+/// byPassBloccoGiaImpaginato Istanta cambia la pagina del derivato, non quella dell'originale.
+async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false, idRec = null, idLavRec = 0) {
     showLoading("Scaricamento del dato");
     indesignEvents.setBusy(true);
     await Utility.sleep(100);
@@ -8603,6 +8620,7 @@ async function impaginaSingolo(codice, pagina, byPassBloccoGiaImpaginato = false
     var idRecNorm = idRec != null && idRec !== "" && !isNaN(parseInt(idRec)) ? parseInt(idRec) : 0;
     formData.append("codiceGruppo", codice);
     formData.append("idRec", idRecNorm);
+    formData.append("idLavRec", DnaBox.idValido(idLavRec));
     formData.append("idLavorazione", idKitLavorazione);
     formData.append("pagina", pagina);
     formData.append("byPassBloccoGiaImpaginato", byPassBloccoGiaImpaginato);
@@ -9362,8 +9380,14 @@ async function trovaRecord(codice, idRec, searchPage = null, select = true, Remo
                     continue;
                 }
 
-    
-                if (dna.codice_gruppo == codice && dna.id_rec == idRec) {
+                //TASK-22d7fad2: il tracciato cerca il box del record, cioe' l'originale. Un derivato
+                //ha lo stesso codice gruppo e lo stesso idRec, ma non e' quello.
+                if (DnaBox.idLavRecDi(dna) > 0) {
+                    continue;
+                }
+
+                //Il confronto era con dna.id_rec, che non esiste: non c'era mai un match esatto.
+                if (dna.codice_gruppo == codice && dna.idRec == idRec) {
                     if (select) {
                         group.select();
                     }
@@ -9372,7 +9396,7 @@ async function trovaRecord(codice, idRec, searchPage = null, select = true, Remo
 
                     var result = {
                         esito: true,
-                        page: p
+                        page: page.name
                     };
                     return result;
                 }
@@ -9408,6 +9432,36 @@ async function trovaRecord(codice, idRec, searchPage = null, select = true, Remo
         if (RemoveOnFail) {
             hideLoading();
             var idRecNorm = idRec != null && !isNaN(parseInt(idRec)) ? parseInt(idRec) : 0;
+
+            //TASK-22d7fad2: la pagina registrata non e' di questo documento. Non e' un box sparito:
+            //puo' stare in un altro documento della lavorazione. Lo si dice, e si offre di
+            //impaginarne qui un derivato; la rimozione resta, con l'avviso di cosa si sta togliendo.
+            var nomiPagineDocumento = BoxDerivati.nomiPagine(docInLavorazione);
+            if (paginaAttesa != null && String(paginaAttesa) !== "" && !BoxDerivati.paginaNelDocumento(paginaAttesa, nomiPagineDocumento)) {
+                var sceltaPaginaAssente = await BoxDerivati.chiediPerPaginaAssente({
+                    codice: codice,
+                    idRec: idRecNorm,
+                    paginaRegistrata: paginaAttesa,
+                    nomiPagine: nomiPagineDocumento,
+                    puoDerivare: BoxDerivati.puoDerivare(ficoProcess.getTipoLavorazioneCorrente(), 0)
+                });
+
+                if (sceltaPaginaAssente.azione === "derivato") {
+                    var boxDerivato = await BoxDerivati.creaEImpagina({ codiceGruppo: codice, idRec: idRecNorm, idLavRec: 0, pagina: sceltaPaginaAssente.pagina });
+                    if (boxDerivato != null && select) {
+                        Utility.selezionaBox(boxDerivato);
+                    }
+                    return { esito: boxDerivato != null, page: sceltaPaginaAssente.pagina };
+                }
+
+                if (sceltaPaginaAssente.azione === "rimuovi") {
+                    messaggioUtente("Code IDX-102 Elemento a pagina " + paginaAttesa + ", non presente in questo documento: procedo a rimuoverlo dall'impaginato sul server", "warning", false, 0);
+                    await rimuoviRefImpaginata([{ codice: codice, idRec: idRecNorm }]);
+                }
+                hideLoading();
+                return { esito: false, page: 0 };
+            }
+
             var confermaRimozione = await Modali.confirmRimozioneRefNonTrovata({
                 codice: codice,
                 idRec: idRecNorm,
@@ -9600,7 +9654,9 @@ function cercaRecordInTracciato(Codice) {
 /// l'oggetto globale, quindi me.isInvalidated e' sempre undefined e quel controllo non
 /// scatta mai. Lo stesso vale per "this.isBusy = false" nel catch, che scrive su una
 /// proprieta' del globale che nessuno legge.
-async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback) {
+/// TASK-22d7fad2: idsLavRec, uno per box nella stessa posizione del suo codice, e' l'idLavRec dei
+/// box derivati (0 per gli altri): la loro scheda si compone con i loro meta.
+async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback, idsLavRec = null) {
     if (typeof idRecs === "function") {
         callback = idRecs;
         idRecs = null;
@@ -9658,6 +9714,9 @@ async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback) {
     //dopo finirebbero accanto al codice sbagliato.
     if (Array.isArray(idRecs) && idRecs.length > 0) {
         formData.append("idsRec", idRecs.map(id => id == null || isNaN(parseInt(id)) ? 0 : parseInt(id)).join("-"));
+    }
+    if (Array.isArray(idsLavRec) && idsLavRec.some(id => DnaBox.idValido(id) > 0)) {
+        formData.append("idsLavRec", idsLavRec.map(id => DnaBox.idValido(id)).join("-"));
     }
 
     //I20-1063: false come la scheda di un box solo (getSchedaRef). Con true il server saltava il
@@ -10151,7 +10210,12 @@ function preAnalisiPerSpostate(spostate) {
             perPagina[r.paginaDocumento] = { nomePagina: r.paginaDocumento, codiciImpaginatiAPaginaDifferente: [], codiciImpaginatiAPaginaDifferenteConId: [] };
         }
         perPagina[r.paginaDocumento].codiciImpaginatiAPaginaDifferente.push(r.codice);
-        perPagina[r.paginaDocumento].codiciImpaginatiAPaginaDifferenteConId.push({ codice: r.codice, idRec: r.idRec });
+        var conId = { codice: r.codice, idRec: r.idRec };
+        //TASK-22d7fad2: di un box derivato si sposta la sua riga, non quella dell'originale.
+        if (parseInt(r.idLavRec) > 0) {
+            conId.idLavRec = parseInt(r.idLavRec);
+        }
+        perPagina[r.paginaDocumento].codiciImpaginatiAPaginaDifferenteConId.push(conId);
     });
     return Object.keys(perPagina).map(k => perPagina[k]);
 }

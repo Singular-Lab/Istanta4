@@ -137,7 +137,7 @@ test('il fix senza report non e\' piu\' offerto', () => {
     //I20-1014: applicaConfronto e' un membro del report, non piu' una funzione di indexNew.
     //I20-1056, lotto 5: con la lettura dei bollini dell'avvio, per i numeri accanto ai record.
     //I20-1124: con la mappa delle versioni precedenti, a parte.
-    assert.match(confronti, /async applicaConfronto\(mappa, letteSegnalazioni = null, versioniPrecedenti = null\) \{/);
+    assert.match(confronti, /async applicaConfronto\(mappa, letteSegnalazioni = null, versioniPrecedenti = null, derivatiRimossi = null\) \{/);
     assert.doesNotMatch(indexNew, /function applicaConfronto\(/);
     assert.doesNotMatch(applicaConfronto, /getSchedeRefsMassivo/);
     assert.doesNotMatch(applicaConfronto, /addBollinoCustom/);
@@ -815,7 +815,7 @@ test('chiudendo la scheda la referenza si ricontrolla da sola', () => {
 
     //La scheda si rilegge dal server: i record con cui il report e' nato sono di prima che
     //l'operatore ci mettesse mano.
-    assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec\)/);
+    assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec, this\._idLavRecDelRecord\(record, stato\)\)/);
     //La preanalisi e' quella del report, sul box che abbiamo in mano, che puo' essere nuovo.
     assert.match(ricontrollo, /await ReportIntegrita\.preAnalisiBoxMappato\(records, record\.elementoMappa, box\)/);
     //Le decisioni stanno nel modulo verificato.
@@ -852,7 +852,7 @@ test('il ricontrollo giudica col dato del server e allinea la lista', () => {
     //Il dato riletto e' la verita': sistemando una segnalazione l'operatore allinea il box al
     //server, e una lista rimasta indietro farebbe giudicare il box con un dato che non c'e'
     //piu'.
-    assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec\)/);
+    assert.match(ricontrollo, /await this\._leggiSchedaRefAggiornata\(stato\.codiceGruppo, stato\.idRec, this\._idLavRecDelRecord\(record, stato\)\)/);
     assert.match(ricontrollo, /this\._aggiornaListaKitConRecordFreschi\(records\)/);
 
     //La preanalisi si rifa' per intero: dice tutto quello che c'e', non solo quello che se ne va.

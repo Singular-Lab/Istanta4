@@ -386,9 +386,9 @@ test("nel report i cloni hanno il contrassegno e le tre sole azioni, Trova selez
     assert.match(azione, /case "tornaInPagina":\s*await this\._tornaInPaginaVersionePrecedente\(payloadId, payload\)/);
 
     const fix = corpoMembro(report, "    async _fixElemento(payloadId, payload) {");
-    assert.match(fix, /VersionePrecedente\.boxInPaginaPer\(docInLavorazione, codiceGruppo, idRec, Utility\.getDnaOfBox\)/);
+    assert.match(fix, /VersionePrecedente\.boxInPaginaPer\(docInLavorazione, codiceGruppo, idRec, Utility\.getDnaOfBox, this\._idLavRecDelRecord\(record\)\)/);
     assert.match(fix, /await this\._ricontrollaReferenzaDopoScheda\(\{ record, box: boxNuovo, codiceGruppo, idRec, payloadId \}\)/);
-    assert.match(fix, /this\._aggiungiVersionePrecedenteTenuta\(codiceGruppo, idRec\)/);
+    assert.match(fix, /this\._aggiungiVersionePrecedenteTenuta\(codiceGruppo, idRec, this\._idLavRecDelRecord\(record\)\)/);
     assert.match(fix, /await this\._riscriviCsvDelReport\(\)/);
 
     const avvia = report.substring(report.indexOf("async avviaReportIntegrita("), report.indexOf("async avvisoSegnalazioniPrimaDelReport("));
@@ -418,7 +418,7 @@ test("il ricollegamento atteso dal report usa la stessa richiesta della scheda",
     const dalReport = corpoMembro(report, "    async _ricollegaDalReport(box) {");
     assert.match(dalReport, /schedaRef\.ricollegaBoxImpaginatoAttendendo\(box\)/);
     assert.match(dalReport, /Promise\.race/);
-    const lettura = corpoMembro(report, "    _leggiSchedaRefConStato(codiceGruppo, idRec) {");
+    const lettura = corpoMembro(report, "    _leggiSchedaRefConStato(codiceGruppo, idRec, idLavRec = 0) {");
     assert.match(lettura, /risultato\.errorCode == 8/);
 });
 

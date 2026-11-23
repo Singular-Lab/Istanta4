@@ -3936,6 +3936,8 @@ out var mismatch);
                 RevisioneFromInddRequest? req = JsonConvert.DeserializeObject<RevisioneFromInddRequest>(reqStr);
                 riassunto = Utility.SalvataggioRefDaIndd.Riassunto(req);
                 _logger.LogInformation("salvaRefFromIndd: {Richiesta}", riassunto);
+                //TASK-22d7fad2: la revisione cambia il dato della referenza, che e' di tutti i box.
+                RecordDellaLavorazione.RifiutaSulDerivato(req?.idLavRec ?? 0, "La revisione dei campi");
 
                 PromoLavorazioniRecord plrItem = this.ctx2.PromoLavorazioniRecords.Include(inc=>inc.IdPromoTracciatiRecordNavigation).FirstOrDefault(f => f.IdLavorazione == req!.idLavorazione && f.CodiceGruppo == req.codice_gruppo)!;
                 string kyeFirma = Enum.GetName(AddestramentoRuoli.Tracciato) + "." + GLOBAL_VARIABLES.keyTracciatoFirma;

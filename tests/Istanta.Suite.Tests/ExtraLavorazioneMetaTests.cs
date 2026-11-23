@@ -290,7 +290,7 @@ public class ExtraLavorazioneMetaTests
         //getSchedaRef: raccolta dal meta e applicazione dopo le foto escluse.
         //I20-1077: con in coda i testi del box, raccolti dallo stesso meta.
         //I20-1103: in coda le righe dei volantini da cui il POP eredita i meta.
-        Assert.Contains("ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, null, volantinoDelPop);", menabo);
+        Assert.Contains("ficoController.updateDatiFromMetaPromoLavorazioni(prepLista.records, idLavorazione, kit!, noRenderPerRef, noRenderElementiPerGruppo, extraLavorazionePerGruppo, testiDalBoxPerGruppo, null, volantinoDelPop, derivato);", menabo);
         Assert.Contains("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", menabo);
         Assert.True(menabo.IndexOf("MB Scheda 12977 - Escludo foto", StringComparison.Ordinal) < menabo.IndexOf("FicoProcessController.applicaExtraDellaLavorazione(resultGlobale.records, extraLavorazionePerGruppo);", StringComparison.Ordinal));
 

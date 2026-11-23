@@ -377,7 +377,7 @@ test("Vai al box apre la scheda in vista controllata e torna alla schermata", ()
     assert.match(chiudi, /SchermataSegnalazioni\._schedaAperta = null;/);
     assert.match(chiudi, /ReportIntegrita\._terminaSchedaDalReport\(\);\s*SchermataSegnalazioni\._eventiFermi\(false\);\s*\$\("body"\)\.append\(stato\.popup\);/);
     assert.match(chiudi, /SchermataSegnalazioni\.riempi\(stato\.elenco\);/);
-    assert.match(chiudi, /_evidenziaBox\(stato\.elenco, stato\.idRec\)/);
+    assert.match(chiudi, /_evidenziaBox\(stato\.elenco, stato\.idRec, stato\.idLavRec\)/);
 
     //La X ha il suo id: quella del report porta al report.
     assert.match(schermata, /\$\('<div id="chiudiSchedaDalleSegnalazioni">✕<\/div>'\)/);
@@ -749,7 +749,7 @@ test("l'avviso delle segnalazioni viene prima di tutto, anche della domanda Riap
     assert.match(avvio, /if \(avviso\.azione === "vai"\) \{\s*await ReportIntegrita\.vaiASegnalazioniDalReport\(avviso\.lette\);\s*return;\s*\}\s*if \(avviso\.azione !== "procedi"\) \{\s*return;\s*\}/);
     //Riapri e report nuovo usano la stessa lettura per i numeri.
     assert.match(avvio, /ReportIntegrita\.assegnaSegnalazioniAlReport\(reportLocale\.report, avviso\.lette\);\s*ReportIntegrita\.compilaReportConfronto\(reportLocale\.report,/);
-    assert.match(avvio, /await ReportIntegrita\.applicaConfronto\(mappa, avviso\.lette, versioniPrecedenti\);/);
+    assert.match(avvio, /await ReportIntegrita\.applicaConfronto\(mappa, avviso\.lette, versioniPrecedenti, reportIntegritaAvvio\.derivatiNonRegistrati\(preAnalisiMismatchNumeriPagina\)\);/);
     assert.match(flussoReport, /ReportIntegrita\.assegnaSegnalazioniAlReport\(reportObj, letteSegnalazioni\);\s*ReportIntegrita\.compilaReportConfronto\(reportObj\);/);
 });
 

@@ -15,6 +15,7 @@ const schedaArtwork = {
     potentialArtwork: null,
     codici:[],
     idRecs:[],
+    idLavRecs:[],
     schedeRefDati:[],
     refs: null,
     job:[],
@@ -24,6 +25,7 @@ const schedaArtwork = {
         this.refs = refs;
         this.potentialArtwork = artwork;
         this.idRecs = [];
+        this.idLavRecs = [];
         $("#artworkTab").show();
         //$("#artworkTab").click();
         jsIndexControls.changeSubMenu($("#artworkTab").attr("subTab"));
@@ -42,6 +44,7 @@ const schedaArtwork = {
                 idRec = parseInt(item.idRec);
             }
             this.idRecs.push(idRec);
+            this.idLavRecs.push(item != null && parseInt(item.idLavRec) > 0 ? parseInt(item.idLavRec) : 0);
             $("#listaGruppiArtwork").append("<h4 class=\"artworkGroupListed\">"+(i+1)+". " + item.codiceGruppo + "</h4>");
         }
 
@@ -67,6 +70,7 @@ const schedaArtwork = {
         $("#listaGruppiArtwork").empty();
         this.codici = this.existingArtwork.label.split("_")[1].split("-");
         this.idRecs = this.codici.map(cod => this.getIdRecByCodice(cod));
+        this.idLavRecs = this.codici.map(cod => this.getIdLavRecByCodice(cod));
         let me=this;
         //Coda di recupero info per ogni record artwork
         this.bindDati(0);
@@ -117,6 +121,7 @@ const schedaArtwork = {
             me.schedeRefDati.splice(0);
             let cod=this.codici[indice];
             let idRec = this.idRecs != null && this.idRecs.length > indice ? this.idRecs[indice] : null;
+            let idLavRec = this.idLavRecs != null && this.idLavRecs.length > indice ? this.idLavRecs[indice] : 0;
             this.getSchedaRef(cod, (error, schedaRef) => {
                 if (error) {
                     console.error("Code ATW-2 Errore durante la richiesta:", error);
@@ -159,7 +164,8 @@ const schedaArtwork = {
     },
 
     /// Chiede al server i dati di una referenza del gruppo.
-    getSchedaRef(codiceGruppo, callback, idRec = 0) {
+    /// TASK-22d7fad2: con idLavRec la scheda e' quella di un box derivato.
+    getSchedaRef(codiceGruppo, callback, idRec = 0, idLavRec = 0) {
         var xhr = new XMLHttpRequestClient();
     
         xhr.onload = async (objResult, parsed) => {
@@ -195,6 +201,9 @@ const schedaArtwork = {
         var formData = new FormData();
         formData.append("codiceGruppo", codiceGruppo);
         formData.append("idRec", idRec);
+        if (parseInt(idLavRec) > 0) {
+            formData.append("idLavRec", parseInt(idLavRec));
+        }
         xhr.send("Menabo/getSchedaRef/" + idKitLavorazione + "/" + false, formData, "PUT");
     },
     /// Esporta la foto dell'artwork.
@@ -582,28 +591,46 @@ const schedaArtwork = {
 
     },
 
+    /// TASK-22d7fad2: il box di un codice gruppo sulla pagina dell'artwork, col suo DNA:
+    /// { item, dna }, o null. Se sulla pagina ci sono l'originale e un suo derivato vale
+    /// l'originale; il derivato vale solo quando e' l'unico. Con idRec conta anche quello.
+    boxDelCodice(codice, idRec = null)
+    {
+        if (this.existingArtwork == null || this.existingArtwork.parentPage == null) {
+            return null;
+        }
+
+        let derivato = null;
+        let pag = this.existingArtwork.parentPage;
+        for (let p=0; p<pag.allPageItems.length; p++)
+        {
+            let item = pag.allPageItems[p];
+            if (item.constructor.name !="Group") {
+                continue;
+            }
+            let dna = Utility.getDnaOfBox(item);
+            if (dna==null || dna.codice_gruppo!=codice) {
+                continue;
+            }
+            if (idRec != null && !(dna.idRec != null && !isNaN(parseInt(dna.idRec)) && parseInt(dna.idRec) == parseInt(idRec))) {
+                continue;
+            }
+            if (!(parseInt(dna.idLavRec) > 0)) {
+                return { item: item, dna: dna };
+            }
+            if (derivato == null) {
+                derivato = { item: item, dna: dna };
+            }
+        }
+        return derivato;
+    },
+
     getIdRecByCodice(codice)
     {
         try {
-            if (this.existingArtwork == null || this.existingArtwork.parentPage == null) {
-                return null;
-            }
-
-            let pag = this.existingArtwork.parentPage;
-            for (let p=0; p<pag.allPageItems.length; p++)
-            {
-                let item = pag.allPageItems[p];
-                if (item.constructor.name =="Group")
-                {
-                    let dna = Utility.getDnaOfBox(item);
-                    if (dna!=null && dna.codice_gruppo==codice)
-                    {
-                        if (dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
-                            return parseInt(dna.idRec);
-                        }
-                        return null;
-                    }
-                }
+            const trovato = this.boxDelCodice(codice);
+            if (trovato != null && trovato.dna.idRec != null && trovato.dna.idRec !== "" && !isNaN(parseInt(trovato.dna.idRec))) {
+                return parseInt(trovato.dna.idRec);
             }
         }
         catch(e){
@@ -613,32 +640,25 @@ const schedaArtwork = {
         return null;
     },
 
+    /// TASK-22d7fad2: l'idLavRec del box del codice gruppo, 0 se non e' un derivato.
+    getIdLavRecByCodice(codice)
+    {
+        try {
+            const trovato = this.boxDelCodice(codice);
+            return trovato != null && parseInt(trovato.dna.idLavRec) > 0 ? parseInt(trovato.dna.idLavRec) : 0;
+        }
+        catch(e){
+            console.warn("Impossibile recuperare idLavRec per codice gruppo " + codice + ": " + e.message);
+        }
+
+        return 0;
+    },
+
     async processoDiRicerca(codice, idRec = null)
     {
         return new Promise(resolve => setTimeout(() => {
-            let pag = this.existingArtwork.parentPage;
-            let foundItem=null;
-            for (let p=0; p<pag.allPageItems.length; p++)
-            {
-                let item = pag.allPageItems[p];
-                if (item.constructor.name =="Group")
-                {
-                    let dna = Utility.getDnaOfBox(item);
-                    let idRecMatch = true;
-                    if (idRec != null) {
-                        idRecMatch = dna != null && dna.idRec != null && !isNaN(parseInt(dna.idRec)) && parseInt(dna.idRec) == parseInt(idRec);
-                    }
-
-                    if (dna!=null && dna.codice_gruppo==codice && idRecMatch)
-                    {
-                        foundItem=item;
-                        //found=true;
-                        break;                    
-                        
-                    }
-                }
-            }
-            resolve(foundItem);
+            const trovato = this.boxDelCodice(codice, idRec);
+            resolve(trovato != null ? trovato.item : null);
         }, 500));
 
         

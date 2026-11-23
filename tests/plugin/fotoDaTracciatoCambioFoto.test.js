@@ -86,7 +86,9 @@ test("pluginMiddleware legge la configurazione del cliente, e senza chiave non n
 test("la schermata Cambia foto usa la regola, e le due richieste mandano il nome della lista", () => {
     const schermata = leggi('reperimentoFoto/schedaFoto.js');
 
-    assert.match(schermata, /const fotoDallaLista = me\.cambioFotoDallaLista\(/);
+    //TASK-22d7fad2: la regola della lista passa da ambitoDelCambioFoto, che la applica ai box non derivati.
+    assert.match(schermata, /const fotoDallaLista = me\.ambitoDelCambioFoto\(/);
+    assert.match(schermata, /ambitoDelCambioFoto\(record, config, idLavRec\) \{[\s\S]*?return this\.cambioFotoDallaLista\(record, config\);/);
     assert.match(schermata, /if \(fotoDallaLista\.soloLavorazione\) \{\n\s*return `<option value="solo_lavorazione">Solo lavorazione<\/option>`;/);
     //L'avviso si scrive come testo, non come HTML.
     assert.match(schermata, /\$\('#avvisoFotoDallaLista'\)\.text\(fotoDallaLista\.avviso\);/);

@@ -255,7 +255,9 @@ test("nel markup sono segnate le voci che la selezione multipla non offre, e sol
     //Edit, Elimina e Reimpagina restano.
     assert.ok(!/SubMenu_Edit_active\.png"[^>]*data-selezione-multipla/.test(html));
     assert.ok(!/data-selezione-multipla="nascosta"[^>]*>\s*<img[^>]*rimuoviRefImpaginata/.test(html));
-    assert.ok(!/data-selezione-multipla="nascosta"[^>]*>\s*<img[^>]*applicaReimpaginazione/.test(html));
+    assert.ok(!/data-selezione-multipla="nascosta"[^>]*>\s*<img[^>]*chiediReimpaginazione/.test(html));
+    //TASK-22d7fad2: l'icona chiede conferma, e con piu' box passa alla conferma della selezione multipla.
+    assert.ok(html.includes('onclick="schedaRef.chiediReimpaginazione()"'));
 });
 
 test("le schede della selezione multipla si chiedono come quella di un box, con gli idRec allineati ai codici", () => {
@@ -316,7 +318,8 @@ test("Raggruppa compare solo con tutti i box impaginati, mai prima di saperlo", 
     assert.strictEqual((mostra.match(/\$\("#raggruppaImage"\)\.show\(\)/g) || []).length, 1);
     assert.match(mostra, /if \(stato === stati\.impaginati\) \{\n\s*\$\("#raggruppaImage"\)\.show\(\);[\s\S]*?me\.SchermataRaggruppamento\(\);\n\s*\}\n\s*else \{\n\s*\$\("#raggruppaImage"\)\.hide\(\);/);
     //Box misti o non leggibili: avviso, niente Raggruppa, e il pannello torna alla home.
-    const ramoNonApre = mostra.substring(mostra.indexOf("if (stato === stati.misti || stato === stati.nonLeggibili) {"), mostra.indexOf("return;"));
+    const inizioRamoNonApre = mostra.indexOf("if (stato === stati.misti || stato === stati.nonLeggibili) {");
+    const ramoNonApre = mostra.substring(inizioRamoNonApre, mostra.indexOf("return;", inizioRamoNonApre));
     assert.match(ramoNonApre, /\$\("#raggruppaImage"\)\.hide\(\);/);
     assert.match(ramoNonApre, /jsIndexControls\.changeSubMenu\(\$\("#homeImage"\)\.attr\("subTab"\)\);/);
 });

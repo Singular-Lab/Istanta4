@@ -213,7 +213,8 @@ namespace Istanta.Controllers
 
             // Cio' che riferisce un record lo blocca: il database rifiuterebbe comunque la rimozione.
             var bloccati = new Dictionary<long, string>();
-            var impaginati = await ctx2.PromoLavorazioniRecords
+            //TASK-22d7fad2: anche i box derivati bloccano la rimozione del record.
+            var impaginati = await RecordDellaLavorazione.ImpaginatiConDerivati(ctx2)
                 .Where(l => idCorrenti.Contains(l.IdRecordTracciato))
                 .Select(l => l.IdRecordTracciato)
                 .Distinct()

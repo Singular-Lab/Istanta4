@@ -510,6 +510,10 @@ namespace Istanta.Migrations.Contesto2
                         .HasColumnType("character varying(4000)")
                         .HasColumnName("codice_gruppo");
 
+                    b.Property<long?>("DerivatoDi")
+                        .HasColumnType("bigint")
+                        .HasColumnName("derivato_di");
+
                     b.Property<short>("IdAutore")
                         .HasColumnType("smallint")
                         .HasColumnName("id_autore");

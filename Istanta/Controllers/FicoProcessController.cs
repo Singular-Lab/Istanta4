@@ -5100,7 +5100,7 @@ namespace Istanta.Controllers
             return letta;
         }
 
-        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo = null, Dictionary<string, PromoLavorazioniRecord>? righeDeiTesti = null, List<MetaDelVolantino>? volantinoDelPop = null)
+        public List<ArticoloInKit> updateDatiFromMetaPromoLavorazioni(List<ArticoloInKit> artInkit, int idLavorazione, FicoRuntimeKit kit/*, bool confronto = false*/, Dictionary<string, bool>? noRenderPerRef = null, Dictionary<string, List<RevisioneNoRenderFromIndd>>? noRenderElementiPerGruppo = null, Dictionary<string, List<RevisioneExtraLavorazioneFromIndd>>? extraLavorazionePerGruppo = null, Dictionary<string, List<TestoDalBox>>? testiDalBoxPerGruppo = null, Dictionary<string, PromoLavorazioniRecord>? righeDeiTesti = null, List<MetaDelVolantino>? volantinoDelPop = null, PromoLavorazioniRecord? rigaDelBox = null)
         {
             var keyCodGruppo = Enum.GetName(AddestramentoRuoli.Scatto) + "." + GLOBAL_VARIABLES.keyScattoCodiceGruppo;
             var keyRefCodice = Enum.GetName(AddestramentoRuoli.Referenza) + "." + GLOBAL_VARIABLES.keyRefCodice;
@@ -5123,8 +5123,12 @@ namespace Istanta.Controllers
                 //gruppo impaginato due volte ha meta distinti.
                 //TASK-bb04f9aa: anche le righe disattivate di questa lavorazione. Un box tolto dalla pagina
                 //conserva i meta, e il gruppo non impaginato li ritrova: cosi' reimpaginandolo nasce com'era.
-                var righeDelGruppo = ctx2.PromoLavorazioniRecords.IgnoreQueryFilters().Where(f => f.CodiceGruppo! == group.Key.CodiceGruppo && idLavorazione == f.IdLavorazione).ToList();
+                //TASK-22d7fad2: mai i box derivati, che hanno meta propri: quelli valgono solo per la
+                //scheda chiesta con il loro Id, che arriva qui in rigaDelBox.
+                var righeDelGruppo = ctx2.PromoLavorazioniRecords.IgnoreQueryFilters().Where(f => f.CodiceGruppo! == group.Key.CodiceGruppo && idLavorazione == f.IdLavorazione && f.DerivatoDi == null).ToList();
                 var promoLavorazione = RecordDellaLavorazione.PerLaLetturaConDisattivate(righeDelGruppo, group.Select(i => i.IdRec));
+                if (rigaDelBox != null && string.Equals(rigaDelBox.CodiceGruppo, group.Key.CodiceGruppo, StringComparison.OrdinalIgnoreCase) && group.Any(i => i.IdRec == rigaDelBox.IdRecordTracciato))
+                    promoLavorazione = rigaDelBox;
                 var chiaviDelGruppo = group.Select(i => chiaveDellImpaginazione(group.Key.CodiceGruppo, i.IdRec)).Distinct().ToList();
                 if (_debug)
                     Console.WriteLine($"Promo lavorazione di {idLavorazione} = {(promoLavorazione != null)}");
