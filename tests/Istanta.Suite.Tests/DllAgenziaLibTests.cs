@@ -55,6 +55,17 @@ public class DllAgenziaLibTests
         Assert.Contains("ConLogo", metodi);
     }
 
+    [Fact]
+    public void La_dll_committata_arrotonda_lo_sconto_di_B_e_B1()
+    {
+        // I20-1254: Istanta carica la DLL committata: senza ricompilarla lo sconto di B e B1 uscirebbe
+        // ancora arrotondato al multiplo piu' vicino.
+        var parametri = ParametriDelMetodoNellaDll(
+            TrovaFile("Istanta/wwwroot/external_lib/AgenziaLib.dll"), "AgenziaLib", "Coopfi", "scontoStampato");
+
+        Assert.Equal(new[] { "sconto", "siglaArea", "pop" }, parametri);
+    }
+
     private static List<string> ParametriDelMetodoNellaDll(string percorsoDll, string spazioDeiNomi, string nomeTipo, string nomeMetodo)
     {
         using var flusso = File.OpenRead(percorsoDll);

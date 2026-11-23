@@ -72,6 +72,51 @@ public class TestaFinestraProdottoTests
         Assert.Contains("var testaProdotto = \"0S24_26_B \\u2013 TDM/B\";", html);
     }
 
+    // ------------------------------------------------------------------ I20-1254: sconto di B e B1
+
+    [Theory]
+    [InlineData("0S24_26_B_TDM_B", "0S24_26_B", true)]
+    [InlineData("0S24_26_B_TDM_B1", "0S24_26_B", true)]
+    [InlineData("0S24_26_B_TDM_A", "0S24_26_B", false)]
+    [InlineData("0S24_26_B_TDM_A-", "0S24_26_B", false)]
+    [InlineData("0S24_26_B_TDM", "0S24_26_B", false)]
+    [InlineData("SCFI_14_09_26", "Speciale Freschi Settembre", false)]
+    public void Lo_sconto_va_al_multiplo_di_5_solo_nei_volantini_B_e_B1(string titolo, string promo, bool atteso)
+    {
+        Assert.Equal(atteso, VolantiniController.ScontoAlMultiploDi5(titolo, promo));
+    }
+
+    [Fact]
+    public void Il_ricalcolo_dello_sconto_va_per_difetto_al_5_solo_con_il_flag_e_txt_sconto()
+    {
+        string html = File.ReadAllText(Path.Combine(RadiceApplicazione(), "Views", "Volantini", "Dettaglio.cshtml"));
+
+        Assert.Contains("var scontoAlMultiploDi5 = @(Model.ScontoAlMultiploDi5 ? \"true\" : \"false\");", html);
+        Assert.Contains("var esatto = 100 - promo / continuo * 100;", html);
+        Assert.Contains("var s = scontoAlMultiploDi5 && campoSconto === 'txt_sconto'\n"
+            + "                ? Math.floor(Math.round(esatto * 100) / 100 / 5) * 5\n"
+            + "                : Math.round(esatto);", html.Replace("\r", ""));
+    }
+
+    [Theory]
+    [InlineData("0S24_26_B_TDM_B", "true")]
+    [InlineData("0S24_26_B_TDM_A", "false")]
+    public async Task L_editor_dice_se_lo_sconto_va_al_multiplo_di_5(string titolo, string atteso)
+    {
+        using var fabbrica = new FabbricaCorreggo();
+        using var app = App(fabbrica);
+        short agenzia = await UtenteAsync(app);
+        int idVol = await VolantinoAsync(app, titolo, "0S24_26_B");
+
+        var c = app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        c.DefaultRequestHeaders.Add(HeaderUtente, agenzia.ToString());
+        var r = await c.GetAsync($"/Volantini/Dettaglio/{idVol}");
+        Assert.Equal(HttpStatusCode.OK, r.StatusCode);
+        string html = await r.Content.ReadAsStringAsync();
+
+        Assert.Contains("var scontoAlMultiploDi5 = " + atteso + ";", html);
+    }
+
     // ------------------------------------------------------------------ allestimento
 
     private static WebApplicationFactory<Program> App(FabbricaCorreggo fabbrica)

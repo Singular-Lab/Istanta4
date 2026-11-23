@@ -1099,6 +1099,8 @@
     var dati = JSON.parse(document.getElementById('datiBox').textContent);
     var urlFoto = @Html.Raw(jsonUrlFoto);
     var testaProdotto = @Html.Raw(jsonTestaProdotto);   // I20-1156: "promo – canale/area" del volantino
+    // I20-1254: volantino delle aree B o B1: lo sconto CoopFi ricalcolato va per difetto al multiplo di 5 (ricalcola).
+    var scontoAlMultiploDi5 = @(Model.ScontoAlMultiploDi5 ? "true" : "false");
     // I20-1186: lo stesso testo che il server manda col rifiuto «gruppo_timone»
     var MESSAGGIO_GRUPPO_TIMONE = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Correggo4.Servizi.ServizioCorrezioni.MessaggioGruppoTimone));
 
@@ -2405,7 +2407,12 @@
         var campoSconto = CAMPI_SCONTO.filter(function (f) { return !!el(f); })[0];
         function sconto(promo, continuo) {
             if (!(continuo > 0) || isNaN(promo)) return null;
-            var s = Math.round(100 - promo / continuo * 100);
+            var esatto = 100 - promo / continuo * 100;
+            // I20-1254: CoopFi in B e B1 stampa lo sconto per difetto al multiplo di 5 (Coopfi.scontoStampato).
+            // Prima al centesimo, come AgenziaLib: 6,50 su 10,00 fa 34,999... in virgola mobile, e scenderebbe a 30.
+            var s = scontoAlMultiploDi5 && campoSconto === 'txt_sconto'
+                ? Math.floor(Math.round(esatto * 100) / 100 / 5) * 5
+                : Math.round(esatto);
             if (!(s >= 0 && s <= 100)) return null;
             var forma = old(campoSconto) || val(campoSconto);
             return /\d/.test(forma) ? forma.replace(/\d+([.,]\d+)?/, String(s)) : s + '%';

@@ -249,6 +249,19 @@ public class VolantiniController : Controller
     }
 
     /// <summary>
+    /// I20-1254: se il volantino e' delle aree B o B1, dove Coop stampa lo sconto arrotondato per
+    /// difetto al multiplo di 5 (AgenziaLib, Coopfi.scontoStampato). La finestra del prodotto ricalcola
+    /// lo sconto allo stesso modo quando cambia un prezzo (Dettaglio.cshtml, ricalcola): prima andava
+    /// all'intero piu' vicino e proponeva "-33%" dove la stampa dava 30%. L'area e' quella del titolo,
+    /// la stessa della testata della finestra (CanaleArea).
+    /// </summary>
+    public static bool ScontoAlMultiploDi5(string titolo, string classificazione)
+    {
+        var (_, area) = CanaleArea(titolo, classificazione);
+        return area == "B" || area == "B1";
+    }
+
+    /// <summary>
     /// LA LETTURA AFFIANCATA (j322): tutto il volantino a coppie di pagine, in una finestra nuova.
     ///
     /// Michele, 01/10: «fallo funzionare». E' il libro nella testa del pannello delle pagine, che
@@ -360,6 +373,7 @@ public class VolantiniController : Controller
             Titolo = vol.Titolo,
             Classificazione = vol.Classificazione,
             TestaProdotto = TestaProdotto(vol.Titolo, vol.Classificazione),
+            ScontoAlMultiploDi5 = ScontoAlMultiploDi5(vol.Titolo, vol.Classificazione),
             Versione = versione,
             SolaLettura = storico,
             UltimaVersione = ultimaVersione,
