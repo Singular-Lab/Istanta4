@@ -2406,13 +2406,62 @@
     }
 
     ApriFinestraSottogruppoDaSender(sender) {
-        let idSender = sender.closest(".record-revisione").attr("id_rec");
-        console.log(idSender);
-        this.ApriFinestraSottogruppo(idSender);
+        //I20-1252: il record della finestra dalla riga cliccata. L'intestazione di un sottogruppo non ha
+        //un record suo (idRec 0): cercata per idRec dava la prima intestazione della lista, e la
+        //finestra mostrava i codici di un altro sottogruppo.
+        let riga = sender.closest(".record-revisione");
+        let element = Revisore.elementoFinestraSottogruppo(this.List, riga.attr("id_rec"), riga.attr("is_gruppo") == "true",
+            riga.attr("codice_gruppo"), this.modalitaSottogruppi);
+        if (element == null) {
+            console.error("Struttura sottogruppo: nessun articolo trovato per " + riga.attr("codice_gruppo"));
+            return;
+        }
+        //Dall'intestazione la finestra mostra il sottogruppo intero: titolo il suo codice, elenco tutti i suoi articoli.
+        let intestazione = Revisore.rigaSenzaRecord(riga.attr("id_rec"), riga.attr("is_gruppo") == "true") ? riga.attr("codice_gruppo") : null;
+        this.ApriFinestraSottogruppo(element.idRec, element, intestazione);
     }
 
-    ApriFinestraSottogruppo(idRec) {
-        let element = this.List.find(f => f.idRec == idRec);
+    /// I20-1252: una riga di gruppo senza un record suo: le intestazioni della vista Sottogruppi
+    /// (idRec 0) e i gruppi costruiti dalla pagina (senza id_rec).
+    static rigaSenzaRecord(idRec, isGruppo) {
+        return isGruppo === true && (idRec == null || idRec === "" || Number(idRec) === 0);
+    }
+
+    /// I20-1252: il pilota con cui una riga della finestra aperta dall'intestazione si toglie o si rimette
+    /// nel sottogruppo: un altro articolo del sottogruppo, mai la riga stessa (tolta, non avrebbe piu' il
+    /// sottogruppo a cui rimettersi). Se non ce n'e' un altro, il pilota della finestra.
+    static pilotaDellaRiga(membri, item, pilotaFinestra) {
+        const altro = (Array.isArray(membri) ? membri : []).find(f => f != null && f !== item && f.idRec != item.idRec);
+        return altro || pilotaFinestra;
+    }
+
+    /// I20-1252: il record su cui si apre "Struttura sottogruppo". Una riga di gruppo senza un record suo
+    /// (idRec 0 o assente, come le intestazioni della vista Sottogruppi) usa come pilota un articolo del
+    /// suo gruppo o sottogruppo: il primario se c'e', altrimenti il primo. Le altre righe sono il record
+    /// con il loro idRec, come prima. Null se non c'e' nessun record.
+    static elementoFinestraSottogruppo(list, idRec, isGruppo, codiceGruppo, modalitaSottogruppi, chiavi) {
+        const k = Revisore.chiaviSottogruppi(chiavi);
+        const elenco = (Array.isArray(list) ? list : []).filter(f => f != null && f.recordInTracciato != null);
+        if (!Revisore.rigaSenzaRecord(idRec, isGruppo)) {
+            return elenco.find(f => f.idRec == idRec) || null;
+        }
+        const chiave = modalitaSottogruppi ? k.sottogruppo : k.gruppo;
+        const membri = elenco.filter(f => !f.isGruppo && f.recordInTracciato[chiave] == codiceGruppo);
+        return membri.find(f => f.recordInTracciato["StatoSelezione"] == 1) || membri[0] || null;
+    }
+
+    /// I20-1252: intestazione e' il codice del gruppo o sottogruppo quando la finestra si apre dalla sua
+    /// intestazione (Revisore.rigaSenzaRecord): allora il titolo e' quel codice e l'elenco ha tutti gli
+    /// articoli, ognuno con il suo pilota (pilotaDellaRiga). Null da una riga di referenza: titolo la
+    /// referenza ed elenco con le altre, come prima.
+    ApriFinestraSottogruppo(idRec, element = null, intestazione = null) {
+        if (element == null) {
+            element = this.List.find(f => f.idRec == idRec);
+        }
+        if (element == null) {
+            console.error("Struttura sottogruppo: record " + idRec + " non trovato");
+            return;
+        }
         let codiceGruppo = element.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)];
         let groupElements = [];
         groupElements = this.List.filter(f => f.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)] == codiceGruppo && f.isGruppo == false);
@@ -2420,7 +2469,8 @@
         $('#costruisciSottogruppoModal').modal('show');
         $('#costruisciSottogruppoModal').find(".modal-body").empty();
 
-        $('#costruisciSottogruppoModal').find("#costruisciSottogruppoTitle").text(element.recordInTracciato[keyRefCodice]);
+        //I20-1252: sempre una stringa: con undefined .text() legge invece di scrivere, e restava il titolo di prima.
+        $('#costruisciSottogruppoModal').find("#costruisciSottogruppoTitle").text(String((intestazione != null ? intestazione : element.recordInTracciato[keyRefCodice]) ?? ""));
         $('#costruisciSottogruppoModal').find("#costruisciSottogruppoTitle").attr("idRec", element.idRec);
         $('#costruisciSottogruppoModal').find("#costruisciSottogruppoTitle").attr("codiceRef", element.recordInTracciato[keyRefCodice]);
         $('#costruisciSottogruppoModal').find("#costruisciSottogruppoTitle").attr("codiceGruppo", element.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
@@ -2428,9 +2478,12 @@
         groupElements.forEach(function (item) {
             let template = $("#recordModalTemplate").clone();
             let htmlItem = $(template.html());
-            if (item != element) {
+            if (item != element || intestazione != null) {
                 htmlItem.find("#singolaRefSottoGruppo").text(item.recordInTracciato[keyRefCodice]);
                 htmlItem.attr("idRec", item.idRec);
+                if (intestazione != null) {
+                    htmlItem.attr("idRecPilota", Revisore.pilotaDellaRiga(groupElements, item, element).idRec);
+                }
                 htmlItem.attr("codiceRef", item.recordInTracciato[keyRefCodice]);
                 htmlItem.attr("codiceGruppo", item.recordInTracciato[(revInstance.modalitaSottogruppi ? keyScattoCodiceSottogruppo : keyScattoCodiceGruppo)]);
 
@@ -2457,7 +2510,8 @@
     ModificaSottogruppoDaSender(sender) {
         let record = sender.closest(".recordModal");
         let idRec = record.attr("idRec");
-        let idRecPilota = $('#costruisciSottogruppoModal').find("#costruisciSottogruppoTitle").attr("idRec");
+        //I20-1252: dalla finestra aperta dall'intestazione ogni riga ha il suo pilota; altrimenti quello del titolo.
+        let idRecPilota = record.attr("idRecPilota") || $('#costruisciSottogruppoModal').find("#costruisciSottogruppoTitle").attr("idRec");
         let add = sender.prop("checked");
         this.ModificaSottogruppo(idRec, idRecPilota, add)
     }

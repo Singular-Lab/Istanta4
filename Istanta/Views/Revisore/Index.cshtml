@@ -1,6 +1,9 @@
 ﻿@page
 @model Istanta.Views.Revisore.IndexModel
 @{
+    // I20-1252: il pulsante "Struttura sottogruppo" e' nascosto per ora, non tolto: la finestra e' stata
+    // corretta (revisore.js, ApriFinestraSottogruppo) e funziona. Si rimette con true qui.
+    bool strutturaSottogruppoVisibile = false;
     var Tracc = new List<Istanta.Models_2.PromoTracciati>();//ViewBag.Tracciato as Istanta.Models_2.PromoTracciati;
     var idTracc = 0;//ViewBag.Tracciato as Istanta.Models_2.PromoTracciati;
     var idPromo = 0;
@@ -349,7 +352,8 @@
             <div class="col text-center d-flex">
                 <div class="justify-content-center" style="margin:auto;">
                     <input id="alberoSottogruppi" type="submit" value="Albero sottogruppi" class="mx-auto btn btn-primary me-3" style="width:150px; display:none; font-size:12px;" />
-                    <input id="sottogruppoButton" type="submit" value="Struttura sottogruppo" class="mx-auto btn btn-primary me-3" style="width:150px; font-size:12px;" />
+                    @*I20-1252: nascosto con strutturaSottogruppoVisibile, in cima alla pagina ([hidden] di Bootstrap).*@
+                    <input id="sottogruppoButton" type="submit" value="Struttura sottogruppo" class="mx-auto btn btn-primary me-3" style="width:150px; font-size:12px;" hidden="@(!strutturaSottogruppoVisibile)" />
                     <div id="testoSottogruppo" class="text-center text-primary" style="cursor:pointer"></div>
                 </div>
             </div>
@@ -1096,7 +1100,9 @@
                                 </div>
                                 <div class="col-10">
                                     <div class="row">
-                                        <a id="a_scheda_articolo" href="SchedaArticolo?id=" target="_blank"><b>COD REF</b></a>
+                                        @*I20-1252: il gruppo padre non ha una scheda articolo: il codice non e' un collegamento
+                                          (portava a una pagina d'errore). Si copia con l'icona accanto.*@
+                                        <span id="a_scheda_articolo"><b>COD REF</b></span>
                                     </div>
                                     <div class="row">
                                         <a id="xls_file" style="font-size:8px;"><b>XLS</b></a>
