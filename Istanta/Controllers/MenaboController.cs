@@ -6726,6 +6726,14 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     esito = true,
                 };
 
+                //TASK-22d7fad2: i record della scheda di un box derivato portano l'Id della sua riga: il
+                //Plugin lo scrive nel DNA del box ogni volta che lo rifa' da questa scheda.
+                if (derivato != null)
+                {
+                    foreach (var record in result.records)
+                        record.recordInTracciato["idLavRec"] = derivato.Id;
+                }
+
                 Console.WriteLine($"getSchedaRef tappa 4 (export di agenzia): {swScheda.ElapsedMilliseconds} ms");
 
                 //logAss.WriteLine("GET SCHEDA REF >> step12");

@@ -483,7 +483,7 @@ test("il ricontrollo rilegge la scheda anche se il pannello l'ha gia' invalidata
     const rilettura = corpoMembro(report, "    _leggiSchedaRefAggiornata(codiceGruppo, idRec) {");
     assert.match(rilettura, /\}, idRec, true\);/);
     const scheda = sorgente("schedaRef.js");
-    assert.match(scheda, /getSchedaRef\(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false\) \{/);
+    assert.match(scheda, /getSchedaRef\(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false, idLavRec = 0\) \{/);
     assert.match(scheda, /if \(me\.isInvalidated && !ignoraInvalidazione\) \{\s*console\.warn\("La scheda ref non è più valida"\);/);
 });
 

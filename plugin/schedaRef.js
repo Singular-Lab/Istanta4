@@ -2,6 +2,8 @@
 const InputEditController = require('./InputEditController');
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const NoRenderElementi = require('./noRenderElementi');
+//TASK-22d7fad2: lo slot dell'idRec nel DNA e l'Id della riga di un box derivato.
+const DnaBox = require('./dnaBox');
 //I20-1105: l'altezza in pixel della lista noRender, l'unico modo perche' in UXP scorra davvero.
 const AltezzaScorrimento = require('./altezzaScorrimento');
 const RicollegaEsiti = require('./ricollegaEsiti');
@@ -516,6 +518,7 @@ const schedaRef = {
             codice: dna.codice,
             codiceGruppo: dna.codice_gruppo,
             idRec: dna.idRec,
+            idLavRec: dna.idLavRec,
             meccanica: dna.box
         };
     },
@@ -658,7 +661,7 @@ const schedaRef = {
                     me.apriSuFotoExtra = false;
                     me.vaiAFotoExtra();
                 }
-            }, me.refSelected.idRec);
+            }, me.refSelected.idRec, false, me.refSelected.idLavRec);
             // }
             // else {
             //     messaggioUtente("Elemento " + me.refSelected.codice + " non trovato nel tracciato", "error");
@@ -1537,7 +1540,9 @@ const schedaRef = {
         return valore != null && !isNaN(parseInt(valore)) ? parseInt(valore) : null;
     },
 
-    getSchedaRef(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false) {
+    /// TASK-22d7fad2: idLavRec e' l'Id della riga di un box derivato (0 per gli altri box): con
+    /// quello Istanta compone la scheda con i meta del derivato, non con quelli dell'originale.
+    getSchedaRef(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false, idLavRec = 0) {
         let me = this;
 
         var xhr = new XMLHttpRequestClient();
@@ -1588,6 +1593,7 @@ const schedaRef = {
         var formData = new FormData();
         formData.append("codiceGruppo", codiceGruppo);
         formData.append("idRec", idRec);
+        formData.append("idLavRec", DnaBox.idValido(idLavRec));
 
         xhr.send("Menabo/getSchedaRef/" + idKitLavorazione + "/" + false, formData, "PUT");
     },
@@ -1833,6 +1839,8 @@ const schedaRef = {
         var area = areaObj != null ? areaObj.sigla : "";
 
         var idRec = (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) ? parseInt(dna.idRec) : 0;
+        //TASK-22d7fad2: un box derivato si ricollega solo alla sua riga.
+        var idLavRec = DnaBox.idLavRecDi(dna);
 
         //I20-986: un box appoggiato fuori dalla pagina non ha una pagina, e chiederne il
         //nome faceva fallire tutto con l'errore generico, che non dice cosa fare. Si
@@ -1858,6 +1866,7 @@ const schedaRef = {
             elementoDaRicollegare: {
                 codiceGruppo: codiceGruppo,
                 idRec: idRec,
+                idLavRec: idLavRec,
                 pag: nomePagina,
                 forzaloAllaPaginaIndicata: true,
             }
@@ -1877,18 +1886,10 @@ const schedaRef = {
 
         dna.idRec = idRecSelezionato.toString();
         if (dna.item != null) {
-            let labelParts = dna.item.label.split("$");
-            if (dna.oldBoxFormat) {
-                if (labelParts.length > 4) {
-                    labelParts[4] = idRecSelezionato.toString();
-                    dna.item.label = labelParts.join("$");
-                }
-            }
-            else {
-                if (labelParts.length > 5) {
-                    labelParts[5] = idRecSelezionato.toString();
-                    dna.item.label = labelParts.join("$");
-                }
+            //TASK-22d7fad2: cambia il record, non la riga di un derivato: l'idLavRec dello slot resta.
+            let nuovaLabel = DnaBox.labelConIdRec(dna.item.label, dna.oldBoxFormat ? 4 : 5, idRecSelezionato);
+            if (nuovaLabel != null) {
+                dna.item.label = nuovaLabel;
             }
         }
         return true;
@@ -5082,6 +5083,7 @@ const schedaRef = {
             }
             //I20-1088: il record del box, per la riga della lavorazione dei meta e la loro versione.
             req.idRec = this.idRecDelBoxAperto();
+            req.idLavRec = this.idLavRecDelBoxAperto();
 
             //creiamo una funzione richiamabile
             let applicaCambiStrutturali = function () {
@@ -5240,6 +5242,8 @@ const schedaRef = {
         let params = "";
         params += "codiceGruppo=" + encodeURIComponent(this.schedeRefDati[0].recordInTracciato["Scatto.CodiceGruppo"]);
         params += "&idRec=" + encodeURIComponent(this.schedeRefDati[0].idRec);
+        //TASK-22d7fad2: da un box derivato Istanta rifiuta il cambio, che e' del box originale.
+        params += "&idLavRec=" + encodeURIComponent(this.idLavRecDelBoxAperto());
 
         let kAz = "azioni[0]";
         //I20-1049: con una sola opzione valida la tendina non si vede, e l'opzione e' quella.
@@ -5809,7 +5813,7 @@ const schedaRef = {
      * getSchedaRef con la callback avvolta in una promessa: dentro un flusso async si legge
      * meglio. Scarica soltanto: la navigazione fra le schermate non la tocca nessuno.
      */
-    async ricaricaDatiScheda(codiceGruppo, idRec) {
+    async ricaricaDatiScheda(codiceGruppo, idRec, idLavRec = 0) {
         let me = this;
 
         return new Promise(function (resolve) {
@@ -5824,7 +5828,7 @@ const schedaRef = {
                     me.schedeRefDati = scheda.records;
                     me.idRecordLavorazione = scheda.idRecInLavorazione;
                     resolve(true);
-                }, idRec);
+                }, idRec, false, idLavRec);
             }
             catch (e) {
                 console.error("Code SRF-47 Riscaricamento della scheda non riuscito: " + e);
@@ -6701,6 +6705,20 @@ const schedaRef = {
         return sigla;
     },
 
+    /// TASK-22d7fad2: l'Id della riga del box aperto se e' un derivato, dal suo DNA; 0 per gli altri
+    /// box o se non si legge. Va in ogni richiesta che porta l'idRec del box aperto: senza, la
+    /// decisione finirebbe sulla riga dell'originale, che ha lo stesso codice gruppo e idRec.
+    idLavRecDelBoxAperto() {
+        try {
+            var dna = this.refSelected != null ? Utility.getDnaOfBox(this.refSelected.item) : null;
+            return DnaBox.idLavRecDi(dna);
+        }
+        catch (e) {
+            console.warn("Impossibile recuperare idLavRec dal box", e);
+        }
+        return 0;
+    },
+
     /// L'idRec del box aperto, dal suo DNA; 0 se non si legge.
     idRecDelBoxAperto() {
         try {
@@ -6731,6 +6749,7 @@ const schedaRef = {
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
             formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
+            formData.append("idLavRec", destinazione != null ? DnaBox.idLavRecDi(destinazione) : me.idLavRecDelBoxAperto());
             formData.append("richiesta", JSON.stringify(richiesta));
 
             var xhr = new XMLHttpRequestClient();
@@ -6859,7 +6878,7 @@ const schedaRef = {
         }
         var schedaRef = this.schedeRefDati;
         var codice = schedaRef != null && schedaRef.length > 0 ? schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"] : this.codiceDellaRefAperta();
-        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto());
+        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto(), this.idLavRecDelBoxAperto());
         if (!ricaricata) {
             messaggioUtente("Code SRF-103 Decisione tolta, ma la scheda non si e' riscaricata: riaprila per vedere il dato aggiornato", "warning", false, 6);
         }
@@ -7177,6 +7196,7 @@ const schedaRef = {
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
             formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
+            formData.append("idLavRec", destinazione != null ? DnaBox.idLavRecDi(destinazione) : me.idLavRecDelBoxAperto());
             formData.append("richiesta", JSON.stringify(richiesta));
 
             var xhr = new XMLHttpRequestClient();
@@ -7210,7 +7230,7 @@ const schedaRef = {
     async riscaricaDopoIlMeta() {
         var schedaRef = this.schedeRefDati;
         var codice = schedaRef != null && schedaRef.length > 0 ? schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"] : this.codiceDellaRefAperta();
-        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto());
+        var ricaricata = await this.ricaricaDatiScheda(codice, this.idRecDelBoxAperto(), this.idLavRecDelBoxAperto());
         if (!ricaricata) {
             messaggioUtente("Code SRF-118 Meta registrato, ma la scheda non si e' riscaricata: riaprila per vedere il dato aggiornato", "warning", false, 6);
         }
@@ -7768,7 +7788,7 @@ const schedaRef = {
             showLoading("Aggiornamento della scheda in corso...");
             var schedaRicaricata = false;
             try {
-                schedaRicaricata = await me.ricaricaDatiScheda(codiceGruppo, idRec);
+                schedaRicaricata = await me.ricaricaDatiScheda(codiceGruppo, idRec, me.idLavRecDelBoxAperto());
             }
             finally {
                 hideLoading();
@@ -8029,6 +8049,8 @@ const schedaRef = {
 
         let params = "codiceGruppo=" + encodeURIComponent(cambioMetaRequest.codiceGruppo);
         params += "&idRec=" + encodeURIComponent(idRec);
+        //TASK-22d7fad2: da un box derivato Istanta rifiuta il cambio, che e' del box originale.
+        params += "&idLavRec=" + encodeURIComponent(me.idLavRecDelBoxAperto());
         for (let a = 0; a < cambioMetaRequest.azioni.length; a++) {
             let azione = cambioMetaRequest.azioni[a];
             let kAz = "azioni[" + a + "]";
@@ -8557,6 +8579,8 @@ const schedaRef = {
         }
         params += "originalGroup=" + CodiceGruppoOriginale;
         params += "&idRec=" + encodeURIComponent(idRec);
+        //TASK-22d7fad2: da un box derivato Istanta rifiuta lo sgruppamento, che e' del box originale.
+        params += "&idLavRec=" + encodeURIComponent(me.idLavRecDelBoxAperto());
         console.log(params);
 
 
@@ -9202,6 +9226,7 @@ const schedaRef = {
             formData.append("idLavorazione", idKitLavorazione);
             formData.append("CodiceGruppo", destinazione != null ? destinazione.codiceGruppo : schedaRef[0].recordInTracciato["Scatto.CodiceGruppo"]);
             formData.append("idRec", destinazione != null ? destinazione.idRec : me.idRecDelBoxAperto());
+            formData.append("idLavRec", destinazione != null ? DnaBox.idLavRecDi(destinazione) : me.idLavRecDelBoxAperto());
             formData.append("elementi", JSON.stringify(elementi || []));
 
             var xhr = new XMLHttpRequestClient();

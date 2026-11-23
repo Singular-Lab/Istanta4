@@ -355,6 +355,7 @@ class InddEvents {
                                                         codice: dna.codice,
                                                         codiceGruppo: dna.codice_gruppo,
                                                         idRec: dna.idRec,
+                                                        idLavRec: dna.idLavRec,
                                                         meccanica: dna.box
                                                     }];
                                                     me.fireEvent(me.EVENT_NEW_VERSIONE_PRECEDENTE_SELECTED, me.lastSelectionDetails);
@@ -367,7 +368,9 @@ class InddEvents {
                                                 if (me.lastSelectionDetails.length > 0 &&
                                                     me.lastSelectionDetails[0].codice == dna.codice &&
                                                     me.lastSelectionDetails[0].codiceGruppo == dna.codice_gruppo &&
-                                                    me.lastSelectionDetails[0].idRec == dna.idRec) {
+                                                    me.lastSelectionDetails[0].idRec == dna.idRec &&
+                                                    //TASK-22d7fad2: un box derivato ha lo stesso idRec dell'originale.
+                                                    (me.lastSelectionDetails[0].idLavRec || 0) == (dna.idLavRec || 0)) {
 
                                                     //Controlliamo il cambiop pagina
                                                     if (me.lastSelectionDetails[0].pag != currPag) {
@@ -391,6 +394,7 @@ class InddEvents {
                                                         codice: dna.codice,
                                                         codiceGruppo: dna.codice_gruppo,
                                                         idRec: dna.idRec,
+                                                        idLavRec: dna.idLavRec,
                                                         meccanica: dna.box
                                                     }];
 
@@ -511,6 +515,7 @@ class InddEvents {
                                                             codice: dna.codice,
                                                             codiceGruppo: dna.codice_gruppo,
                                                             idRec: dna.idRec,
+                                                            idLavRec: dna.idLavRec,
                                                             meccanica: dna.box,
                                                             //Sul livello cloneVecchioImpaginato, come per un box solo.
                                                             versionePrecedente: VersionePrecedente.eVersionePrecedente(potentialRef)

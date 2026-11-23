@@ -17,6 +17,8 @@
 const XMLHttpRequestClient = require('../XMLHttpRequestClient');
 const DataCaricamentoFoto = require('./dataCaricamento');
 const NoRenderElementi = require('../noRenderElementi');
+//TASK-22d7fad2: lo slot dell'idRec nel DNA e l'Id della riga di un box derivato.
+const DnaBox = require('../dnaBox');
 const FotoExtraGruppo = require('./fotoExtraGruppo');
 
 const schedaFoto = {
@@ -1904,11 +1906,14 @@ const schedaFoto = {
                 //facciamo il formData dell'objectToSend
                 var formData = new FormData();
                 var idRec = 0;
+                //TASK-22d7fad2: di un box derivato si salvano le sue primarie e secondarie.
+                var idLavRec = 0;
                 try {
                     var dna = Utility.getDnaOfBox(box);
                     if (dna != null && dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec))) {
                         idRec = parseInt(dna.idRec);
                     }
+                    idLavRec = DnaBox.idLavRecDi(dna);
                 }
                 catch (e) {
                     console.warn("Impossibile recuperare idRec dal box durante Edit P/S", e);
@@ -1916,6 +1921,7 @@ const schedaFoto = {
                 formData.append("idLavorazione", idKitLavorazione);
                 formData.append("CodiceGruppo", codice_gruppo);
                 formData.append("idRec", idRec);
+                formData.append("idLavRec", idLavRec);
                 formData.append("ps", JSON.stringify(objToSend.ps));
 
                 const xhr = new XMLHttpRequestClient();
@@ -2015,7 +2021,7 @@ const schedaFoto = {
                         //la si riscarica sempre, ed e' dal dato fresco che si capisce se il box in
                         //pagina e' ancora allineato. Prima si riscaricava solo su richiesta di agenzia.
                         showLoading("Aggiornamento della scheda in corso...");
-                        var schedaRicaricata = await me.ricaricaDatiScheda(codice_gruppo, idRec);
+                        var schedaRicaricata = await me.ricaricaDatiScheda(codice_gruppo, idRec, idLavRec);
                         hideLoading();
 
                         if (avvisoCambioPrimario !== "") {
@@ -2631,6 +2637,7 @@ const schedaFoto = {
             }
             formData.append("nomeFileOld", nomeFotoOld);
             formData.append("idRec", element != null ? element.idRec : 0);
+            formData.append("idLavRec", me.idLavRecDelBoxAperto());
             //TASK-60aaf10d: la foto che la lista indica, per legarvi la scelta solo per la lavorazione.
             formData.append("nomeFotoTracciato", me.nomeFotoDellaLista(element));
             console.log(obj);
@@ -2806,6 +2813,7 @@ const schedaFoto = {
             formData.append("propaga", propaga ? "true" : "false");
             //I20-1088: il record del box, perche' il meta della foto vada nella riga di questa impaginazione.
             formData.append("idRec", me.idRecDelBoxAperto());
+            formData.append("idLavRec", me.idLavRecDelBoxAperto());
 
 
             return await new Promise((resolve) => {
@@ -3235,6 +3243,7 @@ const schedaFoto = {
         formData.append("idLavorazione", idKitLavorazione);
         formData.append("guidId", voce.guidId);
         formData.append("idRec", me.idRecDelBoxAperto());
+        formData.append("idLavRec", me.idLavRecDelBoxAperto());
         try {
             await me.richiestaFotoExtra("SyncFoto/RimuoviFoto/0", formData, "PUT", false, true);
         }
@@ -3267,6 +3276,7 @@ const schedaFoto = {
         formData.append("idLavorazione", idKitLavorazione);
         formData.append("guidId", parziale.guidId);
         formData.append("idRec", me.idRecDelBoxAperto());
+        formData.append("idLavRec", me.idLavRecDelBoxAperto());
         try {
             await me.richiestaFotoExtra("SyncFoto/RimuoviFoto/0", formData, "PUT", false, true);
         }
@@ -3642,7 +3652,7 @@ const schedaFoto = {
             }
             xhr.onreadystatechange = function () { }
             xhr.onerror = function () { }
-            xhr.send("SyncFoto/RimuoviFotoDaMeta" + "/" + codice + "/" + tipo + "/" + idKitLavorazione + "/" + idRec + "/" + 0, null, "GET");
+            xhr.send("SyncFoto/RimuoviFotoDaMeta" + "/" + codice + "/" + tipo + "/" + idKitLavorazione + "/" + idRec + "/" + 0 + "?idLavRec=" + me.idLavRecDelBoxAperto(), null, "GET");
         }
         catch (e) {
             console.log(e);
@@ -3665,6 +3675,7 @@ const schedaFoto = {
         formData.append("guidId", idFoto);
         //I20-1088: il record del box, perche' il meta vada tolto dalla riga di questa impaginazione.
         formData.append("idRec", me.idRecDelBoxAperto());
+        formData.append("idLavRec", me.idLavRecDelBoxAperto());
 
         var xhr = new XMLHttpRequestClient();
         xhr.onload = (objResult, parsed) => {
