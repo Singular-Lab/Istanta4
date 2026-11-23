@@ -29,6 +29,19 @@ import { promisify } from 'util';
 import { v4 as uuidv4 } from 'uuid';
 import { OlimpoService } from '../app.service';
 import { MaterialiService } from './materiali.service';
+import {
+    argomentiGhostscriptPagina,
+    CodaLavori,
+    codificaPagina,
+    percorsoCachePagina,
+    prendiLock,
+    RESA_BASE,
+    RESA_LETTURA,
+    resaRichiesta,
+    ResaPagina,
+    scriviFileAtomico,
+    unaVoltaPerChiave,
+} from './pagine-pdf';
 import { convertPdfToSvgUsingPostScript } from './pdf-to-svg.postscript';
 import AdmZip = require('adm-zip');
 
@@ -345,6 +358,7 @@ export class MaterialiController implements OnModuleInit {
 
     @Get("generateAllThumbnails")
     async generateAllThumbnailsEndpoint(
+        @Query('dpi') dpi: string,
         @Res() res: FastifyReply,
     ): Promise<void> {
         // Set up SSE headers
@@ -359,8 +373,21 @@ export class MaterialiController implements OnModuleInit {
             res.raw.write(`data: ${JSON.stringify(data)}\n\n`);
         };
 
+        // dpi=300 genera le pagine di lettura dei PDF già archiviati; senza, le miniature di sempre
+        const resa = resaRichiesta(dpi);
+        if (!resa) {
+            sendEvent('error', { message: `dpi non ammesso: ${dpi}. Valori ammessi: ${RESA_BASE.dpi}, ${RESA_LETTURA.dpi}` });
+            sendEvent('complete', { success: false });
+            res.raw.end();
+            return;
+        }
+        if (resa === RESA_LETTURA) {
+            await this.rigeneraPagineLettura(sendEvent, res);
+            return;
+        }
+
         try {
-            sendEvent('log', { type: 'info', message: 'Avvio generazione thumbnails per tutti i materiali PDF' });
+            sendEvent('log', { type: 'info', message: `Avvio generazione thumbnails a ${resa.dpi} dpi per tutti i materiali PDF` });
 
             const pathMateriale = await this.olimpoService.getAbsolutePathFromType(ABSOLUTE_PATH_TYPE.MATERIALI);
             if (!pathMateriale?.path) {
@@ -408,16 +435,13 @@ export class MaterialiController implements OnModuleInit {
                     const pageCount = materiale.pagine || await countPagePdf(pathFile);
 
                     for (let page = 1; page <= pageCount; page++) {
-                        const thumbnailPath = path.join(thumbnailsDir, `${materiale.id}_page${page}.webp`);
+                        const thumbnailPath = percorsoCachePagina(thumbnailsDir, materiale.id, page, resa);
 
                         if (fs.existsSync(thumbnailPath)) {
                             continue; // Skip se già esiste
                         }
 
-                        const pngBuffer = await createThumbnailBufferPdf(pathFile, page, 150);
-                        // Converti in WebP
-                        const webpBuffer = await sharp(pngBuffer).webp({ quality: 80 }).toBuffer();
-                        await fs.promises.writeFile(thumbnailPath, webpBuffer);
+                        await immaginePaginaInCache(pathFile, materiale.id, page, thumbnailsDir, resa);
                         totalPages++;
 
                         sendEvent('page', {
@@ -446,6 +470,75 @@ export class MaterialiController implements OnModuleInit {
         } catch (error: any) {
             sendEvent('log', { type: 'error', message: `Errore fatale: ${error.message}` });
             sendEvent('complete', { success: false });
+            res.raw.end();
+        }
+    }
+
+    /**
+     * Rigenerazione delle pagine a 300 dpi dei PDF già archiviati.
+     * - Non tocca niente di quello che c'è: originali, miniature a 150 dpi, MD5 e dHash.
+     *   Crea solo i file `_300dpi.webp` che mancano.
+     * - I PDF passano nella coda di background uno alla volta, dai più recenti (data del
+     *   file): i volantini in uso sono pronti per primi. Le pagine chieste da qualcuno nel
+     *   frattempo passano davanti.
+     * - Si può riprendere: salta le pagine pronte, quindi dopo un riavvio basta rilanciarla.
+     */
+    private async rigeneraPagineLettura(sendEvent: (event: string, data: any) => void, res: FastifyReply): Promise<void> {
+        if (rigenerazioneLetturaInCorso) {
+            sendEvent('error', { message: 'La rigenerazione delle pagine a 300 dpi è già in corso in questo processo' });
+            sendEvent('complete', { success: false });
+            res.raw.end();
+            return;
+        }
+        rigenerazioneLetturaInCorso = true;
+        try {
+            const pathMateriale = await this.olimpoService.getAbsolutePathFromType(ABSOLUTE_PATH_TYPE.MATERIALI);
+            if (!pathMateriale?.path) {
+                sendEvent('error', { message: 'Path materiali non valido' });
+                sendEvent('complete', { success: false });
+                return;
+            }
+            const thumbnailsDir = path.join(pathMateriale.path, 'thumbnails');
+
+            const daFare: Array<{ materiale: Materiali; file: string; data: number }> = [];
+            for (const materiale of await this.materialiService.getAllMateriali()) {
+                if (path.extname(materiale.file_name).toLowerCase() !== '.pdf' || !(materiale.pagine > 0)) continue;
+                const file = path.join(pathMateriale.path, materiale.file_name);
+                const stato = await fs.promises.stat(file).catch(() => null);
+                if (stato) daFare.push({ materiale, file, data: stato.mtimeMs });
+            }
+            daFare.sort((a, b) => b.data - a.data);
+            sendEvent('log', { type: 'info', message: `Pagine a 300 dpi per ${daFare.length} PDF, dai più recenti, una pagina alla volta` });
+
+            let processed = 0;
+            let incompleti = 0;
+            for (const { materiale, file } of daFare) {
+                processed++;
+                sendEvent('progress', {
+                    current: processed,
+                    total: daFare.length,
+                    percentage: Math.round((processed / daFare.length) * 100),
+                    fileName: materiale.original_name,
+                });
+                await accodaPagineLettura(file, materiale.id, thumbnailsDir, materiale.pagine);
+                let pronte = 0;
+                for (let page = 1; page <= materiale.pagine; page++) {
+                    if (fs.existsSync(percorsoCachePagina(thumbnailsDir, materiale.id, page, RESA_LETTURA))) pronte++;
+                }
+                if (pronte < materiale.pagine) incompleti++;
+                sendEvent('log', {
+                    type: pronte === materiale.pagine ? 'success' : 'warning',
+                    message: `${materiale.original_name}: ${pronte}/${materiale.pagine} pagine a 300 dpi`,
+                });
+            }
+
+            sendEvent('summary', { processed, incompleti });
+            sendEvent('complete', { success: true });
+        } catch (error: any) {
+            sendEvent('log', { type: 'error', message: `Errore fatale: ${error.message}` });
+            sendEvent('complete', { success: false });
+        } finally {
+            rigenerazioneLetturaInCorso = false;
             res.raw.end();
         }
     }
@@ -750,8 +843,10 @@ export class MaterialiController implements OnModuleInit {
             if (ext === '.pdf' && pages > 0) {
                 const thumbnailsDir = path.join(pathMateriale.path, 'thumbnails');
                 const svgDir = path.join(pathMateriale.path, 'svg');
-                // Genera in background senza await per non bloccare la risposta
-                generateAllThumbnails(pathFile, materiale.id, thumbnailsDir, pages, 150)
+                // Genera in background senza await per non bloccare la risposta: prima le
+                // miniature di sempre, poi in coda le pagine di lettura a 300 dpi, più lente
+                generateAllThumbnails(pathFile, materiale.id, thumbnailsDir, pages)
+                    .then(() => accodaPagineLettura(pathFile, materiale.id, thumbnailsDir, pages))
                     .catch(err => console.error(Colorize.bgRed(`[uploadMateriale] Errore generazione thumbnails: ${err.message}`)));
                 generateAllSvgPages(pathFile, materiale.id, svgDir, pages, false)
                     .catch(err => console.error(Colorize.bgRed(`[uploadMateriale] Errore generazione svg: ${err.message}`)));
@@ -776,10 +871,21 @@ export class MaterialiController implements OnModuleInit {
         @Query('width') width: string,
         @Query('height') height: string,
         @Query('svg') svg: string,
+        @Query('dpi') dpi: string,
         @Res() res: FastifyReply,
     ) {
         const wantSvg = ['1', 'true', 'yes', 'on'].includes((svg || '').toLowerCase());
-        console.log(Colorize.bgBlue(`[getThumbnailMaterialePdfs] Starting request with params: id=${id}, page=${page}, width=${width}, height=${height}, svg=${wantSvg}`));
+        console.log(Colorize.bgBlue(`[getThumbnailMaterialePdfs] Starting request with params: id=${id}, page=${page}, width=${width}, height=${height}, svg=${wantSvg}, dpi=${dpi ?? ''}`));
+        // Senza dpi l'immagine di sempre (150); 300 per leggere le scritte dei prodotti
+        const resa = resaRichiesta(dpi);
+        if (!resa) {
+            res.status(HttpStatus.BAD_REQUEST).send({
+                error: `Invalid dpi. Allowed: ${RESA_BASE.dpi}, ${RESA_LETTURA.dpi}`,
+                esito: false,
+                content: null,
+            });
+            return;
+        }
         try {
             console.log(Colorize.bgYellow(`[getThumbnailMaterialePdfs] Fetching material with id: ${id}`));
             const materiale = await this.materialiService.getMaterialeFromId(id);
@@ -874,46 +980,37 @@ export class MaterialiController implements OnModuleInit {
             }
 
             const thumbnailsDir = path.join(pathMateriale.path, 'thumbnails');
-            const cachedPath = getCachedThumbnailPath(thumbnailsDir, id, pageNum);
-
-            let thumbnailBuffer: Buffer;
-
-            if (cachedPath) {
-                // Usa la thumbnail pre-generata dalla cache (già in WebP)
-                console.log(Colorize.bgGreen(`[getThumbnailMaterialePdfs] Usando thumbnail cached: ${cachedPath}`));
-                thumbnailBuffer = await fs.promises.readFile(cachedPath);
-            } else {
-                // Genera al volo (fallback) e salva per le prossime richieste
-                console.log(Colorize.bgYellow(`[getThumbnailMaterialePdfs] Thumbnail non in cache, generazione al volo`));
-                const pngBuffer = await createThumbnailBufferPdf(pathFile, pageNum, 150);
-                // Converti in WebP
-                thumbnailBuffer = await sharp(pngBuffer).webp({ quality: 80 }).toBuffer();
-
-                // Salva in cache per le prossime richieste (in background)
-                if (!fs.existsSync(thumbnailsDir)) {
-                    fs.mkdirSync(thumbnailsDir, { recursive: true });
-                }
-                const thumbnailPath = path.join(thumbnailsDir, `${id}_page${pageNum}.webp`);
-                fs.promises.writeFile(thumbnailPath, thumbnailBuffer)
-                    .catch(err => console.error(Colorize.bgRed(`[getThumbnailMaterialePdfs] Errore salvataggio cache: ${err.message}`)));
+            const paginaLettura = percorsoCachePagina(thumbnailsDir, id, pageNum, RESA_LETTURA);
+            // La pagina a 300 dpi non si disegna mai durante la richiesta: se non è pronta si
+            // serve quella a 150 dpi e il PDF passa in testa alla coda di background
+            const servita = resa === RESA_LETTURA && !fs.existsSync(paginaLettura) ? RESA_BASE : resa;
+            if (servita !== resa) {
+                accodaPagineLettura(pathFile, id, thumbnailsDir, pageCount, { prioritario: true })
+                    .catch(err => console.error(Colorize.bgRed(`[getThumbnailMaterialePdfs] Errore coda 300 dpi: ${err.message}`)));
             }
-            console.log(Colorize.bgMagenta(`[getThumbnailMaterialePdfs] Thumbnail pronta per file: ${materiale.original_name}`));
+            // Dalla cache, oppure (solo la resa base) disegnata ora e salvata per le prossime richieste
+            const thumbnailBuffer = servita === RESA_LETTURA
+                ? await fs.promises.readFile(paginaLettura)
+                : await immaginePaginaInCache(pathFile, id, pageNum, thumbnailsDir, RESA_BASE);
+            console.log(Colorize.bgMagenta(`[getThumbnailMaterialePdfs] Thumbnail a ${servita.dpi} dpi (chiesta ${resa.dpi}) pronta per file: ${materiale.original_name}`));
 
-            console.log(Colorize.bgYellow(`[getThumbnailMaterialePdfs] Processing image with sharp`));
-            let image = sharp(thumbnailBuffer);
+            res.raw.setHeader('Content-Type', 'image/webp');
+            res.raw.setHeader('X-Olimpo-Dpi', String(servita.dpi));
+            // Il ripiego a 150 dpi non va conservato dal browser sotto l'indirizzo della pagina a
+            // 300 dpi: alla prossima visita deve chiedere di nuovo, quando sarà pronta
+            res.raw.setHeader("Cache-Control", servita === resa ? "public, max-age=31536000" : "no-store");
+
             if (width && height) {
                 console.log(Colorize.bgBlue(`[getThumbnailMaterialePdfs] Resizing image to: ${width}x${height}`));
-                image = image.resize(parseInt(width), parseInt(height));
+                const buffer = await sharp(thumbnailBuffer).resize(parseInt(width), parseInt(height)).toBuffer();
+                res.raw.end(buffer);
+                return;
             }
 
-            console.log(Colorize.bgYellow(`[getThumbnailMaterialePdfs] Setting response headers`));
-            res.raw.setHeader('Content-Type', 'image/webp');
-            res.raw.setHeader("Cache-Control", "public, max-age=31536000");
-
-            console.log(Colorize.bgYellow(`[getThumbnailMaterialePdfs] Converting image to buffer`));
-            const buffer = await image.toBuffer();
-            console.log(Colorize.bgGreen(`[getThumbnailMaterialePdfs] Sending response with buffer size: ${buffer.length} bytes`));
-            res.raw.end(buffer);
+            // Il file in cache è già il WebP da servire: ricodificarlo costerebbe CPU a ogni
+            // richiesta (oltre un secondo a 300 dpi) e un'altra perdita di qualità
+            console.log(Colorize.bgGreen(`[getThumbnailMaterialePdfs] Sending cached image, ${thumbnailBuffer.length} bytes`));
+            res.raw.end(thumbnailBuffer);
 
         } catch (error: any) {
             console.error(Colorize.bgRed(`[getThumbnailMaterialePdfs] Error: ${error.message}`));
@@ -1455,8 +1552,10 @@ export class MaterialiController implements OnModuleInit {
                                 if (pageCount > 0) {
                                     const thumbnailsDir = path.join(pathMateriale.path, 'thumbnails');
                                     const svgDir = path.join(pathMateriale.path, 'svg');
-                                    await generateAllThumbnails(pathFile, materiale.id, thumbnailsDir, pageCount, 150);
+                                    await generateAllThumbnails(pathFile, materiale.id, thumbnailsDir, pageCount);
                                     await generateAllSvgPages(pathFile, materiale.id, svgDir, pageCount, false);
+                                    // Le pagine di lettura a 300 dpi in coda, per ultime: sono le più lente
+                                    await accodaPagineLettura(pathFile, materiale.id, thumbnailsDir, pageCount);
                                 }
                             } catch (err: any) {
                                 console.error(Colorize.bgRed(`[uploadMaterialeTest] Errore pre-generazione PDF assets: ${err.message}`));
@@ -1625,10 +1724,11 @@ function runGsProcess(executable: string, args: string[], label = 'Ghostscript')
  *
  * @param pdfPath - Il percorso del file PDF.
  * @param page - La pagina da convertire (default: 1).
- * @param density - La densità (dpi) per la conversione (default: 150).
- * @returns Una Promise che risolve con il buffer dell'immagine.
+ * @param resa - Densità e nitidezza del disegno (default: la resa base a 150 dpi, quella su
+ *   cui si calcola l'MD5 dei PDF di una pagina).
+ * @returns Una Promise che risolve con il PNG della pagina.
  */
-async function createThumbnailBufferPdf(pdfPath: string, page: number = 1, density: number = 150): Promise<Buffer> {
+async function createThumbnailBufferPdf(pdfPath: string, page: number = 1, resa: ResaPagina = RESA_BASE): Promise<Buffer> {
     const isWindows = process.platform === 'win32';
     const normalizedPath = isWindows ? pdfPath.replace(/\\/g, '/') : pdfPath;
     const executables = isWindows ? getWindowsGhostscriptExecutables() : ['gs'];
@@ -1640,18 +1740,7 @@ async function createThumbnailBufferPdf(pdfPath: string, page: number = 1, densi
             // GS 9.x: -dSAFER è sufficiente e richiesto
             // GS 10.x: -dNOSAFER necessario per alcuni PDF con restrizioni
             const safeFlag = majorVersion >= 10 ? '-dNOSAFER' : '-dSAFER';
-            const args = [
-                '-q',
-                safeFlag,
-                '-dBATCH',
-                '-dNOPAUSE',
-                '-sDEVICE=png16m',
-                `-dFirstPage=${page}`,
-                `-dLastPage=${page}`,
-                `-r${density}`,
-                '-sOutputFile=-',
-                normalizedPath,
-            ];
+            const args = argomentiGhostscriptPagina(normalizedPath, page, resa, safeFlag);
             return await runGsProcess(executable, args, 'Ghostscript thumbnail');
         } catch (err) {
             lastError = err as Error;
@@ -1728,7 +1817,8 @@ async function countPagePdf(filePath: string): Promise<number> {
 async function cleanAndHashPdf(pdfPath: string): Promise<string> {
     try {
         const pageCount = await countPagePdf(pdfPath);
-        const pdfBuffer = await createThumbnailBufferPdf(pdfPath, 1, 150);
+        // Sempre la resa base: è l'MD5 con cui si riconoscono i PDF di una pagina già archiviati
+        const pdfBuffer = await createThumbnailBufferPdf(pdfPath, 1, RESA_BASE);
         const md5 = crypto.createHash('md5').update(pdfBuffer).digest('hex');
         return md5;
     } catch (error) {
@@ -1737,64 +1827,144 @@ async function cleanAndHashPdf(pdfPath: string): Promise<string> {
 }
 
 /**
- * Pre-genera tutte le thumbnail PNG di un PDF e le salva su disco.
- * Le thumbnail vengono salvate nella sottocartella "thumbnails" con naming: {materialeId}_page{N}.png
+ * Pre-genera tutte le thumbnail WebP di un PDF e le salva su disco.
+ * Le thumbnail vengono salvate nella sottocartella "thumbnails" con naming
+ * {materialeId}_page{N}.webp (resa base) o {materialeId}_page{N}_300dpi.webp (lettura).
  *
  * @param pdfPath - Percorso del file PDF
  * @param materialeId - ID univoco del materiale (usato per il naming dei file)
  * @param thumbnailsDir - Cartella dove salvare le thumbnail
  * @param pageCount - Numero totale di pagine del PDF
- * @param density - Risoluzione DPI (default: 150)
+ * @param resa - Resa delle pagine (default: la base a 150 dpi)
+ * @param pausaMs - Attesa dopo ogni pagina disegnata, per lasciare la CPU alle richieste
+ * @returns Quante pagine ha disegnato
  */
-async function generateAllThumbnails(
+export async function generateAllThumbnails(
     pdfPath: string,
     materialeId: string,
     thumbnailsDir: string,
     pageCount: number,
-    density: number = 150
-): Promise<void> {
-    // Crea la cartella thumbnails se non esiste
-    if (!fs.existsSync(thumbnailsDir)) {
-        fs.mkdirSync(thumbnailsDir, { recursive: true });
-    }
-
-    console.log(Colorize.bgBlue(`[generateAllThumbnails] Generazione ${pageCount} thumbnail WebP per materiale ${materialeId}`));
+    resa: ResaPagina = RESA_BASE,
+    pausaMs = 0
+): Promise<number> {
+    console.log(Colorize.bgBlue(`[generateAllThumbnails] Generazione ${pageCount} thumbnail WebP a ${resa.dpi} dpi per materiale ${materialeId}`));
+    let disegnate = 0;
 
     for (let page = 1; page <= pageCount; page++) {
-        const thumbnailPath = path.join(thumbnailsDir, `${materialeId}_page${page}.webp`);
-
         // Salta se la thumbnail esiste già
-        if (fs.existsSync(thumbnailPath)) {
+        if (fs.existsSync(percorsoCachePagina(thumbnailsDir, materialeId, page, resa))) {
             console.log(Colorize.bgYellow(`[generateAllThumbnails] Thumbnail pagina ${page} già esistente, skip`));
             continue;
         }
 
         try {
-            const pngBuffer = await createThumbnailBufferPdf(pdfPath, page, density);
-            // Converti PNG in WebP con sharp
-            const webpBuffer = await sharp(pngBuffer).webp({ quality: 80 }).toBuffer();
-            await fs.promises.writeFile(thumbnailPath, webpBuffer);
+            if (resa === RESA_LETTURA) {
+                if (!await disegnaPaginaLettura(pdfPath, materialeId, page, thumbnailsDir)) {
+                    console.log(Colorize.bgYellow(`[generateAllThumbnails] Pagina ${page} in lavorazione in un altro processo, skip`));
+                    continue;
+                }
+            } else {
+                await immaginePaginaInCache(pdfPath, materialeId, page, thumbnailsDir, resa);
+            }
+            disegnate++;
             console.log(Colorize.bgGreen(`[generateAllThumbnails] Generata thumbnail WebP pagina ${page}/${pageCount}`));
+            if (pausaMs > 0) {
+                await new Promise(prosegui => setTimeout(prosegui, pausaMs));
+            }
         } catch (error) {
             console.error(Colorize.bgRed(`[generateAllThumbnails] Errore generazione pagina ${page}: ${error.message}`));
         }
     }
 
-    console.log(Colorize.bgGreen(`[generateAllThumbnails] Completata generazione thumbnail per ${materialeId}`));
+    console.log(Colorize.bgGreen(`[generateAllThumbnails] Completata generazione thumbnail a ${resa.dpi} dpi per ${materialeId}`));
+    return disegnate;
+}
+
+/** Disegna la pagina con Ghostscript, la codifica e la salva in modo atomico. */
+async function disegnaEScriviPagina(pdfPath: string, materialeId: string, page: number, thumbnailsDir: string, resa: ResaPagina): Promise<Buffer> {
+    const png = await createThumbnailBufferPdf(pdfPath, page, resa);
+    const webp = await codificaPagina(png, resa);
+    await fs.promises.mkdir(thumbnailsDir, { recursive: true });
+    await scriviFileAtomico(percorsoCachePagina(thumbnailsDir, materialeId, page, resa), webp);
+    return webp;
 }
 
 /**
- * Ottiene il percorso della thumbnail cached per una specifica pagina.
- *
- * @param thumbnailsDir - Cartella delle thumbnail
- * @param materialeId - ID del materiale
- * @param page - Numero di pagina
- * @returns Percorso del file se esiste, null altrimenti
+ * L'immagine WebP di una pagina nella resa base: dalla cache se c'è, altrimenti disegnata
+ * subito (circa un secondo) e salvata. Richieste contemporanee della stessa pagina
+ * aspettano lo stesso disegno.
  */
-function getCachedThumbnailPath(thumbnailsDir: string, materialeId: string, page: number): string | null {
-    const thumbnailPath = path.join(thumbnailsDir, `${materialeId}_page${page}.webp`);
-    return fs.existsSync(thumbnailPath) ? thumbnailPath : null;
+export async function immaginePaginaInCache(
+    pdfPath: string,
+    materialeId: string,
+    page: number,
+    thumbnailsDir: string,
+    resa: ResaPagina = RESA_BASE
+): Promise<Buffer> {
+    const percorso = percorsoCachePagina(thumbnailsDir, materialeId, page, resa);
+    if (fs.existsSync(percorso)) {
+        return fs.promises.readFile(percorso);
+    }
+    return unaVoltaPerChiave(percorso, () => disegnaEScriviPagina(pdfPath, materialeId, page, thumbnailsDir, resa));
 }
+
+/**
+ * Disegna una pagina di lettura (300 dpi) se nessun altro processo la sta già disegnando.
+ * Restituisce false se il lock è di un altro processo: quella pagina la finirà lui.
+ */
+async function disegnaPaginaLettura(pdfPath: string, materialeId: string, page: number, thumbnailsDir: string): Promise<boolean> {
+    await fs.promises.mkdir(thumbnailsDir, { recursive: true });
+    const percorso = percorsoCachePagina(thumbnailsDir, materialeId, page, RESA_LETTURA);
+    const rilascia = await prendiLock(percorso);
+    if (!rilascia) return false;
+    try {
+        if (!fs.existsSync(percorso)) {
+            await unaVoltaPerChiave(percorso, () => disegnaEScriviPagina(pdfPath, materialeId, page, thumbnailsDir, RESA_LETTURA));
+        }
+        return true;
+    } finally {
+        await rilascia();
+    }
+}
+
+/** Attesa fra una pagina di lettura e l'altra nei lavori in background. */
+const PAUSA_FRA_PAGINE_LETTURA_MS = 200;
+
+/**
+ * Le pagine di lettura si disegnano solo qui, in background e una alla volta per processo:
+ * un disegno a 600 dpi impegna Ghostscript per secondi e sharp per circa 300 MB. Nessuna
+ * richiesta HTTP aspetta un disegno a 300 dpi.
+ */
+const codaLettura = new CodaLavori((materialeId, errore) =>
+    console.error(Colorize.bgRed(`[codaLettura] Errore pagine a 300 dpi di ${materialeId}: ${(errore as Error)?.message ?? errore}`)),
+);
+
+/**
+ * Mette in coda la preparazione delle pagine di lettura di un PDF. Un PDF già in coda non
+ * si aggiunge di nuovo. Con `prioritario` passa davanti agli altri: serve quando qualcuno
+ * ha chiesto una pagina che non è ancora pronta.
+ */
+export function accodaPagineLettura(
+    pdfPath: string,
+    materialeId: string,
+    thumbnailsDir: string,
+    pageCount: number,
+    opzioni: { prioritario?: boolean } = {},
+): Promise<void> {
+    return codaLettura.aggiungi(
+        materialeId,
+        () => generateAllThumbnails(pdfPath, materialeId, thumbnailsDir, pageCount, RESA_LETTURA, PAUSA_FRA_PAGINE_LETTURA_MS),
+        { inTesta: opzioni.prioritario },
+    );
+}
+
+/** Si risolve quando la coda delle pagine di lettura è vuota (per i test). */
+export function codaLetturaFinita(): Promise<void> {
+    return codaLettura.finita();
+}
+
+/** Una sola rigenerazione dell'archivio alla volta per processo. */
+let rigenerazioneLetturaInCorso = false;
 
 function getCachedSvgPath(svgDir: string, materialeId: string, page: number): string {
     return path.join(svgDir, `${materialeId}_page${page}.svg`);

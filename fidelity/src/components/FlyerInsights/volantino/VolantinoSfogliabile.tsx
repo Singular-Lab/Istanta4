@@ -6,7 +6,7 @@ import Segmenti from "@/components/Base/Segmenti";
 import { Legenda, type VoceLegenda } from "@/components/Grafici";
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
 import { formatNumero } from "@/utils/format";
-import { urlPaginaMateriale } from "@/utils/materiali";
+import { urlPaginaDaLeggere, urlPaginaMateriale } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { Dialog as DialogHeadless, DialogPanel, DialogTitle } from "@headlessui/react";
 import {
@@ -1250,7 +1250,8 @@ function Sfogliabile({
   const immagineDellaPagina = (numero: number | null): string | null => {
     if (numero === null) return null;
     const idOlimpo = conImmagine(numero);
-    return idOlimpo ? urlPaginaMateriale(idOlimpo, numero) : null;
+    // Le pagine aperte a 300 dpi, per leggere allo zoom le scritte dei prodotti; le miniature restano ridotte
+    return idOlimpo ? urlPaginaDaLeggere(idOlimpo, numero) : null;
   };
 
   const boxScelto = selezionato ? (box.find(voce => voce.id === selezionato) ?? null) : null;

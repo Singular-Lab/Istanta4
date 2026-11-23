@@ -15,3 +15,16 @@ if (!PIKEPDF) {
 
 /** `it` per i test che richiedono pikepdf: senza pikepdf in locale diventa `it.skip`. */
 export const itConPikepdf: jest.It = PIKEPDF ? it : it.skip;
+
+/**
+ * Ghostscript disegna le pagine dei PDF. Come per pikepdf: in Docker e in CI c'e' sempre e i test non
+ * si saltano mai; in locale, se manca, i test che lo richiedono si saltano con un avviso.
+ */
+export const GHOSTSCRIPT = process.env.CI === 'true' || spawnSync('gs', ['--version'], { stdio: 'ignore' }).status === 0;
+
+if (!GHOSTSCRIPT) {
+  console.warn('Ghostscript non installato: i test che disegnano le pagine dei PDF si saltano. Per eseguirli: apt install ghostscript');
+}
+
+/** `it` per i test che richiedono Ghostscript: senza Ghostscript in locale diventa `it.skip`. */
+export const itConGhostscript: jest.It = GHOSTSCRIPT ? it : it.skip;
