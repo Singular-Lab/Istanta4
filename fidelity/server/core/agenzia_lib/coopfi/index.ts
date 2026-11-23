@@ -179,6 +179,16 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     public MENABO_PAGINE_A_MANO = { confermaDaPagineTolte: 5 };
     /** I20-1258: per Coop la colonna dei gruppi del menabò si ridimensiona (i nomi dei gruppi sono lunghi). */
     public MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE = true;
+    /** I20-1259: le etichette del menabò Coop, nella tendina in quest'ordine (più quella libera). */
+    public MENABO_ETICHETTE: readonly string[] = [
+        "RICETTA",
+        "COPERTINA",
+        "JOLLY",
+        "PRODOTTO ATTRAZIONE",
+        "SPENDI PUNTI",
+        "PRODOTTI SPRINT",
+        "PROMO WEE",
+    ];
 
     /** La lista soci contiene tutti i canali/aree: ogni promo tiene solo i suoi (I20-958). */
     public visibilitaPromo: DimensioneVisibilitaPromo[] = ["canale", "area"];

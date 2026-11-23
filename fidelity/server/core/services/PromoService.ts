@@ -1588,6 +1588,8 @@ export class PromoService implements IPromoService {
           : {}),
         // I20-1258: la colonna dei gruppi ridimensionabile, solo se la libreria agenzia lo dichiara
         ...(this.agenziaLib.MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE ? { colonna_gruppi_ridimensionabile: true } : {}),
+        // I20-1259: le etichette della tendina, solo se la libreria agenzia le dichiara
+        ...(this.agenziaLib.MENABO_ETICHETTE?.length ? { etichette_menabo: [...this.agenziaLib.MENABO_ETICHETTE] } : {}),
         nomePromo: promoValues.nome_promo as string,
       };
     } catch (error: any) {

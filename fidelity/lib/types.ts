@@ -2670,6 +2670,8 @@ export interface MenaboRisultato {
   pagine_a_mano?: { conferma_da_pagine_tolte: number };
   /** I20-1258: true quando la libreria agenzia fa ridimensionare la colonna dei gruppi del menabò. */
   colonna_gruppi_ridimensionabile?: boolean;
+  /** I20-1259: le etichette del menabò da scegliere in una tendina (più quella libera), dalla libreria agenzia. */
+  etichette_menabo?: string[];
 }
 
 export interface MenaboLayoutLabelSalvata {
