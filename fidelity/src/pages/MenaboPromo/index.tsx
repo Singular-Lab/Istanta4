@@ -36,6 +36,9 @@ export const COLONNA_GRUPPI_MINIMA = 240;
 export const COLONNA_GRUPPI_QUOTA_MASSIMA = 0.7;
 const CHIAVE_COLONNA_GRUPPI = "menabo.larghezzaColonnaGruppi";
 
+/** I20-1259: il valore della voce «Scrivi un'altra etichetta…» nella tendina delle etichette. */
+const ETICHETTA_LIBERA = "__etichetta_libera__";
+
 /** La larghezza della colonna dei gruppi entro i limiti, per una finestra larga «finestra» pixel. */
 export function larghezzaColonnaGruppi(richiesta: number, finestra: number): number {
     const massima = Math.max(COLONNA_GRUPPI_MINIMA, Math.floor(finestra * COLONNA_GRUPPI_QUOTA_MASSIMA));
@@ -136,6 +139,15 @@ function MenaboPromoPage() {
     const [selectedId, setSelectedId] = useState<string>("");
     const [selectedItem, setSelectedItem] = useState<string>("");
     const [labelText, setLabelText] = useState("Ricetta");
+    // I20-1259: le etichette del cliente in una tendina (dalla libreria agenzia); in fondo la voce per
+    // scriverne una libera. Senza elenco resta il solo testo libero.
+    const etichetteMenabo = useMemo(() => data?.etichette_menabo ?? [], [data]);
+    const [etichettaLibera, setEtichettaLibera] = useState(false);
+    useEffect(() => {
+        if (etichetteMenabo.length && !etichettaLibera && !etichetteMenabo.includes(labelText)) {
+            setLabelText(etichetteMenabo[0]);
+        }
+    }, [etichetteMenabo, etichettaLibera, labelText]);
     const [placedRecordKeys, setPlacedRecordKeys] = useState<Set<string>>(() => new Set());
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -901,13 +913,37 @@ function MenaboPromoPage() {
                                     <span className="text-xs text-slate-400 italic">trascina →</span>
                                 )}
                             </div>
-                            <FormInput
-                                id="menabo-etichetta"
-                                type="text"
-                                value={labelText}
-                                onChange={e => setLabelText(e.target.value)}
-                                placeholder="Ricetta, Copertina..."
-                            />
+                            {etichetteMenabo.length > 0 && (
+                                <FormSelect
+                                    id="menabo-etichetta"
+                                    value={etichettaLibera ? ETICHETTA_LIBERA : labelText}
+                                    onChange={e => {
+                                        if (e.target.value === ETICHETTA_LIBERA) {
+                                            setEtichettaLibera(true);
+                                            setLabelText("");
+                                        } else {
+                                            setEtichettaLibera(false);
+                                            setLabelText(e.target.value);
+                                        }
+                                    }}
+                                >
+                                    {etichetteMenabo.map(etichetta => (
+                                        <option key={etichetta} value={etichetta}>{etichetta}</option>
+                                    ))}
+                                    <option value={ETICHETTA_LIBERA}>Scrivi un'altra etichetta…</option>
+                                </FormSelect>
+                            )}
+                            {(etichetteMenabo.length === 0 || etichettaLibera) && (
+                                <FormInput
+                                    id={etichetteMenabo.length ? "menabo-etichetta-libera" : "menabo-etichetta"}
+                                    type="text"
+                                    value={labelText}
+                                    onChange={e => setLabelText(e.target.value)}
+                                    placeholder={etichetteMenabo.length ? "Scrivi l'etichetta" : "Ricetta, Copertina..."}
+                                    aria-label={etichetteMenabo.length ? "Etichetta libera" : undefined}
+                                    autoFocus={etichettaLibera}
+                                />
+                            )}
                             <div
                                 draggable={!!labelText.trim()}
                                 onDragStart={e => {

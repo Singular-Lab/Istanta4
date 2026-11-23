@@ -26,6 +26,7 @@ function makeService(
   campiIdentita?: readonly string[],
   pagineAMano?: { confermaDaPagineTolte: number },
   colonnaRidimensionabile?: boolean,
+  etichette?: readonly string[],
 ) {
   vi.spyOn(TracciatiMomento, 'findAll').mockResolvedValue([
     { risultato: { tracciati: [{ guidCanale: '', guidArea: '', context: '[]', records: [record('B', 'macelleria', 'bovino'), record('A', 'ortofrutta', 'mele')] }] } },
@@ -34,6 +35,7 @@ function makeService(
     ...(campiIdentita ? { CAMPI_IDENTITA_MENABO: campiIdentita } : {}),
     ...(pagineAMano ? { MENABO_PAGINE_A_MANO: pagineAMano } : {}),
     ...(colonnaRidimensionabile ? { MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE: true } : {}),
+    ...(etichette ? { MENABO_ETICHETTE: etichette } : {}),
     // Restituisce i codici nell'ordine in cui la libreria li riceve
     getDatoPerMenabo: vi.fn(async (risultati: any[]) => ({
       tipoDivisione: 'canale',
@@ -141,5 +143,27 @@ describe('PromoService.getDatoPerMenabo: colonna dei gruppi ridimensionabile (I2
     const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
 
     expect(dato.colonna_gruppi_ridimensionabile).toBeUndefined();
+  });
+});
+
+describe('PromoService.getDatoPerMenabo: etichette della tendina (I20-1259)', () => {
+  const richiesta = {} as Parameters<PromoService['getDatoPerMenabo']>[2];
+
+  it('passa al menabò le etichette dichiarate dalla libreria agenzia, nel loro ordine', async () => {
+    const { service } = makeService(ordinamento, undefined, undefined, undefined, ['RICETTA', 'COPERTINA']);
+
+    const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
+
+    expect(dato.etichette_menabo).toEqual(['RICETTA', 'COPERTINA']);
+  });
+
+  it('con una libreria che non le dichiara, o con un elenco vuoto, resta il solo testo libero', async () => {
+    for (const etichette of [undefined, []]) {
+      const { service } = makeService(ordinamento, undefined, undefined, undefined, etichette);
+
+      const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
+
+      expect(dato.etichette_menabo).toBeUndefined();
+    }
   });
 });

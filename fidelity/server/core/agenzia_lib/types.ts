@@ -415,6 +415,12 @@ export interface IAgenziaLib {
    * bordo (spec menabo-promo, "Colonna dei gruppi ridimensionabile"). Assente = larghezza fissa.
    */
   MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE?: boolean;
+  /**
+   * I20-1259: le etichette del menabò da scegliere in una tendina, nell'ordine in cui mostrarle; in
+   * fondo alla tendina resta la voce per scriverne una libera (spec menabo-promo, "Etichette del
+   * menabò da un elenco del cliente"). Assente = solo testo libero, come oggi.
+   */
+  MENABO_ETICHETTE?: readonly string[];
   elaboraDatoPerAgenzia(data: RisultatoConfrontoMomento): Promise<TracciatoReport>;
 
   normalizzaDatoConfrontoPerScore(confrontiData: PromoScoreboardInput): Promise<PromoScoreboardInput>;

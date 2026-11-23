@@ -499,3 +499,19 @@ describe("coopfi menabo: colonna dei gruppi ridimensionabile (I20-1258)", () => 
     expect(sut.MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE).toBe(true);
   });
 });
+
+describe("coopfi menabo: etichette della tendina (I20-1259)", () => {
+  it("per Coop le etichette del menabò sono queste sette, in quest'ordine", () => {
+    const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
+
+    expect(sut.MENABO_ETICHETTE).toEqual([
+      "RICETTA",
+      "COPERTINA",
+      "JOLLY",
+      "PRODOTTO ATTRAZIONE",
+      "SPENDI PUNTI",
+      "PRODOTTI SPRINT",
+      "PROMO WEE",
+    ]);
+  });
+});
