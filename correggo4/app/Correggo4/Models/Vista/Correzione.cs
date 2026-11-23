@@ -78,6 +78,12 @@ public sealed class VolantinoInCorrezione
     /// </summary>
     public string TestaProdotto { get; set; } = "";
 
+    /// <summary>
+    /// I20-1254: volantino delle aree B o B1: la finestra del prodotto ricalcola lo sconto CoopFi per
+    /// difetto al multiplo di 5, come lo stampa l'esportazione. Vedi VolantiniController.ScontoAlMultiploDi5.
+    /// </summary>
+    public bool ScontoAlMultiploDi5 { get; set; }
+
     /// <summary>Aperto dallo storico (?v=): niente scritture (j213). UltimaVersione per l'avviso.</summary>
     public bool SolaLettura { get; set; }
     public short UltimaVersione { get; set; }

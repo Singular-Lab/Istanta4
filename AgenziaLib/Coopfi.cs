@@ -264,6 +264,31 @@ namespace AgenziaLib
         }
 
         /// <summary>
+        /// I20-1254: lo sconto del tracciato come si stampa, nel volantino e nel PoP. Nelle aree B e B1 si
+        /// arrotonda per difetto al multiplo di 5, come chiesto da Coop: 31, 32,5, 32,99, 33 e 34,9 fanno 30,
+        /// 35 resta 35. Prima si andava al multiplo piu' vicino con soglia 3 (33 faceva 35), e nel PoP solo
+        /// in B: in B1 il PoP non arrotondava. Nel volantino A e A- tengono quella regola; le altre aree, e
+        /// A e A- nel PoP, non arrotondano, come prima.
+        /// </summary>
+        public static decimal scontoStampato(decimal sconto, string siglaArea, bool pop)
+        {
+            if (siglaArea == "B" || siglaArea == "B1")
+            {
+                return Math.Floor(sconto / 5) * 5;
+            }
+            if (!pop && (siglaArea == "A" || siglaArea == "A-"))
+            {
+                if (sconto % 5 < 3)
+                {
+                    //Si approssima al multiplo basso
+                    return (int)(sconto / 5) * 5;
+                }
+                return ((int)(sconto / 5) + 1) * 5;
+            }
+            return sconto;
+        }
+
+        /// <summary>
         /// Se sul cartello PoP compare lo sconto piccolo: area A, sconto sopra lo 0 e sotto il 25%, senza
         /// colonna Toscana e senza tema eccezionale, la stessa condizione con cui esportaPoP mette
         /// sconto_piccolo. Solo allora il prezzo dello STD ha lo stile
@@ -1248,18 +1273,8 @@ namespace AgenziaLib
                         }
                     }
 
-                    if (siglaAreaKit == "B")
-                    {
-                        if (sconto % 5 < 3)
-                        {
-                            //Si approssima al multiplo basso
-                            sconto = (int)(sconto / 5) * 5;
-                        }
-                        else
-                        {
-                            sconto = ((int)(sconto / 5) + 1) * 5;
-                        }
-                    }
+                    //I20-1254: in B e B1 per difetto al multiplo di 5 (prima solo B, al multiplo piu' vicino).
+                    sconto = scontoStampato(sconto, siglaAreaKit, pop: true);
 
 
                     decimal sconto_soci = recItem.ContainsKey("txt_sconto_soci_doppia") ? MathExt.Round(recItem["txt_sconto_soci_doppia"].ToDecimal(), 2, MidpointRounding.AwayFromZero) : 0m;
@@ -3237,18 +3252,8 @@ namespace AgenziaLib
                             }
                         }
 
-                        if (siglaAreaKit == "B" || siglaAreaKit == "B1" || siglaAreaKit == "A" || siglaAreaKit == "A-")
-                        {
-                            if (sconto % 5 < 3)
-                            {
-                                //Si approssima al multiplo basso
-                                sconto = (int)(sconto / 5) * 5;
-                            }
-                            else
-                            {
-                                sconto = ((int)(sconto / 5) + 1) * 5;
-                            }
-                        }
+                        //I20-1254: in B e B1 per difetto al multiplo di 5; A e A- come prima.
+                        sconto = scontoStampato(sconto, siglaAreaKit, pop: false);
 
 
                         decimal sconto_soci = recItem.ContainsKey("txt_sconto_soci_doppia") ? MathExt.Round(recItem["txt_sconto_soci_doppia"].ToDecimal(), 2, MidpointRounding.AwayFromZero) : 0m;
