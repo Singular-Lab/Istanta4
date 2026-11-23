@@ -85,6 +85,52 @@ public class ErroriImpaginazioneListaTests
         Assert.Contains("lavorazione 302", ErroreIstanta.DiProcessaKit("", true, 302).Message);
     }
 
+    /* ---- I20-1251: la promo senza tracciati del kit ---- */
+
+    [Fact]
+    public void La_promo_senza_tracciati_del_kit_si_dice_con_la_sola_frase_per_l_operatore()
+    {
+        const string guid = "a606433d-2e47-4a8c-9699-3031bbe40bf2";
+        const string atteso = "La promo non ha tracciati importati per l'area, il canale e il PV del kit della lavorazione (promo: " + guid + ")";
+        var errore = ErroreIstanta.PromoSenzaTracciati(guid);
+
+        string breve = DescrizioneErrori.Breve("processaKit", errore);
+
+        Assert.Equal(atteso, breve);
+        Assert.DoesNotContain("processaKit", breve);
+        Assert.DoesNotContain("scelta dei tracciati", breve);
+        //Sta tutta nei 160 caratteri: Breve non la accorcia.
+        Assert.True(atteso.Length <= DescrizioneErrori.LunghezzaMassima);
+        Assert.Equal(Istanta.Models.ErrorCodes.TracciatoNonTrovato, DescrizioneErrori.Codice(errore));
+        //Inoltrata da getListaTracciatoNew resta la stessa frase.
+        Assert.Equal(atteso, DescrizioneErrori.Breve("getListaTracciatoNew", ErroreIstanta.DiProcessaKit(breve, true, 1)));
+    }
+
+    [Fact]
+    public void Gli_altri_errori_tengono_chiamata_e_passo_e_nessun_codice()
+    {
+        var altro = new ErroreIstanta("lettura della promo", "la promo abc della lavorazione 302 non esiste.");
+
+        Assert.Equal("processaKit, lettura della promo: la promo abc della lavorazione 302 non esiste.", DescrizioneErrori.Breve("processaKit", altro));
+        Assert.Equal(Istanta.Models.ErrorCodes.None, DescrizioneErrori.Codice(altro));
+        Assert.Equal(Istanta.Models.ErrorCodes.None, DescrizioneErrori.Codice(new InvalidOperationException("x")));
+        //Il codice si legge anche dentro AgenziaLib, come il messaggio.
+        Assert.Equal(Istanta.Models.ErrorCodes.TracciatoNonTrovato,
+            DescrizioneErrori.Codice(new TargetInvocationException(ErroreIstanta.PromoSenzaTracciati("abc"))));
+    }
+
+    [Fact]
+    public void ProcessaKit_e_getListaTracciatoNew_portano_il_codice_della_promo_senza_tracciati_al_Plugin()
+    {
+        string processaKit = Tratto(Sorgente(FicoProcess), "public async Task<IActionResult> processaKit(", "public List<PromoTracciati> getTracciatiDelKit(");
+        Assert.Contains("if (punteggioTracciati.Count() <= 0)\n                            throw ErroreIstanta.PromoSenzaTracciati(plItem.GuidPromo);", processaKit);
+        Assert.DoesNotContain("non ha tracciati per l'area", processaKit);
+        Assert.Contains("result.errorCode = (int)DescrizioneErrori.Codice(ex);", processaKit);
+
+        string lista = Tratto(Sorgente(Menabo), "public async Task<IActionResult> getListaTracciatoNew(", "\n        [");
+        Assert.Contains("result.errorCode = risposta?.errorCode ?? 0;", lista);
+    }
+
     /* ---- le griglie ---- */
 
     [Theory]

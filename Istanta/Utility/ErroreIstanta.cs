@@ -1,6 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using Istanta.Models;
 using IstantaLib;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,9 +18,25 @@ namespace Istanta.Utility
         /// "esportazione di agenzia". Null per un errore gia' descritto da un'altra chiamata.
         public string? Passo { get; }
 
+        /// I20-1251: il codice con cui il client riconosce l'errore, quando deve trattarlo a parte
+        /// (va nell'errorCode della risposta). None per tutti gli altri.
+        public ErrorCodes Codice { get; init; } = ErrorCodes.None;
+
         public ErroreIstanta(string? passo, string messaggio, Exception? causa = null) : base(messaggio, causa)
         {
             Passo = passo;
+        }
+
+        /// I20-1251: la promo non ha tracciati importati per l'area, il canale e il PV del kit. Prima
+        /// l'operatore leggeva "processaKit, scelta dei tracciati: la promo ... non ha tracciati ...":
+        /// ora la frase e' gia' scritta per lui, senza chiamata ne' passo (Passo null), e il Plugin la
+        /// riconosce dal codice e la mostra senza altro davanti. La lavorazione resta nel log del server.
+        public static ErroreIstanta PromoSenzaTracciati(string? guidPromo)
+        {
+            return new ErroreIstanta(null, $"La promo non ha tracciati importati per l'area, il canale e il PV del kit della lavorazione (promo: {guidPromo})")
+            {
+                Codice = ErrorCodes.TracciatoNonTrovato
+            };
         }
 
         /// L'errore di un'altra chiamata, gia' descritto da DescrizioneErrori.Breve, da passare al
@@ -99,6 +116,13 @@ namespace Istanta.Utility
 
             string? punto = PuntoNelCodice(radice);
             return $"{radice.GetType().Name}" + (punto != null ? $" in {punto}" : "") + $" - {radice.Message}";
+        }
+
+        /// I20-1251: il codice dell'errore per l'errorCode della risposta: quello dell'ErroreIstanta,
+        /// None per ogni altro errore.
+        public static ErrorCodes Codice(Exception ex)
+        {
+            return Radice(ex) is ErroreIstanta errore ? errore.Codice : ErrorCodes.None;
         }
 
         /// La traccia completa, per i log e per il campo dettaglio.

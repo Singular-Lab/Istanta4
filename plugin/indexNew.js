@@ -2189,7 +2189,14 @@ function scaricaContenutoKit(idKit, noCacheValue = null, callback = null, skipMo
                 if (objResult != null && objResult.dettaglio) {
                     console.error("Dettaglio dell'errore del server:", objResult.dettaglio);
                 }
-                messaggioUtente("Code IDX-180 Lista del kit non scaricata, resta quella di prima: " + motivo, "error");
+                //I20-1251: la promo senza tracciati per area, canale e PV del kit (errorCode 10,
+                //TracciatoNonTrovato) arriva con la frase gia' scritta per l'operatore, e si mostra cosi'.
+                if (objResult != null && objResult.errorCode == 10) {
+                    messaggioUtente("Code IDX-180 " + motivo, "error");
+                }
+                else {
+                    messaggioUtente("Code IDX-180 Lista del kit non scaricata, resta quella di prima: " + motivo, "error");
+                }
                 xhrInProcess = null;
                 if (onErrore != null && typeof onErrore === "function") {
                     onErrore(motivo);

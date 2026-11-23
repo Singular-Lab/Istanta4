@@ -69,6 +69,8 @@ test("una risposta d'errore non si salva come lista: si mostra il motivo e lo si
 
     const ramoErrore = scarica.substring(controllo, scrittura);
     assert.match(ramoErrore, /messaggioUtente\("Code IDX-180 Lista del kit non scaricata, resta quella di prima: " \+ motivo, "error"\);/);
+    //I20-1251: la promo senza tracciati del kit (errorCode 10) si mostra con la sola frase di Istanta.
+    assert.match(ramoErrore, /if \(objResult != null && objResult\.errorCode == 10\) \{\s*messaggioUtente\("Code IDX-180 " \+ motivo, "error"\);\s*\}\s*else \{\s*messaggioUtente\("Code IDX-180 Lista del kit non scaricata, resta quella di prima: " \+ motivo, "error"\);\s*\}/);
     assert.match(ramoErrore, /console\.error\("Dettaglio dell'errore del server:", objResult\.dettaglio\);/);
     assert.match(ramoErrore, /onErrore\(motivo\);\s*\}\s*return;/);
     //La lista di prima resta: in questo ramo non si scrive e non si rilegge niente.
