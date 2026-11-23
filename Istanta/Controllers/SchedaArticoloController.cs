@@ -280,21 +280,43 @@ namespace Istanta.Controllers
             return View();
         }
 
+        /// I20-1253: elimina una foto del prodotto dall'archivio dell'articolo, dalla Scheda articolo e
+        /// dalla gestione delle foto del revisore. Prima la route c'era ma nessuna pagina la chiamava,
+        /// toglieva qualunque foto, anche quella in uso, e rimandava alla scheda.
+        ///
+        /// Rifiuta le foto extra (hanno la loro eliminazione, SyncFoto/RimuoviFoto) e le foto in uso
+        /// (EliminazioneFoto.InUso), anche quando la richiesta non passa dalla pagina. Toglie solo la
+        /// riga dell'archivio: il file resta su Olimpo, e le lavorazioni che hanno quel GUID nei loro
+        /// dati continuano a trovarlo.
         [HttpPost]
         [Route("SchedaArticolo/DeleteFoto/{id}")]
-        public async Task<IActionResult> DeleteFoto(Int64 id)
+        public async Task<IActionResult> DeleteFoto(Int64 id, string? codice)
         {
-            var articolo_foto = await ctx.ArticoliFotos.Include(i => i.IdArticoloNavigation).Where(a => a.Id == id).FirstOrDefaultAsync();
-
-            if (articolo_foto!=null)
+            Articoli? articolo = await this.ctx.Articolis.Include(a => a.ArticoliFotos).Where(a => a.Codice == codice).FirstOrDefaultAsync();
+            if (articolo == null)
             {
-                this.ctx.ArticoliFotos.Remove(articolo_foto);
-                this.ctx.SaveChanges();
+                return Ok(new { esito = false, error = "L'articolo " + codice + " non e' in archivio." });
             }
 
-            
+            var foto = articolo.ArticoliFotos!.FirstOrDefault(f => f.Id == id);
+            if (foto == null)
+            {
+                return Ok(new { esito = false, error = "La foto " + id + " non e' fra quelle dell'articolo " + codice + "." });
+            }
+            if (!EliminazioneFoto.EFotoDelProdotto(foto))
+            {
+                return Ok(new { esito = false, error = "La foto " + foto.NomeReale + " non e' una foto del prodotto." });
+            }
+            if (EliminazioneFoto.InUso(foto, articolo.ArticoliFotos))
+            {
+                return Ok(new { esito = false, error = "La foto " + foto.NomeReale + " e' selezionata: non si puo' eliminare." });
+            }
 
-            return Redirect("~/SchedaArticolo?id=" + articolo_foto!.IdArticolo);
+            this.ctx.ArticoliFotos.Remove(foto);
+            await this.ctx.SaveChangesAsync();
+            Console.WriteLine($"SchedaArticolo/DeleteFoto: eliminata la foto {foto.Id} ({foto.NomeReale}) dell'articolo {codice}");
+
+            return Ok(new { esito = true, error = (string?)null });
         }
 
 
