@@ -2668,6 +2668,8 @@ export interface MenaboRisultato {
    * numero di pagine; da conferma_da_pagine_tolte pagine tolte si chiede conferma anche se vuote.
    */
   pagine_a_mano?: { conferma_da_pagine_tolte: number };
+  /** I20-1258: true quando la libreria agenzia fa ridimensionare la colonna dei gruppi del menabò. */
+  colonna_gruppi_ridimensionabile?: boolean;
 }
 
 export interface MenaboLayoutLabelSalvata {

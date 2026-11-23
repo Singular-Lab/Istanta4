@@ -491,3 +491,11 @@ describe("coopfi menabo: numero di pagine scritto a mano (I20-1256)", () => {
     expect(sut.MENABO_PAGINE_A_MANO).toEqual({ confermaDaPagineTolte: 5 });
   });
 });
+
+describe("coopfi menabo: colonna dei gruppi ridimensionabile (I20-1258)", () => {
+  it("per Coop la colonna dei gruppi del menabò si ridimensiona", () => {
+    const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
+
+    expect(sut.MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE).toBe(true);
+  });
+});

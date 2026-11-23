@@ -1586,6 +1586,8 @@ export class PromoService implements IPromoService {
         ...(this.agenziaLib.MENABO_PAGINE_A_MANO
           ? { pagine_a_mano: { conferma_da_pagine_tolte: this.agenziaLib.MENABO_PAGINE_A_MANO.confermaDaPagineTolte } }
           : {}),
+        // I20-1258: la colonna dei gruppi ridimensionabile, solo se la libreria agenzia lo dichiara
+        ...(this.agenziaLib.MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE ? { colonna_gruppi_ridimensionabile: true } : {}),
         nomePromo: promoValues.nome_promo as string,
       };
     } catch (error: any) {

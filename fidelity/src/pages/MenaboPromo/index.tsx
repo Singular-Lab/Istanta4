@@ -12,7 +12,7 @@ import { SocketProvider } from "@/hooks/useSocket";
 import { useFetchDatoPerMenabo, useFetchMenaboLayout, useFetchRegoleMenabo, useSaveMenaboLayout } from "@/query/query";
 import { useQueryClient } from "@tanstack/react-query";
 import clsx from "clsx";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { TIPO_UTENTI } from "../../../lib/enums";
 import type { MenaboLayoutDivisioneSalvata, MenaboRisultatoCanale, MenaboSottogruppoChiave } from "../../../lib/types";
@@ -25,6 +25,41 @@ const PALETTE = [
     "#8b5cf6", "#06b6d4", "#ec4899", "#f97316",
     "#84cc16", "#6366f1",
 ];
+
+/**
+ * I20-1258: la colonna dei contenuti a sinistra si allarga e si stringe trascinandone il bordo, solo
+ * per i clienti la cui libreria agenzia lo dichiara (oggi Coop). Fra 240 pixel e il 70% della
+ * finestra; la larghezza scelta resta nel browser, il doppio clic torna alla standard (w-96).
+ */
+export const COLONNA_GRUPPI_STANDARD = 384;
+export const COLONNA_GRUPPI_MINIMA = 240;
+export const COLONNA_GRUPPI_QUOTA_MASSIMA = 0.7;
+const CHIAVE_COLONNA_GRUPPI = "menabo.larghezzaColonnaGruppi";
+
+/** La larghezza della colonna dei gruppi entro i limiti, per una finestra larga «finestra» pixel. */
+export function larghezzaColonnaGruppi(richiesta: number, finestra: number): number {
+    const massima = Math.max(COLONNA_GRUPPI_MINIMA, Math.floor(finestra * COLONNA_GRUPPI_QUOTA_MASSIMA));
+    const valore = Number.isFinite(richiesta) ? richiesta : COLONNA_GRUPPI_STANDARD;
+    return Math.round(Math.min(massima, Math.max(COLONNA_GRUPPI_MINIMA, valore)));
+}
+
+function leggiColonnaGruppi(): number {
+    try {
+        const salvata = Number(window.localStorage.getItem(CHIAVE_COLONNA_GRUPPI));
+        return salvata > 0 ? larghezzaColonnaGruppi(salvata, window.innerWidth) : COLONNA_GRUPPI_STANDARD;
+    } catch {
+        return COLONNA_GRUPPI_STANDARD;
+    }
+}
+
+function salvaColonnaGruppi(larghezza: number | null) {
+    try {
+        if (larghezza === null) window.localStorage.removeItem(CHIAVE_COLONNA_GRUPPI);
+        else window.localStorage.setItem(CHIAVE_COLONNA_GRUPPI, String(larghezza));
+    } catch {
+        // senza localStorage la larghezza vale solo finché la pagina resta aperta
+    }
+}
 
 // Colore stabile per utente (stesso userId → stesso colore avatar in tutta la pagina).
 function colorForUser(userId: string): string {
@@ -103,6 +138,41 @@ function MenaboPromoPage() {
     const [labelText, setLabelText] = useState("Ricetta");
     const [placedRecordKeys, setPlacedRecordKeys] = useState<Set<string>>(() => new Set());
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+    // I20-1258: colonna dei gruppi ridimensionabile, se la libreria agenzia lo dichiara
+    const colonnaRidimensionabile = !!data?.colonna_gruppi_ridimensionabile;
+    const [larghezzaGruppi, setLarghezzaGruppi] = useState<number>(() => leggiColonnaGruppi());
+    const trascinamentoColonnaRef = useRef<{ x: number; larghezza: number } | null>(null);
+    const iniziaTrascinamentoColonna = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        trascinamentoColonnaRef.current = { x: e.clientX, larghezza: larghezzaGruppi };
+    }, [larghezzaGruppi]);
+    const trascinaColonna = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        const inizio = trascinamentoColonnaRef.current;
+        if (!inizio) return;
+        setLarghezzaGruppi(larghezzaColonnaGruppi(inizio.larghezza + e.clientX - inizio.x, window.innerWidth));
+    }, []);
+    const finisciTrascinamentoColonna = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+        if (!trascinamentoColonnaRef.current) return;
+        trascinamentoColonnaRef.current = null;
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+        setLarghezzaGruppi(l => { salvaColonnaGruppi(l); return l; });
+    }, []);
+    const tastieraColonna = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+        const passo = e.key === "ArrowRight" ? 16 : e.key === "ArrowLeft" ? -16 : 0;
+        if (!passo) return;
+        e.preventDefault();
+        setLarghezzaGruppi(l => {
+            const nuova = larghezzaColonnaGruppi(l + passo, window.innerWidth);
+            salvaColonnaGruppi(nuova);
+            return nuova;
+        });
+    }, []);
+    const colonnaStandard = useCallback(() => {
+        salvaColonnaGruppi(null);
+        setLarghezzaGruppi(COLONNA_GRUPPI_STANDARD);
+    }, []);
 
     // Sotto il breakpoint lg la sidebar è un drawer in overlay: al primo caricamento
     // parte chiusa per non coprire il canvas (effetto post-mount per non rompere l'idratazione SSR)
@@ -649,7 +719,36 @@ function MenaboPromoPage() {
 
             {/* Pannello laterale */}
             {isSidebarOpen && (
-                <div className="absolute inset-y-0 left-0 z-40 w-96 max-w-[85vw] flex-shrink-0 flex flex-col border-r border-slate-200/80 bg-white shadow-2xl dark:border-darkmode-400 dark:bg-darkmode-600 overflow-hidden lg:static lg:z-auto lg:shadow-none">
+                <div
+                    className={clsx(
+                        "absolute inset-y-0 left-0 z-40 w-96 max-w-[85vw] flex-shrink-0 flex flex-col border-r border-slate-200/80 bg-white shadow-2xl dark:border-darkmode-400 dark:bg-darkmode-600 overflow-hidden lg:z-auto lg:shadow-none",
+                        // I20-1258: da lg in su la larghezza la decide la maniglia, fino al 70% della finestra
+                        colonnaRidimensionabile
+                            ? "lg:relative lg:w-[var(--larghezza-gruppi)] lg:max-w-[70vw]"
+                            : "lg:static",
+                    )}
+                    style={colonnaRidimensionabile
+                        ? ({ "--larghezza-gruppi": `${larghezzaGruppi}px` } as React.CSSProperties)
+                        : undefined}
+                >
+                    {colonnaRidimensionabile && (
+                        <div
+                            role="separator"
+                            aria-orientation="vertical"
+                            aria-label="Larghezza della colonna dei contenuti"
+                            aria-valuenow={larghezzaGruppi}
+                            aria-valuemin={COLONNA_GRUPPI_MINIMA}
+                            tabIndex={0}
+                            title="Trascina per allargare o stringere la colonna · doppio clic: larghezza standard"
+                            onPointerDown={iniziaTrascinamentoColonna}
+                            onPointerMove={trascinaColonna}
+                            onPointerUp={finisciTrascinamentoColonna}
+                            onPointerCancel={finisciTrascinamentoColonna}
+                            onDoubleClick={colonnaStandard}
+                            onKeyDown={tastieraColonna}
+                            className="absolute inset-y-0 right-0 z-10 hidden w-1.5 cursor-col-resize touch-none bg-transparent transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none lg:block"
+                        />
+                    )}
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200/80 bg-slate-50/60 flex-shrink-0 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                         <div>
                             <h2 className="title-card dark:text-slate-200">Contenuti</h2>

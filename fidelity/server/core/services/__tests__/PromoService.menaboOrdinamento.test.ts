@@ -25,6 +25,7 @@ function makeService(
   ordinamentoLetto: OrdinamentoMerceologico,
   campiIdentita?: readonly string[],
   pagineAMano?: { confermaDaPagineTolte: number },
+  colonnaRidimensionabile?: boolean,
 ) {
   vi.spyOn(TracciatiMomento, 'findAll').mockResolvedValue([
     { risultato: { tracciati: [{ guidCanale: '', guidArea: '', context: '[]', records: [record('B', 'macelleria', 'bovino'), record('A', 'ortofrutta', 'mele')] }] } },
@@ -32,6 +33,7 @@ function makeService(
   const agenziaLib = {
     ...(campiIdentita ? { CAMPI_IDENTITA_MENABO: campiIdentita } : {}),
     ...(pagineAMano ? { MENABO_PAGINE_A_MANO: pagineAMano } : {}),
+    ...(colonnaRidimensionabile ? { MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE: true } : {}),
     // Restituisce i codici nell'ordine in cui la libreria li riceve
     getDatoPerMenabo: vi.fn(async (risultati: any[]) => ({
       tipoDivisione: 'canale',
@@ -119,5 +121,25 @@ describe('PromoService.getDatoPerMenabo: numero di pagine scritto a mano (I20-12
     const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
 
     expect(dato.pagine_a_mano).toBeUndefined();
+  });
+});
+
+describe('PromoService.getDatoPerMenabo: colonna dei gruppi ridimensionabile (I20-1258)', () => {
+  const richiesta = {} as Parameters<PromoService['getDatoPerMenabo']>[2];
+
+  it('lo dice al menabò quando la libreria agenzia lo dichiara', async () => {
+    const { service } = makeService(ordinamento, undefined, undefined, true);
+
+    const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
+
+    expect(dato.colonna_gruppi_ridimensionabile).toBe(true);
+  });
+
+  it('con una libreria che non lo dichiara la colonna resta fissa', async () => {
+    const { service } = makeService(ordinamento);
+
+    const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
+
+    expect(dato.colonna_gruppi_ridimensionabile).toBeUndefined();
   });
 });
