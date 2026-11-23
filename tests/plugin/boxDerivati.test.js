@@ -226,7 +226,8 @@ test("ogni richiesta sulle foto che porta l'idRec del box aperto porta anche l'i
     const foto = sorgente("plugin/reperimentoFoto/schedaFoto.js");
 
     assert.strictEqual(occorrenze(foto, 'formData.append("idRec", me.idRecDelBoxAperto());\n'), 4);
-    assert.strictEqual(occorrenze(foto, 'formData.append("idLavRec", me.idLavRecDelBoxAperto());\n'), 5);
+    //Lotto 3: piu' tre, per le chiamate che Istanta rifiuta da un derivato (collega, estendi, extra auto).
+    assert.strictEqual(occorrenze(foto, 'formData.append("idLavRec", me.idLavRecDelBoxAperto());\n'), 8);
     assert.ok(foto.includes('"/" + idRec + "/" + 0 + "?idLavRec=" + me.idLavRecDelBoxAperto(), null, "GET");'));
 });
 
@@ -630,4 +631,539 @@ test("l'artwork prende il box originale del codice, e il derivato solo se e' l'u
 
     assert.ok(artwork.includes('formData.append("idLavRec", parseInt(idLavRec));'));
     assert.ok(artwork.includes("this.idLavRecs = this.codici.map(cod => this.getIdLavRecByCodice(cod));"));
+});
+
+/* ==== lotto 3: creare un derivato e riconoscerlo nella scheda ====
+ *
+ * Il derivato nasce su richiesta, a una pagina indicata dall'operatore: dal Reimpagina box, con
+ * la spunta "Impagina come derivato", o dal tracciato, quando l'originale e' registrato a una
+ * pagina che il documento non ha. Una pagina che non va bene si dice dentro la finestra, senza
+ * registrare niente. Nella scheda di un derivato revisione, azioni sul box, Struttura e Sgruppa
+ * non si offrono.
+ */
+
+const BoxDerivati = require("../../plugin/boxDerivati.js");
+
+//Sostituisce delle proprieta' per la durata di una funzione, anche asincrona, e le rimette.
+async function conSostituti(oggetto, sostituti, funzione) {
+    const prima = {};
+    Object.keys(sostituti).forEach(k => { prima[k] = Object.prototype.hasOwnProperty.call(oggetto, k) ? { v: oggetto[k] } : null; oggetto[k] = sostituti[k]; });
+    try {
+        return await funzione();
+    }
+    finally {
+        Object.keys(sostituti).forEach(k => { if (prima[k] != null) { oggetto[k] = prima[k].v; } else { delete oggetto[k]; } });
+    }
+}
+
+//Un documento finto: { "3": [dna, ...] } con i box sul livello InPagina.
+function documentoFinto(pagine) {
+    const nomi = Object.keys(pagine);
+    return {
+        pages: {
+            length: nomi.length,
+            item: (i) => ({
+                name: nomi[i],
+                groups: {
+                    length: pagine[nomi[i]].length,
+                    item: (g) => ({ dna: pagine[nomi[i]][g], itemLayer: { name: pagine[nomi[i]][g].livello || "InPagina" } })
+                }
+            })
+        }
+    };
+}
+
+/* ---- le regole ---- */
+
+test("un derivato si puo' creare solo nel Volantino e mai da un altro derivato", () => {
+    assert.strictEqual(BoxDerivati.puoDerivare(1, 0), true);
+    assert.strictEqual(BoxDerivati.puoDerivare("1", undefined), true);
+    assert.strictEqual(BoxDerivati.puoDerivare(2, 0), false);
+    assert.strictEqual(BoxDerivati.puoDerivare(null, 0), false);
+    assert.strictEqual(BoxDerivati.puoDerivare(1, 55), false);
+});
+
+test("le pagine del documento si descrivono a tratti", () => {
+    assert.strictEqual(BoxDerivati.descriviPagine(["1", "2", "3", "4", "5", "6", "7", "8"]), "1-8");
+    assert.strictEqual(BoxDerivati.descriviPagine(["3", "1", "2", "7", "9", "10"]), "1-3, 7, 9-10");
+    assert.strictEqual(BoxDerivati.descriviPagine(["1", "A"]), "1, A");
+    assert.strictEqual(BoxDerivati.descriviPagine(null), "");
+    assert.deepStrictEqual(BoxDerivati.nomiPagine(documentoFinto({ "1": [], "2": [] })), ["1", "2"]);
+    assert.deepStrictEqual(BoxDerivati.nomiPagine(null), []);
+});
+
+test("la pagina del derivato va bene solo se e' una pagina del documento", () => {
+    const pagine = ["1", "2", "3", "4", "5", "6", "7", "8"];
+
+    assert.deepStrictEqual(BoxDerivati.validaPagina(" 7 ", pagine), { pagina: 7 });
+    assert.deepStrictEqual(BoxDerivati.validaPagina(3, pagine), { pagina: 3 });
+    assert.deepStrictEqual(BoxDerivati.validaPagina("", pagine), { errore: "Indica la pagina in cui impaginare il derivato." });
+    assert.deepStrictEqual(BoxDerivati.validaPagina(null, pagine), { errore: "Indica la pagina in cui impaginare il derivato." });
+    assert.deepStrictEqual(BoxDerivati.validaPagina("sette", pagine), { errore: "\"sette\" non e' un numero di pagina." });
+    assert.deepStrictEqual(BoxDerivati.validaPagina("7.5", pagine), { errore: "\"7.5\" non e' un numero di pagina." });
+    assert.deepStrictEqual(BoxDerivati.validaPagina("0", pagine), { errore: "La pagina deve essere fra 1 e 255." });
+    assert.deepStrictEqual(BoxDerivati.validaPagina("300", pagine), { errore: "La pagina deve essere fra 1 e 255." });
+    assert.deepStrictEqual(BoxDerivati.validaPagina("12", pagine), { errore: "La pagina 12 non e' in questo documento (pagine: 1-8)." });
+    assert.deepStrictEqual(BoxDerivati.validaPagina("12", []), { errore: "La pagina 12 non e' in questo documento." });
+
+    assert.strictEqual(BoxDerivati.paginaNelDocumento(7, pagine), true);
+    assert.strictEqual(BoxDerivati.paginaNelDocumento("12", pagine), false);
+    assert.strictEqual(BoxDerivati.paginaNelDocumento(null, pagine), false);
+});
+
+test("la richiesta di creazione porta lavorazione, codice gruppo, record, box di partenza e pagina", () => {
+    assert.deepStrictEqual(
+        BoxDerivati.richiestaDiCreazione(1193, { codiceGruppo: "7938749,7951882", idRec: "100", idLavRec: 0, pagina: 7 }),
+        { idLavorazione: 1193, codiceGruppo: "7938749,7951882", idRec: 100, idLavRec: 0, pagina: 7 });
+    //Da un derivato l'idLavRec parte lo stesso: e' Istanta che rifiuta, con il motivo.
+    assert.strictEqual(BoxDerivati.richiestaDiCreazione(1, { codiceGruppo: "A", idRec: 10, idLavRec: 55, pagina: 2 }).idLavRec, 55);
+
+    const sorgenteDerivati = sorgente("plugin/boxDerivati.js");
+    assert.ok(sorgenteDerivati.includes('xhr.send("Menabo/creaDerivato", formData, "PUT");'));
+});
+
+/* ---- i derivati di un record nel documento ---- */
+
+test("i derivati di un record nel documento sono i soli box col suo codice, il suo idRec e un idLavRec", () => {
+    const doc = documentoFinto({
+        "3": [{ codice_gruppo: "A", idRec: "10", idLavRec: 0 }],
+        "5": [{ codice_gruppo: "A", idRec: "10", idLavRec: 55 }, { codice_gruppo: "B", idRec: "20", idLavRec: 60 }],
+        "7": [{ codice_gruppo: "A", idRec: "10", idLavRec: 56 }, { codice_gruppo: "A", idRec: "11", idLavRec: 57 },
+            { codice_gruppo: "A", idRec: "10", idLavRec: 58, livello: "cloneVecchioImpaginato" }]
+    });
+
+    const trovati = BoxDerivati.derivatiNelDocumento(doc, "A", 10, (g) => g.dna);
+    assert.deepStrictEqual(trovati.map(d => [d.pagina, d.idLavRec]), [["5", 55], ["7", 56]]);
+    assert.deepStrictEqual(BoxDerivati.derivatiNelDocumento(doc, "C", 30, (g) => g.dna), []);
+});
+
+test("l'avviso dei derivati dice quanti sono e a quali pagine", () => {
+    assert.strictEqual(BoxDerivati.testoAvvisoDerivati([]), null);
+    assert.strictEqual(BoxDerivati.testoAvvisoDerivati(null), null);
+    assert.strictEqual(BoxDerivati.testoAvvisoDerivati([{ pagina: "7", idLavRec: 55 }]),
+        "Code DRV-06 Questo box ha 1 derivato nel documento, a pagina 7: va reimpaginato per prendere il dato nuovo.");
+    assert.strictEqual(BoxDerivati.testoAvvisoDerivati([{ pagina: "5" }, { pagina: "7" }, { pagina: "7" }]),
+        "Code DRV-06 Questo box ha 3 derivati nel documento, a pagina 5, 7: vanno reimpaginati per prendere il dato nuovo.");
+});
+
+test("dopo una modifica dall'originale si avvisa dei suoi derivati, e solo dall'originale", async () => {
+    const doc = documentoFinto({
+        "3": [{ codice_gruppo: "A", idRec: "10", idLavRec: 0 }],
+        "7": [{ codice_gruppo: "A", idRec: "10", idLavRec: 55 }]
+    });
+    const messaggi = [];
+    const globali = { docInLavorazione: doc, Utility: { getDnaOfBox: (g) => g.dna }, messaggioUtente: (testo, tipo) => messaggi.push([testo, tipo]) };
+
+    await conSostituti(global, globali, async () => {
+        await conSostituti(schedaRef, { inSelezioneMultipla: false, refSelected: { item: { dna: { codice_gruppo: "A", idRec: "10", idLavRec: 0 } } } }, async () => {
+            schedaRef.avvisaDerivatiDelBoxAperto();
+        });
+        assert.strictEqual(messaggi.length, 1);
+        assert.strictEqual(messaggi[0][1], "warning");
+        assert.ok(messaggi[0][0].includes("1 derivato nel documento, a pagina 7"));
+
+        //Dal derivato stesso, o senza derivati, niente avviso.
+        await conSostituti(schedaRef, { inSelezioneMultipla: false, refSelected: { item: { dna: { codice_gruppo: "A", idRec: "10", idLavRec: 55 } } } }, async () => {
+            schedaRef.avvisaDerivatiDelBoxAperto();
+        });
+        await conSostituti(schedaRef, { inSelezioneMultipla: false, refSelected: { item: { dna: { codice_gruppo: "B", idRec: "20", idLavRec: 0 } } } }, async () => {
+            schedaRef.avvisaDerivatiDelBoxAperto();
+        });
+        assert.strictEqual(messaggi.length, 1);
+    });
+
+    const scheda = sorgente("plugin/schedaRef.js");
+    assert.ok(scheda.includes('messaggioUtente("SalvaModifiche: Richiesta completata con successo", "success", false, 5);\n                            this.avvisaDerivatiDelBoxAperto();'));
+    assert.ok(scheda.includes("if (objResult.esito) {\n                    //TASK-22d7fad2: il dato del record e' cambiato: i derivati vanno reimpaginati.\n                    me.avvisaDerivatiDelBoxAperto();"));
+});
+
+/* ---- la creazione ---- */
+
+function globaliDellaCreazione(eventi, impaginazione) {
+    return {
+        idKitLavorazione: 1193,
+        docInLavorazione: {},
+        schedaRef: schedaRef,
+        indesignEvents: { setBusy: (v) => eventi.push("busy:" + v) },
+        showLoading: () => { },
+        hideLoading: () => { },
+        messaggioUtente: (testo, tipo) => eventi.push(tipo + ":" + testo.substring(0, 11)),
+        getSchedaRefAsync: async (scheda, codice, idRec, idLavRec) => { eventi.push("scheda:" + codice + ":" + idRec + ":" + idLavRec); return { records: [{ idRec: idRec }] }; },
+        assicuraLivelloInPagina: () => eventi.push("livello"),
+        impaginazioneSingoloIndd: async (records, pagina) => { eventi.push("impagina:" + pagina); return impaginazione(); },
+        rimuoviRefImpaginata: async (lista) => { eventi.push("togli:" + JSON.stringify(lista)); }
+    };
+}
+
+test("il derivato si registra, poi si impagina con la sua scheda alla pagina chiesta", async () => {
+    const eventi = [];
+    const box = { isValid: true };
+    const registra = async (dati) => { eventi.push("registra:" + dati.codiceGruppo + ":" + dati.idRec + ":" + dati.pagina); return { esito: true, idLavRec: 900, idRec: 100, pagina: 7 }; };
+
+    const esito = await conSostituti(global, globaliDellaCreazione(eventi, () => ({ boxAggiunto: box })), () =>
+        conSostituti(BoxDerivati, { registra: registra }, () =>
+            BoxDerivati.creaEImpagina({ codiceGruppo: "A", idRec: 100, idLavRec: 0, pagina: 7 })));
+
+    assert.strictEqual(esito, box);
+    assert.deepStrictEqual(eventi, ["busy:true", "registra:A:100:7", "scheda:A:100:900", "livello", "impagina:7", "success:Code DRV-02", "busy:false"]);
+});
+
+test("se Istanta rifiuta il derivato non si impagina niente e non c'e' niente da togliere", async () => {
+    const eventi = [];
+    const registra = async () => ({ esito: false, error: "creaDerivato, creazione del derivato: la pagina 0 non e' valida." });
+
+    const esito = await conSostituti(global, globaliDellaCreazione(eventi, () => null), () =>
+        conSostituti(BoxDerivati, { registra: registra }, () =>
+            BoxDerivati.creaEImpagina({ codiceGruppo: "A", idRec: 100, idLavRec: 0, pagina: 7 })));
+
+    assert.strictEqual(esito, null);
+    assert.deepStrictEqual(eventi, ["busy:true", "error:Code DRV-01", "busy:false"]);
+});
+
+test("se il box del derivato non nasce, la sua registrazione si toglie con il suo idLavRec", async () => {
+    const eventi = [];
+    const registra = async () => ({ esito: true, idLavRec: 900, idRec: 100, pagina: 7 });
+
+    const esito = await conSostituti(global, globaliDellaCreazione(eventi, () => undefined), () =>
+        conSostituti(BoxDerivati, { registra: registra }, () =>
+            BoxDerivati.creaEImpagina({ codiceGruppo: "A", idRec: 100, idLavRec: 0, pagina: 7 })));
+
+    assert.strictEqual(esito, null);
+    assert.deepStrictEqual(eventi, ["busy:true", "scheda:A:100:900", "livello", "impagina:7", "error:Code DRV-03",
+        'togli:[{"codice":"A","idRec":100,"idLavRec":900}]', "busy:false"]);
+});
+
+/* ---- le finestre ---- */
+
+test("la conferma del Reimpagina offre la spunta solo quando si puo' derivare", async () => {
+    const viste = [];
+    await conSostituti(BoxDerivati, { chiedi: async (config) => { viste.push(config); return { azione: "annulla", pagina: null }; } }, async () => {
+        await BoxDerivati.chiediReimpagina({ codiceGruppo: "A", descrizione: "PASTA 500 g", eDerivato: false, puoDerivare: true, nomiPagine: ["1", "2"] });
+        await BoxDerivati.chiediReimpagina({ codiceGruppo: "A", descrizione: "", eDerivato: true, puoDerivare: false, nomiPagine: ["1", "2"] });
+    });
+
+    assert.strictEqual(viste[0].titolo, "Reimpaginare il box A?");
+    assert.deepStrictEqual(viste[0].righe, ["PASTA 500 g"]);
+    assert.deepStrictEqual(viste[0].derivato, { conSpunta: true, testo: "Impagina come derivato" });
+    assert.deepStrictEqual(viste[0].pulsanti.map(p => [p.testo, p.azione, p.pagina]), [["Annulla", "annulla", false], ["Reimpagina", "reimpagina", "conSpunta"]]);
+    assert.strictEqual(viste[1].derivato, null);
+    assert.deepStrictEqual(viste[1].righe, ["Questo box e' un derivato: viene rifatto con i suoi meta."]);
+});
+
+test("dal tracciato, per una pagina che il documento non ha, si offre il derivato e la rimozione resta con l'avviso", async () => {
+    const viste = [];
+    await conSostituti(BoxDerivati, { chiedi: async (config) => { viste.push(config); return { azione: "annulla", pagina: null }; } }, async () => {
+        await BoxDerivati.chiediPerPaginaAssente({ codice: "A", idRec: 10, paginaRegistrata: "12", nomiPagine: ["1", "2", "3"], puoDerivare: true });
+        await BoxDerivati.chiediPerPaginaAssente({ codice: "A", idRec: 10, paginaRegistrata: "12", nomiPagine: ["1", "2", "3"], puoDerivare: false });
+    });
+
+    assert.strictEqual(viste[0].titolo, "Elemento a una pagina non presente in questo documento");
+    assert.deepStrictEqual(viste[0].righe, ["Codice: A", "Id record: 10", "Pagina registrata: 12", "Pagine di questo documento: 1-3"]);
+    assert.ok(viste[0].avviso.includes("toglie dall'impaginato un elemento che sta a pagina 12, non presente in questo documento"));
+    assert.strictEqual(viste[0].derivato.conSpunta, false);
+    assert.deepStrictEqual(viste[0].pulsanti.map(p => [p.testo, p.azione, p.pagina]),
+        [["Annulla", "annulla", false], ["Rimuovi dal server", "rimuovi", false], ["Impagina derivato", "derivato", "sempre"]]);
+    //Fuori dal Volantino il derivato non si offre; la rimozione, con il suo avviso, si'.
+    assert.strictEqual(viste[1].derivato, null);
+    assert.deepStrictEqual(viste[1].pulsanti.map(p => p.azione), ["annulla", "rimuovi"]);
+    assert.ok(viste[1].avviso.includes("non presente in questo documento"));
+});
+
+test("una pagina che non va bene si dice nella finestra, che resta aperta", () => {
+    const sorgenteDerivati = sorgente("plugin/boxDerivati.js");
+    const premi = tratto(sorgenteDerivati, "            const premi = function (pulsante) {", "            (config.pulsanti || []).forEach(pulsante => {");
+
+    assert.ok(premi.includes("const valida = BoxDerivati.validaPagina(campo != null ? nellaFinestra(\"txtPaginaDerivato\").val() : \"\", config.nomiPagine);"));
+    assert.ok(/if \(valida\.errore\) \{\s*(\/\/[^\n]*\n\s*)*nellaFinestra\("erroreDerivato"\)\.css\("display", "block"\)\.text\(valida\.errore\);\s*return;/.test(premi));
+    //Con la spunta attiva il pulsante di conferma vale "derivato".
+    assert.ok(premi.includes('esito = { azione: pulsante.pagina === "conSpunta" ? "derivato" : pulsante.azione, pagina: valida.pagina };'));
+    //Chiusa da fuori vale Annulla, e non resta appesa.
+    assert.ok(sorgenteDerivati.includes('if ($("#derivatoModal").length === 0) {\n                    esito = { azione: "annulla", pagina: null };'));
+});
+
+/* ---- il Reimpagina della scheda ---- */
+
+test("l'icona Reimpagina chiede conferma: senza spunta rifa' il box, con la spunta crea il derivato", async () => {
+    const eventi = [];
+    const globali = { docInLavorazione: documentoFinto({ "1": [], "2": [] }), ficoProcess: { getTipoLavorazioneCorrente: () => 1 }, Utility: { getDnaOfBox: (g) => g.dna } };
+    const record = [{ idRec: 10, recordInTracciato: { "Referenza.Codice": "A", "Scatto.CodiceGruppo": "A", StatoSelezione: 1, "Descrizioni.Descrizione1": "PASTA" } }];
+    const scheda = (idLavRec) => ({
+        inSelezioneMultipla: false,
+        schedeRefDati: record,
+        refSelected: { codiceGruppo: "A", idRec: 10, item: { dna: { codice_gruppo: "A", idRec: "10", idLavRec: idLavRec } } },
+        applicaReimpaginazione: async () => { eventi.push("rifai"); return "rifatto"; }
+    });
+    const risposte = [{ azione: "reimpagina", pagina: null }, { azione: "derivato", pagina: 2 }, { azione: "annulla", pagina: null }, { azione: "reimpagina", pagina: null }];
+    const chieste = [];
+
+    await conSostituti(global, globali, () =>
+        conSostituti(BoxDerivati, {
+            chiediReimpagina: async (dati) => { chieste.push(dati); return risposte.shift(); },
+            creaEImpagina: async (dati) => { eventi.push("derivato:" + JSON.stringify(dati)); return "nuovo"; }
+        }, async () => {
+            await conSostituti(schedaRef, scheda(0), async () => {
+                assert.strictEqual(await schedaRef.chiediReimpaginazione(), "rifatto");
+                assert.strictEqual(await schedaRef.chiediReimpaginazione(), "nuovo");
+                assert.strictEqual(await schedaRef.chiediReimpaginazione(), null);
+            });
+            //Da un derivato la spunta non si offre, e si rifa' quel derivato.
+            await conSostituti(schedaRef, scheda(55), async () => {
+                assert.strictEqual(await schedaRef.chiediReimpaginazione(), "rifatto");
+            });
+            //Con piu' box la conferma e' quella della selezione multipla.
+            await conSostituti(schedaRef, Object.assign(scheda(0), { inSelezioneMultipla: true }), async () => {
+                assert.strictEqual(await schedaRef.chiediReimpaginazione(), "rifatto");
+            });
+        }));
+
+    assert.deepStrictEqual(eventi, ["rifai", 'derivato:{"codiceGruppo":"A","idRec":10,"idLavRec":0,"pagina":2}', "rifai", "rifai"]);
+    assert.strictEqual(chieste.length, 4);
+    assert.deepStrictEqual([chieste[0].codiceGruppo, chieste[0].descrizione, chieste[0].puoDerivare, chieste[0].eDerivato], ["A", "PASTA", true, false]);
+    assert.deepStrictEqual(chieste[0].nomiPagine, ["1", "2"]);
+    assert.deepStrictEqual([chieste[3].puoDerivare, chieste[3].eDerivato], [false, true]);
+});
+
+/* ---- la scheda di un derivato ---- */
+
+test("le azioni sul box non si offrono da un derivato, ne' con un derivato nella selezione", async () => {
+    await conSostituti(global, { Utility: { getDnaOfBox: (g) => g.dna } }, async () => {
+        await conSostituti(schedaRef, { inSelezioneMultipla: false, refSelected: { item: { dna: { idRec: "10", idLavRec: 0 } } } }, async () => {
+            assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), true);
+        });
+        await conSostituti(schedaRef, { inSelezioneMultipla: false, refSelected: { item: { dna: { idRec: "10", idLavRec: 55 } } } }, async () => {
+            assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), false);
+        });
+        const normale = { dettaglio: { codiceGruppo: "A", idRec: 10 }, records: [] };
+        const derivato = { dettaglio: { codiceGruppo: "A", idRec: 10, idLavRec: 55 }, records: [] };
+        await conSostituti(schedaRef, { inSelezioneMultipla: true, boxSelezioneMultipla: [normale, normale] }, async () => {
+            assert.strictEqual(schedaRef.selezioneConDerivati(), false);
+            assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), true);
+        });
+        await conSostituti(schedaRef, { inSelezioneMultipla: true, boxSelezioneMultipla: [normale, derivato] }, async () => {
+            assert.strictEqual(schedaRef.selezioneConDerivati(), true);
+            assert.strictEqual(schedaRef.mostraAzioniStrutturaliInEdit(), false);
+            //Nell'elenco il derivato si riconosce.
+            assert.deepStrictEqual(schedaRef.vociSelezioneMultipla().map(v => v.descrizione), ["", "[derivato]"]);
+        });
+    });
+});
+
+test("la scheda di un derivato nasce in sola lettura, senza Salva, Sgruppa e Struttura, e lo dice", () => {
+    const scheda = sorgente("plugin/schedaRef.js");
+
+    assert.ok(scheda.includes("var schedaDiDerivato = me.idLavRecDelBoxAperto() > 0;\n        if (schedaDiDerivato) {\n            refEditabile = false;"));
+    assert.ok(scheda.includes("this.segnaSchedaDiDerivato(schedaDiDerivato);\n        if (codice.includes(\",\") && !schedaDiDerivato) {\n            $(\"#sgruppa\").show();"));
+    assert.ok(scheda.includes("if (schedaDiDerivato) {\n                $(\"#salvaButton\").remove();"));
+    assert.ok(scheda.includes("if (schedaDiDerivato) {\n                    me.editRefFieldController.solaLettura = true;"));
+    assert.ok(scheda.includes('.text(me.TESTO_SCHEDA_DERIVATO));'));
+    //Il Salva non parte da un derivato nemmeno da codice (la finestra delle differenze).
+    const salva = tratto(scheda, "    salvaModifiche(schedaRef, codice, box, meccanica, page) {", "//Chiedo al controller le operazioni che devo fare");
+    assert.ok(/if \(me\.idLavRecDelBoxAperto\(\) > 0\) \{\s*messaggioUtente\("Code SRF-167[^\n]*\n\s*return;/.test(salva));
+    //Il contrassegno nel titolo e la voce Struttura.
+    const segna = tratto(scheda, "    segnaSchedaDiDerivato(eDerivato) {", "    avvisaDerivatiDelBoxAperto() {");
+    assert.ok(segna.includes('.text("DERIVATO")'));
+    assert.ok(/if \(eDerivato\) \{[\s\S]*?voceStruttura\.hide\(\);\s*\}\s*else if \(!this\.inVistaControllata\(\)\) \{\s*voceStruttura\.show\(\);/.test(segna));
+});
+
+/* ---- il tracciato ---- */
+
+test("dal tracciato una pagina che il documento non ha non passa per un box sparito", () => {
+    const index = sorgente("plugin/indexNew.js");
+    const ricerca = tratto(index, "async function trovaRecord(", "        messaggioUtente(\"Code IDX-104");
+    const assente = ricerca.indexOf("!BoxDerivati.paginaNelDocumento(paginaAttesa, nomiPagineDocumento)");
+    const sparito = ricerca.indexOf("await Modali.confirmRimozioneRefNonTrovata({");
+
+    assert.ok(assente > 0 && assente < sparito, "la pagina assente si riconosce prima della finestra del box non trovato");
+    assert.ok(ricerca.includes("puoDerivare: BoxDerivati.puoDerivare(ficoProcess.getTipoLavorazioneCorrente(), 0)"));
+    assert.ok(ricerca.includes("await BoxDerivati.creaEImpagina({ codiceGruppo: codice, idRec: idRecNorm, idLavRec: 0, pagina: sceltaPaginaAssente.pagina });"));
+    //La rimozione resta possibile, e toglie l'originale: la voce non porta idLavRec.
+    assert.ok(/if \(sceltaPaginaAssente\.azione === "rimuovi"\) \{\s*messaggioUtente\("Code IDX-102[^\n]*\n\s*await rimuoviRefImpaginata\(\[\{ codice: codice, idRec: idRecNorm \}\]\);/.test(ricerca));
+    assert.ok(index.includes("const BoxDerivati = require('./boxDerivati');"));
+});
+
+//Misurato in console il 23/11/2026: in UXP il riferimento tenuto a un input da quando e' stato
+//creato non ne riflette lo stato (this.checked true, riferimento undefined). Con la spunta letta
+//dal riferimento il campo della pagina non compariva e "Reimpagina" rifaceva il box senza
+//chiedere la pagina.
+test("la finestra legge spunta e pagina dall'evento e dalla finestra, mai dal riferimento tenuto", () => {
+    const sorgenteDerivati = sorgente("plugin/boxDerivati.js");
+    const finestra = tratto(sorgenteDerivati, "    async chiedi(config) {", "    chiediReimpagina(dati) {");
+
+    assert.ok(finestra.includes('const nellaFinestra = (id) => $("#derivatoModal").find("#" + id);'));
+    assert.ok(finestra.includes('const spuntaAttiva = () => nellaFinestra("chkImpaginaComeDerivato").prop("checked") === true;'));
+    //Il gestore della spunta guarda la casella dell'evento, e mostra la riga ritrovandola.
+    assert.ok(/spunta\.on\("change", function \(evento\) \{\s*const casella = evento != null && evento\.target != null \? evento\.target : this;\s*const attiva = casella\.checked === true;\s*nellaFinestra\("rigaPaginaDerivato"\)\.css\("display", attiva \? "flex" : "none"\);/.test(finestra));
+    //Al clic la spunta si rilegge: spuntata e senza pagina, la finestra si ferma sull'errore.
+    assert.ok(finestra.includes("const conSpunta = spunta != null && spuntaAttiva();"));
+    //Nessuna lettura di stato dai riferimenti.
+    assert.ok(!finestra.includes('spunta.prop("checked")'));
+    assert.ok(!finestra.includes("campo.val()"));
+});
+
+/* ---- collaudo del 23/11/2026: la descrizione sul derivato ---- */
+
+test("sul derivato la descrizione del box non si revisiona: si usa quella del server o la si mette nel meta", () => {
+    const scheda = sorgente("plugin/schedaRef.js");
+    const scelte = tratto(scheda, "        if (this.eDescrizioneInMismatch(diff)) {", "        //I20-1077: e cosi' su ogni altro campo di testo");
+
+    const derivato = scelte.indexOf('if (this.idLavRecDelBoxAperto() > 0) {\n                return ["descrizioneServer", "impostaMetaDescrizione"];');
+    const normale = scelte.indexOf("this.sceltaDelBoxPerLaDescrizione(this.dovePortaLaDescrizioneDelBox())");
+    assert.ok(derivato > 0 && derivato < normale, "il derivato si decide prima della scelta per dove sta la differenza");
+    //Con il meta gia' impostato valgono le scelte del meta, anche sul derivato.
+    assert.ok(scelte.indexOf('return ["usaMetaDescrizione", "aggiornaMetaDescrizione"];') < derivato);
+});
+
+test("con la descrizione nel meta il banner del mismatch non si mostra", () => {
+    const meta = sorgente("plugin/metaDelBox.js");
+    const stato = tratto(meta, "    applicaStatoMetaDescrizione() {", "    aggiornaPulsantiMetaDescrizione() {");
+
+    assert.ok(/if \(conMeta\) \{[\s\S]*?\$\("#mismatchWarningPanel"\)\.empty\(\)\.css\("background-color", ""\);\s*\}/.test(stato));
+    //Senza meta il banner resta: lo scrive il controller, e questa funzione non lo tocca.
+    assert.strictEqual(occorrenze(stato, "#mismatchWarningPanel"), 1);
+});
+
+/* ---- collaudo del 23/11/2026: selezione multipla, foto e finestra degli ambiti ---- */
+
+test("una selezione multipla con un derivato non si apre, e dice quale box", () => {
+    assert.strictEqual(schedaRef.testoDerivatiInSelezioneMultipla(["7938749"]),
+        "Code SRF-168 Il box 7938749 e' un derivato e non puo' essere alterato con una multi selezione");
+    assert.strictEqual(schedaRef.testoDerivatiInSelezioneMultipla(["A", "B"]),
+        "Code SRF-168 I box A; B sono derivati e non possono essere alterati con una multi selezione");
+
+    const scheda = sorgente("plugin/schedaRef.js");
+    const mostra = tratto(scheda, "    async mostraSchedaMultipla() {", "    componiTitoloSelezioneMultipla(quanti) {");
+    const blocco = mostra.indexOf("if (derivatiSelezionati.length > 0) {");
+    const misti = mostra.indexOf("if (stato === stati.misti || stato === stati.nonLeggibili) {");
+    const raggruppa = mostra.indexOf('$("#raggruppaImage").show()');
+    assert.ok(blocco > 0 && blocco < misti && blocco < raggruppa, "il derivato ferma la selezione prima di ogni altra cosa");
+    //Come per i box misti: niente scheda, niente Raggruppa, e il pannello torna alla home.
+    assert.ok(/if \(derivatiSelezionati\.length > 0\) \{\s*me\.impostaVociSelezioneMultipla\(false\);\s*\$\("#refImage"\)\.hide\(\);\s*\$\("#raggruppaImage"\)\.hide\(\);\s*messaggioUtente\(me\.testoDerivatiInSelezioneMultipla\([^\n]*\n\s*jsIndexControls\.changeSubMenu\(\$\("#homeImage"\)\.attr\("subTab"\)\);\s*jsIndexControls\.changeImage\(\$\("#homeImage"\)\);\s*return;/.test(mostra));
+});
+
+test("da un derivato la foto si cambia solo per questa lavorazione", () => {
+    const lista = { "Foto.Origine": "tracciato", "Foto.NomeDaTracciato": "pasta" };
+    const config = { cambioSoloPerLavorazione: true };
+
+    assert.deepStrictEqual(schedaRef.ambitoDelCambioFoto(null, null, 55),
+        { soloLavorazione: true, avviso: "Box derivato: la foto si cambia solo per questa lavorazione." });
+    //Per gli altri box vale la regola della lista, com'era.
+    assert.deepStrictEqual(schedaRef.ambitoDelCambioFoto(null, null, 0), { soloLavorazione: false, avviso: null });
+    assert.strictEqual(schedaRef.ambitoDelCambioFoto(lista, config, 0).soloLavorazione, true);
+
+    const foto = sorgente("plugin/reperimentoFoto/schedaFoto.js");
+    assert.ok(foto.includes("pluginMiddleware.getFotoDaTracciato(),\n                    me.idLavRecDelBoxAperto());"));
+});
+
+test("da un derivato le foto extra chiedono l'ambito con la sola scelta di questa lavorazione", async () => {
+    const chieste = [];
+    const Modali = { confirmCustom: async (...argomenti) => { chieste.push(argomenti); return { result: true, hiddenVal: argomenti[2] }; } };
+
+    await conSostituti(global, { Modali: Modali, Utility: { getDnaOfBox: (g) => g.dna } }, async () => {
+        await conSostituti(schedaRef, { refSelected: { item: { dna: { idRec: "10", idLavRec: 55 } } } }, async () => {
+            assert.strictEqual(await schedaRef.sceltaAmbitoAzioneExtra(), "lavorazione");
+        });
+        await conSostituti(schedaRef, { refSelected: { item: { dna: { idRec: "10", idLavRec: 0 } } } }, async () => {
+            await schedaRef.sceltaAmbitoAzioneExtra();
+        });
+    });
+
+    assert.deepStrictEqual(chieste[0], ["Per quali lavorazioni vale?", "Solo per questa lavorazione", "lavorazione"]);
+    assert.deepStrictEqual(chieste[1], ["Per quali lavorazioni vale?", "Per tutte le lavorazioni", "tutte", "Solo per questa lavorazione", "lavorazione"]);
+});
+
+test("da un derivato le foto extra dell'articolo non si attivano, non si disattivano e non si eliminano", () => {
+    const foto = sorgente("plugin/reperimentoFoto/schedaFoto.js");
+
+    assert.ok(foto.includes("var soloMeta = me.idLavRecDelBoxAperto() > 0;"));
+    assert.ok(foto.includes("if (!soloMeta) {\n                    row.append(checkbox);"));
+    assert.ok(/me\.eliminaFotoExtra\([^\n]*\n\s*\}\);\s*if \(!soloMeta\) \{\s*row\.append\(button\);/.test(foto));
+    //Escludi solo qui, che va nei meta, resta.
+    assert.ok(foto.includes("row.append(me.pulsanteEscludiSoloQui(elemento, elemento.tipo, box));"));
+    //Extra auto: Escludi e Includi valgono per l'articolo.
+    assert.ok(/if \(decisione != null \|\| !\(me\.idLavRecDelBoxAperto\(\) > 0\)\) \{\s*row\.append\(button\);/.test(foto));
+    //Parziali e non piu' a sistema: Elimina ed Estendi non si offrono.
+    const parziali = tratto(foto, "    pannelloExtraParziali(parziali, box) {", "    /// Estendi:");
+    assert.ok(/if \(me\.idLavRecDelBoxAperto\(\) > 0\) \{\s*panel\.append\(riga\);\s*return;\s*\}\s*riga\.append\(elimina\);/.test(parziali));
+    assert.ok(foto.includes("if (!(me.idLavRecDelBoxAperto() > 0)) {\n                riga.append(elimina);"));
+    assert.ok(foto.includes(".text(me.TESTO_FOTO_EXTRA_DERIVATO));"));
+});
+
+//Collaudo: dopo "Imposta come meta" dalla finestra delle differenze restavano banner, bordi gialli
+//e icone del server di prima, finche' non si riapriva la scheda.
+test("messo il meta della descrizione dalla finestra delle differenze, la scheda si ridisegna", async () => {
+    const scheda = sorgente("plugin/schedaRef.js");
+
+    assert.ok(/if \(azione === "impostaMetaDescrizione"\) \{\s*if \(await me\.impostaDescrizioneComeMeta\(\)\) \{\s*await me\.ridisegnaSchedaDopoIlMeta\(\);/.test(scheda));
+    assert.ok(/else if \(azione === "aggiornaMetaDescrizione"\) \{\s*if \(await me\.aggiornaMetaDescrizioneColBox\(\)\) \{\s*await me\.ridisegnaSchedaDopoIlMeta\(\);/.test(scheda));
+
+    const eventi = [];
+    await conSostituti(global, { CampiARiposo: { giro: () => eventi.push("riposo") } }, () =>
+        conSostituti(schedaRef, {
+            dimenticaSegnalazioni: () => eventi.push("dimentica"),
+            selectSchedaRef: async (quale) => { eventi.push("ridisegna:" + quale); }
+        }, () => schedaRef.ridisegnaSchedaDopoIlMeta()));
+    assert.strictEqual(eventi[0], "dimentica");
+    assert.strictEqual(eventi[1], "ridisegna:1");
+});
+
+//Collaudo: con la sola voce "Solo lavorazione" la tendina restava vuota, e il cambio partiva globale.
+test("l'ambito del cambio foto limitato alla lavorazione non dipende da cosa mostra la tendina", () => {
+    assert.strictEqual(schedaRef.ambitoScelto(null, true), "solo_lavorazione");
+    assert.strictEqual(schedaRef.ambitoScelto("", true), "solo_lavorazione");
+    assert.strictEqual(schedaRef.ambitoScelto("globale", true), "solo_lavorazione");
+    //Senza limite vale la tendina, e una tendina senza selezione resta "globale" com'era.
+    assert.strictEqual(schedaRef.ambitoScelto("canale_area", false), "canale_area");
+    assert.strictEqual(schedaRef.ambitoScelto(null, false), "globale");
+
+    const foto = sorgente("plugin/reperimentoFoto/schedaFoto.js");
+    assert.ok(foto.includes("value = me.ambitoScelto(value, fotoDallaLista.soloLavorazione);"));
+    assert.ok(foto.includes("const value = me.ambitoScelto($('#selectScopeCambiaFoto').val(), fotoDallaLista.soloLavorazione);"));
+    //La tendina non resta senza selezione quando "Globale" non e' fra le voci.
+    assert.ok(/if \(!trovata && selectEl\.options\.length > 0\) \{\s*selectEl\.options\[0\]\.selected = true;\s*selectEl\.selectedIndex = 0;/.test(foto));
+});
+
+test("la conferma a due scelte dalle etichette lunghe ha il piede su due righe, con Annulla dentro", () => {
+    const Modali = require("../../plugin/modali/modali.js");
+
+    //Una scelta sola, o due corte: una riga, come prima.
+    assert.strictEqual(Modali.righePiedeConferma("Sincronizza", null), 1);
+    assert.strictEqual(Modali.righePiedeConferma("Solo volantino", "Tutto"), 1);
+    assert.strictEqual(Modali.righePiedeConferma("Per tutte le lavorazioni", "Solo per questa lavorazione"), 2);
+    assert.strictEqual(Modali.altezzaPiedeConferma(1), 50);
+    assert.strictEqual(Modali.altezzaPiedeConferma(2), 84);
+    //Il messaggio lascia il posto alla seconda riga; con una riga l'altezza e' quella di prima.
+    assert.strictEqual(Modali.altezzaMassimaMessaggio(628), 453);
+    assert.strictEqual(Modali.altezzaMassimaMessaggio(628, 1), 453);
+    assert.strictEqual(Modali.altezzaMassimaMessaggio(628, 2), 419);
+
+    const codice = sorgente("plugin/modali/modali.js");
+    assert.ok(codice.includes("var righePiede = Modali.righePiedeConferma(bottoneConfirm1Text, bottoneConfirm2Text);"));
+    assert.ok(/if \(righePiede === 2\) \{\s*pulsanti\.append\(\$\('<div style="flex-basis: 100%; height: 0;"><\/div>'\)\);\s*\}\s*pulsanti\.append\(annulla\);/.test(codice));
+});
+
+/* ---- la protezione lato Istanta ---- */
+
+//Le chiamate delle foto che cambiano il dato dell'articolo dicono da quale box partono, cosi'
+//Istanta le rifiuta da un derivato anche se il Plugin le lasciasse passare.
+test("le chiamate delle foto che cambiano l'articolo portano l'idLavRec del box", async () => {
+    const foto = sorgente("plugin/reperimentoFoto/schedaFoto.js");
+
+    assert.ok(/formData\.append\("idLavRec", me\.idLavRecDelBoxAperto\(\)\);\s*xhr\.send\("SyncFoto\/linkLogoBollo\/", formData, "PUT"\);/.test(foto));
+    assert.ok(/formData\.append\("idLavRec", me\.idLavRecDelBoxAperto\(\)\);\s*try \{\s*showLoading\("Estendo "/.test(foto));
+    assert.ok(/formData\.append\("idLavRec", me\.idLavRecDelBoxAperto\(\)\);\s*xhr\.send\("SyncFoto\/escludiIncludiFotoExtraAuto\/"/.test(foto));
+    //Le tre eliminazioni lo portavano gia' dal lotto 2a.
+    assert.strictEqual(occorrenze(foto, 'formData.append("idLavRec", me.idLavRecDelBoxAperto());\n        try {\n            await me.richiestaFotoExtra("SyncFoto/RimuoviFoto/0"'), 2);
+
+    //L'attiva/disattiva lo mette nell'indirizzo, e solo per un derivato: per gli altri resta com'era.
+    const records = [{ recordInTracciato: { "Scatto.CodiceGruppo": "A", StatoSelezione: 1 } }];
+    const nomeUrl = Object.keys(schedaRef).find(k => typeof schedaRef[k] === "function" && String(schedaRef[k]).includes('"SyncFoto/attivaDisattivaFotoExtra/" + guidId'));
+    assert.ok(nomeUrl != null, "la funzione dell'indirizzo c'e'");
+    await conSostituti(global, { Utility: { getDnaOfBox: (g) => g.dna } }, async () => {
+        await conSostituti(schedaRef, { refSelected: { item: { dna: { idRec: "10", idLavRec: 55 } } } }, async () => {
+            assert.ok(schedaRef[nomeUrl]("G1", true, records).endsWith("?codice=A&idLavRec=55"));
+        });
+        await conSostituti(schedaRef, { refSelected: { item: { dna: { idRec: "10", idLavRec: 0 } } } }, async () => {
+            assert.ok(schedaRef[nomeUrl]("G1", true, records).endsWith("?codice=A"));
+        });
+    });
 });

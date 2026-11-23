@@ -68,6 +68,7 @@ const fs2 = require('uxp').storage.localFileSystem;
 const VersionePrecedente = require('./versionePrecedente');
 //TASK-22d7fad2: lo slot dell'idRec nel DNA e l'Id della riga di un box derivato.
 const DnaBox = require('./dnaBox');
+const BoxDerivati = require('./boxDerivati');
 const { app, Justification, FitOptions, LocationOptions, File, ColorModel, Folder, ExportFormat, ContentType, SaveOptions, CoordinateSpaces, AnchorPoint, ResizeMethods} = require('indesign');
 //I20-1064: il cliente non si copia piu' in radice. clienteAttivo.json, scritto da
 //monta-cliente.sh, dice quale ipconfig usare, e l'ipconfig quale custom.js d'archivio leggere.
@@ -9431,6 +9432,36 @@ async function trovaRecord(codice, idRec, searchPage = null, select = true, Remo
         if (RemoveOnFail) {
             hideLoading();
             var idRecNorm = idRec != null && !isNaN(parseInt(idRec)) ? parseInt(idRec) : 0;
+
+            //TASK-22d7fad2: la pagina registrata non e' di questo documento. Non e' un box sparito:
+            //puo' stare in un altro documento della lavorazione. Lo si dice, e si offre di
+            //impaginarne qui un derivato; la rimozione resta, con l'avviso di cosa si sta togliendo.
+            var nomiPagineDocumento = BoxDerivati.nomiPagine(docInLavorazione);
+            if (paginaAttesa != null && String(paginaAttesa) !== "" && !BoxDerivati.paginaNelDocumento(paginaAttesa, nomiPagineDocumento)) {
+                var sceltaPaginaAssente = await BoxDerivati.chiediPerPaginaAssente({
+                    codice: codice,
+                    idRec: idRecNorm,
+                    paginaRegistrata: paginaAttesa,
+                    nomiPagine: nomiPagineDocumento,
+                    puoDerivare: BoxDerivati.puoDerivare(ficoProcess.getTipoLavorazioneCorrente(), 0)
+                });
+
+                if (sceltaPaginaAssente.azione === "derivato") {
+                    var boxDerivato = await BoxDerivati.creaEImpagina({ codiceGruppo: codice, idRec: idRecNorm, idLavRec: 0, pagina: sceltaPaginaAssente.pagina });
+                    if (boxDerivato != null && select) {
+                        Utility.selezionaBox(boxDerivato);
+                    }
+                    return { esito: boxDerivato != null, page: sceltaPaginaAssente.pagina };
+                }
+
+                if (sceltaPaginaAssente.azione === "rimuovi") {
+                    messaggioUtente("Code IDX-102 Elemento a pagina " + paginaAttesa + ", non presente in questo documento: procedo a rimuoverlo dall'impaginato sul server", "warning", false, 0);
+                    await rimuoviRefImpaginata([{ codice: codice, idRec: idRecNorm }]);
+                }
+                hideLoading();
+                return { esito: false, page: 0 };
+            }
+
             var confermaRimozione = await Modali.confirmRimozioneRefNonTrovata({
                 codice: codice,
                 idRec: idRecNorm,

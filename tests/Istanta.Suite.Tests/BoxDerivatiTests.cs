@@ -468,6 +468,58 @@ public class BoxDerivatiTests
         Assert.Contains("mode,\n                        idLavRec\n                    );", schede);
     }
 
+    //Da un derivato si cambia solo cio' che sta nei suoi meta: una foto per le altre lavorazioni
+    //cambierebbe l'originale.
+    [Fact]
+    public void Da_un_derivato_la_foto_si_cambia_solo_per_la_lavorazione()
+    {
+        var rifiuto = Assert.Throws<ErroreIstanta>(() => RecordDellaLavorazione.RifiutaSulDerivatoFuoriDaiMeta(900, false, "Il cambio della foto per le altre lavorazioni"));
+        Assert.Contains("non si fa da un box derivato", rifiuto.Message);
+
+        RecordDellaLavorazione.RifiutaSulDerivatoFuoriDaiMeta(900, true, "Il cambio della foto");
+        RecordDellaLavorazione.RifiutaSulDerivatoFuoriDaiMeta(0, false, "Il cambio della foto");
+
+        string syncFoto = Sorgente("Istanta/Controllers/SyncFotoController.cs");
+        string cambio = Tratto(syncFoto, "public async Task<IActionResult> updateImmagineEsistente(", "if (data.idLavorazione != 0)");
+        Assert.Contains("RecordDellaLavorazione.RifiutaSulDerivatoFuoriDaiMeta(data.idLavRec, data.validaSoloPerLavorazione,", cambio);
+    }
+
+    //Le operazioni sulle foto che cambiano il dato dell'articolo si rifiutano da un derivato prima
+    //di leggere o scrivere qualunque cosa: il Plugin le nasconde, ma la regola non dipende da lui.
+    [Fact]
+    public void Le_operazioni_sulle_foto_dell_articolo_si_rifiutano_da_un_derivato()
+    {
+        string syncFoto = Sorgente("Istanta/Controllers/SyncFotoController.cs");
+
+        (string firma, string rifiuto)[] casi =
+        {
+            ("public async Task<IActionResult> attivaDisattivaFotoExtra(string guidId, bool attiva, [FromQuery] string? codice = null, [FromQuery] long idLavRec = 0)",
+                "RecordDellaLavorazione.RifiutaSulDerivato(idLavRec, \"Attivare o disattivare una foto extra dell'articolo\");"),
+            ("public async Task<IActionResult> EstendiFotoExtra([FromForm] string guidId, [FromForm] string codice, int id_operazione = 0, [FromForm] long idLavRec = 0)",
+                "RecordDellaLavorazione.RifiutaSulDerivato(idLavRec, \"Estendere una foto extra alle altre referenze\");"),
+            ("public async Task<IActionResult> linkLogoBollo(string guidId, string nomeReale, string fileHash, string codiceReferenza, TipoFoto tipo, int id_operazione = 0, long idLavRec = 0)",
+                "RecordDellaLavorazione.RifiutaSulDerivato(idLavRec, \"Collegare un logo o un bollo all'articolo\");"),
+            ("public async Task<IActionResult> RimuoviFoto([FromForm] FileIndd dato, int id_operazione)",
+                "RecordDellaLavorazione.RifiutaSulDerivato(dato.idLavRec, \"Eliminare una foto dell'articolo\");"),
+            ("public async Task<IActionResult> escludiIncludiFotoExtraAuto(string codiceGruppo, string nomeFoto, bool escludi, long idLavRec = 0)",
+                "RecordDellaLavorazione.RifiutaSulDerivato(idLavRec, \"Escludere o includere una foto extra automatica per l'articolo\");"),
+            ("public async Task<IActionResult> updateFotoFromIndd([FromForm] FileIndd _file, int id_operazione=0)",
+                "RecordDellaLavorazione.RifiutaSulDerivatoFuoriDaiMeta(_file.idLavRec, _file.uploadMethod == FileInddUploadMethod.RelativoAllaLavorazione,"),
+        };
+
+        foreach (var (firma, rifiuto) in casi)
+        {
+            int inizio = syncFoto.IndexOf(firma, StringComparison.Ordinal);
+            Assert.True(inizio >= 0, firma + " non trovata");
+            int posizione = syncFoto.IndexOf(rifiuto, inizio, StringComparison.Ordinal);
+            Assert.True(posizione > inizio, rifiuto + " non trovato");
+            //Prima di ogni lettura o scrittura: fra la firma e il rifiuto non si tocca il database.
+            string prima = syncFoto.Substring(inizio, posizione - inizio);
+            Assert.DoesNotContain("this.ctx", prima);
+            Assert.DoesNotContain("SaveChanges", prima);
+        }
+    }
+
     private static string Tratto(string testo, string da, string a)
     {
         int inizio = testo.IndexOf(da, StringComparison.Ordinal);

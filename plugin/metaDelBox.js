@@ -588,6 +588,10 @@ const metaDelBox = {
         if (conMeta) {
             $('#editReferenza textarea[labelcorrispondente="descrizione"]').prop("readonly", true).css("opacity", "0.6");
             $("#applicaDescrizioneDaServer").hide();
+            //TASK-22d7fad2: con la descrizione nel meta il box e' diverso dall'archivio per scelta: il
+            //banner del mismatch, che il controller scrive confrontando box e archivio senza sapere
+            //del meta, non si mostra. Restava per sempre su un derivato, che non si revisiona.
+            $("#mismatchWarningPanel").empty().css("background-color", "");
         }
         this.aggiornaPulsantiMetaDescrizione();
     },

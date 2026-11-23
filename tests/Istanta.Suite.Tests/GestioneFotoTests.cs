@@ -163,7 +163,7 @@ public class GestioneFotoTests
     {
         var sync = Sorgente("Istanta/Controllers/SyncFotoController.cs");
 
-        Assert.Contains("public async Task<IActionResult> attivaDisattivaFotoExtra(string guidId, bool attiva, [FromQuery] string? codice = null)", sync);
+        Assert.Contains("public async Task<IActionResult> attivaDisattivaFotoExtra(string guidId, bool attiva, [FromQuery] string? codice = null, [FromQuery] long idLavRec = 0)", sync);
         Assert.Contains("FotoExtraDiPiuArticoli.DaAttivare(righeDelGuid, f => f.IdArticoloNavigation?.Codice, codice);", sync);
 
         int inizio = sync.IndexOf("public async Task<IActionResult> linkLogoBollo(", StringComparison.Ordinal);

@@ -323,6 +323,14 @@ namespace Istanta.Utility
                 throw new ErroreIstanta("controllo del derivato", $"{operazione} non si fa da un box derivato: va fatta dal box originale.");
         }
 
+        /// Da un derivato si cambia solo cio' che sta nei suoi meta: una scelta che vale anche per le
+        /// altre lavorazioni (la foto dell'articolo, per area o canale) cambierebbe l'originale.
+        public static void RifiutaSulDerivatoFuoriDaiMeta(long idLavRec, bool soloPerLaLavorazione, string operazione)
+        {
+            if (idLavRec > 0 && !soloPerLaLavorazione)
+                throw new ErroreIstanta("controllo del derivato", $"{operazione} non si fa da un box derivato: da un derivato vale solo per questa lavorazione.");
+        }
+
         /// Il box esce dalla lavorazione: un derivato si cancella con i suoi meta, gli altri si
         /// disattivano e li conservano (TASK-bb04f9aa).
         public static void Esce(Edro21_DbContext2 ctx2, PromoLavorazioniRecord? riga)

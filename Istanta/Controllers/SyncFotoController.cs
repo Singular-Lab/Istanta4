@@ -1905,11 +1905,13 @@ namespace Istanta.Controllers
         /// Senza codice resta il comportamento di prima, per i Plugin non ancora aggiornati.
         [HttpGet]
         [Route("SyncFoto/attivaDisattivaFotoExtra/{guidId}/{attiva}")]
-        public async Task<IActionResult> attivaDisattivaFotoExtra(string guidId, bool attiva, [FromQuery] string? codice = null)
+        public async Task<IActionResult> attivaDisattivaFotoExtra(string guidId, bool attiva, [FromQuery] string? codice = null, [FromQuery] long idLavRec = 0)
         {
             BoolResult result = new BoolResult();
             try
             {
+                //TASK-22d7fad2: la foto extra e' dell'articolo: da un derivato si esclude solo per la lavorazione.
+                RecordDellaLavorazione.RifiutaSulDerivato(idLavRec, "Attivare o disattivare una foto extra dell'articolo");
                 var codici = FotoExtraDiPiuArticoli.Codici(codice);
                 var righeDelGuid = this.ctx.ArticoliFotos.Include(f => f.IdArticoloNavigation)
                     .Where(f => f.GuidId == guidId && (codici.Count == 0 || codici.Contains(f.IdArticoloNavigation.Codice!)))
@@ -2010,6 +2012,8 @@ namespace Istanta.Controllers
                 Console.WriteLine($"1. updateFotoFromIndd {DateTime.Now}");
 
                 _file.Normalize();
+                //TASK-22d7fad2: da un derivato una foto nuova si carica solo per questa lavorazione.
+                RecordDellaLavorazione.RifiutaSulDerivatoFuoriDaiMeta(_file.idLavRec, _file.uploadMethod == FileInddUploadMethod.RelativoAllaLavorazione, "Il caricamento di una foto in archivio");
                 List<string> codiciList = new List<string>();
                 codiciList.AddRange(_file.codice!.Split(","));
                 string guidOlympo = "";
@@ -2427,6 +2431,8 @@ namespace Istanta.Controllers
             try
             {
                 data.Normalize();
+                //TASK-22d7fad2: da un derivato la foto si cambia solo per questa lavorazione.
+                RecordDellaLavorazione.RifiutaSulDerivatoFuoriDaiMeta(data.idLavRec, data.validaSoloPerLavorazione, "Il cambio della foto per le altre lavorazioni");
                 long idLavorazioneRec = 0;
 
                 if (data.idLavorazione != 0)
@@ -2645,11 +2651,13 @@ namespace Istanta.Controllers
         /// sono. Risponde con i codici a cui e' stata aggiunta.
         [HttpPut]
         [Route("SyncFoto/EstendiFotoExtra/{id_operazione}")]
-        public async Task<IActionResult> EstendiFotoExtra([FromForm] string guidId, [FromForm] string codice, int id_operazione = 0)
+        public async Task<IActionResult> EstendiFotoExtra([FromForm] string guidId, [FromForm] string codice, int id_operazione = 0, [FromForm] long idLavRec = 0)
         {
             EsitoEstendiFotoExtra result = new EsitoEstendiFotoExtra();
             try
             {
+                //TASK-22d7fad2: estendere cambia le referenze dell'articolo.
+                RecordDellaLavorazione.RifiutaSulDerivato(idLavRec, "Estendere una foto extra alle altre referenze");
                 var codici = FotoExtraDiPiuArticoli.Codici(codice);
                 var articoli = this.ctx.Articolis.Include(a => a.ArticoliFotos).Where(a => codici.Contains(a.Codice!)).ToList();
                 var sorgente = FotoExtraDiPiuArticoli.RigaDaEstendere(articoli.SelectMany(a => a.ArticoliFotos!), guidId);
@@ -2763,11 +2771,13 @@ namespace Istanta.Controllers
 
         [HttpPut]
         [Route("SyncFoto/linkLogoBollo")]
-        public async Task<IActionResult> linkLogoBollo(string guidId, string nomeReale, string fileHash, string codiceReferenza, TipoFoto tipo, int id_operazione = 0)
+        public async Task<IActionResult> linkLogoBollo(string guidId, string nomeReale, string fileHash, string codiceReferenza, TipoFoto tipo, int id_operazione = 0, long idLavRec = 0)
         {
             ArticoliFoto result = new ArticoliFoto();
             try
             {
+                //TASK-22d7fad2: il collegamento vale per l'articolo: da un derivato si aggiunge solo per la lavorazione.
+                RecordDellaLavorazione.RifiutaSulDerivato(idLavRec, "Collegare un logo o un bollo all'articolo");
 
                 var logoBolloResult = getLogoBolloByGuidId(guidId);
 
@@ -2908,6 +2918,8 @@ namespace Istanta.Controllers
             List<int> idFotosInt = new List<int>();
             try
             {
+                //TASK-22d7fad2: eliminare una foto la toglie all'articolo.
+                RecordDellaLavorazione.RifiutaSulDerivato(dato.idLavRec, "Eliminare una foto dell'articolo");
 
                 string[] cods =  dato.codice!.Split(',');
 
@@ -2958,9 +2970,20 @@ namespace Istanta.Controllers
 
         [HttpPut]
         [Route("SyncFoto/escludiIncludiFotoExtraAuto/{escludi}")]
-        public async Task<IActionResult> escludiIncludiFotoExtraAuto(string codiceGruppo, string nomeFoto, bool escludi)
+        public async Task<IActionResult> escludiIncludiFotoExtraAuto(string codiceGruppo, string nomeFoto, bool escludi, long idLavRec = 0)
         {
             BoolResult result = new BoolResult();
+            //TASK-22d7fad2: escludere o includere un'extra automatica vale per l'articolo.
+            try
+            {
+                RecordDellaLavorazione.RifiutaSulDerivato(idLavRec, "Escludere o includere una foto extra automatica per l'articolo");
+            }
+            catch (ErroreIstanta ex)
+            {
+                result.Esito = false;
+                result.error = DescrizioneErrori.Breve("escludiIncludiFotoExtraAuto", ex);
+                return Ok(result);
+            }
             var codici = codiceGruppo.Split(",");
             //Una referenza del gruppo che non e' in archivio si salta: prima mandava in errore tutto il
             //gruppo e la scelta non si salvava su nessuna.
