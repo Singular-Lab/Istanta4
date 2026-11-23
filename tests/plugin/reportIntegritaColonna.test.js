@@ -480,8 +480,8 @@ test("un report nuovo prende il posto di quello affiancato, e affiancato non tie
 
 test("il ricontrollo rilegge la scheda anche se il pannello l'ha gia' invalidata", () => {
     //Lasciato il box, EVENT_NO_REF_SELECTED invalida la scheda: senza questo la rilettura falliva.
-    const rilettura = corpoMembro(report, "    _leggiSchedaRefAggiornata(codiceGruppo, idRec) {");
-    assert.match(rilettura, /\}, idRec, true\);/);
+    const rilettura = corpoMembro(report, "    _leggiSchedaRefAggiornata(codiceGruppo, idRec, idLavRec = 0) {");
+    assert.match(rilettura, /\}, idRec, true, idLavRec\);/);
     const scheda = sorgente("schedaRef.js");
     assert.match(scheda, /getSchedaRef\(codiceGruppo, callback, idRec = 0, ignoraInvalidazione = false, idLavRec = 0\) \{/);
     assert.match(scheda, /if \(me\.isInvalidated && !ignoraInvalidazione\) \{\s*console\.warn\("La scheda ref non è più valida"\);/);

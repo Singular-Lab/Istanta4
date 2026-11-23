@@ -30,6 +30,7 @@
 const confronti = require('../confronti');
 //I20-1124: la versione precedente di un box rifatto, sul suo livello.
 const VersionePrecedente = require('../versionePrecedente');
+const DnaBox = require('../dnaBox');
 const XMLHttpRequestClient = require('../XMLHttpRequestClient');
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 const fs = require('fs');
@@ -336,19 +337,19 @@ const ReportIntegrita = {
                 const dove = pagineDocumento.find(p => p != null
                     && ReportIntegrita._codiciConId(p.codiciConId, p.codici).some(c => ReportIntegrita._stessaReferenza(c, codice)));
                 if (dove == null) {
-                    nonImpaginate.push({ codice: codice.codice, idRec: codice.idRec, paginaServer: nomePagina });
+                    nonImpaginate.push(ReportIntegrita._conIdLavRec({ codice: codice.codice, idRec: codice.idRec, paginaServer: nomePagina }, codice));
                 }
                 else if (daSvuotare.indexOf(String(dove.nomePagina)) < 0) {
-                    spostate.push({ codice: codice.codice, idRec: codice.idRec, paginaServer: nomePagina, paginaDocumento: String(dove.nomePagina) });
+                    spostate.push(ReportIntegrita._conIdLavRec({ codice: codice.codice, idRec: codice.idRec, paginaServer: nomePagina, paginaDocumento: String(dove.nomePagina) }, codice));
                 }
             });
 
             ReportIntegrita._codiciConId(pagina.codiciNonImpaginatiSulServerConId, pagina.codiciNonImpaginatiSulServer).forEach(codice => {
-                nonRegistrate.push({ codice: codice.codice, idRec: codice.idRec, pagina: nomePagina });
+                nonRegistrate.push(ReportIntegrita._conIdLavRec({ codice: codice.codice, idRec: codice.idRec, pagina: nomePagina }, codice));
             });
 
             ReportIntegrita._codiciConId(pagina.codiciImpaginatiAPaginaDifferenteConId, pagina.codiciImpaginatiAPaginaDifferente).forEach(codice => {
-                registrateAltrove.push({ codice: codice.codice, idRec: codice.idRec, pagina: nomePagina });
+                registrateAltrove.push(ReportIntegrita._conIdLavRec({ codice: codice.codice, idRec: codice.idRec, pagina: nomePagina }, codice));
             });
         });
 
@@ -360,7 +361,7 @@ const ReportIntegrita = {
     _codiciConId(listaConId, listaCodici) {
         const conId = (Array.isArray(listaConId) ? listaConId : [])
             .filter(c => c != null && c.codice != null && String(c.codice) !== "")
-            .map(c => ({ codice: String(c.codice), idRec: !isNaN(parseInt(c.idRec)) ? parseInt(c.idRec) : 0 }));
+            .map(c => ReportIntegrita._conIdLavRec({ codice: String(c.codice), idRec: !isNaN(parseInt(c.idRec)) ? parseInt(c.idRec) : 0 }, c));
         if (conId.length > 0) {
             return conId;
         }
@@ -371,11 +372,32 @@ const ReportIntegrita = {
 
     /// Due codici sono la stessa referenza se il codice e' uguale e, quando entrambi hanno
     /// l'idRec, anche quello: lo stesso codice puo' stare in due record del tracciato.
+    /// TASK-22d7fad2: un box derivato ha codice e idRec dell'originale, ma e' un'altra referenza:
+    /// e' la stessa solo di chi ha il suo idLavRec.
     _stessaReferenza(a, b) {
         if (a == null || b == null || String(a.codice).toLowerCase() !== String(b.codice).toLowerCase()) {
             return false;
         }
+        if (DnaBox.idLavRecDi(a) !== DnaBox.idLavRecDi(b)) {
+            return false;
+        }
         return !(a.idRec > 0 && b.idRec > 0) || a.idRec === b.idRec;
+    },
+
+    /// TASK-22d7fad2: la voce con l'idLavRec dell'origine, solo se e' di un box derivato: le voci
+    /// degli altri box restano com'erano.
+    _conIdLavRec(voce, origine) {
+        const idLavRec = DnaBox.idLavRecDi(origine);
+        if (idLavRec > 0) {
+            voce.idLavRec = idLavRec;
+        }
+        return voce;
+    },
+
+    /// TASK-22d7fad2: l'idLavRec del box di una riga del report, 0 se non e' un derivato. stato e'
+    /// quello della scheda aperta o del box seguito, quando c'e'.
+    _idLavRecDelRecord(record, stato = null) {
+        return DnaBox.idLavRecDi(stato) || DnaBox.idLavRecDi(record?.elementoMappa);
     },
 
     percorsoFileReport(idKit = null) {
@@ -842,6 +864,7 @@ const ReportIntegrita = {
             box,
             codiceGruppo: dna.codice_gruppo,
             idRec: dna.idRec,
+            idLavRec: DnaBox.idLavRecDi(dna),
             timer: null,
             vigilanzeFuori: 0
         };
@@ -1143,6 +1166,7 @@ const ReportIntegrita = {
             box,
             codiceGruppo: dna.codice_gruppo,
             idRec: dna.idRec,
+            idLavRec: DnaBox.idLavRecDi(dna),
             timer: null,
             riaggancioInCorso: false
         };
@@ -1524,7 +1548,7 @@ const ReportIntegrita = {
         //cosi' resta giusto anche se il ricontrollo del dato non riesce.
         this._aggiornaSegnalazioniDelRecord(record, box);
 
-        const records = await this._leggiSchedaRefAggiornata(stato.codiceGruppo, stato.idRec);
+        const records = await this._leggiSchedaRefAggiornata(stato.codiceGruppo, stato.idRec, this._idLavRecDelRecord(record, stato));
 
         this._tracciaScheda("ricontrollo:schedaRiletta", {
             richiesta: { codiceGruppo: stato.codiceGruppo, idRec: stato.idRec },
@@ -1803,7 +1827,8 @@ const ReportIntegrita = {
 
     /// La scheda si rilegge dal server per quella sola referenza: i record con cui il report e'
     /// nato sono di prima che l'operatore ci mettesse mano.
-    _leggiSchedaRefAggiornata(codiceGruppo, idRec) {
+    /// TASK-22d7fad2: con idLavRec la scheda e' quella del box derivato, con i suoi meta.
+    _leggiSchedaRefAggiornata(codiceGruppo, idRec, idLavRec = 0) {
         return new Promise(resolve => {
             let risposto = false;
 
@@ -1828,7 +1853,7 @@ const ReportIntegrita = {
                     }
 
                     rispondi(risultato.records || null);
-                }, idRec, true);
+                }, idRec, true, idLavRec);
             }
             catch (err) {
                 console.error("Rilettura della scheda non partita:", err);
@@ -3198,6 +3223,7 @@ const ReportIntegrita = {
         return {
             codiceGruppo,
             idRec: idRec == null || isNaN(parseInt(idRec)) ? "" : String(parseInt(idRec)),
+            idLavRec: String(DnaBox.idLavRecDi(record?.elementoMappa) || ""),
             refId: String(refId || ""),
             pagina: String(pagina || ""),
             duplicateInstanceId: String(duplicateInstanceId || "")
@@ -3214,6 +3240,7 @@ const ReportIntegrita = {
 
         if (ia.codiceGruppo !== ib.codiceGruppo) return false;
         if (ia.idRec !== ib.idRec) return false;
+        if (ia.idLavRec !== ib.idLavRec) return false;
 
         if (ia.refId || ib.refId) {
             return ia.refId !== "" && ia.refId === ib.refId;
@@ -3559,12 +3586,15 @@ const ReportIntegrita = {
         const idRec = this._getRecordIdRec(record);
         const pagina = record?.numeroPagina ?? record?.elementoMappa?.pagina ?? record?.elementoMappa?.numeroPagina ?? null;
 
-        const boxInPage = this._findBoxByCodiceGruppoInPage(codiceGruppo, idRec, pagina);
+        //TASK-22d7fad2: il box di una riga e' quello col suo idLavRec: l'originale non e' il derivato.
+        const idLavRec = this._idLavRecDelRecord(record);
+
+        const boxInPage = this._findBoxByCodiceGruppoInPage(codiceGruppo, idRec, pagina, idLavRec);
         if (boxInPage) {
             return boxInPage;
         }
 
-        return this._findBoxByCodiceGruppoInDocument(codiceGruppo, idRec);
+        return this._findBoxByCodiceGruppoInDocument(codiceGruppo, idRec, idLavRec);
     },
 
     _getRecordCodiceGruppo(record) {
@@ -3587,21 +3617,21 @@ const ReportIntegrita = {
         return parseInt(idRec);
     },
 
-    _findBoxByCodiceGruppoInPage(codiceGruppo, idRec, pageName) {
+    _findBoxByCodiceGruppoInPage(codiceGruppo, idRec, pageName, idLavRec = 0) {
         const page = this._getDocumentPageByName(pageName);
         if (!page) {
             return null;
         }
 
-        return this._findBoxByCodiceGruppoInGroups(page.groups, codiceGruppo, idRec);
+        return this._findBoxByCodiceGruppoInGroups(page.groups, codiceGruppo, idRec, idLavRec);
     },
 
-    _findBoxByCodiceGruppoInDocument(codiceGruppo, idRec) {
+    _findBoxByCodiceGruppoInDocument(codiceGruppo, idRec, idLavRec = 0) {
         try {
             const doc = app.activeDocument;
             for (let i = 0; i < doc.pages.length; i++) {
                 const page = doc.pages.item(i);
-                const box = this._findBoxByCodiceGruppoInGroups(page.groups, codiceGruppo, idRec);
+                const box = this._findBoxByCodiceGruppoInGroups(page.groups, codiceGruppo, idRec, idLavRec);
                 if (box) {
                     return box;
                 }
@@ -3613,7 +3643,7 @@ const ReportIntegrita = {
         return null;
     },
 
-    _findBoxByCodiceGruppoInGroups(groups, codiceGruppo, idRec) {
+    _findBoxByCodiceGruppoInGroups(groups, codiceGruppo, idRec, idLavRec = 0) {
         return this._findItemInCollection(groups, (group) => {
             try {
                 if (!group || !group.isValid) {
@@ -3622,6 +3652,10 @@ const ReportIntegrita = {
 
                 const dna = Utility.getDnaOfBox(group);
                 if (!dna || String(dna.codice_gruppo || "").trim() !== codiceGruppo) {
+                    return false;
+                }
+
+                if (DnaBox.idLavRecDi(dna) !== DnaBox.idValido(idLavRec)) {
                     return false;
                 }
 
@@ -3812,7 +3846,7 @@ const ReportIntegrita = {
             const codiceGruppo = record?.codiceGruppo;
             const idRec = record?.elementoMappa?.idRec != null ? record.elementoMappa.idRec : null;
 
-            let boxNuovo = VersionePrecedente.boxInPaginaPer(docInLavorazione, codiceGruppo, idRec, Utility.getDnaOfBox);
+            let boxNuovo = VersionePrecedente.boxInPaginaPer(docInLavorazione, codiceGruppo, idRec, Utility.getDnaOfBox, this._idLavRecDelRecord(record));
             if (boxNuovo == null && box.boxAggiunto != null && box.boxAggiunto.isValid) {
                 boxNuovo = box.boxAggiunto;
             }
@@ -3834,7 +3868,7 @@ const ReportIntegrita = {
                 }
             }
 
-            this._aggiungiVersionePrecedenteTenuta(codiceGruppo, idRec);
+            this._aggiungiVersionePrecedenteTenuta(codiceGruppo, idRec, this._idLavRecDelRecord(record));
             this._saveCurrentReportAndWhitelist();
             this._refreshConfrontoReportUi();
             await this._riscriviCsvDelReport();
@@ -3894,7 +3928,7 @@ const ReportIntegrita = {
         const codiceGruppo = dna != null ? dna.codice_gruppo : record?.codiceGruppo;
         const idRec = dna != null ? dna.idRec : (record?.elementoMappa?.idRec != null ? record.elementoMappa.idRec : null);
 
-        const lettura = await this._leggiSchedaRefConStato(codiceGruppo, idRec);
+        const lettura = await this._leggiSchedaRefConStato(codiceGruppo, idRec, dna != null ? DnaBox.idLavRecDi(dna) : this._idLavRecDelRecord(record));
         if (lettura.nonImpaginata) {
             const esito = await this._ricollegaDalReport(box);
             (esito.messaggi || []).forEach(m => messaggioUtente(m.testo, m.tipo, false, 5));
@@ -3923,7 +3957,7 @@ const ReportIntegrita = {
 
     /// La scheda riletta dal server, distinguendo la referenza che il server non considera
     /// impaginata (errorCode 8): e' il caso in cui va ricollegata.
-    _leggiSchedaRefConStato(codiceGruppo, idRec) {
+    _leggiSchedaRefConStato(codiceGruppo, idRec, idLavRec = 0) {
         return new Promise(resolve => {
             let risposto = false;
 
@@ -3949,7 +3983,7 @@ const ReportIntegrita = {
                         return;
                     }
                     rispondi({ records: risultato.records || null, nonImpaginata: false });
-                }, idRec, true);
+                }, idRec, true, idLavRec);
             }
             catch (err) {
                 console.error("Rilettura della scheda non partita:", err);
@@ -3973,12 +4007,12 @@ const ReportIntegrita = {
 
     /// Dopo un Fix, la versione precedente che il confronto ha tenuto sul suo livello entra subito
     /// fra i box da eliminare, col contrassegno Clone: il report resta fedele al documento.
-    _aggiungiVersionePrecedenteTenuta(codiceGruppo, idRec) {
+    _aggiungiVersionePrecedenteTenuta(codiceGruppo, idRec, idLavRec = 0) {
         const state = this._confrontoReportState;
         if (state == null || state.report == null) {
             return false;
         }
-        const clone = VersionePrecedente.versionePrecedenteDi(docInLavorazione, codiceGruppo, idRec, Utility.getDnaOfBox);
+        const clone = VersionePrecedente.versionePrecedenteDi(docInLavorazione, codiceGruppo, idRec, Utility.getDnaOfBox, idLavRec);
         if (clone == null) {
             return false;
         }
@@ -3994,6 +4028,7 @@ const ReportIntegrita = {
             codice: dna != null ? dna.codice : null,
             codiceGruppo: codiceGruppo,
             idRec: idRec,
+            idLavRec: DnaBox.idValido(idLavRec),
             bounds: clone.geometricBounds,
             pagina: pagina,
             paginaAttuale: pagina,
@@ -4814,7 +4849,7 @@ const ReportIntegrita = {
         }
 
         if (box == null) {
-            box = ReportIntegrita._findBoxByCodiceGruppoInPage(elementoMappa.codiceGruppo, elementoMappa.idRec, elementoMappa.pagina);
+            box = ReportIntegrita._findBoxByCodiceGruppoInPage(elementoMappa.codiceGruppo, elementoMappa.idRec, elementoMappa.pagina, DnaBox.idLavRecDi(elementoMappa));
         }
 
         return box;
@@ -5031,7 +5066,7 @@ const ReportIntegrita = {
             //5. Il confronto box per box e l'apertura del report.
             showLoading("Inizio confronto box...");
             await Utility.sleep(100);
-            await ReportIntegrita.applicaConfronto(mappa, avviso.lette, versioniPrecedenti);
+            await ReportIntegrita.applicaConfronto(mappa, avviso.lette, versioniPrecedenti, reportIntegritaAvvio.derivatiNonRegistrati(preAnalisiMismatchNumeriPagina));
 
             console.log("Report integrità: sequenza completa in " + ((Date.now() - inizio) / 1000).toFixed(1) + " s");
         }
@@ -5164,7 +5199,9 @@ const ReportIntegrita = {
     /// reportConfronti.js per le differenze sui campi osservati dall'agenzia. 359 righe.
     /// I20-1056, lotto 5: letteSegnalazioni e' la lettura dei bollini fatta all'avvio, che da' i
     /// numeri accanto ai record; null se non e' riuscita.
-    async applicaConfronto(mappa, letteSegnalazioni = null, versioniPrecedenti = null) {
+    /// TASK-22d7fad2: derivatiRimossi sono gli idLavRec dei box derivati che il server non registra
+    /// piu' (avvio.derivatiNonRegistrati): non hanno una scheda, e finiscono fra i box da eliminare.
+    async applicaConfronto(mappa, letteSegnalazioni = null, versioniPrecedenti = null, derivatiRimossi = null) {
         console.log(mappa);
         showLoading("Controllo dei box in pagina per ricerca differenze...");
         await Utility.sleep(10);
@@ -5225,13 +5262,16 @@ const ReportIntegrita = {
                     idRecNorm = parseInt(ref.idRec);
                 }
 
-                var chiavePresenza = (ref.codiceGruppo != null ? ref.codiceGruppo : "") + "|" + (idRecNorm != null ? idRecNorm : "");
+                //TASK-22d7fad2: un box derivato e' una presenza a se', col suo idLavRec.
+                var idLavRecNorm = DnaBox.idLavRecDi(ref);
+
+                var chiavePresenza = (ref.codiceGruppo != null ? ref.codiceGruppo : "") + "|" + (idRecNorm != null ? idRecNorm : "") + (idLavRecNorm > 0 ? "|" + idLavRecNorm : "");
                 if (presenzeViste[chiavePresenza]) {
                     continue;
                 }
 
                 presenzeViste[chiavePresenza] = true;
-                presenze.push({ codiceGruppo: ref.codiceGruppo, idRec: idRecNorm });
+                presenze.push({ codiceGruppo: ref.codiceGruppo, idRec: idRecNorm, idLavRec: idLavRecNorm });
             }
         }
 
@@ -5283,6 +5323,22 @@ const ReportIntegrita = {
         var schedeRefs = [];
         for (var i = 0; i < presenze.length; i++) {
             var presenza = presenze[i];
+
+            //TASK-22d7fad2: la lista del kit porta i meta dell'originale. Un box derivato ha i
+            //suoi: la sua scheda si chiede al server, con l'idLavRec. Quello che il server non
+            //registra piu' resta senza scheda, e sotto finisce fra i box da eliminare.
+            if (presenza.idLavRec > 0) {
+                var recordsDerivato = null;
+                if ((derivatiRimossi || []).indexOf(presenza.idLavRec) < 0) {
+                    recordsDerivato = await ReportIntegrita._leggiSchedaRefAggiornata(presenza.codiceGruppo, presenza.idRec != null ? presenza.idRec : 0, presenza.idLavRec);
+                    if (recordsDerivato == null) {
+                        messaggioUtente("Code IDX-167 Scheda del box derivato " + presenza.codiceGruppo + " non letta: il box compare fra quelli da eliminare, rilanciare il report prima di toglierlo", "warning", false, 10);
+                    }
+                }
+                schedeRefs.push({ records: recordsDerivato || [], idLavRec: presenza.idLavRec });
+                continue;
+            }
+
             var candidati = recordsPerCodiceGruppo[presenza.codiceGruppo] || [];
 
             schedeRefs.push({
@@ -5319,6 +5375,11 @@ const ReportIntegrita = {
                             var refDup = listaDup[d];
                             var idRecDup = refDup.idRec != null && !isNaN(parseInt(refDup.idRec)) ? parseInt(refDup.idRec) : "";
                             var dupKey = [refDup.codiceGruppo || "", idRecDup].join("|");
+                            //TASK-22d7fad2: originale e derivato non sono duplicati l'uno dell'altro;
+                            //due copie dello stesso derivato si'.
+                            if (DnaBox.idLavRecDi(refDup) > 0) {
+                                dupKey += "|" + DnaBox.idLavRecDi(refDup);
+                            }
                             if (duplicateGroups[dupKey] == null) {
                                 duplicateGroups[dupKey] = [];
                             }
@@ -5365,7 +5426,9 @@ const ReportIntegrita = {
                                 return false;
                             }
 
-                            return true;
+                            //TASK-22d7fad2: la scheda di un derivato vale per il suo box, quella
+                            //della lista per i box che non sono derivati.
+                            return DnaBox.idLavRecDi(candidato.elMappa) === DnaBox.idLavRecDi(schedaRef);
                         });
 
                         if (elementiDaAnalizzare.length === 0) {

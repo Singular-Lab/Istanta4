@@ -826,7 +826,9 @@ const Utility=
         }
     
         console.log("Menabo/getListaImpaginati/" + idKitLavorazione);
-        xhrInProcess.send("Menabo/getListaImpaginati/" + idKitLavorazione, null, "GET");
+        //TASK-22d7fad2: con conDerivati la lista ha anche i box derivati, ognuno col suo idLavRec.
+        //Senza, e' quella di prima: i soli originali, che dicono se un record e' impaginato.
+        xhrInProcess.send("Menabo/getListaImpaginati/" + idKitLavorazione + (opzioni.conDerivati ? "?conDerivati=true" : ""), null, "GET");
 
         let i = 0;
 

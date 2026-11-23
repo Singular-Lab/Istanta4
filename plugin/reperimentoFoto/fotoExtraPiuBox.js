@@ -214,7 +214,12 @@ const FotoExtraPiuBox = {
     /// Il codice gruppo e l'idRec di un box della selezione, per le chiamate al server.
     destinazioneDelBox(b) {
         const conId = this.getCodiciConIdFromMultiSelection([b.dettaglio])[0] || {};
-        return { codiceGruppo: b.records[0].recordInTracciato["Scatto.CodiceGruppo"], idRec: conId.idRec || 0 };
+        const destinazione = { codiceGruppo: b.records[0].recordInTracciato["Scatto.CodiceGruppo"], idRec: conId.idRec || 0 };
+        //TASK-22d7fad2: per un box derivato anche il suo idLavRec, cosi' la foto va ai suoi meta.
+        if (conId.idLavRec > 0) {
+            destinazione.idLavRec = conId.idLavRec;
+        }
+        return destinazione;
     },
 
     /// Una chiamata al server come promessa: risolve con la risposta, fallisce col motivo.

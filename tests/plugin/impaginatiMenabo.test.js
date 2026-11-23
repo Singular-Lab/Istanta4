@@ -115,7 +115,8 @@ test("gli impaginati si chiedono una volta per ridisegno, prima delle righe", ()
     const fine = filtri.indexOf("            righeGriglia.append(row);", inizio);
     const corpo = filtri.substring(inizio, fine);
 
-    const chiamata = "await Utility.getListaCodiciImpaginati({ nullSeFallisce: true });";
+    //TASK-22d7fad2: con i derivati, che sono box della pagina come gli altri.
+    const chiamata = "await Utility.getListaCodiciImpaginati({ nullSeFallisce: true, conDerivati: true });";
     assert.strictEqual(corpo.split(chiamata).length - 1, 1);
     assert.ok(corpo.indexOf(chiamata) < corpo.indexOf("const row = $('<div></div>')"), "la chiamata va prima del ciclo delle righe");
     assert.match(corpo, /listaImpaginati != null \? filtri\.impaginatiPerPagina\(listaImpaginati\) : null/);

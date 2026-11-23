@@ -49,10 +49,17 @@ const SvuotamentoPagina = {
         const d = daDecidere || {};
         const elenco = (lista) => Array.isArray(lista) ? lista : [];
         const righe = [];
-        elenco(d.spostate).forEach(r => righe.push({ tipo: "spostata", codice: r.codice, idRec: r.idRec, paginaServer: String(r.paginaServer), paginaDocumento: String(r.paginaDocumento) }));
-        elenco(d.nonImpaginate).forEach(r => righe.push({ tipo: "nonImpaginata", codice: r.codice, idRec: r.idRec, paginaServer: String(r.paginaServer), paginaDocumento: null }));
-        elenco(d.registrateAltrove).forEach(r => righe.push({ tipo: "registrataAltrove", codice: r.codice, idRec: r.idRec, paginaServer: null, paginaDocumento: String(r.pagina) }));
-        elenco(d.nonRegistrate).forEach(r => righe.push({ tipo: "nonRegistrata", codice: r.codice, idRec: r.idRec, paginaServer: null, paginaDocumento: String(r.pagina) }));
+        //TASK-22d7fad2: la riga di un box derivato porta il suo idLavRec, le altre restano com'erano.
+        const aggiungi = (r, riga) => {
+            if (parseInt(r.idLavRec) > 0) {
+                riga.idLavRec = parseInt(r.idLavRec);
+            }
+            righe.push(riga);
+        };
+        elenco(d.spostate).forEach(r => aggiungi(r, { tipo: "spostata", codice: r.codice, idRec: r.idRec, paginaServer: String(r.paginaServer), paginaDocumento: String(r.paginaDocumento) }));
+        elenco(d.nonImpaginate).forEach(r => aggiungi(r, { tipo: "nonImpaginata", codice: r.codice, idRec: r.idRec, paginaServer: String(r.paginaServer), paginaDocumento: null }));
+        elenco(d.registrateAltrove).forEach(r => aggiungi(r, { tipo: "registrataAltrove", codice: r.codice, idRec: r.idRec, paginaServer: null, paginaDocumento: String(r.pagina) }));
+        elenco(d.nonRegistrate).forEach(r => aggiungi(r, { tipo: "nonRegistrata", codice: r.codice, idRec: r.idRec, paginaServer: null, paginaDocumento: String(r.pagina) }));
 
         return righe.map(riga => {
             const sulServer = riga.tipo === "nonRegistrata" ? null : SvuotamentoPagina.impaginatoDi(impaginati, riga, stessaReferenza);
@@ -75,17 +82,18 @@ const SvuotamentoPagina = {
             return null;
         }
         return impaginati.find(i => i != null
-            && stessaReferenza({ codice: String(i.codiceGruppo), idRec: parseInt(i.idRec) || 0 }, riga)) || null;
+            && stessaReferenza({ codice: String(i.codiceGruppo), idRec: parseInt(i.idRec) || 0, idLavRec: parseInt(i.idLavRec) || 0 }, riga)) || null;
     },
 
     /// Il record della referenza nella lista della lavorazione, o null se non c'e'. Con l'idRec
-    /// conta quello; senza (la pre-analisi puo' dare 0) basta il codice gruppo.
+    /// conta quello; senza (la pre-analisi puo' dare 0) basta il codice gruppo. TASK-22d7fad2: un
+    /// box derivato ha il record dell'originale, quindi qui il suo idLavRec non distingue.
     recordDi(records, riga, stessaReferenza) {
         if (!Array.isArray(records)) {
             return null;
         }
         const trovato = records.find(r => r != null && r.recordInTracciato != null
-            && stessaReferenza({ codice: String(r.recordInTracciato["Scatto.CodiceGruppo"]), idRec: parseInt(r.recordInTracciato.idRec) || 0 }, riga));
+            && stessaReferenza({ codice: String(r.recordInTracciato["Scatto.CodiceGruppo"]), idRec: parseInt(r.recordInTracciato.idRec) || 0, idLavRec: riga.idLavRec }, riga));
         return trovato != null ? trovato.recordInTracciato : null;
     },
 
@@ -222,7 +230,7 @@ const SvuotamentoPagina = {
     /// ripartenza il ciclo non la prende per una ref appena scelta (che chiuderebbe le finestre).
     trova(riga) {
         const candidati = VersionePrecedente.gruppiConDnaSulLivello(docInLavorazione, "InPagina", Utility.getDnaOfBox, [String(riga.paginaDocumento)]);
-        const trovato = candidati.find(c => ReportIntegrita._stessaReferenza({ codice: String(c.dna.codice_gruppo), idRec: parseInt(c.dna.idRec) || 0 }, riga));
+        const trovato = candidati.find(c => ReportIntegrita._stessaReferenza({ codice: String(c.dna.codice_gruppo), idRec: parseInt(c.dna.idRec) || 0, idLavRec: c.dna.idLavRec }, riga));
         if (trovato == null) {
             messaggioUtente("Code SVP-02 Box " + riga.codice + " non trovato a pagina " + riga.paginaDocumento, "warning", false, 5);
             return false;
@@ -282,7 +290,8 @@ const SvuotamentoPagina = {
             return { spostate: [] };
         }
 
-        const impaginati = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true });
+        //TASK-22d7fad2: con i derivati, che hanno una riga e un autore loro.
+        const impaginati = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true, conDerivati: true });
         const righe = SvuotamentoPagina.righe(daDecidere, impaginati, pluginMiddleware.recordsDellaLavorazione(), ReportIntegrita._stessaReferenza);
         const contenuto = SvuotamentoPagina.contenuto(righe, pagine, {
             info: (riga) => SvuotamentoPagina.apriInfo(riga),

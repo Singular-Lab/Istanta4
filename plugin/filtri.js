@@ -515,7 +515,7 @@ const filtri = {
     mostraImpaginatiPagina(nomePagina, impaginati) {
         const elenco = $('<div></div>').css({ width: '100%', color: 'black', fontSize: '13px' });
         impaginati.forEach(elemento => {
-            const testo = elemento.codiceGruppo + (elemento.idRec != null ? " (idRec " + elemento.idRec + ")" : "");
+            const testo = elemento.codiceGruppo + (elemento.idRec != null ? " (idRec " + elemento.idRec + ")" : "") + (elemento.derivato ? " - derivato" : "");
             elenco.append($('<div></div>').text(testo).css({ padding: '2px 0', borderBottom: '1px solid #ddd' }));
         });
 
@@ -661,7 +661,8 @@ const filtri = {
         const listaEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
         //I20-1031: i box impaginati di ogni pagina secondo Istanta, chiesti una volta per ridisegno.
         //null se la chiamata non riesce: la colonna dira' "?" invece di un "Nessuna" che non e' vero.
-        const listaImpaginati = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true });
+        //TASK-22d7fad2: derivati compresi: sono box della pagina come gli altri.
+        const listaImpaginati = await Utility.getListaCodiciImpaginati({ nullSeFallisce: true, conDerivati: true });
         const impaginatiPerPagina = listaImpaginati != null ? filtri.impaginatiPerPagina(listaImpaginati) : null;
         let ultimaDataConteggio = null;
         //compiliamo l'ultima data di conteggio prendendo la data più recente tra quelle presenti in listaRefConteggio

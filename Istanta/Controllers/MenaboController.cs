@@ -5887,7 +5887,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
     [FromForm] string? idsRec,
     int idLavorazione,
     bool byPassLavorazioneRecord = false,
-    FicoCombinazioneKitReadMode mode = FicoCombinazioneKitReadMode.Classic)
+    FicoCombinazioneKitReadMode mode = FicoCombinazioneKitReadMode.Classic,
+    [FromForm] string? idsLavRec = null)
         {
             try
             {
@@ -5902,6 +5903,13 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     .Select(x => long.TryParse(x, out var id) ? id : 0)
                     .ToList();
 
+                //TASK-22d7fad2: un idLavRec per box, nella stessa posizione del suo codice; 0 per un
+                //box che non e' un derivato. La scheda di un derivato si compone con i suoi meta.
+                var listaIdsLavRec = (idsLavRec ?? "")
+                    .Split("-", StringSplitOptions.TrimEntries)
+                    .Select(x => long.TryParse(x, out var id) ? id : 0)
+                    .ToList();
+
                 var resultList = new List<ArticoloInRevisioneKitResult>();
 
                 for (int i = 0; i < listaCodici.Count; i++)
@@ -5912,12 +5920,17 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         ? listaIdsRec[i]
                         : 0;
 
+                    var idLavRec = i < listaIdsLavRec.Count
+                        ? listaIdsLavRec[i]
+                        : 0;
+
                     IActionResult res = await getSchedaRef(
                         cod,
                         idLavorazione,
                         idRec,
                         byPassLavorazioneRecord,
-                        mode
+                        mode,
+                        idLavRec
                     );
 
                     resultList.Add(RisultatoDellaSchedaNelMassivo(cod, res));
@@ -6957,34 +6970,54 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                 f.Pagina.ToString() == pag.nomePagina)
                             .ToList();
 
+                        //TASK-22d7fad2: sulla pagina stanno anche i box derivati, che la lettura sopra
+                        //non vede. Ognuno ha la sua riga e si riconosce dal suo idLavRec: nelle liste
+                        //con l'id della risposta lo porta, cosi' non si confonde con l'originale.
+                        elementiImpaginatiAPagina.AddRange(RecordDellaLavorazione.Derivati(this.ctx2)
+                            .Include(p => p.IdPromoTracciatiRecordNavigation)
+                            .Where(f =>
+                                f.IdLavorazione == id_lavorazione &&
+                                f.Pagina.ToString() == pag.nomePagina)
+                            .ToList());
+
                         void AddNonPiuPresente(PromoLavorazioniRecord elemento)
                         {
                             var codice = elemento.CodiceGruppo ?? "";
+                            var idLavRec = RecordDellaLavorazione.IdLavRecDelBox(elemento);
 
-                            if (!esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciato.Contains(codice))
+                            if (idLavRec == 0 && !esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciato.Contains(codice))
                             {
                                 esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciato.Add(codice);
                             }
 
                             if (!esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Any(c =>
                                     c.codice == codice &&
-                                    c.idRec == elemento.IdRecordTracciato))
+                                    c.idRec == elemento.IdRecordTracciato &&
+                                    c.idLavRec == idLavRec))
                             {
                                 esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Add(new filtroCodici
                                 {
                                     codice = codice,
-                                    idRec = Convert.ToInt32(elemento.IdRecordTracciato)
+                                    idRec = Convert.ToInt32(elemento.IdRecordTracciato),
+                                    idLavRec = idLavRec
                                 });
                             }
                         }
 
                         bool IsNonPiuPresente(filtroCodici item)
                         {
+                            if (item.idLavRec > 0)
+                            {
+                                return esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Any(c =>
+                                    c.idLavRec == item.idLavRec);
+                            }
+
                             if (item.idRec > 0)
                             {
                                 return esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Any(c =>
                                     c.codice == item.codice &&
-                                    c.idRec == item.idRec);
+                                    c.idRec == item.idRec &&
+                                    c.idLavRec == 0);
                             }
 
                             return esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciato.Contains(item.codice);
@@ -6992,7 +7025,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                         void AddCorrispondente(filtroCodici item, PromoLavorazioniRecord elemento)
                         {
-                            if (!esitoPagina.codiciCorrispondenti.Contains(item.codice))
+                            if (item.idLavRec == 0 && !esitoPagina.codiciCorrispondenti.Contains(item.codice))
                             {
                                 esitoPagina.codiciCorrispondenti.Add(item.codice);
                             }
@@ -7003,19 +7036,21 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                             if (!esitoPagina.codiciCorrispondentiConId.Any(c =>
                                     c.codice == item.codice &&
-                                    c.idRec == idRec))
+                                    c.idRec == idRec &&
+                                    c.idLavRec == item.idLavRec))
                             {
                                 esitoPagina.codiciCorrispondentiConId.Add(new filtroCodici
                                 {
                                     codice = item.codice,
-                                    idRec = idRec
+                                    idRec = idRec,
+                                    idLavRec = item.idLavRec
                                 });
                             }
                         }
 
                         void AddPaginaDifferente(filtroCodici item, PromoLavorazioniRecord elemento)
                         {
-                            if (!esitoPagina.codiciImpaginatiAPaginaDifferente.Contains(item.codice))
+                            if (item.idLavRec == 0 && !esitoPagina.codiciImpaginatiAPaginaDifferente.Contains(item.codice))
                             {
                                 esitoPagina.codiciImpaginatiAPaginaDifferente.Add(item.codice);
                             }
@@ -7026,31 +7061,35 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                             if (!esitoPagina.codiciImpaginatiAPaginaDifferenteConId.Any(c =>
                                     c.codice == item.codice &&
-                                    c.idRec == idRec))
+                                    c.idRec == idRec &&
+                                    c.idLavRec == item.idLavRec))
                             {
                                 esitoPagina.codiciImpaginatiAPaginaDifferenteConId.Add(new filtroCodici
                                 {
                                     codice = item.codice,
-                                    idRec = idRec
+                                    idRec = idRec,
+                                    idLavRec = item.idLavRec
                                 });
                             }
                         }
 
                         void AddNonImpaginato(filtroCodici item)
                         {
-                            if (!esitoPagina.codiciNonImpaginatiSulServer.Contains(item.codice))
+                            if (item.idLavRec == 0 && !esitoPagina.codiciNonImpaginatiSulServer.Contains(item.codice))
                             {
                                 esitoPagina.codiciNonImpaginatiSulServer.Add(item.codice);
                             }
 
                             if (!esitoPagina.codiciNonImpaginatiSulServerConId.Any(c =>
                                     c.codice == item.codice &&
-                                    c.idRec == item.idRec))
+                                    c.idRec == item.idRec &&
+                                    c.idLavRec == item.idLavRec))
                             {
                                 esitoPagina.codiciNonImpaginatiSulServerConId.Add(new filtroCodici
                                 {
                                     codice = item.codice,
-                                    idRec = item.idRec
+                                    idRec = item.idRec,
+                                    idLavRec = item.idLavRec
                                 });
                             }
                         }
@@ -7059,20 +7098,23 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         {
                             var codice = elemento.CodiceGruppo ?? "";
                             var idRec = Convert.ToInt32(elemento.IdRecordTracciato);
+                            var idLavRec = RecordDellaLavorazione.IdLavRecDelBox(elemento);
 
-                            if (!esitoPagina.codiciPresentiSoloSulServer.Contains(codice))
+                            if (idLavRec == 0 && !esitoPagina.codiciPresentiSoloSulServer.Contains(codice))
                             {
                                 esitoPagina.codiciPresentiSoloSulServer.Add(codice);
                             }
 
                             if (!esitoPagina.codiciPresentiSoloSulServerConId.Any(c =>
                                     c.codice == codice &&
-                                    c.idRec == idRec))
+                                    c.idRec == idRec &&
+                                    c.idLavRec == idLavRec))
                             {
                                 esitoPagina.codiciPresentiSoloSulServerConId.Add(new filtroCodici
                                 {
                                     codice = codice,
-                                    idRec = idRec
+                                    idRec = idRec,
+                                    idLavRec = idLavRec
                                 });
                             }
                         }
@@ -7131,14 +7173,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                 continue;
                             }
 
-                            PromoTracciatiRecord? recordTarget;
-
-                            var elementoImpaginato = GetLavorazioneRecordConFratelli(
-                                item.codice,
-                                item.idRec,
-                                id_lavorazione,
-                                out recordTarget
-                            );
+                            var elementoImpaginato = RigaDelBoxDelDocumento(item, id_lavorazione);
 
                             if (elementoImpaginato == null)
                             {
@@ -7164,10 +7199,12 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         {
                             var codice = elementoSuServer.CodiceGruppo ?? "";
                             var idRec = Convert.ToInt32(elementoSuServer.IdRecordTracciato);
+                            var idLavRec = RecordDellaLavorazione.IdLavRecDelBox(elementoSuServer);
 
                             bool nonPiuPresente = esitoPagina.codiciImpaginatiMaNonPiuPresentiInTracciatoConId.Any(c =>
                                 c.codice == codice &&
-                                c.idRec == idRec);
+                                c.idRec == idRec &&
+                                c.idLavRec == idLavRec);
 
                             if (nonPiuPresente)
                             {
@@ -7281,14 +7318,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                         foreach (var item in codiciPresentiSoloSulServer)
                         {
-                            PromoTracciatiRecord? recordTarget;
-
-                            var record = GetLavorazioneRecordConFratelli(
-                                item.codice,
-                                item.idRec,
-                                id_lavorazione,
-                                out recordTarget
-                            );
+                            var record = RigaDelBoxDelDocumento(item, id_lavorazione);
 
                             if (record != null)
                             {
@@ -7341,21 +7371,19 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                             })
                                             .ToList();
 
-                                return codiciMappa.Any(c =>
-                                {
-                                    if (!string.Equals(c.codice, record.CodiceGruppo, StringComparison.OrdinalIgnoreCase))
-                                        return false;
-
-                                    if (c.idRec > 0)
-                                        return c.idRec == record.IdRecordTracciato;
-
-                                    return true;
-                                });
+                                //TASK-22d7fad2: la voce di un derivato non dice dov'e' l'originale, e un
+                                //derivato si trova solo dalla sua voce.
+                                return codiciMappa.Any(c => RecordDellaLavorazione.EVoceDelBox(record, c.codice, c.idRec, c.idLavRec));
                             });
 
                             if (paginaMappa != null)
                             {
                                 PortaAPagina(record, Byte.Parse(paginaMappa.nomePagina!), AutoreSpostamenti);
+                            }
+                            else if (record.DerivatoDi != null)
+                            {
+                                //TASK-22d7fad2: un derivato che il documento non ha piu' si cancella.
+                                RecordDellaLavorazione.Esce(this.ctx2, record);
                             }
                             else
                             {
@@ -7371,6 +7399,13 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     {
                         foreach (var item in codiciNonImpaginatiSulServer)
                         {
+                            //TASK-22d7fad2: un derivato rimosso non si ricollega e non si registra da
+                            //qui: il suo box resta fra quelli da eliminare del Report Integrita'.
+                            if (item.idLavRec > 0)
+                            {
+                                continue;
+                            }
+
                             RichiestaImpaginazioneSingolo richiesta = new RichiestaImpaginazioneSingolo();
                             richiesta.pagina = Byte.Parse(pag.nomePagina!);
                             richiesta.idLavorazione = id_lavorazione;
@@ -7424,14 +7459,7 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                     foreach (var item in codiciImpaginatiAPaginaDifferente)
                     {
-                        PromoTracciatiRecord? recordTarget;
-
-                        var recordDaCambiarePagina = GetLavorazioneRecordConFratelli(
-                            item.codice,
-                            item.idRec,
-                            id_lavorazione,
-                            out recordTarget
-                        );
+                        var recordDaCambiarePagina = RigaDelBoxDelDocumento(item, id_lavorazione);
 
                         if (recordDaCambiarePagina == null)
                         {
@@ -8946,6 +8974,18 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 return Ok(result);
             }
             return Ok(result);
+        }
+
+        /// TASK-22d7fad2: la riga di un box del documento, come lo descrive la mappa: con idLavRec
+        /// quella del derivato (null se e' stato rimosso), altrimenti quella del codice gruppo.
+        private PromoLavorazioniRecord? RigaDelBoxDelDocumento(filtroCodici item, int idLavorazione)
+        {
+            if (item.idLavRec > 0)
+            {
+                return RecordDellaLavorazione.DerivatoSeEsiste(this.ctx2, idLavorazione, item.idLavRec);
+            }
+
+            return GetLavorazioneRecordConFratelli(item.codice, item.idRec, idLavorazione, out _);
         }
 
         private PromoLavorazioniRecord? GetLavorazioneRecordConFratelli(

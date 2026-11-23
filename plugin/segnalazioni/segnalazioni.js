@@ -330,6 +330,15 @@ const Segnalazioni = {
         return isNaN(numero) ? null : String(numero);
     },
 
+    /// TASK-22d7fad2: la chiave di un box: quella del suo record e, per un box derivato, anche il
+    /// suo idLavRec (idRec*idLavRec, come nel DNA), perche' originale e derivato hanno lo stesso
+    /// record ma segnalazioni proprie. null se l'idRec non e' un numero.
+    chiaveBox(idRec, idLavRec) {
+        const chiave = Segnalazioni.chiaveRecord(idRec);
+        const derivato = parseInt(idLavRec);
+        return chiave != null && derivato > 0 ? chiave + "*" + derivato : chiave;
+    },
+
     /// I20-1141: i record del tracciato il cui box ha segnalazioni, per la voce "Con segnalazioni"
     /// della tendina. riepilogo e' quello di riepilogoTracciato (per idRec, solo i box con voci),
     /// idRecDi(record) l'idRec del record. L'ordine resta quello ricevuto.

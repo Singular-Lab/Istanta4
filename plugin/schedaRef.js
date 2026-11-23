@@ -706,9 +706,12 @@ const schedaRef = {
             indesignEvents.setBusy(true);
             var listaCodiciGruppo = [];
             var listaIdRec = [];
+            //TASK-22d7fad2: l'idLavRec dei box derivati della selezione, 0 per gli altri.
+            var listaIdLavRec = [];
             $("#editReferenza").empty();
             for (let i = 0; i < refs.length; i++) {
                 listaCodiciGruppo.push(refs[i].codiceGruppo);
+                listaIdLavRec.push(me.idLavRecDelDettaglio(refs[i]));
 
                 var idRec = null;
                 if (refs[i].idRec != null && refs[i].idRec !== "" && !isNaN(parseInt(refs[i].idRec))) {
@@ -748,7 +751,7 @@ const schedaRef = {
                 }
 
                 me.mostraSchedaMultipla();
-            });
+            }, listaIdLavRec);
         }
         catch (error) {
 
@@ -1226,6 +1229,12 @@ const schedaRef = {
 
         let params = "codiceGruppo=" + enc(primo.recordInTracciato["Scatto.CodiceGruppo"]);
         params += "&idRec=" + enc(primo.idRec);
+        //TASK-22d7fad2: i record della scheda di un box derivato portano il suo idLavRec. Lo si
+        //manda: Istanta rifiuta le azioni sul box per quel derivato, e lo dice per quel box.
+        const idLavRec = DnaBox.idValido(primo.recordInTracciato["idLavRec"]);
+        if (idLavRec > 0) {
+            params += "&idLavRec=" + enc(idLavRec);
+        }
         if (diGruppo && opzione == "primario") {
             params += "&" + kAz + ".codice=" + enc(primo.recordInTracciato["Referenza.Codice"]);
         }
@@ -8700,6 +8709,24 @@ const schedaRef = {
 
     },
 
+    /// TASK-22d7fad2: l'idLavRec di un box della selezione (0 se non e' un derivato): quello che la
+    /// selezione ha letto dal DNA, altrimenti il DNA del box.
+    idLavRecDelDettaglio(dettaglio) {
+        if (dettaglio == null) {
+            return 0;
+        }
+        const letto = DnaBox.idLavRecDi(dettaglio);
+        if (letto > 0) {
+            return letto;
+        }
+        try {
+            return dettaglio.item != null && dettaglio.item.isValid ? DnaBox.idLavRecDi(Utility.getDnaOfBox(dettaglio.item)) : 0;
+        }
+        catch (e) {
+            return 0;
+        }
+    },
+
     getCodiciConIdFromMultiSelection(multiSelection) {
         var lista = [];
         if (!Array.isArray(multiSelection)) {
@@ -8727,7 +8754,13 @@ const schedaRef = {
                 }
             }
 
-            lista.push({ codice: codice, idRec: idRec });
+            //TASK-22d7fad2: la voce di un box derivato porta il suo idLavRec, le altre restano com'erano.
+            var voce = { codice: codice, idRec: idRec };
+            var idLavRec = this.idLavRecDelDettaglio(item);
+            if (idLavRec > 0) {
+                voce.idLavRec = idLavRec;
+            }
+            lista.push(voce);
         }
 
         return lista;
@@ -8817,6 +8850,10 @@ const schedaRef = {
 
                 params += "ListaCodiciConId[" + i + "].codice=" + encodeURIComponent(codice) + "&";
                 params += "ListaCodiciConId[" + i + "].idRec=" + encodeURIComponent(idRec) + "&";
+                //TASK-22d7fad2: con un derivato nella selezione Istanta rifiuta il raggruppamento.
+                if (DnaBox.idLavRecDi(listaCodiciConId[i]) > 0) {
+                    params += "ListaCodiciConId[" + i + "].idLavRec=" + encodeURIComponent(DnaBox.idLavRecDi(listaCodiciConId[i])) + "&";
+                }
             }
 
             var xhr = new XMLHttpRequestClient();
@@ -9457,7 +9494,13 @@ const schedaRef = {
             const elementi = NoRenderElementi.elementiDaSalvare(voceBox.lista);
             const statoInviato = NoRenderElementi.statoDiRendering(voceBox.lista);
             const idRec = (me.getCodiciConIdFromMultiSelection([b.dettaglio])[0] || {}).idRec || 0;
-            const registrato = await me.inviaNoRender(elementi, { codiceGruppo: b.records[0].recordInTracciato["Scatto.CodiceGruppo"], idRec: idRec });
+            const destinazione = { codiceGruppo: b.records[0].recordInTracciato["Scatto.CodiceGruppo"], idRec: idRec };
+            //TASK-22d7fad2: per un box derivato anche il suo idLavRec, cosi' la lista va ai suoi meta.
+            const idLavRec = me.idLavRecDelDettaglio(b.dettaglio);
+            if (idLavRec > 0) {
+                destinazione.idLavRec = idLavRec;
+            }
+            const registrato = await me.inviaNoRender(elementi, destinazione);
             if (registrato) {
                 voceBox.statoSalvato = statoInviato;
                 me.aggiornaNoRenderNeiRecord(elementi, b.records);

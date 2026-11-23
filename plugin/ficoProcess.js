@@ -1651,6 +1651,15 @@ const FicoProcess=
     },
 
     //Processo di lettura locale info
+    /// TASK-22d7fad2: il record della lista copiato per un box dell'esportazione: pagina, posizione
+    /// e ingombro si scrivono sulla copia. Null se il record non c'e'.
+    copiaPerIlBox: function (record) {
+        if (record == null) {
+            return null;
+        }
+        return Object.assign({}, record, { recordInTracciato: Object.assign({}, record.recordInTracciato) });
+    },
+
     processExport:async function (page, file)
     {
         return new Promise(resolve => setTimeout(() => {
@@ -1674,7 +1683,11 @@ const FicoProcess=
                         //troviamo nel file listaKit l'elemento con codice = param[2]
                         if (dna.codice != null) {
                             //var element = file.records.find(f => f.recordInTracciato["Scatto.CodiceGruppo"].toString() == dna.codice_gruppo && (f.recordInTracciato["StatoSelezione"].toString() == 1 || dna.codice==dna.codice_gruppo));
-                            var element = file.records.find(f => f.recordInTracciato["Scatto.CodiceGruppo"].toString() == dna.codice_gruppo && f.recordInTracciato["Referenza.Codice"].toString() == dna.codice);
+                            var elementoLista = file.records.find(f => f.recordInTracciato["Scatto.CodiceGruppo"].toString() == dna.codice_gruppo && f.recordInTracciato["Referenza.Codice"].toString() == dna.codice);
+                            //TASK-22d7fad2: una copia per box. Scrivendo sul record della lista, due box
+                            //dello stesso record (l'originale e un derivato) finivano con la stessa
+                            //pagina e la stessa posizione: quelle dell'ultimo letto.
+                            var element = this.copiaPerIlBox(elementoLista);
                             if (element != null) {
                                 //Prendiamo dettagli sull'ingombro
                                 element.recordInTracciato["View.wPag"]=wPag;

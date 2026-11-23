@@ -260,6 +260,37 @@ namespace Istanta.Utility
                 ?? throw new ErroreIstanta("lettura del derivato", $"il box derivato {idLavRec} non esiste nella lavorazione {idLavorazione}: e' stato rimosso.");
         }
 
+        /// Il derivato con quell'Id nella lavorazione, o null se non c'e' piu': per chi confronta il
+        /// documento col server, dove un derivato rimosso e' un caso da riferire e non un errore.
+        public static PromoLavorazioniRecord? DerivatoSeEsiste(Edro21_DbContext2 ctx2, int idLavorazione, long idLavRec)
+        {
+            return Derivati(ctx2)
+                .Include(r => r.IdPromoTracciatiRecordNavigation)
+                .FirstOrDefault(r => r.Id == idLavRec && r.IdLavorazione == idLavorazione);
+        }
+
+        /// L'idLavRec con cui il box della riga si presenta nel documento: l'Id della riga per un
+        /// derivato, 0 per un originale (il suo DNA non lo porta).
+        public static long IdLavRecDelBox(PromoLavorazioniRecord riga)
+        {
+            return riga.DerivatoDi != null ? riga.Id : 0;
+        }
+
+        /// Se una voce della mappa del documento (codice, idRec, idLavRec del DNA) e' il box della
+        /// riga. Un derivato si riconosce solo dal suo idLavRec; un originale dal codice gruppo e,
+        /// quando la voce lo porta, dall'idRec, e mai dalla voce di un derivato: il derivato di un
+        /// box sta su un'altra pagina e non dice dov'e' l'originale.
+        public static bool EVoceDelBox(PromoLavorazioniRecord riga, string? codice, long idRec, long idLavRec)
+        {
+            if (riga.DerivatoDi != null)
+                return idLavRec == riga.Id;
+            if (idLavRec > 0)
+                return false;
+            if (!string.Equals(codice, riga.CodiceGruppo, StringComparison.OrdinalIgnoreCase))
+                return false;
+            return idRec <= 0 || idRec == riga.IdRecordTracciato;
+        }
+
         /// La riga di un'impaginazione in corso per Id, derivato o no: per chi ha gia' l'Id della riga
         /// (il registro delle operazioni) e deve scriverne i meta.
         public static PromoLavorazioniRecord? PerId(Edro21_DbContext2 ctx2, long id)

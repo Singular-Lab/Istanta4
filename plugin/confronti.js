@@ -24,6 +24,7 @@ const fs = require('fs');
 const NoRenderElementi = require('./noRenderElementi');
 //I20-1124: la versione precedente di un box rifatto, messa da parte sul suo livello.
 const VersionePrecedente = require('./versionePrecedente');
+const DnaBox = require('./dnaBox');
 
 /// I20-1046: gli elementi del box che decidono le regole e non l'operatore: la base (e gli altri
 /// campi base*, a cui il custom del cliente da' lo stile oggetto del formato) e i loghi e gli sfondi
@@ -952,6 +953,7 @@ const confronti = {
                     codice: dna.codice,
                     codiceGruppo: dna.codice_gruppo,
                     idRec: dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : null,
+                    idLavRec: DnaBox.idLavRecDi(dna),
                     bounds: gruppo.geometricBounds,
                     pagina: t.pagina,
                     paginaAttuale: t.pagina,
@@ -1087,6 +1089,7 @@ const confronti = {
                                 codice: dna.codice,
                                 codiceGruppo: dna.codice_gruppo,
                                 idRec: dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : null,
+                                idLavRec: DnaBox.idLavRecDi(dna),
                                 bounds: gruppo.geometricBounds,
                                 pagina: pagina.name,
                                 paginaAttuale: pagina.name,
@@ -1168,6 +1171,7 @@ const confronti = {
                                 codice: dna.codice,
                                 codiceGruppo: dna.codice_gruppo,
                                 idRec: dna.idRec != null && dna.idRec !== "" && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : null,
+                                idLavRec: DnaBox.idLavRecDi(dna),
                                 bounds: gruppo.geometricBounds,
                                 puntoCentrale: [gruppo.geometricBounds[1] + (gruppo.geometricBounds[3] - gruppo.geometricBounds[1]) / 2, gruppo.geometricBounds[0] + (gruppo.geometricBounds[2] - gruppo.geometricBounds[0]) / 2],
                                 pagina: pagina.name,
@@ -1236,9 +1240,17 @@ const confronti = {
                     return;
                 }
 
-                var exists = paginaObj.codiciConId.some(c => c.codice === codice && parseInt(c.idRec) === idRec);
+                //TASK-22d7fad2: un box derivato ha lo stesso codice e lo stesso idRec dell'originale:
+                //la sua voce porta l'idLavRec, e non e' un doppione di quella dell'originale.
+                var idLavRec = DnaBox.idLavRecDi(gruppo);
+
+                var exists = paginaObj.codiciConId.some(c => c.codice === codice && parseInt(c.idRec) === idRec && DnaBox.idLavRecDi(c) === idLavRec);
                 if (!exists) {
-                    paginaObj.codiciConId.push({ codice: codice, idRec: idRec });
+                    var voce = { codice: codice, idRec: idRec };
+                    if (idLavRec > 0) {
+                        voce.idLavRec = idLavRec;
+                    }
+                    paginaObj.codiciConId.push(voce);
                 }
             });
             listaPagine.push(paginaObj);

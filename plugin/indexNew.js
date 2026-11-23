@@ -7614,6 +7614,13 @@ function creaRigaSync(contenutoKitInLavorazione) {
 }
 
 /// I20-1141: l'idRec di un record del tracciato, come lo legge la riga per il badge di pagina.
+/// Gli idRec impaginati secondo Istanta (la lista di Menabo/getListaImpaginati, una voce per box
+/// con codiceGruppo, idRec e nomePagina), per i filtri "impaginati" e "da impaginare" del
+/// tracciato. Prima si cercava l'idRec dentro la lista di voci, e non si trovava mai.
+function idRecImpaginati(listImpaginati) {
+    return new Set((Array.isArray(listImpaginati) ? listImpaginati : []).filter(voce => voce != null).map(voce => voce.idRec));
+}
+
 function idRecDelRecordDelTracciato(record) {
     return getIdRecFromItemRef(record != null ? record.recordInTracciato : null);
 }
@@ -7645,6 +7652,7 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
 
         if (resRicerca == null) {
             const listImpaginati = await Utility.getListaCodiciImpaginati();
+            const impaginati = idRecImpaginati(listImpaginati);
 
             if (val === "all") {
                 recordsDaMostrare = contenutoKitInLavorazione.records || [];
@@ -7657,11 +7665,11 @@ async function aggiornaTracciatoPostRicerca(resRicerca) {
                 recordsDaMostrare = Segnalazioni.recordConSegnalazioni(contenutoKitInLavorazione.records || [], riepilogoSegnalazioniTracciato(), idRecDelRecordDelTracciato);
             } else if (val === "impaginati") {
                 recordsDaMostrare = (contenutoKitInLavorazione.records || []).filter(r =>
-                    listImpaginati.includes(r.recordInTracciato.idRec)
+                    impaginati.has(r.recordInTracciato.idRec)
                 );
             } else if (val === "da_impaginare") {
                 recordsDaMostrare = (contenutoKitInLavorazione.records || []).filter(r =>
-                    !listImpaginati.includes(r.recordInTracciato.idRec)
+                    !impaginati.has(r.recordInTracciato.idRec)
                 );
             }
         } else {
@@ -9371,8 +9379,14 @@ async function trovaRecord(codice, idRec, searchPage = null, select = true, Remo
                     continue;
                 }
 
-    
-                if (dna.codice_gruppo == codice && dna.id_rec == idRec) {
+                //TASK-22d7fad2: il tracciato cerca il box del record, cioe' l'originale. Un derivato
+                //ha lo stesso codice gruppo e lo stesso idRec, ma non e' quello.
+                if (DnaBox.idLavRecDi(dna) > 0) {
+                    continue;
+                }
+
+                //Il confronto era con dna.id_rec, che non esiste: non c'era mai un match esatto.
+                if (dna.codice_gruppo == codice && dna.idRec == idRec) {
                     if (select) {
                         group.select();
                     }
@@ -9381,7 +9395,7 @@ async function trovaRecord(codice, idRec, searchPage = null, select = true, Remo
 
                     var result = {
                         esito: true,
-                        page: p
+                        page: page.name
                     };
                     return result;
                 }
@@ -9609,7 +9623,9 @@ function cercaRecordInTracciato(Codice) {
 /// l'oggetto globale, quindi me.isInvalidated e' sempre undefined e quel controllo non
 /// scatta mai. Lo stesso vale per "this.isBusy = false" nel catch, che scrive su una
 /// proprieta' del globale che nessuno legge.
-async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback) {
+/// TASK-22d7fad2: idsLavRec, uno per box nella stessa posizione del suo codice, e' l'idLavRec dei
+/// box derivati (0 per gli altri): la loro scheda si compone con i loro meta.
+async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback, idsLavRec = null) {
     if (typeof idRecs === "function") {
         callback = idRecs;
         idRecs = null;
@@ -9667,6 +9683,9 @@ async function getSchedeRefsMassivo(codiciGruppi, idRecs, callback) {
     //dopo finirebbero accanto al codice sbagliato.
     if (Array.isArray(idRecs) && idRecs.length > 0) {
         formData.append("idsRec", idRecs.map(id => id == null || isNaN(parseInt(id)) ? 0 : parseInt(id)).join("-"));
+    }
+    if (Array.isArray(idsLavRec) && idsLavRec.some(id => DnaBox.idValido(id) > 0)) {
+        formData.append("idsLavRec", idsLavRec.map(id => DnaBox.idValido(id)).join("-"));
     }
 
     //I20-1063: false come la scheda di un box solo (getSchedaRef). Con true il server saltava il
@@ -10160,7 +10179,12 @@ function preAnalisiPerSpostate(spostate) {
             perPagina[r.paginaDocumento] = { nomePagina: r.paginaDocumento, codiciImpaginatiAPaginaDifferente: [], codiciImpaginatiAPaginaDifferenteConId: [] };
         }
         perPagina[r.paginaDocumento].codiciImpaginatiAPaginaDifferente.push(r.codice);
-        perPagina[r.paginaDocumento].codiciImpaginatiAPaginaDifferenteConId.push({ codice: r.codice, idRec: r.idRec });
+        var conId = { codice: r.codice, idRec: r.idRec };
+        //TASK-22d7fad2: di un box derivato si sposta la sua riga, non quella dell'originale.
+        if (parseInt(r.idLavRec) > 0) {
+            conId.idLavRec = parseInt(r.idLavRec);
+        }
+        perPagina[r.paginaDocumento].codiciImpaginatiAPaginaDifferenteConId.push(conId);
     });
     return Object.keys(perPagina).map(k => perPagina[k]);
 }

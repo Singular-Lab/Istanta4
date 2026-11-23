@@ -371,6 +371,112 @@ public class BoxDerivatiTests
         Assert.Equal("7", elenco[1].nomePagina);
     }
 
+    // ---------- lotto 2b: il documento confrontato col server ----------
+
+    //Nella mappa del documento un derivato ha codice gruppo e idRec dell'originale: lo distingue
+    //solo l'idLavRec. Senza, la voce del derivato a pagina 7 faceva passare l'originale per
+    //spostato a pagina 7.
+    [Fact]
+    public void La_voce_di_un_derivato_non_e_il_box_dell_originale_e_viceversa()
+    {
+        var originale = Originale();
+        var derivato = RecordDellaLavorazione.NuovoDerivato(originale, 7, 9, Adesso);
+        derivato.Id = 900;
+
+        Assert.True(RecordDellaLavorazione.EVoceDelBox(originale, Gruppo, 100, 0));
+        Assert.False(RecordDellaLavorazione.EVoceDelBox(originale, Gruppo, 100, 900));
+        Assert.True(RecordDellaLavorazione.EVoceDelBox(derivato, Gruppo, 100, 900));
+        Assert.False(RecordDellaLavorazione.EVoceDelBox(derivato, Gruppo, 100, 0));
+        Assert.False(RecordDellaLavorazione.EVoceDelBox(derivato, Gruppo, 100, 901));
+    }
+
+    //Per i box che non sono derivati la regola resta quella di prima: codice gruppo senza
+    //distinguere le maiuscole, e l'idRec solo quando la voce lo porta.
+    [Fact]
+    public void La_voce_di_un_originale_si_riconosce_come_prima()
+    {
+        var originale = Originale();
+
+        Assert.True(RecordDellaLavorazione.EVoceDelBox(originale, Gruppo, 0, 0));
+        Assert.True(RecordDellaLavorazione.EVoceDelBox(originale, Gruppo.ToUpperInvariant(), 100, 0));
+        Assert.False(RecordDellaLavorazione.EVoceDelBox(originale, Gruppo, 101, 0));
+        Assert.False(RecordDellaLavorazione.EVoceDelBox(originale, "1,2", 100, 0));
+    }
+
+    [Fact]
+    public void L_idLavRec_del_box_e_l_Id_della_riga_solo_per_un_derivato()
+    {
+        var originale = Originale();
+        var derivato = RecordDellaLavorazione.NuovoDerivato(originale, 7, 9, Adesso);
+        derivato.Id = 900;
+
+        Assert.Equal(0, RecordDellaLavorazione.IdLavRecDelBox(originale));
+        Assert.Equal(900, RecordDellaLavorazione.IdLavRecDelBox(derivato));
+    }
+
+    //La pre-analisi guarda anche le righe derivate della pagina, risolve le voci con idLavRec
+    //sulla riga del derivato, e nelle liste con l'id dice di quale box parla.
+    [Fact]
+    public void La_pre_analisi_confronta_i_derivati_sulla_loro_riga()
+    {
+        string menabo = Sorgente("Istanta/Controllers/MenaboController.cs");
+        string preAnalisi = Tratto(menabo, "public async Task<IActionResult> PreAnalisiMismatch(", "public async Task<IActionResult> syncImpaginatoConServer(");
+
+        Assert.Contains("elementiImpaginatiAPagina.AddRange(RecordDellaLavorazione.Derivati(this.ctx2)", preAnalisi);
+        Assert.Contains("var elementoImpaginato = RigaDelBoxDelDocumento(item, id_lavorazione);", preAnalisi);
+        Assert.DoesNotContain("GetLavorazioneRecordConFratelli(", preAnalisi);
+        //Le cinque liste con l'id portano l'idLavRec.
+        Assert.Equal(2, Occorrenze(preAnalisi, "idLavRec = idLavRec\n"));
+        Assert.Equal(3, Occorrenze(preAnalisi, "idLavRec = item.idLavRec\n"));
+        //Le liste di soli codici, lette dai client vecchi, restano dei soli originali.
+        Assert.Contains("if (idLavRec == 0 && !esitoPagina.codiciPresentiSoloSulServer.Contains(codice))", preAnalisi);
+        Assert.Contains("if (item.idLavRec == 0 && !esitoPagina.codiciNonImpaginatiSulServer.Contains(item.codice))", preAnalisi);
+
+        string riga = Tratto(menabo, "private PromoLavorazioniRecord? RigaDelBoxDelDocumento(", "private PromoLavorazioniRecord? GetLavorazioneRecordConFratelli(");
+        Assert.Contains("return RecordDellaLavorazione.DerivatoSeEsiste(this.ctx2, idLavorazione, item.idLavRec);", riga);
+        Assert.Contains("return GetLavorazioneRecordConFratelli(item.codice, item.idRec, idLavorazione, out _);", riga);
+    }
+
+    //La sincronizzazione: un derivato su un'altra pagina sposta la sua riga; uno che il documento
+    //non ha piu' si cancella; uno che Istanta non registra piu' non si registra da qui.
+    [Fact]
+    public void La_sincronizzazione_tratta_il_derivato_sulla_sua_riga()
+    {
+        string menabo = Sorgente("Istanta/Controllers/MenaboController.cs");
+        string sync = Tratto(menabo, "public async Task<IActionResult> syncImpaginatoConServer(", "Menabo/inserisciBoxInPromoLavorazioniRecord/");
+
+        Assert.DoesNotContain("GetLavorazioneRecordConFratelli(", sync);
+        Assert.Equal(2, Occorrenze(sync, "RigaDelBoxDelDocumento(item, id_lavorazione);"));
+        Assert.Contains("return codiciMappa.Any(c => RecordDellaLavorazione.EVoceDelBox(record, c.codice, c.idRec, c.idLavRec));", sync);
+        Assert.Contains("else if (record.DerivatoDi != null)\n                            {\n                                //TASK-22d7fad2: un derivato che il documento non ha piu' si cancella.\n                                RecordDellaLavorazione.Esce(this.ctx2, record);", sync);
+
+        int nonImpaginati = sync.IndexOf("foreach (var item in codiciNonImpaginatiSulServer)", StringComparison.Ordinal);
+        int salto = sync.IndexOf("if (item.idLavRec > 0)\n                            {\n                                continue;", nonImpaginati, StringComparison.Ordinal);
+        int registra = sync.IndexOf("await impaginaSingolo(richiesta", nonImpaginati, StringComparison.Ordinal);
+        Assert.True(nonImpaginati > 0 && salto > nonImpaginati && salto < registra, "il derivato non registrato si salta prima di impaginaSingolo");
+    }
+
+    //Con piu' box selezionati la scheda di un derivato si chiede con il suo idLavRec.
+    [Fact]
+    public void Le_schede_di_piu_box_portano_l_idLavRec_di_ciascuno()
+    {
+        string menabo = Sorgente("Istanta/Controllers/MenaboController.cs");
+        string schede = Tratto(menabo, "public async Task<IActionResult> getSchedeRefs(", "public static ArticoloInRevisioneKitResult RisultatoDellaSchedaNelMassivo(");
+
+        Assert.Contains("[FromForm] string? idsLavRec = null)", schede);
+        Assert.Contains("var idLavRec = i < listaIdsLavRec.Count\n                        ? listaIdsLavRec[i]\n                        : 0;", schede);
+        Assert.Contains("mode,\n                        idLavRec\n                    );", schede);
+    }
+
+    private static string Tratto(string testo, string da, string a)
+    {
+        int inizio = testo.IndexOf(da, StringComparison.Ordinal);
+        Assert.True(inizio >= 0, da + " non trovato");
+        int fine = testo.IndexOf(a, inizio + da.Length, StringComparison.Ordinal);
+        Assert.True(fine > inizio, a + " non trovato");
+        return testo.Substring(inizio, fine - inizio);
+    }
+
     private static int Occorrenze(string testo, string cercato)
     {
         int n = 0;

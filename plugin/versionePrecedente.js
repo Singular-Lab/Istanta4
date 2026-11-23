@@ -98,10 +98,14 @@ const VersionePrecedente = {
     },
 
     /// Due riferimenti alla stessa presenza: stesso codice gruppo e stesso idRec (vuoto compreso).
-    stessaPresenza(codiceGruppoA, idRecA, codiceGruppoB, idRecB) {
+    /// TASK-22d7fad2: e stesso idLavRec, perche' un box derivato ha codice gruppo e idRec
+    /// dell'originale ma e' un'altra presenza (0, o niente, per chi non e' un derivato).
+    stessaPresenza(codiceGruppoA, idRecA, codiceGruppoB, idRecB, idLavRecA = 0, idLavRecB = 0) {
         const idA = idRecA == null || idRecA === "" ? "" : String(idRecA);
         const idB = idRecB == null || idRecB === "" ? "" : String(idRecB);
-        return String(codiceGruppoA) === String(codiceGruppoB) && idA === idB;
+        const derivatoA = parseInt(idLavRecA) > 0 ? parseInt(idLavRecA) : 0;
+        const derivatoB = parseInt(idLavRecB) > 0 ? parseInt(idLavRecB) : 0;
+        return String(codiceGruppoA) === String(codiceGruppoB) && idA === idB && derivatoA === derivatoB;
     },
 
     /// I gruppi del documento, pagina per pagina, che stanno su un livello e hanno un DNA.
@@ -137,16 +141,16 @@ const VersionePrecedente = {
     },
 
     /// Il box su InPagina di una presenza (codice gruppo e idRec), in qualunque pagina. Null se non c'e'.
-    boxInPaginaPer(doc, codiceGruppo, idRec, leggiDna) {
+    boxInPaginaPer(doc, codiceGruppo, idRec, leggiDna, idLavRec = 0) {
         const candidati = this.gruppiConDnaSulLivello(doc, NOME_LIVELLO_IN_PAGINA, leggiDna);
-        const trovato = candidati.find(c => this.stessaPresenza(c.dna.codice_gruppo, c.dna.idRec, codiceGruppo, idRec));
+        const trovato = candidati.find(c => this.stessaPresenza(c.dna.codice_gruppo, c.dna.idRec, codiceGruppo, idRec, c.dna.idLavRec, idLavRec));
         return trovato != null ? trovato.gruppo : null;
     },
 
     /// La versione precedente di una presenza, se nel documento ce n'e' una. Null se non c'e'.
-    versionePrecedenteDi(doc, codiceGruppo, idRec, leggiDna) {
+    versionePrecedenteDi(doc, codiceGruppo, idRec, leggiDna, idLavRec = 0) {
         const candidati = this.gruppiConDnaSulLivello(doc, NOME_LIVELLO, leggiDna);
-        const trovato = candidati.find(c => this.stessaPresenza(c.dna.codice_gruppo, c.dna.idRec, codiceGruppo, idRec));
+        const trovato = candidati.find(c => this.stessaPresenza(c.dna.codice_gruppo, c.dna.idRec, codiceGruppo, idRec, c.dna.idLavRec, idLavRec));
         return trovato != null ? trovato.gruppo : null;
     }
 };

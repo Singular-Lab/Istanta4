@@ -426,6 +426,11 @@ function gruppoGiaNellaMappa(records, mappa) {
         if (gruppo == null || gruppo.codiceGruppo == null || String(gruppo.codiceGruppo) !== codice) {
             return false;
         }
+        //TASK-22d7fad2: il server restituisce solo box originali; un derivato nel documento non
+        //dice che l'originale c'e'.
+        if (parseInt(gruppo.idLavRec) > 0) {
+            return false;
+        }
         const idRecMappa = parseInt(gruppo.idRec);
         return !(idRec > 0 && idRecMappa > 0) || idRec === idRecMappa;
     }));
@@ -436,9 +441,28 @@ function gruppoGiaNellaMappa(records, mappa) {
 //suo box su InPagina, in qualunque pagina, e' un clone da eliminare; chi non ce l'ha e' una
 //versione da riportare in pagina o da eliminare, e sta fra i modificati.
 
-/// La chiave di una presenza: codice gruppo e idRec, vuoto compreso.
-function chiavePresenza(codiceGruppo, idRec) {
-    return String(codiceGruppo == null ? "" : codiceGruppo) + "|" + (idRec == null || idRec === "" ? "" : String(idRec));
+/// La chiave di una presenza: codice gruppo e idRec, vuoto compreso. TASK-22d7fad2: per un box
+/// derivato anche il suo idLavRec, cosi' il clone di un derivato non passa per quello dell'originale.
+function chiavePresenza(codiceGruppo, idRec, idLavRec) {
+    const derivato = parseInt(idLavRec) > 0 ? "|" + parseInt(idLavRec) : "";
+    return String(codiceGruppo == null ? "" : codiceGruppo) + "|" + (idRec == null || idRec === "" ? "" : String(idRec)) + derivato;
+}
+
+/// TASK-22d7fad2: gli idLavRec dei box derivati che il documento ha e che il server non registra
+/// piu', dalla pre-analisi. Un derivato rimosso non si ricollega: il suo box e' da eliminare.
+function derivatiNonRegistrati(preAnalisi) {
+    const ids = [];
+    const pagine = preAnalisi != null && Array.isArray(preAnalisi.resultPaginas) ? preAnalisi.resultPaginas : [];
+    pagine.forEach(pagina => {
+        const voci = pagina != null && Array.isArray(pagina.codiciNonImpaginatiSulServerConId) ? pagina.codiciNonImpaginatiSulServerConId : [];
+        voci.forEach(voce => {
+            const idLavRec = voce != null ? parseInt(voce.idLavRec) : 0;
+            if (idLavRec > 0 && ids.indexOf(idLavRec) < 0) {
+                ids.push(idLavRec);
+            }
+        });
+    });
+    return ids;
 }
 
 /// Divide le versioni precedenti (mappa per pagina, come quella dell'impaginato) fra chi ha un
@@ -449,7 +473,7 @@ function classificaVersioniPrecedenti(mappaVersioni, mappa) {
     Object.keys(mappa || {}).forEach(pagina => {
         (mappa[pagina] || []).forEach(el => {
             if (el != null) {
-                inPagina.add(chiavePresenza(el.codiceGruppo, el.idRec));
+                inPagina.add(chiavePresenza(el.codiceGruppo, el.idRec, el.idLavRec));
             }
         });
     });
@@ -462,7 +486,7 @@ function classificaVersioniPrecedenti(mappaVersioni, mappa) {
                 return;
             }
             const voce = { elemento: el, pagina: String(pagina), elementiPagina: mappaVersioni[pagina] };
-            (inPagina.has(chiavePresenza(el.codiceGruppo, el.idRec)) ? daEliminare : daRiportare).push(voce);
+            (inPagina.has(chiavePresenza(el.codiceGruppo, el.idRec, el.idLavRec)) ? daEliminare : daRiportare).push(voce);
         });
     });
 
@@ -499,6 +523,7 @@ function eRecordVersionePrecedente(record) {
 module.exports = {
     gruppoGiaNellaMappa,
     chiavePresenza,
+    derivatiNonRegistrati,
     classificaVersioniPrecedenti,
     DIFFERENZA_VERSIONE_PRECEDENTE,
     recordVersionePrecedente,
