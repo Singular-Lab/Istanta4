@@ -5115,40 +5115,19 @@ namespace Istanta.Controllers
                     Label = f.label
                 });
 
-            PromoLavorazioni? kitResultCache = null;
-            //if (confronto)
-            //{
-            //    string kitCacheId = "PR_" + idLavorazione.ToString();
-            //    _cache.TryGetValue(kitCacheId, out kitResultCache);
-            //}
-
             foreach (var group in kitGrouped)
             {
                 bool _debug = (group.Key.CodiceGruppo == "3150596,3150599,3150600,4831132,4831135");
 
                 //I20-1088: la riga di questa impaginazione, non la prima del codice gruppo: lo stesso
                 //gruppo impaginato due volte ha meta distinti.
-                var righeDelGruppo = ctx2.PromoLavorazioniRecords.Where(f => f.CodiceGruppo! == group.Key.CodiceGruppo && idLavorazione == f.IdLavorazione).ToList();
-                var promoLavorazione = RecordDellaLavorazione.PerLaLettura(righeDelGruppo, group.Select(i => i.IdRec));
+                //TASK-bb04f9aa: anche le righe disattivate di questa lavorazione. Un box tolto dalla pagina
+                //conserva i meta, e il gruppo non impaginato li ritrova: cosi' reimpaginandolo nasce com'era.
+                var righeDelGruppo = ctx2.PromoLavorazioniRecords.IgnoreQueryFilters().Where(f => f.CodiceGruppo! == group.Key.CodiceGruppo && idLavorazione == f.IdLavorazione).ToList();
+                var promoLavorazione = RecordDellaLavorazione.PerLaLetturaConDisattivate(righeDelGruppo, group.Select(i => i.IdRec));
                 var chiaviDelGruppo = group.Select(i => chiaveDellImpaginazione(group.Key.CodiceGruppo, i.IdRec)).Distinct().ToList();
                 if (_debug)
                     Console.WriteLine($"Promo lavorazione di {idLavorazione} = {(promoLavorazione != null)}");
-                if (promoLavorazione == null)
-                {
-                    if (kitResultCache != null)
-                    {
-                        promoLavorazione = kitResultCache.PromoLavorazioniRecords.FirstOrDefault(f => f.CodiceGruppo! == group.Key.ToString());// && idLavorazione == f.IdLavorazione);
-                        if (promoLavorazione == null)
-                        {
-                            continue;
-                        }
-                    }
-                    //else
-                    //{
-                    //    continue;
-                    //}
-                }
-
                 RevisioneMetaPromoLavorazioni storeField = new RevisioneMetaPromoLavorazioni();
                 //I20-1077: i testi del box valgono solo dal meta di questa lavorazione, non dal passato.
                 bool metaDiQuestaLavorazione = promoLavorazione != null && promoLavorazione.Meta != null;

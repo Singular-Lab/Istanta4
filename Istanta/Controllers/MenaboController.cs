@@ -3237,8 +3237,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             {
                 var itemsToRemove = this.ctx2.PromoLavorazioniRecords.Where(item => item.IdLavorazione == idKit && item.Pagina == pagSelected).ToList();
 
-                // Rimuove tutti gli elementi trovati
-                this.ctx2.PromoLavorazioniRecords.RemoveRange(itemsToRemove);
+                //TASK-bb04f9aa: le righe non si cancellano, si disattivano: i meta restano per quando
+                //lo stesso record verra' reimpaginato.
+                RecordDellaLavorazione.Disattiva(itemsToRemove);
 
                 this.ctx2.SaveChanges();
                 result.Esito = true;
@@ -3262,8 +3263,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             {
                 var itemsToRemove = this.ctx2.PromoLavorazioniRecords.Where(item => item.IdLavorazione == idKit).ToList();
 
-                // Rimuove tutti gli elementi trovati
-                this.ctx2.PromoLavorazioniRecords.RemoveRange(itemsToRemove);
+                //TASK-bb04f9aa: le righe non si cancellano, si disattivano: i meta restano per quando
+                //lo stesso record verra' reimpaginato.
+                RecordDellaLavorazione.Disattiva(itemsToRemove);
 
                 this.ctx2.SaveChanges();
                 result.Esito = true;
@@ -3387,73 +3389,6 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
             }
         }
 
-
-        [HttpPost]
-        [Route("Menabo/restoreCacheConfronto")]
-        public async Task<IActionResult> RestoreCacheConfronto(int idLavorazione)
-        {
-            var res = new PromoLavorazioniResult();
-            PromoLavorazioni cached = new PromoLavorazioni();
-            var cacheId = "PR_" + idLavorazione.ToString()!;
-            if (!_cache!.TryGetValue(cacheId, out cached!))
-                return StatusCode(StatusCodes.Status410Gone, new { error = "Cache scaduta" , Esito = false});
-
-            // Carica entità esistente + figli (se serve)
-            var dbEntity = await ctx2.PromoLavorazionis
-                .Include(p => p.PromoLavorazioniRecords)
-                .FirstOrDefaultAsync(p => p.Id == idLavorazione);
-
-            if (dbEntity == null)
-                return NotFound(new { error = "Lavorazione non trovata" , Esito = false});
-
-            // Copia SCALARI (stesso tipo)
-            this.ctx2.Entry(dbEntity).CurrentValues.SetValues(cached);
-
-            // Sincronizza la collezione figli
-            // Supponendo che i record abbiano chiave Id
-            var cachedById = cached.PromoLavorazioniRecords.ToDictionary(r => r.Id);
-            var dbById = dbEntity.PromoLavorazioniRecords.ToDictionary(r => r.Id);
-
-            // UPDATE + ADD
-            foreach (var kv in cachedById)
-            {
-                if (dbById.TryGetValue(kv.Key, out var existing))
-                {
-                    this.ctx2.Entry(existing).CurrentValues.SetValues(kv.Value); // update scalari
-                }
-                else
-                {
-                    // Attacca nuovo figlio collegandolo al parent
-                    dbEntity.PromoLavorazioniRecords.Add(kv.Value);
-                }
-            }
-
-            // REMOVE
-            foreach (var kv in dbById)
-            {
-                if (!cachedById.ContainsKey(kv.Key))
-                {
-                    this.ctx2.Remove(kv.Value);
-                }
-            }
-
-            try
-            {
-                await ctx2.SaveChangesAsync();
-                _cache!.Remove("PR_"+idLavorazione.ToString()!); // rimuovi SOLO dopo successo
-                res.Esito = true;
-                res.records = dbEntity.PromoLavorazioniRecords.ToList(); // opzionale per response
-                return Ok(res);
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                return Conflict(new { error = "Conflitto di concorrenza, "+ ex.Message, Esito = false});
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message, Esito = false });
-            }
-        }
 
         private readonly record struct CodiceFiltroKey(string Codice, long? IdRec)
         {
@@ -3771,24 +3706,6 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                 if (promoLav == null)
                     throw new ErroreIstanta("lettura della lavorazione", $"la lavorazione {idLavorazione} non esiste.");
 
-
-                //if (confronto)
-                //{
-                //    string kitCacheId = "PR_"+idLavorazione.ToString();
-                //    if (!this._cache!.TryGetValue(kitCacheId, out PromoLavorazioni? kitResult))
-                //    {
-                //        IstantaLib.Utility.Logger.Log($"Creo cache di confronto");
-                //        this._cache!.Set(kitCacheId, promoLav, new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(120)));
-                //    }
-
-                //    if (filtri.Filters != null)
-                //    {
-                //        foreach (var filtro in filtri.Filters)
-                //        {
-                //            await this.SvuotaPagina(idLavorazione, filtro.Pag);
-                //        }
-                //    }
-                //}
 
                 Dictionary<string, object> elementiPerPagina = new Dictionary<string, object>();
                 Dictionary<string, object> elementiAvanzatiLimitePerPagina = new Dictionary<string, object>();
@@ -4703,16 +4620,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                                 if (impagina)
                                 {
-                                    PromoLavorazioniRecord recToAdd = new PromoLavorazioniRecord();
-                                    recToAdd.Codice = oggetto[keyCodiceRef].ToString();
-                                    recToAdd.CodiceGruppo = oggetto[key_codice_gruppo].ToString();
-                                    recToAdd.IdRecordTracciato = Convert.ToInt64(oggetto["idRec"]);
-                                    recToAdd.IdLavorazione = idLavorazione;
-                                    recToAdd.Pagina = (Byte)pag;
-                                    recToAdd.Indice = (Byte)0;
-                                    recToAdd.IdAutore = id_utente;
-                                    recToAdd.RegisterDate = DateTime.Now;
-                                    this.ctx2.PromoLavorazioniRecords.Add(recToAdd);
+                                    //TASK-bb04f9aa: riattiva la riga disattivata del record, se c'e'.
+                                    RecordDellaLavorazione.Impagina(this.ctx2, idLavorazione, oggetto[keyCodiceRef].ToString(),
+                                        oggetto[key_codice_gruppo].ToString(), Convert.ToInt64(oggetto["idRec"]), (Byte)pag, id_utente);
                                 }
 
                                 filtroCorrispondente.Griglia.boxOccupati.Add(boxDisponibile);
@@ -4839,17 +4749,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                                             
                                             if (impagina)
                                             {
-
-                                                PromoLavorazioniRecord recToAdd = new PromoLavorazioniRecord();
-                                                recToAdd.Codice = oggetto[keyCodiceRef].ToString();
-                                                recToAdd.CodiceGruppo = oggetto[key_codice_gruppo].ToString();
-                                                recToAdd.IdRecordTracciato = /*!(oggetto[key_codice_gruppo] as string).Contains(",") ? */Convert.ToInt64(oggetto["idRec"]) /*: null*/;
-                                                recToAdd.IdLavorazione = idLavorazione;
-                                                recToAdd.Pagina = (Byte)pag;
-                                                recToAdd.Indice = (Byte)0;
-                                                recToAdd.IdAutore = id_utente;
-                                                recToAdd.RegisterDate = DateTime.Now;
-                                                this.ctx2.PromoLavorazioniRecords.Add(recToAdd);
+                                                //TASK-bb04f9aa: riattiva la riga disattivata del record, se c'e'.
+                                                RecordDellaLavorazione.Impagina(this.ctx2, idLavorazione, oggetto[keyCodiceRef].ToString(),
+                                                    oggetto[key_codice_gruppo].ToString(), Convert.ToInt64(oggetto["idRec"]), (Byte)pag, id_utente);
 
 
                                             }
@@ -5090,16 +4992,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                                     Int64 _idRec = Convert.ToInt64(rec.recordInTracciato["idRec"]);
 
-                                    PromoLavorazioniRecord recToAdd = new PromoLavorazioniRecord();
-                                    recToAdd.Codice = rec.recordInTracciato[keyCodiceRef].ToString();
-                                    recToAdd.CodiceGruppo = rec.sottogruppo[keyCodiceRef].ToString();
-                                    recToAdd.IdRecordTracciato = _idRec;// Convert.ToInt64(rec.recordInTracciato["idRec"]);
-                                    recToAdd.IdLavorazione = idLavorazione;
-                                    recToAdd.Pagina = (Byte)pag;
-                                    recToAdd.Indice = (Byte)0;
-                                    recToAdd.IdAutore = id_utente;
-                                    recToAdd.RegisterDate = DateTime.Now;
-                                    this.ctx2.PromoLavorazioniRecords.Add(recToAdd);
+                                    //TASK-bb04f9aa: riattiva la riga disattivata del record, se c'e'.
+                                    RecordDellaLavorazione.Impagina(this.ctx2, idLavorazione, rec.recordInTracciato[keyCodiceRef].ToString(),
+                                        rec.sottogruppo[keyCodiceRef].ToString(), _idRec, (Byte)pag, id_utente);
 
                                     currInPag = 0;
                                     pag++;
@@ -5129,18 +5024,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                                     Int64 _idRec = Convert.ToInt64(rec.recordInTracciato["idRec"]);
 
-                                    PromoLavorazioniRecord recSingoloToAdd = new PromoLavorazioniRecord();
-                                    recSingoloToAdd.Codice = rec.recordInTracciato[keyCodiceRef].ToString();
-                                    recSingoloToAdd.CodiceGruppo = rec.recordInTracciato[key_codice_gruppo].ToString();
-
-                                    recSingoloToAdd.IdRecordTracciato = _idRec;
-
-                                    recSingoloToAdd.IdLavorazione = idLavorazione;
-                                    recSingoloToAdd.Pagina = (Byte)pag;
-                                    recSingoloToAdd.Indice = (Byte)0;
-                                    recSingoloToAdd.IdAutore = id_utente;
-                                    recSingoloToAdd.RegisterDate = DateTime.Now;
-                                    this.ctx2.PromoLavorazioniRecords.Add(recSingoloToAdd);
+                                    //TASK-bb04f9aa: riattiva la riga disattivata del record, se c'e'.
+                                    RecordDellaLavorazione.Impagina(this.ctx2, idLavorazione, rec.recordInTracciato[keyCodiceRef].ToString(),
+                                        rec.recordInTracciato[key_codice_gruppo].ToString(), _idRec, (Byte)pag, id_utente);
 
                                     currInPag = 0;
                                     pag++;
@@ -6883,17 +6769,11 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     }
 
 
-                    PromoLavorazioniRecord nuovoRecord = new PromoLavorazioniRecord();
-                    nuovoRecord.Pagina = richiesta.pagina;
-                    nuovoRecord.IdLavorazione = richiesta.idLavorazione;
-                    nuovoRecord.Indice = (byte)0;
-                    nuovoRecord.CodiceGruppo = richiesta.codiceGruppo;
-                    nuovoRecord.Codice = richiesta.codiceGruppo!.Split(",")[0];
-                    nuovoRecord.IdRecordTracciato = primario.IdRec;
-                    nuovoRecord.IdAutore = id_utente;
-                    nuovoRecord.RegisterDate = DateTime.Now;
-
-                    db.PromoLavorazioniRecords.Add(nuovoRecord);
+                    //TASK-bb04f9aa: se il record ha una riga disattivata in questa lavorazione (box tolto
+                    //dalla pagina, o rimasto nel documento e ora ricollegato) la si riattiva, con i meta
+                    //che aveva e che getSchedaRef ha gia' applicato al gruppo.
+                    RecordDellaLavorazione.Impagina(db, richiesta.idLavorazione, richiesta.codiceGruppo!.Split(",")[0],
+                        richiesta.codiceGruppo, primario.IdRec, richiesta.pagina, id_utente);
 
                     result.records = gruppoResult.records;
                     result.warn = gruppoResult.warn;
@@ -7375,7 +7255,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                             }
                         }
 
-                        db.RemoveRange(recordDaEliminare);
+                        //TASK-bb04f9aa: disattivate, non cancellate.
+                        RecordDellaLavorazione.Disattiva(recordDaEliminare);
                     }
 
                     if (impaginaETogliDaImpaginato)
@@ -8556,19 +8437,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     string codicePrimario = primario.recordInTracciato[keyCodiceRef].ToString()!;
                     // oppure GLOBAL_VARIABLES.keyRefCodice, dipende da cosa hai dentro recordInTracciato
 
-                    var recToAdd = new PromoLavorazioniRecord
-                    {
-                        Codice = codicePrimario,
-                        CodiceGruppo = gruppo.CodiceGruppo,
-                        IdRecordTracciato = idRecPrimario,
-                        IdLavorazione = idKitLavorazione,
-                        Pagina = lavorazioneRecord.Pagina,
-                        Indice = (byte)0,
-                        IdAutore = id_utente,
-                        RegisterDate = DateTime.Now
-                    };
-
-                    this.ctx2.PromoLavorazioniRecords.Add(recToAdd);
+                    //TASK-bb04f9aa: riattiva la riga disattivata del gruppo, se c'e'.
+                    RecordDellaLavorazione.Impagina(this.ctx2, idKitLavorazione, codicePrimario, gruppo.CodiceGruppo,
+                        idRecPrimario, lavorazioneRecord.Pagina, id_utente);
 
                     var resLista = OttieniListaImpaginazione(gruppoResult.records);
                     if (!resLista.esito)
@@ -8579,7 +8450,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     result.listaGruppi.AddRange(resLista.listaGruppi);
                 }
 
-                this.ctx2.PromoLavorazioniRecords.Remove(lavorazioneRecord);
+                //TASK-bb04f9aa: la riga del gruppo sgruppato si disattiva: se si torna a quel gruppo
+                //ritrova i suoi meta.
+                RecordDellaLavorazione.Disattiva(lavorazioneRecord);
                 await this.ctx2.SaveChangesAsync();
                 await tx.CommitAsync();
 
@@ -8784,7 +8657,8 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         _recDicts.Add(dato);
                     }
 
-                    this.ctx2.PromoLavorazioniRecords.Remove(lavoriazioneRecord);
+                    //TASK-bb04f9aa: disattivata, non cancellata.
+                    RecordDellaLavorazione.Disattiva(lavoriazioneRecord);
                 }
 
                 IstantaController icCtrl = new IstantaController("", this.path_external_lib, this.path_external_source, this._dbContextFactory);
@@ -8889,16 +8763,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
 
                 string codicePrimario = primario.recordInTracciato[keyCodiceRef].ToString()!;
 
-                PromoLavorazioniRecord recToAdd = new PromoLavorazioniRecord();
-                recToAdd.Codice = codicePrimario;
-                recToAdd.CodiceGruppo = nuovoCodiceGruppo;
-                recToAdd.IdRecordTracciato = idRecPrimario;
-                recToAdd.IdLavorazione = idLavorazione;
-                recToAdd.Pagina = (byte)paginaPrimoElemento;
-                recToAdd.Indice = (Byte)0;
-                recToAdd.IdAutore = id_utente;
-                recToAdd.RegisterDate = DateTime.Now;
-                this.ctx2.PromoLavorazioniRecords.Add(recToAdd);
+                //TASK-bb04f9aa: riattiva la riga disattivata del gruppo, se c'e'.
+                RecordDellaLavorazione.Impagina(this.ctx2, idLavorazione, codicePrimario, nuovoCodiceGruppo,
+                    idRecPrimario, (byte)paginaPrimoElemento, id_utente);
 
                 this.ctx2.SaveChanges();
 
@@ -9781,7 +9648,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                     }
                     else
                     {
-                        this.ctx2.PromoLavorazioniRecords.Remove(refImpaginata);
+                        //TASK-bb04f9aa: disattivata, non cancellata. Se il record esce anche dal
+                        //tracciato la riga viene cancellata davvero poco sotto, insieme a lui.
+                        RecordDellaLavorazione.Disattiva(refImpaginata);
                     }
 
                     if (eliminaDaTracciato)
@@ -9818,6 +9687,9 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                             throw new Exception("Nessun record tracciato trovato per il gruppo " + codice);
                         }
 
+                        //TASK-bb04f9aa: le righe disattivate di questi record (quella appena
+                        //disattivata compresa) escono con loro, o la chiave esterna rifiuta l'eliminazione.
+                        RecordDellaLavorazione.EliminaLeDisattivateDei(this.ctx2, records.Select(r => r.Id));
                         this.ctx2.PromoTracciatiRecords.RemoveRange(records);
                     }
                 }

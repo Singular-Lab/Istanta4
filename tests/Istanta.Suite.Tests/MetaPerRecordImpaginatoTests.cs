@@ -169,7 +169,8 @@ public class MetaPerRecordImpaginatoTests
         string menabo = Sorgente("Istanta/Controllers/MenaboController.cs");
         string syncFoto = Sorgente("Istanta/Controllers/SyncFotoController.cs");
 
-        Assert.Contains("var promoLavorazione = RecordDellaLavorazione.PerLaLettura(righeDelGruppo, group.Select(i => i.IdRec));", fico);
+        //TASK-bb04f9aa: la stessa regola, che in piu' guarda le righe disattivate della lavorazione.
+        Assert.Contains("var promoLavorazione = RecordDellaLavorazione.PerLaLetturaConDisattivate(righeDelGruppo, group.Select(i => i.IdRec));", fico);
         Assert.Contains("return RecordDellaLavorazione.Trova(this.ctx2, idLavorazione, codiceGruppo, idRecRichiesto);", menabo);
         //updateFotoFromIndd, updateImmagineEsistente, RimuoviFotoDaMeta, RimuoviFoto.
         Assert.Equal(4, syncFoto.Split("PromoLavorazioniRecord? plrItem = RecordDellaLavorazione.Trova(this.ctx2,").Length - 1);

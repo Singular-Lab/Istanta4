@@ -127,8 +127,8 @@ public class MigrazioniTests
         var nomi1 = ctx1.GetService<IMigrationsAssembly>().Migrations.Keys.Select(NomeSenzaData).ToList();
         var nomi2 = ctx2.GetService<IMigrationsAssembly>().Migrations.Keys.Select(NomeSenzaData).ToList();
 
-        Assert.Equal(new[] { "Baseline", "EanA300ContractA5000", "TimestampSenzaFuso", "DateModificaTracciato" }, nomi1);
-        Assert.Equal(new[] { "Baseline", "PromoBackup", "TimestampSenzaFuso", "DateModificaTracciato" }, nomi2);
+        Assert.Equal(new[] { "Baseline", "EanA300ContractA5000", "TimestampSenzaFuso", "DateModificaTracciato", "LavorazioniRecordAttivo" }, nomi1);
+        Assert.Equal(new[] { "Baseline", "PromoBackup", "TimestampSenzaFuso", "DateModificaTracciato", "LavorazioniRecordAttivo" }, nomi2);
     }
 
     // Lo schema c'e' gia' su ogni database: la Baseline lo registra e basta.

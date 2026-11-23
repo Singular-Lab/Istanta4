@@ -108,6 +108,8 @@ namespace Istanta.Models
         public byte Indice { get; set; }
         public byte Pagina { get; set; }
         public string? Meta { get; set; }
+        /// <summary>TASK-bb04f9aa: false per una riga disattivata. I backup di prima non l'hanno: vale true.</summary>
+        public bool Attivo { get; set; } = true;
 
         public static RigaLavorazioneBackup Da(PromoLavorazioniRecord r)
         {
@@ -122,7 +124,8 @@ namespace Istanta.Models
                 RegisterDate = r.RegisterDate,
                 Indice = r.Indice,
                 Pagina = r.Pagina,
-                Meta = r.Meta
+                Meta = r.Meta,
+                Attivo = r.Attivo
             };
         }
 
@@ -137,6 +140,7 @@ namespace Istanta.Models
             r.Indice = Indice;
             r.Pagina = Pagina;
             r.Meta = Meta;
+            r.Attivo = Attivo;
         }
 
         public PromoLavorazioniRecord NuovaEntita()

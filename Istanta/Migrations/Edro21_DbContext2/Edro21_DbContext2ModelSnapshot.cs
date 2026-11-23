@@ -497,6 +497,10 @@ namespace Istanta.Migrations.Contesto2
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<bool>("Attivo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("attivo");
+
                     b.Property<string>("Codice")
                         .HasColumnType("text")
                         .HasColumnName("codice");
