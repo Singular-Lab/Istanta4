@@ -18,6 +18,7 @@ import type { IConsultazioneService } from '../interfaces/IConsultazioneService'
 import { log } from '../logger';
 import { authMiddleware } from '../middleware/authMiddleware';
 import { permissionGuard } from '../middleware/permissionGuard';
+import { eseguiMisurando, intestazioneServerTiming, sogliaRichiestaLentaMs } from '../utils/tempiRichiesta';
 
 /** Testo di un parametro (query o body); i parametri ripetuti e i valori vuoti non contano. */
 const testo = (valore: unknown): string | undefined =>
@@ -136,7 +137,13 @@ export class ConsultazioneController extends BaseController {
   /** Risposta JSON del lavoro, o l'errore. */
   private async rispondi(req: Request, res: Response, lavoro: (ambito: AmbitoGdo) => Promise<unknown>): Promise<void> {
     try {
-      this.sendResponse(res, HttpStatusCode.OK, await lavoro(await this.ambito(req, res)));
+      // I tempi delle fasi vanno nell'intestazione Server-Timing (scheda Rete del browser) e, se la risposta e' lenta, nel log
+      const { valore, voci, totaleMs } = await eseguiMisurando(async () => lavoro(await this.ambito(req, res)));
+      res.setHeader('Server-Timing', intestazioneServerTiming(voci, totaleMs));
+      if (totaleMs >= sogliaRichiestaLentaMs()) {
+        log.warn(`Richiesta lenta: ${req.method} ${req.path} in ${totaleMs} ms`, { fasi: voci, context: 'Consultazione' });
+      }
+      this.sendResponse(res, HttpStatusCode.OK, valore);
     } catch (error) {
       this.handleError(res, error);
     }

@@ -14,6 +14,7 @@ vi.mock('../../repositories/InsightVolantinoRepository', () => ({
   kitNellAmbito: vi.fn(),
   pdfDelKit: vi.fn(),
   righeDelKit: vi.fn(),
+  versioniRigheDeiKit: vi.fn(async () => new Map()),
 }));
 
 // Riepilogo delle pagine di /api/flyer-insights: l'ingombro e' una percentuale della pagina qualunque

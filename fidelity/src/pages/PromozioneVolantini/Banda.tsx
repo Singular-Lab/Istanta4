@@ -1,12 +1,15 @@
 import type { Tinta } from "@/components/Grafici";
 import { twMerge } from "@/utils/twMerge";
 import { ETICHETTA_PERIODO_CONSULTAZIONE } from "../../../lib/consultazione/periodi";
-import type { DettaglioPromozioneVolantiniConsultazione, Riferimento } from "../../../lib/consultazione/tipi";
+import type { DettaglioPromozioneVolantiniConsultazione, Riferimento, VarianteConsultazione } from "../../../lib/consultazione/tipi";
 import { fraseKit, testoValidita } from "./analisi";
 import { LogoInsegna } from "./LogoInsegna";
 
 export interface BandaProps {
-  dettaglio: DettaglioPromozioneVolantiniConsultazione;
+  /** Basta la promo, il periodo e i volantini mostrati: la banda esce anche prima del calcolo degli insight. */
+  dettaglio: Pick<DettaglioPromozioneVolantiniConsultazione, "promo" | "periodo"> & {
+    kit: readonly Pick<VarianteConsultazione, "canale" | "area">[];
+  };
   /** Le insegne fra cui scegliere, come la tendina Insegna. */
   insegne: readonly Riferimento[];
   tinta: (idCanale: string) => Tinta;

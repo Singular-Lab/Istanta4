@@ -25,7 +25,9 @@ import { IVolantinoService } from '../interfaces/IVolantinoService';
 import { TipiDiExport } from '../models';
 import { FilesRuntime } from '../models/files_runtime';
 import { ReferenzeGruppo } from '../models/referenze_gruppo';
-import { kitNellAmbito, pdfDelKit, righeDelKit } from '../repositories/InsightVolantinoRepository';
+import { kitNellAmbito, pdfDelKit, righeDelKit, versioniRigheDeiKit } from '../repositories/InsightVolantinoRepository';
+import { CACHE_CONSULTAZIONE_REDIS, type CacheConsultazione, DURATA_CACHE_INSIGHT_KIT_SECONDI, impronta, VERSIONE_CALCOLO_INSIGHT_KIT } from './cacheConsultazione';
+import { misura } from '../utils/tempiRichiesta';
 import { boxDelKit } from '../utils/analisiKit';
 import { applicaAnagraficaReparti, leggiAnagraficaReparti, valoreCampo, type PercorsoCampo } from '../utils/campiInsights';
 import { sezioniInsight } from '../utils/insightVolantino';
@@ -90,7 +92,9 @@ export class VolantinoService implements IVolantinoService {
     // Reparti della GDO, linee del distributore e catalogo dei loghi: il container li passa, i test possono non farlo
     private readonly reparti: FonteRepartiGdo = SENZA_REPARTI_GDO,
     private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {},
-    private readonly catalogoLoghi: Pick<ICatalogoLoghiService, 'catalogo'> | null = null
+    private readonly catalogoLoghi: Pick<ICatalogoLoghiService, 'catalogo'> | null = null,
+    // Insight di un kit gia' calcolati (Redis): null = si calcolano sempre, come senza Redis
+    private readonly cacheInsight: CacheConsultazione | null = CACHE_CONSULTAZIONE_REDIS
   ) { }
 
   /** Il catalogo dei loghi di Istanta per le linee del distributore; vuoto se non si legge. */
@@ -163,7 +167,32 @@ export class VolantinoService implements IVolantinoService {
 
       // 2. Le referenze del kit per pagina e posizione (la prima di un box e' la pilota) e il PDF del volantino.
       // Senza referenze si prosegue lo stesso: i riepiloghi vengono vuoti e le sezioni nuove pure.
-      const [righe, pdf] = await Promise.all([righeDelKit(guidIdKitRuntime), pdfDelKit(guidIdKitRuntime)]);
+      // Prima la versione delle referenze (una query leggera, senza le righe): se il risultato di questa
+      // versione e' gia' in cache, le righe (centinaia, circa 9 KB l'una) non si leggono ne' si ricalcolano
+      const [versioni, pdf] = await misura('kit-pdf-versione', () => Promise.all([
+        versioniRigheDeiKit([guidIdKitRuntime]),
+        pdfDelKit(guidIdKitRuntime),
+      ]));
+
+      // La config degli insight della GDO del kit (o quella del file) e i reparti, serve anche alla chiave della cache
+      const insightsConfig = await this.configService.getFlyerInsightsConfig(kit.gdo);
+      const anagraficaReparti = leggiAnagraficaReparti(insightsConfig.dataMapping?.reparti);
+      // Nome per il marketing e colore dei reparti della GDO (Impostazioni GDO)
+      const risolutore = await caricaRisolutoreReparti(this.reparti, kit.gdo, anagraficaReparti, 'Insight volantino');
+
+      const versione = versioni.get(guidIdKitRuntime.toLowerCase());
+      const chiaveCache = this.cacheInsight && versione !== undefined
+        ? `consultazione:insight-pagina:${guidIdKitRuntime.toLowerCase()}:${impronta(
+          VERSIONE_CALCOLO_INSIGHT_KIT, versione, kit, pdf, totalePaginePdf, insightsConfig,
+          anagraficaReparti.map(reparto => (risolutore.vuoto ? null : risolutore.risolvi(reparto)))
+        )}`
+        : null;
+      if (chiaveCache && this.cacheInsight) {
+        const inCache = await misura('cache', () => this.cacheInsight!.leggi<FlyerInsightsDTO>(chiaveCache)).catch(() => null);
+        if (inCache) return inCache;
+      }
+
+      const righe = await misura('referenze', () => righeDelKit(guidIdKitRuntime));
       const referenze = righe as unknown as any[];
 
       /*
@@ -204,11 +233,7 @@ export class VolantinoService implements IVolantinoService {
       }
 
       // 2. Mappa referenze in DTO usando la config degli insight della GDO del kit (o quella del file)
-      const insightsConfig = await this.configService.getFlyerInsightsConfig(kit.gdo);
       const fieldMapping: Record<string, PercorsoCampo> = insightsConfig.dataMapping?.referenzaFields ?? {};
-      const anagraficaReparti = leggiAnagraficaReparti(insightsConfig.dataMapping?.reparti);
-      // Nome per il marketing e colore dei reparti della GDO (Impostazioni GDO)
-      const risolutore = await caricaRisolutoreReparti(this.reparti, kit.gdo, anagraficaReparti, 'Insight volantino');
 
       // Config per groupBy
       const repartiGroupBy = insightsConfig.reparti?.groupBy ?? { field: 'reparto', descriptionField: 'descrizioneReparto' };
@@ -397,7 +422,7 @@ export class VolantinoService implements IVolantinoService {
         }
       );
 
-      return {
+      const risultato: FlyerInsightsDTO = {
         guidIdKitRuntime,
         contesto,
         origineStorico,
@@ -411,6 +436,10 @@ export class VolantinoService implements IVolantinoService {
         pdf: pdf ? { ...pdf, pagine: pdf.pagine > 0 ? pdf.pagine : sezioni.sintesi.pagine } : null,
         ...sezioni
       };
+      if (chiaveCache && this.cacheInsight) {
+        void this.cacheInsight.scrivi(chiaveCache, risultato, DURATA_CACHE_INSIGHT_KIT_SECONDI).catch(() => undefined);
+      }
+      return risultato;
 
     } catch (error) {
       if (isAppError(error)) throw error;

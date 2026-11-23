@@ -36,6 +36,8 @@ vi.mock('../../models', async (importOriginal) => ({
   UtentiGDO: { findOne: vi.fn(async () => (anagrafica.idGdo ? { id_gdo_utentegdo: anagrafica.idGdo, id_ruolo_utente_gdo: null } : null)) },
 }));
 
+import { log } from '../../logger';
+import { misura } from '../../utils/tempiRichiesta';
 import { ConsultazioneController } from '../ConsultazioneController';
 
 const ID = '7f4c2b1e-1d2a-4c3b-9e8f-0a1b2c3d4e5f';
@@ -99,6 +101,57 @@ beforeEach(() => {
   vi.clearAllMocks();
   permessi.concessi = new Set();
   anagrafica.idGdo = 'gdo-sessione';
+});
+
+describe('tempi delle API di consultazione', () => {
+  it('ogni risposta porta l\'intestazione Server-Timing con le fasi misurate e il totale', async () => {
+    permessi.concessi = new Set(['materiali.visualizza']);
+    const { app, servizio } = creaApp();
+    servizio.getPromozioneVolantini.mockImplementation(async () => {
+      await misura('insight-kit', async () => undefined);
+      await misura('punti-vendita', async () => undefined);
+      return DETTAGLIO_PROMOZIONE;
+    });
+
+    const risposta = await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45');
+
+    expect(risposta.status).toBe(200);
+    expect(risposta.headers['server-timing']).toMatch(/^insight-kit;dur=[\d.]+, punti-vendita;dur=[\d.]+, totale;dur=[\d.]+$/);
+  });
+
+  it('una risposta oltre la soglia finisce nel log come lenta, con le sue fasi', async () => {
+    process.env.FIDELITY_SOGLIA_RICHIESTA_LENTA_MS = '1';
+    try {
+      permessi.concessi = new Set(['materiali.visualizza']);
+      const { app, servizio } = creaApp();
+      servizio.getPromozioneVolantini.mockImplementation(async () => {
+        await misura('insight-kit', async () => new Promise(risolvi => setTimeout(risolvi, 15)));
+        return DETTAGLIO_PROMOZIONE;
+      });
+
+      await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45');
+
+      expect(log.warn).toHaveBeenCalledWith(
+        expect.stringMatching(/^Richiesta lenta: GET .* in [\d.]+ ms$/),
+        expect.objectContaining({ fasi: [expect.objectContaining({ nome: 'insight-kit' })] })
+      );
+    } finally {
+      delete process.env.FIDELITY_SOGLIA_RICHIESTA_LENTA_MS;
+    }
+  });
+
+  it('una risposta veloce non e\' un avviso, e un errore non porta l\'intestazione', async () => {
+    permessi.concessi = new Set(['materiali.visualizza']);
+    const { app, servizio } = creaApp();
+
+    await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45');
+    expect(log.warn).not.toHaveBeenCalled();
+
+    servizio.getPromozioneVolantini.mockRejectedValue(new NotFoundError({ message: 'Promozione non disponibile', entityType: 'Promo', entityId: 'x' }));
+    const errore = await request(app).get('/api/consultazione/volantini/promozioni/PROMO-2026-45');
+    expect(errore.status).toBe(404);
+    expect(errore.headers['server-timing']).toBeUndefined();
+  });
 });
 
 describe('permessi delle API di consultazione', () => {

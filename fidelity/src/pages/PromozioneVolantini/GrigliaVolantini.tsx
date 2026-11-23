@@ -4,7 +4,7 @@ import type { Tinta } from "@/components/Grafici";
 import { twMerge } from "@/utils/twMerge";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
-import type { KitPromozioneConsultazione } from "../../../lib/consultazione/tipi";
+import type { VarianteConsultazione } from "../../../lib/consultazione/tipi";
 import { percorsoDettaglioVolantino } from "../../../lib/materiali/periodi";
 import { nomeKit, numeriNellaCella } from "./analisi";
 import { Copertina } from "./Copertina";
@@ -24,7 +24,7 @@ export function GrigliaVolantini({
   kit,
   tinta,
 }: {
-  kit: readonly KitPromozioneConsultazione[];
+  kit: readonly VarianteConsultazione[];
   tinta: (idCanale: string) => Tinta;
 }) {
   const numeri = useMemo(() => numeriNellaCella(kit), [kit]);

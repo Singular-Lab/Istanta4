@@ -59,7 +59,28 @@ import type {
   RigaFileConsultazione,
   RigaOpzioneContenutoDigitale,
 } from '../repositories/ConsultazioneRepository';
-import { kitNellAmbito, pdfDelKit, righeDelKit } from '../repositories/InsightVolantinoRepository';
+import type { PdfVolantino } from '../../../lib/insightVolantino/tipi';
+import {
+  type KitInsight,
+  kitNeiAmbito,
+  kitNellAmbito,
+  pdfDeiKit,
+  pdfDelKit,
+  righeDelKit,
+  versioniRigheDeiKit,
+} from '../repositories/InsightVolantinoRepository';
+import {
+  CACHE_CONSULTAZIONE_REDIS,
+  type CacheConsultazione,
+  chiaveCacheElenco,
+  chiaveCacheInsightKit,
+  DURATA_CACHE_ELENCO_SECONDI,
+  DURATA_CACHE_INSIGHT_KIT_SECONDI,
+  type InsightKitInCache,
+  improntaInsightKit,
+  ricorda,
+} from './cacheConsultazione';
+import { misura } from '../utils/tempiRichiesta';
 import type {
   CriteriKit,
   FiltriSqlFile,
@@ -162,9 +183,9 @@ export type FonteConfigInsight = Pick<IConfigService, 'getFlyerInsightsConfig'>;
 const SENZA_CONFIG_INSIGHT: FonteConfigInsight = { getFlyerInsightsConfig: async () => ({}) };
 
 /** Le stesse letture del kit degli insight del volantino (InsightVolantinoRepository). */
-const LETTURE_KIT_INSIGHT: LettureKitInsight = { kitNellAmbito, pdfDelKit, righeDelKit };
+const LETTURE_KIT_INSIGHT: LettureKitInsight = { kitNellAmbito, pdfDelKit, righeDelKit, kitNeiAmbito, pdfDeiKit, versioniRigheDeiKit };
 
-/** Kit letti insieme per gli insight del dettaglio della promozione: ognuno sono due query sulle referenze. */
+/** Kit calcolati insieme per gli insight del dettaglio della promozione (le letture sono gia' fatte per tutti insieme). */
 const KIT_INSIGHT_IN_PARALLELO = 4;
 
 /** Il lavoro su ogni voce, al massimo `limite` alla volta; i risultati nell'ordine delle voci. */
@@ -431,7 +452,9 @@ export class ConsultazioneService implements IConsultazioneService {
     // Loghi delle insegne (Impostazioni GDO) accanto ai nomi delle insegne del dettaglio della promozione
     private readonly loghiInsegne: FonteLoghiInsegne = loghiInsegneDaConfigurazione,
     // Linee del distributore e ruoli dei prodotti dell'assortimento, come negli insight del volantino
-    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {}
+    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {},
+    // Insight dei kit gia' calcolati (Redis): null = si calcolano sempre, come senza Redis
+    private readonly cacheInsight: CacheConsultazione | null = CACHE_CONSULTAZIONE_REDIS
   ) { }
 
   /** Solo kit pubblicati del tipo indicato, nelle promo del periodo e della GDO dell'ambito. */
@@ -484,22 +507,27 @@ export class ConsultazioneService implements IConsultazioneService {
     const rigaVetrina = conFiltri || !motivo ? null : await this.materiali.trovaPromoInVetrina(criteri, motivo);
     const criteriElenco: CriteriKit = rigaVetrina ? { ...criteri, escludiPromo: rigaVetrina.id_promo } : criteri;
 
+    // Riepilogo, opzioni e promo della tendina non dipendono dalla pagina: per pochi secondi si leggono una volta sola
+    const dalCache = <T>(nome: string, parti: readonly unknown[], calcola: () => Promise<T>): Promise<T> =>
+      misura(nome, () => ricorda(this.cacheInsight, chiaveCacheElenco(nome, criteri, ...parti), DURATA_CACHE_ELENCO_SECONDI, calcola));
     const [righePromo, totali, riepilogo, opzioniIncrociate, promozioni] = await Promise.all([
-      this.materiali.elencaPromoVolantini(criteriElenco, filtriPromo, { limite: dimensione, scarto: (pagina - 1) * dimensione }),
-      this.materiali.contaPromoVolantini(criteriElenco, filtriPromo),
+      misura('elenco', () => this.materiali.elencaPromoVolantini(criteriElenco, filtriPromo, { limite: dimensione, scarto: (pagina - 1) * dimensione })),
+      misura('conteggio', () => this.materiali.contaPromoVolantini(criteriElenco, filtriPromo)),
       // Il riepilogo e' sempre del periodo intero, vetrina compresa: le promo sono anche il totale senza filtri
-      this.materiali.riepilogoPromoVolantini(criteri),
+      dalCache('riepilogo', [], () => this.materiali.riepilogoPromoVolantini(criteri)),
       // Sul periodo intero, vetrina compresa: con un filtro la vetrina non c'e' comunque
-      this.opzioniIncrociate(criteri, filtriPromo),
+      dalCache('opzioni', [filtriPromo], () => this.opzioniIncrociate(criteri, filtriPromo)),
       // Nello Storico le promo sono centinaia: si cercano per nome e anno, non da una tendina
-      periodo === 'storico' ? Promise.resolve([] as RigaPromo[]) : this.materiali.elencaPromoVolantini(criteri),
+      periodo === 'storico'
+        ? Promise.resolve([] as RigaPromo[])
+        : dalCache('tendina-promo', [], () => this.materiali.elencaPromoVolantini(criteri)),
     ]);
     // Senza filtri ogni kit corrisponde: la vetrina ha tutti i suoi kit volantino pubblicati
     const idPromoKit = righePromo.map(riga => riga.id_promo);
     if (rigaVetrina) idPromoKit.push(rigaVetrina.id_promo);
     const [righeKit, righePuntiVendita] = await Promise.all([
-      this.materiali.elencaVariantiVolantini(criteri, idPromoKit, filtriPromo),
-      this.materiali.contaPuntiVenditaPromoVolantini(criteri, idPromoKit, filtriPromo),
+      misura('varianti', () => this.materiali.elencaVariantiVolantini(criteri, idPromoKit, filtriPromo)),
+      misura('punti-vendita', () => this.materiali.contaPuntiVenditaPromoVolantini(criteri, idPromoKit, filtriPromo)),
     ]);
     // C'e' una riga in vetrina solo con un motivo: il controllo serve al tipo
     const vetrina: VetrinaVolantiniConsultazione | null = rigaVetrina && motivo
@@ -605,8 +633,10 @@ export class ConsultazioneService implements IConsultazioneService {
     };
     const [righePuntiVendita, kit, loghi] = await Promise.all([
       // Le righe dei kit esclusi dai filtri non contano: l'aggregazione tiene solo quelle dei kit mostrati
-      mostrate.length > 0 ? this.materiali.elencaPuntiVenditaVolantini(criteri, rigaPromo.id_promo) : Promise.resolve([]),
-      aGruppi(mostrate, KIT_INSIGHT_IN_PARALLELO, variante => this.insightDelKit(variante, ambito, contestoDellaGdoDelKit)),
+      mostrate.length > 0
+        ? misura('punti-vendita', () => this.materiali.elencaPuntiVenditaVolantini(criteri, rigaPromo.id_promo))
+        : Promise.resolve([]),
+      misura('insight-kit', () => this.insightDeiKit(mostrate, ambito, contestoDellaGdoDelKit)),
       this.loghiDelleInsegneDellaPromo(varianti),
     ]);
     // Le righe servono ai numeri; l'elenco dei punti vendita non va piu' alla pagina (sezione "Dove arriva" tolta)
@@ -635,12 +665,12 @@ export class ConsultazioneService implements IConsultazioneService {
   ): Promise<{ rigaPromo: RigaPromo; periodo: PeriodoConsultazione; criteri: CriteriKit; varianti: VarianteConsultazione[] }> {
     const id = idPromoEsistente(idPromo);
     const nonDisponibile = () => new NotFoundError({ message: PROMOZIONE_VOLANTINI_NON_DISPONIBILE, entityType: 'Promo', entityId: id });
-    const rigaPromo = await this.repository.trovaPromo(id, STATI_PROMO_CONSULTABILI, ambito);
+    const rigaPromo = await misura('promo', () => this.repository.trovaPromo(id, STATI_PROMO_CONSULTABILI, ambito));
     const periodo = periodoConsultazioneDellaPromo(rigaPromo?.stato_promo);
     if (!rigaPromo || !periodo) throw nonDisponibile();
 
     const criteri = this.criteri(periodo, TIPO_LAVORAZIONE.VOLANTINO, ambito);
-    const righeKit = await this.materiali.elencaVariantiVolantini(criteri, [rigaPromo.id_promo]);
+    const righeKit = await misura('varianti', () => this.materiali.elencaVariantiVolantini(criteri, [rigaPromo.id_promo]));
     if (righeKit.length === 0) throw nonDisponibile();
     return { rigaPromo, periodo, criteri, varianti: righeKit.map(varianteDa).sort(confrontaVarianti) };
   }
@@ -674,6 +704,26 @@ export class ConsultazioneService implements IConsultazioneService {
   }
 
   /**
+   * Le sezioni degli insight di tutti i kit mostrati. Kit, PDF e versione delle referenze si leggono
+   * una volta per tutti (tre query, non tre per kit); le referenze, che sono il costo grosso, si
+   * leggono e si calcolano solo per i kit che non sono gia' in cache con la stessa versione.
+   */
+  private async insightDeiKit(
+    varianti: readonly VarianteConsultazione[],
+    ambito: AmbitoGdo,
+    contestoDellaGdoDelKit: (idGdo: string | null) => Promise<ContestoConfig>
+  ): Promise<KitConInsight[]> {
+    if (varianti.length === 0) return [];
+    const letture = this.lettureInsight;
+    const ids = varianti.map(v => v.id);
+    const insieme = letture.kitNeiAmbito && letture.pdfDeiKit && letture.versioniRigheDeiKit
+      ? await Promise.all([letture.kitNeiAmbito(ids, ambito), letture.pdfDeiKit(ids), letture.versioniRigheDeiKit(ids)])
+      : null;
+    return aGruppi(varianti, KIT_INSIGHT_IN_PARALLELO, variante =>
+      this.insightDelKit(variante, ambito, contestoDellaGdoDelKit, insieme));
+  }
+
+  /**
    * Le sezioni degli insight di un kit, lette come negli insight del volantino (InsightConfrontiService):
    * un kit senza referenze ha zero box. Un kit che non si trova piu' fra l'elenco e questa lettura
    * vale come un kit senza referenze.
@@ -681,20 +731,37 @@ export class ConsultazioneService implements IConsultazioneService {
   private async insightDelKit(
     variante: VarianteConsultazione,
     ambito: AmbitoGdo,
-    contestoDellaGdoDelKit: (idGdo: string | null) => Promise<ContestoConfig>
+    contestoDellaGdoDelKit: (idGdo: string | null) => Promise<ContestoConfig>,
+    insieme: readonly [Map<string, KitInsight>, Map<string, PdfVolantino>, Map<string, string>] | null
   ): Promise<KitConInsight> {
-    const kit = await this.lettureInsight.kitNellAmbito(variante.id, ambito);
+    const chiaveKit = variante.id.toLowerCase();
+    const kit = insieme ? (insieme[0].get(variante.id) ?? insieme[0].get(chiaveKit) ?? null) : await this.lettureInsight.kitNellAmbito(variante.id, ambito);
     if (!kit) {
       const { sintesi, box } = sezioniInsight([], { totalePagine: 0, anagraficaReparti: [], marcheDistributore: [], urlFoto: guid => guid });
       return { variante, sintesi, box };
     }
-    const [righe, pdf, contesto] = await Promise.all([
+    const contesto = await contestoDellaGdoDelKit(kit.gdo);
+
+    // Senza lettura a gruppi o senza cache si calcola sempre, come prima
+    const versione = insieme?.[2].get(chiaveKit);
+    const chiave = this.cacheInsight && insieme && versione !== undefined
+      ? chiaveCacheInsightKit(kit.id, improntaInsightKit(
+        versione, kit, insieme[1].get(kit.id) ?? insieme[1].get(chiaveKit) ?? null,
+        contesto, contesto.anagraficaReparti.map(reparto => contesto.risolviReparto?.(reparto) ?? null)
+      ))
+      : null;
+    if (chiave && this.cacheInsight) {
+      const inCache = await this.cacheInsight.leggi<InsightKitInCache>(chiave).catch(() => null);
+      if (inCache) return { variante, sintesi: inCache.sintesi, box: inCache.box };
+    }
+
+    const [righe, pdf] = await Promise.all([
       this.lettureInsight.righeDelKit(kit.id),
-      this.lettureInsight.pdfDelKit(kit.id),
-      contestoDellaGdoDelKit(kit.gdo),
+      insieme ? Promise.resolve(insieme[1].get(kit.id) ?? insieme[1].get(chiaveKit) ?? null) : this.lettureInsight.pdfDelKit(kit.id),
     ]);
     const boxKit = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
     const { sintesi, box } = sezioniInsight(boxKit, opzioniDelKit(kit, righe, boxKit, pdf, contesto, this.agenziaLib.insightVolantino));
+    if (chiave && this.cacheInsight) void this.cacheInsight.scrivi(chiave, { sintesi, box }, DURATA_CACHE_INSIGHT_KIT_SECONDI).catch(() => undefined);
     return { variante, sintesi, box };
   }
 

@@ -27,6 +27,8 @@ globalThis.ResizeObserver ??= class {
 
 const finti = vi.hoisted(() => ({
   risultato: {} as Record<string, unknown>,
+  // I volantini della promo (query leggera): senza dati, la pagina aspetta il dettaglio
+  leggera: { data: undefined } as Record<string, unknown>,
   richieste: [] as unknown[],
   filtri: [] as unknown[],
   permessi: new Set<string>(),
@@ -42,6 +44,7 @@ vi.mock("@/query/consultazione", () => ({
     finti.filtri.push(filtri);
     return finti.risultato;
   },
+  useVolantiniPromozione: () => finti.leggera,
 }));
 
 import PromozioneVolantini from ".";
@@ -226,6 +229,7 @@ const percorso = (link: HTMLElement) => link.getAttribute("href");
 
 beforeEach(() => {
   finti.risultato = caricato(dettaglio());
+  finti.leggera = { data: undefined };
   finti.richieste = [];
   finti.filtri = [];
   finti.permessi = new Set();
@@ -1164,6 +1168,55 @@ describe("Consultazione di una promozione", () => {
 
     expect(screen.getByRole("status", { name: "Caricamento della promozione" })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: "La promozione" })).not.toBeInTheDocument();
+  });
+
+  describe("caricamento progressivo: i volantini arrivano prima del calcolo degli insight", () => {
+    const inCalcolo = { data: undefined, isLoading: true, isError: false, error: null, refetch: vi.fn() };
+    const volantiniLeggeri = (kitDellaPromo: KitPromozioneConsultazione[]) => ({
+      data: {
+        promo: dettaglio().promo,
+        periodo: dettaglio().periodo,
+        volantini: kitDellaPromo,
+        loghiInsegne: {},
+      },
+    });
+
+    it("mostra subito banda, filtri e copertine dai volantini e un segnaposto per assortimento e analisi", async () => {
+      finti.risultato = inCalcolo;
+      finti.leggera = volantiniLeggeri([kit("k1"), kit("k2", { canale: SUPERSTORE })]);
+      await apri();
+
+      expect(screen.getByRole("heading", { level: 1, name: dettaglio().promo.nome })).toBeInTheDocument();
+      expect(screen.getByRole("region", { name: "La promozione" })).toBeInTheDocument();
+      expect(within(screen.getByRole("list", { name: "Copertine dei volantini" })).getAllByRole("link")).toHaveLength(2);
+      expect(screen.getByRole("status", { name: "Caricamento dell'assortimento e delle analisi" })).toBeInTheDocument();
+      // Quello che si calcola sui kit non c'e' ancora, ne' l'indice che rimanda a quelle parti
+      expect(screen.queryByRole("navigation", { name: "In questa pagina" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("status", { name: "Caricamento della promozione" })).not.toBeInTheDocument();
+    });
+
+    it("con un filtro nell'indirizzo mostra subito solo i volantini di quell'insegna", async () => {
+      finti.risultato = inCalcolo;
+      finti.leggera = volantiniLeggeri([kit("k1"), kit("k2", { canale: SUPERSTORE })]);
+      await apri(`/volantini/promozioni/p1?canale=${SUPERSTORE.id}`);
+
+      expect(within(screen.getByRole("list", { name: "Copertine dei volantini" })).getAllByRole("link")).toHaveLength(1);
+    });
+
+    it("senza i volantini leggeri resta la forma della pagina con i segnaposto", async () => {
+      finti.risultato = inCalcolo;
+      finti.leggera = { data: undefined };
+      await apri();
+
+      expect(screen.getByRole("status", { name: "Caricamento della promozione" })).toBeInTheDocument();
+      expect(screen.queryByRole("list", { name: "Copertine dei volantini" })).not.toBeInTheDocument();
+    });
+
+    it("quando arriva il dettaglio i segnaposto spariscono", async () => {
+      await apri();
+
+      expect(screen.queryByRole("status", { name: "Caricamento dell'assortimento e delle analisi" })).not.toBeInTheDocument();
+    });
   });
 
   it("una promozione che non c'è (404) è non disponibile, con il ritorno a Volantini attivi e senza errore", async () => {
