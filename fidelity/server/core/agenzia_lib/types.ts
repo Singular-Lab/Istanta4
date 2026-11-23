@@ -410,6 +410,11 @@ export interface IAgenziaLib {
    * confermaDaPagineTolte: da quante pagine tolte in una volta si chiede conferma anche se sono vuote.
    */
   MENABO_PAGINE_A_MANO?: MenaboPagineAMano;
+  /**
+   * I20-1258: la colonna dei contenuti a sinistra del menabò si allarga e si stringe trascinandone il
+   * bordo (spec menabo-promo, "Colonna dei gruppi ridimensionabile"). Assente = larghezza fissa.
+   */
+  MENABO_COLONNA_GRUPPI_RIDIMENSIONABILE?: boolean;
   elaboraDatoPerAgenzia(data: RisultatoConfrontoMomento): Promise<TracciatoReport>;
 
   normalizzaDatoConfrontoPerScore(confrontiData: PromoScoreboardInput): Promise<PromoScoreboardInput>;
