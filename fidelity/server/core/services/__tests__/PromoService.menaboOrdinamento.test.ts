@@ -21,12 +21,17 @@ const record = (codice: string, reparto: string, categoria: string) => ({
   tema: 'SPRINT',
 });
 
-function makeService(ordinamentoLetto: OrdinamentoMerceologico, campiIdentita?: readonly string[]) {
+function makeService(
+  ordinamentoLetto: OrdinamentoMerceologico,
+  campiIdentita?: readonly string[],
+  pagineAMano?: { confermaDaPagineTolte: number },
+) {
   vi.spyOn(TracciatiMomento, 'findAll').mockResolvedValue([
     { risultato: { tracciati: [{ guidCanale: '', guidArea: '', context: '[]', records: [record('B', 'macelleria', 'bovino'), record('A', 'ortofrutta', 'mele')] }] } },
   ] as any);
   const agenziaLib = {
     ...(campiIdentita ? { CAMPI_IDENTITA_MENABO: campiIdentita } : {}),
+    ...(pagineAMano ? { MENABO_PAGINE_A_MANO: pagineAMano } : {}),
     // Restituisce i codici nell'ordine in cui la libreria li riceve
     getDatoPerMenabo: vi.fn(async (risultati: any[]) => ({
       tipoDivisione: 'canale',
@@ -94,5 +99,25 @@ describe('PromoService.getDatoPerMenabo: campi che identificano le referenze', (
     const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
 
     expect(dato.campi_identita).toEqual([]);
+  });
+});
+
+describe('PromoService.getDatoPerMenabo: numero di pagine scritto a mano (I20-1256)', () => {
+  const richiesta = {} as Parameters<PromoService['getDatoPerMenabo']>[2];
+
+  it('passa al menabò la soglia della conferma quando la libreria agenzia lo dichiara', async () => {
+    const { service } = makeService(ordinamento, undefined, { confermaDaPagineTolte: 5 });
+
+    const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
+
+    expect(dato.pagine_a_mano).toEqual({ conferma_da_pagine_tolte: 5 });
+  });
+
+  it('con una libreria che non lo dichiara non lo passa: restano solo le frecce', async () => {
+    const { service } = makeService(ordinamento);
+
+    const dato = await service.getDatoPerMenabo('p1', undefined, richiesta);
+
+    expect(dato.pagine_a_mano).toBeUndefined();
   });
 });

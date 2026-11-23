@@ -2663,6 +2663,11 @@ export interface MenaboRisultato {
    * referenze attuali; vuoto = si confronta la referenza intera.
    */
   campi_identita?: string[];
+  /**
+   * I20-1256: presente quando la libreria agenzia (MENABO_PAGINE_A_MANO) fa scrivere a mano il
+   * numero di pagine; da conferma_da_pagine_tolte pagine tolte si chiede conferma anche se vuote.
+   */
+  pagine_a_mano?: { conferma_da_pagine_tolte: number };
 }
 
 export interface MenaboLayoutLabelSalvata {

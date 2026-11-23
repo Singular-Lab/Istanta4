@@ -1582,6 +1582,10 @@ export class PromoService implements IPromoService {
         ...risultatoDatiDaAgenziaLib,
         // Con questi campi il client ricollega il menabò salvato alle referenze attuali
         campi_identita: [...(this.agenziaLib.CAMPI_IDENTITA_MENABO ?? [])],
+        // I20-1256: il numero di pagine scritto a mano, solo se la libreria agenzia lo dichiara
+        ...(this.agenziaLib.MENABO_PAGINE_A_MANO
+          ? { pagine_a_mano: { conferma_da_pagine_tolte: this.agenziaLib.MENABO_PAGINE_A_MANO.confermaDaPagineTolte } }
+          : {}),
         nomePromo: promoValues.nome_promo as string,
       };
     } catch (error: any) {

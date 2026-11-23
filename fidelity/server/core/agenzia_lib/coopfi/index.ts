@@ -175,6 +175,8 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     public CHIAVE_DEDUP_MENABO = "Scatto.CodiceGruppo";
     /** Una referenza del menabò si riconosce dal codice del gruppo di scatto, altrimenti dal suo codice. */
     public CAMPI_IDENTITA_MENABO: readonly string[] = [this.CHIAVE_DEDUP_MENABO, "Referenza.Codice"];
+    /** I20-1256: per Coop il numero di pagine del menabò si scrive a mano; da 5 pagine tolte si chiede conferma. */
+    public MENABO_PAGINE_A_MANO = { confermaDaPagineTolte: 5 };
 
     /** La lista soci contiene tutti i canali/aree: ogni promo tiene solo i suoi (I20-958). */
     public visibilitaPromo: DimensioneVisibilitaPromo[] = ["canale", "area"];
