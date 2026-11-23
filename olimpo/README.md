@@ -162,6 +162,43 @@ Con `NODE_ENV=production` Olimpo distribuisce le richieste su più processi Node
   torna a 1 secondo dopo un minuto di vita.
 - **Chiusura:** con SIGTERM i processi non vengono riavviati.
 
+## Immagini delle pagine dei PDF
+
+`getThumbnailMaterialePdfs?id=…&page=N` restituisce la pagina N in WebP. Il codice è in
+`src/materiali/pagine-pdf.ts`.
+
+- **Due rese:**
+  - senza `dpi`, o con `dpi=150`: la pagina a 150 dpi di sempre, per anteprime e miniature;
+  - con `dpi=300`: la pagina per leggere le scritte dei prodotti. Ghostscript la disegna a
+    600 dpi senza antialias, sharp la riduce a 300 (`lanczos3`) e la codifica in WebP qualità 75
+    con `smartSubsample`. Non si usa `-dGraphicsAlphaBits`: su certi PDF rallenta il disegno
+    fino a 26 s per pagina. Un disegno richiede circa 4-8 s e 300 MB di memoria.
+  - Ogni altro valore risponde 400.
+- **Resa base invariata:** il disegno a 150 dpi non va cambiato. Serve anche a calcolare l'MD5
+  dei PDF di una pagina, che riconosce i doppioni, e il dHash con cui si confrontano i PDF.
+- **Cache:** `thumbnails/{id}_page{N}.webp` e `thumbnails/{id}_page{N}_300dpi.webp`. Il file
+  in cache si serve così com'è (header `X-Olimpo-Dpi` con la resa servita), e si ridimensiona
+  solo se la richiesta indica `width` e `height`.
+- **Nessun disegno a 300 dpi durante una richiesta:**
+  - se la pagina a 300 dpi non è ancora pronta, Olimpo risponde subito con quella a 150 dpi,
+    con `Cache-Control: no-store` perché il browser non la conservi al posto dell'altra;
+  - insieme mette il PDF in testa alla coda di background;
+  - la pagina a 150 dpi che manca si disegna invece subito, in circa un secondo.
+- **Coda di background:**
+  - una per processo, che disegna una pagina a 300 dpi alla volta con una breve pausa fra
+    l'una e l'altra;
+  - un PDF già in coda non si aggiunge di nuovo;
+  - un file `.lock` accanto alla pagina impedisce che due processi la disegnino insieme; un lock
+    più vecchio di 10 minuti viene da un processo morto e si riprende.
+- **Upload di un PDF:** dopo le miniature a 150 dpi e le pagine SVG, il PDF entra nella coda.
+- **PDF già archiviati:** `GET /olimpo/materiali/generateAllThumbnails?dpi=300` (autenticato) li
+  passa alla coda uno alla volta, dai più recenti per data del file, e mostra l'avanzamento in
+  SSE.
+  - Crea solo i file `_300dpi.webp` che mancano: originali, miniature, MD5 e dHash non cambiano.
+  - Si può riprendere: dopo un riavvio basta rilanciarla, salta le pagine pronte.
+  - Una seconda chiamata mentre la prima è in corso risponde con un errore.
+  - Le pagine chieste nel frattempo passano davanti.
+
 ## Test senza Docker
 
 - **Test d'integrazione delle migrazioni:** girano su un PostgreSQL locale, senza Docker. Il database

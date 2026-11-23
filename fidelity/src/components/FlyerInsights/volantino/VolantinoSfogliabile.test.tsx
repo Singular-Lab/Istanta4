@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { altezzaFoglio, tintaCategoria } from "@/components/Grafici";
 import type { FlyerInsightsConfig } from "@/types/flyerInsights";
-import { urlPaginaMateriale } from "@/utils/materiali";
+import { urlPaginaDaLeggere, urlPaginaMateriale } from "@/utils/materiali";
 import type { BoxInsight, ProdottoInsight, TappaProdotto, ViaggioProdotto } from "../../../../lib/insightVolantino/tipi";
 import { percorsoDettaglioVolantino } from "../../../../lib/materiali/periodi";
 
@@ -321,7 +321,9 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
     const { container } = disegna({ pdf: PDF, box: [boxDi("a")] });
 
     const immagine = immagineDi(1);
-    expect(immagine).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
+    // La pagina da leggere arriva a 300 dpi, per le scritte dei prodotti allo zoom
+    expect(immagine).toHaveAttribute("src", urlPaginaDaLeggere("olimpo-1", 1));
+    expect(immagine.getAttribute("src")).toMatch(/&page=1&dpi=300$/);
     expect(immagine).toHaveAttribute("loading", "lazy");
     expect(pagina(1)).toHaveAttribute("data-immagine", "caricamento");
     // Nessun PDF scaricato né disegnato: solo immagini
@@ -349,6 +351,8 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
     const miniatura = indice.querySelector("img");
     expect(miniatura).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1, misuraMiniatura(A4)));
     expect(miniatura?.getAttribute("src")).toMatch(/&width=104&height=\d+$/);
+    // Le miniature si ricavano dall'immagine di sempre, non da quella a 300 dpi
+    expect(miniatura?.getAttribute("src")).not.toContain("dpi=");
   });
 
   it("se Olimpo risponde con il segnaposto quadrato, o l'immagine non arriva, la pagina resta bianca", () => {
@@ -368,7 +372,7 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
 
     expect(pagineSulPalco()).toEqual(["Pagina 4", "Pagina 5"]);
     const pronte = [...screen.getByTestId("pagine-pronte").querySelectorAll("img")].map(img => img.getAttribute("src"));
-    expect(pronte).toEqual([2, 3, 6, 7].map(numero => urlPaginaMateriale("olimpo-1", numero)));
+    expect(pronte).toEqual([2, 3, 6, 7].map(numero => urlPaginaDaLeggere("olimpo-1", numero)));
     expect(screen.queryByRole("group", { name: "Pagina 9" })).not.toBeInTheDocument();
   });
 
@@ -394,7 +398,7 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
     fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
 
     const grande = await screen.findByTestId("volantino-schermo-intero");
-    expect(within(grande).getByRole("group", { name: "Pagina 1" }).querySelector("img")).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
+    expect(within(grande).getByRole("group", { name: "Pagina 1" }).querySelector("img")).toHaveAttribute("src", urlPaginaDaLeggere("olimpo-1", 1));
   });
 });
 
@@ -668,7 +672,7 @@ describe("VolantinoSfogliabile: scheda del box", () => {
     fireEvent.click(screen.getByTestId("box-a"));
 
     const ritaglio = await screen.findByTestId("box-stampato");
-    expect(ritaglio.querySelector("img")).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
+    expect(ritaglio.querySelector("img")).toHaveAttribute("src", urlPaginaDaLeggere("olimpo-1", 1));
     // Accanto, la foto del prodotto in grande
     expect(screen.getByRole("img", { name: "Foto di Mozzarella" })).toHaveAttribute("src", "https://foto.example/mozzarella.jpg");
     // La marca in evidenza sopra il nome, una volta sola; formato e pagina sotto il nome

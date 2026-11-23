@@ -42,6 +42,18 @@ export const urlPaginaMateriale = (idOlimpoCloud: string, pagina: number, misura
   return `${base}&width=${larghezza}&height=${altezza}`;
 };
 
+/** Risoluzione delle pagine da leggere: quella delle foto dei volantini, sotto la quale le scritte piccole si perdono. */
+export const DPI_LETTURA = 300;
+
+/**
+ * Immagine di una pagina da leggere da vicino, per esempio nel volantino degli insight: Olimpo
+ * la disegna a 300 dpi, così allo zoom massimo si leggono le scritte sulle confezioni.
+ * L'indirizzo è diverso da quello a 150 dpi, quindi il browser non ripropone l'immagine
+ * vecchia che ha in cache. Per miniature e anteprime resta urlPaginaMateriale.
+ */
+export const urlPaginaDaLeggere = (idOlimpoCloud: string, pagina: number): string =>
+  `${urlPaginaMateriale(idOlimpoCloud, pagina)}&dpi=${DPI_LETTURA}`;
+
 /**
  * Validità compatta di una promo: "16/10 – 29/10/2026", con l'anno una volta sola quando le due
  * date cadono nello stesso anno. Date ISO (YYYY-MM-DD) come nel contratto; null se mancano entrambe.

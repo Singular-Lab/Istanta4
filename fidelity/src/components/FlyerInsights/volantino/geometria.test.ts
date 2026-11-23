@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { urlPaginaMateriale } from "@/utils/materiali";
+import { urlPaginaDaLeggere, urlPaginaMateriale } from "@/utils/materiali";
 import type { BoxInsight } from "../../../../lib/insightVolantino/tipi";
 import {
   altezzaAdattata,
@@ -204,6 +204,11 @@ describe("compensazione dell'abbondanza dell'immagine della pagina", () => {
       "/olimpo/materiali/getThumbnailMaterialePdfs?id=abc&page=2&width=144&height=204"
     );
     expect(urlPaginaMateriale("abc", 1, { larghezza: 0, altezza: 0.2 })).toMatch(/&width=1&height=1$/);
+  });
+
+  it("la pagina da leggere si chiede a 300 dpi, con un indirizzo diverso da quello di sempre", () => {
+    expect(urlPaginaDaLeggere("abc 1", 3)).toBe("/olimpo/materiali/getThumbnailMaterialePdfs?id=abc%201&page=3&dpi=300");
+    expect(urlPaginaDaLeggere("abc", 3)).not.toBe(urlPaginaMateriale("abc", 3));
   });
 });
 
