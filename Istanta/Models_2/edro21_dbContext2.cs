@@ -567,7 +567,10 @@ namespace Istanta.Models_2
 
                 entity.Property(e => e.Meta).HasColumnType("text").HasColumnName("meta");
 
-
+                //TASK-bb04f9aa: le righe disattivate (box usciti dalla lavorazione) restano nel database
+                //con i loro meta, ma nessuna lettura le vede se non lo chiede con IgnoreQueryFilters.
+                entity.Property(e => e.Attivo).HasColumnName("attivo");
+                entity.HasQueryFilter(e => e.Attivo);
 
                 entity.Property(e => e.RegisterDate)
                 .HasColumnType("timestamp without time zone")

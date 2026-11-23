@@ -1,5 +1,6 @@
 ﻿using Istanta.Models;
 using Istanta.Models_2;
+using Istanta.Utility;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -199,7 +200,8 @@ namespace Istanta.Controllers
         private IQueryable<PromoLavorazioniRecord> RecordDelleLavorazioni(Promo promo)
         {
             string guid = promo.guidID ?? string.Empty;
-            return ctx2.PromoLavorazioniRecords.Where(r => r.IdPromoLavorazioniNavigation.GuidPromo == guid);
+            //TASK-bb04f9aa: anche le righe disattivate, con il loro stato: portano i meta dei box tolti dalla pagina.
+            return ctx2.PromoLavorazioniRecords.IgnoreQueryFilters().Where(r => r.IdPromoLavorazioniNavigation.GuidPromo == guid);
         }
 
         /// <summary>Applica il piano ai record dei tracciati. Torna quante righe ha reinserito.</summary>
@@ -242,6 +244,8 @@ namespace Istanta.Controllers
             {
                 ctx2.PromoTracciatiRecords.Add(riga.NuovaEntita());
             }
+            //TASK-bb04f9aa: le righe disattivate dei record da rimuovere escono con loro.
+            RecordDellaLavorazione.EliminaLeDisattivateDei(ctx2, piano.daRimuovere);
             ctx2.PromoTracciatiRecords.RemoveRange(piano.daRimuovere.Select(id => perId[id]));
 
             risposta.Riporta(piano);

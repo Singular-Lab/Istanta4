@@ -956,14 +956,6 @@ namespace Istanta.Models
         public string? codiceGruppo { get; set; }
     }
 
-    public class PromoLavorazioniResult
-    {
-        public bool Esito { get; set; }
-        public string error { get; set; } = String.Empty;
-
-        public List<PromoLavorazioniRecord> records { get; set; } = new List<PromoLavorazioniRecord>();
-    }
-
     public class StringResult
     {
         public string? Esito { get; set; }

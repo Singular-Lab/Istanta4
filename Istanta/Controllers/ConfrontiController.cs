@@ -1790,6 +1790,9 @@ namespace Istanta.Controllers
                 this.ctx2.PromoBackups.Add(backup);
 
                 var perId = records.ToDictionary(r => r.Id);
+                //TASK-bb04f9aa: un record non impaginato puo' avere righe disattivate (meta conservati di
+                //un box tolto dalla pagina): escono con lui, o la chiave esterna rifiuta l'eliminazione.
+                RecordDellaLavorazione.EliminaLeDisattivateDei(this.ctx2, piano.daEliminare);
                 this.ctx2.PromoTracciatiRecords.RemoveRange(piano.daEliminare.Select(id => perId[id]));
                 await this.ctx2.SaveChangesAsync();
                 await tx.CommitAsync();

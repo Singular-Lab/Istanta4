@@ -21,6 +21,11 @@ namespace Istanta.Models_2
         public Byte Indice { get; set; }
         public Byte Pagina { get; set; }
         public string? Meta { get; set; }
+        /// TASK-bb04f9aa: false quando il box e' uscito dalla lavorazione. La riga non si cancella, per
+        /// conservarne i meta, ma per tutte le letture non esiste: il contesto la filtra
+        /// (HasQueryFilter). Chi deve vederla lo chiede con IgnoreQueryFilters; disattivazione e
+        /// riattivazione passano da Utility.RecordDellaLavorazione.
+        public bool Attivo { get; set; } = true;
 
         public virtual PromoLavorazioni IdPromoLavorazioniNavigation { get; set; } = null!;
         public virtual PromoTracciatiRecord IdPromoTracciatiRecordNavigation { get; set; } = null!;
