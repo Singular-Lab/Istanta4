@@ -179,6 +179,10 @@ class Archivio {
             ME.EliminaFotoExtra($(this));
         });
 
+        pagina.on("click", "[data-azione='eliminaFotoArticolo']", function () {
+            ME.EliminaFotoArticolo($(this));
+        });
+
         pagina.on("change", "[data-azione='attivaFotoExtra']", function () {
             ME.AttivaDisattivaFotoExtra($(this));
         });
@@ -1071,6 +1075,37 @@ class Archivio {
             ME.DopoModificaFoto();
 
         });
+    }
+
+    /// I20-1253: elimina una foto del prodotto non in uso, dopo la conferma. Il pulsante c'e' solo sulle
+    /// foto che si possono eliminare, e il server lo ricontrolla: se rifiuta, si dice perche'.
+    EliminaFotoArticolo(button) {
+        let ME = this;
+        const idFoto = button.attr("data-idfoto");
+        const testo = Archivio.testoConfermaEliminazioneFoto(button.attr("data-nome"), button.attr("data-selezionata-il"));
+        if (!confirm(testo)) {
+            return;
+        }
+
+        showLoading();
+        Call.do("SchedaArticolo", "DeleteFoto/" + idFoto, "POST", { codice: Archivio.codiceDellaSezioneFoto() }, ME, function (result, sender) {
+            hideLoading();
+            if (result == null || result.esito !== true) {
+                alert("Foto non eliminata: " + ((result && (result.error || result.message)) || "errore sconosciuto"));
+                return;
+            }
+            ME.DopoModificaFoto();
+        });
+    }
+
+    /// I20-1253: la domanda prima di eliminare una foto del prodotto. Con la data, se la foto e' stata
+    /// selezionata meno di un mese fa, lo dice: potrebbe essere ancora attesa in qualche lavorazione.
+    static testoConfermaEliminazioneFoto(nome, selezionataIl) {
+        let testo = "Eliminare la foto " + (nome || "") + "?";
+        if (selezionataIl != null && String(selezionataIl).trim() !== "") {
+            testo += "\n\nAttenzione: questa foto e' stata selezionata il " + String(selezionataIl).trim() + ", meno di un mese fa.";
+        }
+        return testo + "\n\nL'eliminazione non si puo' annullare.";
     }
 
     checkLastModificaFromButton(sender, canale = null, area = null) {
