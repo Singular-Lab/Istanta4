@@ -16,8 +16,9 @@ import { ServerCall } from "../../../lib/server_call";
 import type { MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, RegoleMenabo } from "../../../lib/types";
 import { useUser } from "../../context/UserContext";
 import { ricollegaElementiSalvati } from "./menaboChiavi";
+import { anteprimaNote } from "./menaboNote";
 import { pagineDelGruppo, referenzeDellaPagina } from "./menaboSelezione";
-import { gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, nuovoUnioneId, sciogliUnione, unisciGruppi } from "./menaboUnioni";
+import { altrePagineDellUnione, gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, nuovoUnioneId, raggruppaPerUnione, rimandoAltrePagine, sciogliUnione, unisciGruppi } from "./menaboUnioni";
 // ── Document dimensions (A4 in points at 72 dpi) ──────────────────────────
 const DOC_W = 595;
 const DOC_H = 842;
@@ -821,6 +822,9 @@ export default function MenaboCanvas({
     const unioneDelSelezionato = selectedItem?.unioneId;
     // Task 17ac016e: «Unione 1», «Unione 2»… su ogni gruppo unito.
     const numeriUnione = useMemo(() => numeroDelleUnioni(items), [items]);
+    // Passando sopra una scheda unita (o selezionandola) si illuminano tutti i gruppi della sua unione, su ogni pagina.
+    const [unioneSottoIlPuntatore, setUnioneSottoIlPuntatore] = useState<string | null>(null);
+    const unioneInEvidenza = unioneSottoIlPuntatore ?? unioneDelSelezionato ?? null;
     const gruppiUnitiAlSelezionato = useMemo(
         () => gruppiDellUnione(items, unioneDelSelezionato),
         [items, unioneDelSelezionato],
@@ -1230,6 +1234,8 @@ export default function MenaboCanvas({
         markDirty();
     }, [markDirty]);
 
+    // Nota di cui si sta chiedendo la conferma di eliminazione (una nota con testo non si toglie al primo clic).
+    const [confermaEliminaNota, setConfermaEliminaNota] = useState<string | null>(null);
     const removePageNote = useCallback((pageIndex: number, noteId: string) => {
         pushHistory();
         setPageNotes(prev => {
@@ -1921,10 +1927,19 @@ export default function MenaboCanvas({
                                                             {(() => {
                                                                 const denominator = isFinite(maxRefs) ? maxRefs : (usedRefs > 0 ? usedRefs : 1);
                                                                 const contentAreaH = (DOC_H - 2 * MARGIN) * scale;
-                                                                const totalGapH = Math.max(0, pageItems.length - 1) * 12 * scale;
+                                                                // Le schede unite stanno in un unico riquadro con un'intestazione: tra le schede dentro il
+                                                                // riquadro c'è meno spazio, e riquadro e intestazione tolgono altezza alle schede.
+                                                                const blocchi = raggruppaPerUnione(pageItems);
+                                                                const INTESTAZIONE_UNIONE = 22 * scale;
+                                                                const CORNICE_UNIONE = 6 * scale;
+                                                                const GAP_NELL_UNIONE = 4 * scale;
+                                                                const totalGapH = Math.max(0, blocchi.length - 1) * 12 * scale
+                                                                    + blocchi.reduce((somma, b) => b.unioneId
+                                                                        ? somma + (b.indici.length - 1) * GAP_NELL_UNIONE + INTESTAZIONE_UNIONE + 2 * CORNICE_UNIONE + 2 * 1.5 * scale
+                                                                        : somma, 0);
                                                                 const itemBodyH = contentAreaH - totalGapH;
 
-                                                                return pageItems.map(item => {
+                                                                const schede = pageItems.map(item => {
                                                                     const color = PALETTE[item.colorIdx % PALETTE.length];
                                                                     const isSelectedGroup = selectedId === item.id;
                                                                     const isSelected = isSelectedGroup && (selectedPageIndex === null || selectedPageIndex === item.pageIndex);
@@ -1943,6 +1958,7 @@ export default function MenaboCanvas({
                                                                                         }
                                                                                     }}
                                                                                     style={{
+                                                                                        position: "relative",
                                                                                         display: "flex",
                                                                                         alignItems: "center",
                                                                                         justifyContent: "space-between",
@@ -1981,7 +1997,7 @@ export default function MenaboCanvas({
                                                                                                 textTransform: "uppercase",
                                                                                             }}
                                                                                         >
-                                                                                            Gruppo scelto{item.unioneId ? ` · Unione ${numeriUnione.get(item.unioneId) ?? ""}` : ""}
+                                                                                            Gruppo scelto
                                                                                         </span>
 
                                                                                         <span
@@ -2009,15 +2025,17 @@ export default function MenaboCanvas({
                                                                                             })()}
                                                                                         </span>
 
-                                                                                        <span
-                                                                                            style={{
-                                                                                                color,
-                                                                                                fontSize: 16 * scale,
-                                                                                                lineHeight: 1,
-                                                                                                fontWeight: 700,
-                                                                                            }}
-                                                                                        >
-                                                                                            {referenceCount} {referenceCount === 1 ? "referenza" : "referenze"}
+                                                                                        <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 * scale }}>
+                                                                                            <span
+                                                                                                style={{
+                                                                                                    color,
+                                                                                                    fontSize: 16 * scale,
+                                                                                                    lineHeight: 1,
+                                                                                                    fontWeight: 700,
+                                                                                                }}
+                                                                                            >
+                                                                                                {referenceCount} {referenceCount === 1 ? "referenza" : "referenze"}
+                                                                                            </span>
                                                                                         </span>
                                                                                     </div>
 
@@ -2073,6 +2091,53 @@ export default function MenaboCanvas({
                                                                                 </ContextMenuContent>
                                                                             )}
                                                                         </ContextMenu>
+                                                                    );
+                                                                });
+
+                                                                return blocchi.map(blocco => {
+                                                                    if (!blocco.unioneId) return schede[blocco.indici[0]];
+                                                                    const numeroUnione = numeriUnione.get(blocco.unioneId);
+                                                                    const rimando = rimandoAltrePagine(altrePagineDellUnione(items, blocco.unioneId, pageIdx), pageIdx);
+                                                                    // Attenuati i riquadri delle altre unioni mentre una è in evidenza.
+                                                                    const fuoriEvidenza = unioneInEvidenza !== null && blocco.unioneId !== unioneInEvidenza;
+                                                                    return (
+                                                                        <div
+                                                                            key={`unione-${blocco.unioneId}-${blocco.indici[0]}`}
+                                                                            data-unione={numeroUnione}
+                                                                            onMouseEnter={() => setUnioneSottoIlPuntatore(blocco.unioneId ?? null)}
+                                                                            onMouseLeave={() => setUnioneSottoIlPuntatore(null)}
+                                                                            style={{
+                                                                                display: "flex",
+                                                                                flexDirection: "column",
+                                                                                gap: GAP_NELL_UNIONE,
+                                                                                padding: CORNICE_UNIONE,
+                                                                                border: `${1.5 * scale}px solid rgb(var(--color-primary) / 0.5)`,
+                                                                                borderRadius: 9 * scale,
+                                                                                background: "rgb(var(--color-primary) / 0.05)",
+                                                                                opacity: fuoriEvidenza ? 0.4 : 1,
+                                                                                transition: "opacity 160ms ease",
+                                                                            }}
+                                                                        >
+                                                                            <div
+                                                                                style={{
+                                                                                    display: "flex",
+                                                                                    alignItems: "center",
+                                                                                    gap: 5 * scale,
+                                                                                    height: INTESTAZIONE_UNIONE,
+                                                                                    padding: `0 ${4 * scale}px`,
+                                                                                    color: "rgb(var(--color-primary) / 1)",
+                                                                                    fontSize: 10.5 * scale,
+                                                                                    lineHeight: 1,
+                                                                                    fontWeight: 700,
+                                                                                }}
+                                                                            >
+                                                                                <Lucide aria-hidden="true" icon="Link" style={{ width: 11 * scale, height: 11 * scale, flexShrink: 0 }} />
+                                                                                <span>Unione {numeroUnione}</span>
+                                                                                <span style={{ fontWeight: 500, opacity: 0.8 }}>· un solo ordine merceologico</span>
+                                                                                {rimando && <span style={{ marginLeft: "auto", fontWeight: 600 }}>{rimando}</span>}
+                                                                            </div>
+                                                                            {blocco.indici.map(i => schede[i])}
+                                                                        </div>
                                                                     );
                                                                 });
                                                             })()}
@@ -2141,24 +2206,25 @@ export default function MenaboCanvas({
                                                         Linguetta compatta attaccata al BORDO SUPERIORE, fuori dall'area di
                                                         contenuto (translateY -100%), così non copre nulla. È SEMPRE visibile
                                                         quando ci sono note (anche col pannello aperto: stanno in punti diversi),
-                                                        quindi compare subito al drop. Click = apri/chiudi il pannello. */}
+                                                        quindi compare subito al drop. Click = apri/chiudi il pannello.
+                                                        Colori del badge «attenzione» del progetto, senza gradienti. */}
                                                     {hasNotes && (
                                                         <button
                                                             type="button"
                                                             onClick={e => { e.stopPropagation(); if (isNotesOpen) closeNotesPanel(pageIdx); else setOpenNotesPage(pageIdx); }}
                                                             onPointerDown={e => e.stopPropagation()}
-                                                            title={isNotesOpen ? "Chiudi note" : `${notes.length} ${notes.length === 1 ? "nota" : "note"} — clicca per aprire`}
+                                                            title={isNotesOpen ? "Chiudi note" : anteprimaNote(notes)}
                                                             aria-label={isNotesOpen ? "Chiudi note" : `Apri ${notes.length} ${notes.length === 1 ? "nota" : "note"} della pagina`}
                                                             aria-expanded={isNotesOpen}
                                                             className={clsx(
-                                                                "absolute z-40 flex items-center gap-1.5 rounded-t-xl border border-b-0 px-2.5 py-1 shadow-[0_-10px_22px_-16px_rgba(180,83,9,0.85)] transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70",
+                                                                "absolute z-40 flex items-center gap-1.5 rounded-t-control border border-b-0 px-2.5 py-1 shadow-sm transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
                                                                 isNotesOpen
-                                                                    ? "border-amber-300 bg-gradient-to-r from-amber-200 via-amber-100 to-orange-100 text-amber-900 dark:border-amber-400/60 dark:from-amber-500/25 dark:via-amber-900/80 dark:to-darkmode-700 dark:text-amber-100"
-                                                                    : "border-amber-200 bg-gradient-to-r from-amber-100 via-white to-orange-50 text-amber-800 hover:border-amber-300 hover:shadow-[0_-12px_26px_-16px_rgba(180,83,9,0.95)] dark:border-amber-500/35 dark:from-amber-500/15 dark:via-darkmode-700 dark:to-darkmode-700 dark:text-amber-200 dark:hover:border-amber-400/60",
+                                                                    ? "border-slate-300 bg-slate-100 text-slate-700 dark:border-darkmode-300 dark:bg-darkmode-500 dark:text-slate-100"
+                                                                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-200 dark:hover:border-darkmode-300",
                                                             )}
                                                             style={{ right: 12, top: 0, transform: "translateY(-100%)" }}
                                                         >
-                                                            <Lucide icon="StickyNote" className="h-3.5 w-3.5" />
+                                                            <Lucide icon="StickyNote" className="h-3.5 w-3.5 text-amber-600 dark:text-amber-300" />
                                                             <span className="text-2xs font-bold leading-none tabular-nums">
                                                                 {notes.length}
                                                             </span>
@@ -2167,7 +2233,7 @@ export default function MenaboCanvas({
 
                                                     {isNotesOpen && (
                                                         <div
-                                                            className="absolute z-40 flex max-h-full w-72 max-w-full flex-col overflow-hidden rounded-card border border-amber-200/80 bg-white/95 shadow-[0_24px_70px_-32px_rgba(146,64,14,0.55),0_10px_28px_-20px_rgba(15,23,42,0.45)] backdrop-blur dark:border-amber-500/30 dark:bg-darkmode-700/95"
+                                                            className="absolute z-40 flex max-h-full w-72 max-w-full flex-col overflow-hidden rounded-card border border-slate-200 bg-white shadow-lg dark:border-darkmode-400 dark:bg-darkmode-700"
                                                             style={isSingleColumn
                                                                 // In colonna singola la pagina occupa tutta la larghezza:
                                                                 // il pannello si apre dentro il foglio per non creare overflow
@@ -2176,67 +2242,85 @@ export default function MenaboCanvas({
                                                             onClick={e => e.stopPropagation()}
                                                             onPointerDown={e => e.stopPropagation()}
                                                         >
-                                                            <div className="flex items-start justify-between gap-3 border-b border-amber-100/80 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3.5 py-3 dark:border-amber-500/20 dark:from-amber-500/10 dark:via-darkmode-700 dark:to-darkmode-700">
-                                                                <div className="flex min-w-0 items-start gap-2.5">
-                                                                    <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-card bg-amber-100 text-amber-700 ring-1 ring-amber-200/80 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
-                                                                        <Lucide icon="StickyNote" className="h-4 w-4" />
+                                                            <div className="flex items-center justify-between gap-3 border-b border-slate-200/80 px-3.5 py-2.5 dark:border-darkmode-400">
+                                                                <div className="flex min-w-0 items-center gap-2">
+                                                                    <Lucide icon="StickyNote" className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-300" />
+                                                                    <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-100">
+                                                                        Note pagina {pageIdx + 1}
                                                                     </span>
-                                                                    <div className="min-w-0">
-                                                                        <div className="flex items-center gap-1.5">
-                                                                            <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-100">
-                                                                                Note pagina {pageIdx + 1}
-                                                                            </span>
-                                                                            {notes.length > 0 && (
-                                                                                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-3xs font-bold leading-none text-amber-700 ring-1 ring-amber-200/70 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
-                                                                                    {notes.length}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                        <p className="mt-0.5 text-3xs leading-snug text-slate-400 dark:text-slate-500">
-                                                                            Promemoria interni, esclusi dagli export.
-                                                                        </p>
-                                                                    </div>
+                                                                    {notes.length > 0 && (
+                                                                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-3xs font-bold leading-none tabular-nums text-slate-600 dark:bg-darkmode-500 dark:text-slate-200">
+                                                                            {notes.length}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => closeNotesPanel(pageIdx)}
                                                                     title="Chiudi"
                                                                     aria-label="Chiudi"
-                                                                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-white/80 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 dark:text-slate-500 dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
+                                                                    className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:text-slate-500 dark:hover:bg-darkmode-600 dark:hover:text-slate-200"
                                                                 >
                                                                     <Lucide aria-hidden="true" icon="X" className="h-3.5 w-3.5" />
                                                                 </button>
                                                             </div>
-                                                            <div className="flex-1 overflow-y-auto bg-[radial-gradient(circle_at_top_left,rgba(251,191,36,0.10),transparent_42%)] p-3">
+                                                            <p className="border-b border-slate-100 px-3.5 py-1.5 text-3xs leading-snug text-slate-500 dark:border-darkmode-500 dark:text-slate-400">
+                                                                Promemoria interni, esclusi dagli export.
+                                                            </p>
+                                                            <div className="flex-1 overflow-y-auto bg-slate-50/60 p-3 dark:bg-darkmode-800/40">
                                                                 {notes.length === 0 ? (
-                                                                    <div className="rounded-card border border-dashed border-amber-200 bg-amber-50/60 px-3 py-5 text-center dark:border-amber-500/25 dark:bg-amber-500/10">
-                                                                        <Lucide icon="PencilLine" className="mx-auto mb-2 h-4 w-4 text-amber-500 dark:text-amber-300" />
-                                                                        <p className="text-2xs font-medium text-slate-500 dark:text-slate-300">
+                                                                    <div className="rounded-card border border-dashed border-slate-300 px-3 py-5 text-center dark:border-darkmode-400">
+                                                                        <Lucide icon="PencilLine" className="mx-auto mb-2 h-4 w-4 text-slate-400" />
+                                                                        <p className="text-2xs font-medium text-slate-600 dark:text-slate-300">
                                                                             Nessuna nota per questa pagina.
                                                                         </p>
-                                                                        <p className="mt-0.5 text-3xs text-slate-400 dark:text-slate-500">
+                                                                        <p className="mt-0.5 text-3xs text-slate-500 dark:text-slate-400">
                                                                             Aggiungi un promemoria operativo.
                                                                         </p>
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="flex flex-col gap-2.5">
+                                                                    <div className="flex flex-col gap-2">
                                                                         {notes.map((note, noteIdx) => (
-                                                                            <div key={note.id} className="group/note relative overflow-hidden rounded-card border border-amber-100 bg-white p-2.5 shadow-[0_10px_28px_-22px_rgba(146,64,14,0.65)] transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-[0_16px_34px_-24px_rgba(146,64,14,0.75)] dark:border-amber-500/15 dark:bg-darkmode-600">
-                                                                                <span className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-amber-300/80 dark:bg-amber-300/50" />
-                                                                                <div className="mb-2 flex items-center justify-between gap-2 pl-1">
-                                                                                    <span className="flex items-center gap-1.5 text-3xs font-semibold tracking-wide text-slate-500 dark:text-slate-300">
+                                                                            <div key={note.id} className="rounded-card border border-slate-200 bg-white p-2.5 transition-colors focus-within:border-primary/40 hover:border-slate-300 dark:border-darkmode-400 dark:bg-darkmode-600">
+                                                                                <div className="mb-1.5 flex items-center justify-between gap-2">
+                                                                                    <span className="flex items-center gap-1.5 text-3xs font-semibold text-slate-600 dark:text-slate-300">
                                                                                         <span className="h-1.5 w-1.5 rounded-full bg-amber-400 dark:bg-amber-300" />
                                                                                         Nota {noteIdx + 1}
                                                                                     </span>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={() => removePageNote(pageIdx, note.id)}
-                                                                                        title="Elimina nota"
-                                                                                        aria-label="Elimina nota"
-                                                                                        className="flex h-6 w-6 items-center justify-center rounded-control text-slate-300 opacity-70 transition-all hover:bg-red-50 hover:text-red-500 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-300"
-                                                                                    >
-                                                                                        <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
-                                                                                    </button>
+                                                                                    {confermaEliminaNota === note.id ? (
+                                                                                        <span className="flex items-center gap-1 text-3xs" role="group" aria-label="Conferma eliminazione">
+                                                                                            <span className="text-slate-500 dark:text-slate-400">Eliminare?</span>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => { setConfermaEliminaNota(null); removePageNote(pageIdx, note.id); }}
+                                                                                                className="rounded-control bg-red-50 px-1.5 py-0.5 font-semibold text-red-700 hover:bg-red-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 dark:bg-red-500/10 dark:text-red-300"
+                                                                                            >
+                                                                                                Sì
+                                                                                            </button>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                autoFocus
+                                                                                                onClick={() => setConfermaEliminaNota(null)}
+                                                                                                className="rounded-control bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600 hover:bg-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:bg-darkmode-500 dark:text-slate-200"
+                                                                                            >
+                                                                                                No
+                                                                                            </button>
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                // Una nota vuota si toglie subito: non c'è niente da perdere.
+                                                                                                if (note.text.trim() === "") removePageNote(pageIdx, note.id);
+                                                                                                else setConfermaEliminaNota(note.id);
+                                                                                            }}
+                                                                                            title="Elimina nota"
+                                                                                            aria-label="Elimina nota"
+                                                                                            className="flex h-6 w-6 items-center justify-center rounded-control text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-200 dark:text-slate-500 dark:hover:bg-red-500/10 dark:hover:text-red-300"
+                                                                                        >
+                                                                                            <Lucide aria-hidden="true" icon="Trash2" className="h-3.5 w-3.5" />
+                                                                                        </button>
+                                                                                    )}
                                                                                 </div>
                                                                                 <FormTextarea
                                                                                     autoFocus={noteIdx === notes.length - 1}
@@ -2245,18 +2329,18 @@ export default function MenaboCanvas({
                                                                                     value={note.text}
                                                                                     onChange={e => updatePageNote(pageIdx, note.id, e.target.value)}
                                                                                     placeholder="Scrivi un promemoria…"
-                                                                                    className="min-h-[88px] resize-none bg-transparent px-1 py-0 text-xs leading-relaxed text-slate-600 shadow-none placeholder:text-slate-400 focus:ring-0 dark:bg-transparent dark:text-slate-200 dark:placeholder:text-slate-500"
+                                                                                    className="min-h-[88px] resize-none bg-transparent px-1 py-0 text-xs leading-relaxed text-slate-700 shadow-none placeholder:text-slate-400 focus:ring-0 dark:bg-transparent dark:text-slate-200 dark:placeholder:text-slate-500"
                                                                                 />
                                                                             </div>
                                                                         ))}
                                                                     </div>
                                                                 )}
                                                             </div>
-                                                            <div className="border-t border-amber-100/80 bg-white/80 p-2.5 dark:border-amber-500/20 dark:bg-darkmode-700/80">
+                                                            <div className="border-t border-slate-200/80 bg-white p-2.5 dark:border-darkmode-400 dark:bg-darkmode-700">
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => addPageNote(pageIdx)}
-                                                                    className="flex w-full items-center justify-center gap-1.5 rounded-card border border-amber-200 bg-amber-50 py-2 text-xs font-semibold text-amber-800 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:bg-amber-100 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 active:translate-y-0 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-200 dark:hover:border-amber-400/50 dark:hover:bg-amber-500/15"
+                                                                    className="flex w-full items-center justify-center gap-1.5 rounded-control border border-slate-200 bg-white py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:border-darkmode-400 dark:bg-darkmode-600 dark:text-slate-200 dark:hover:bg-darkmode-500"
                                                                 >
                                                                     <Lucide icon="Plus" className="h-3.5 w-3.5" /> Aggiungi nota
                                                                 </button>
@@ -2358,9 +2442,8 @@ export default function MenaboCanvas({
                                     {unioneDelSelezionato ? (
                                         <>
                                             <p className="mb-2 text-slate-500">
-                                                Unione {numeriUnione.get(unioneDelSelezionato) ?? ""}, in un solo ordine merceologico: {gruppiUnitiAlSelezionato
-                                                    .map(id => items.find(item => item.groupId === id)?.label ?? id)
-                                                    .join(" + ")}.
+                                                <span aria-hidden="true" className="mr-1.5 inline-block h-2 w-2 rounded-full bg-primary align-middle" />
+                                                Unione {numeriUnione.get(unioneDelSelezionato) ?? ""}: le referenze di questi gruppi seguono un solo ordine merceologico.
                                             </p>
                                             <ul className="mb-2 list-disc pl-4 text-slate-500" data-testid="menabo-unione-pagine">
                                                 {gruppiUnitiAlSelezionato.map(id => {

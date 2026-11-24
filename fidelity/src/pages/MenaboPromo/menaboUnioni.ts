@@ -94,3 +94,49 @@ export function numeroDelleUnioni<T extends ElementoUnibile>(elementi: readonly 
     }
     return numeri;
 }
+
+/** Una serie di schede consecutive della pagina: della stessa unione, oppure una scheda sola non unita. */
+export interface BloccoDiSchede {
+    unioneId?: string;
+    /** Gli indici delle schede, nell'ordine in cui compaiono nella pagina. */
+    indici: number[];
+}
+
+/**
+ * Raggruppa le schede della pagina in blocchi: le schede unite consecutive della stessa unione stanno in un
+ * blocco solo (il menabò le disegna in un unico riquadro), ogni scheda non unita è un blocco a sé.
+ */
+export function raggruppaPerUnione(schede: ReadonlyArray<{ unioneId?: string }>): BloccoDiSchede[] {
+    const blocchi: BloccoDiSchede[] = [];
+    schede.forEach((scheda, i) => {
+        const ultimo = blocchi[blocchi.length - 1];
+        if (scheda.unioneId && ultimo && ultimo.unioneId === scheda.unioneId) {
+            ultimo.indici.push(i);
+            return;
+        }
+        blocchi.push(scheda.unioneId ? { unioneId: scheda.unioneId, indici: [i] } : { indici: [i] });
+    });
+    return blocchi;
+}
+
+/** Gli indici delle altre pagine in cui compare l'unione, in ordine crescente. */
+export function altrePagineDellUnione(
+    elementi: ReadonlyArray<{ unioneId?: string; pageIndex: number }>,
+    unioneId: string | undefined,
+    pagina: number,
+): number[] {
+    if (!unioneId) return [];
+    return Array.from(new Set(
+        elementi.filter(e => e.unioneId === unioneId && e.pageIndex !== pagina).map(e => e.pageIndex),
+    )).sort((a, b) => a - b);
+}
+
+/** «→ pag. 6», «← pag. 4», «← pag. 4 · → pag. 6»: dove prosegue l'unione (numeri di pagina da 1). */
+export function rimandoAltrePagine(altre: readonly number[], pagina: number): string {
+    const prima = altre.filter(p => p < pagina).map(p => p + 1);
+    const dopo = altre.filter(p => p > pagina).map(p => p + 1);
+    const parti: string[] = [];
+    if (prima.length > 0) parti.push(`← pag. ${prima.join(", ")}`);
+    if (dopo.length > 0) parti.push(`→ pag. ${dopo.join(", ")}`);
+    return parti.join(" · ");
+}

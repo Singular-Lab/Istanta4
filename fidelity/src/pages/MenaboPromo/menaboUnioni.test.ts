@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, sciogliUnione, togliGruppoDallUnione, unisciGruppi } from "./menaboUnioni";
+import { altrePagineDellUnione, gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, raggruppaPerUnione, rimandoAltrePagine, sciogliUnione, togliGruppoDallUnione, unisciGruppi } from "./menaboUnioni";
 
 type El = { id: string; groupId: string; unioneId?: string };
 const base: El[] = [
@@ -70,5 +70,52 @@ describe("lettura dell'unione nel menabò (task 17ac016e)", () => {
 
     it("senza unioni non numera niente", () => {
         expect(numeroDelleUnioni(base).size).toBe(0);
+    });
+});
+
+describe("riconoscere le unioni sulle pagine (task 769e2865)", () => {
+    it("le schede unite consecutive stanno in un blocco solo", () => {
+        const schede = [{ unioneId: "u1" }, { unioneId: "u1" }, { unioneId: "u1" }, {}, { unioneId: "u2" }];
+        expect(raggruppaPerUnione(schede)).toEqual([
+            { unioneId: "u1", indici: [0, 1, 2] },
+            { indici: [3] },
+            { unioneId: "u2", indici: [4] },
+        ]);
+    });
+
+    it("due unioni diverse una dopo l'altra restano blocchi separati", () => {
+        expect(raggruppaPerUnione([{ unioneId: "u1" }, { unioneId: "u2" }])).toEqual([
+            { unioneId: "u1", indici: [0] },
+            { unioneId: "u2", indici: [1] },
+        ]);
+    });
+
+    it("la stessa unione interrotta da una scheda non unita dà tre blocchi", () => {
+        expect(raggruppaPerUnione([{ unioneId: "u1" }, {}, { unioneId: "u1" }]).map(b => b.indici)).toEqual([[0], [1], [2]]);
+    });
+
+    it("le schede non unite sono un blocco ciascuna, senza unione", () => {
+        expect(raggruppaPerUnione([{}, {}])).toEqual([{ indici: [0] }, { indici: [1] }]);
+        expect(raggruppaPerUnione([])).toEqual([]);
+    });
+
+    it("le altre pagine dell'unione, senza quella corrente e senza doppioni", () => {
+        const el = [
+            { unioneId: "u1", pageIndex: 4 },
+            { unioneId: "u1", pageIndex: 4 },
+            { unioneId: "u1", pageIndex: 5 },
+            { unioneId: "u2", pageIndex: 7 },
+            { pageIndex: 8 },
+        ];
+        expect(altrePagineDellUnione(el, "u1", 4)).toEqual([5]);
+        expect(altrePagineDellUnione(el, "u1", 5)).toEqual([4]);
+        expect(altrePagineDellUnione(el, undefined, 4)).toEqual([]);
+    });
+
+    it("il rimando dice dove prosegue l'unione, con le pagine da 1", () => {
+        expect(rimandoAltrePagine([5], 4)).toBe("→ pag. 6");
+        expect(rimandoAltrePagine([3], 4)).toBe("← pag. 4");
+        expect(rimandoAltrePagine([2, 5], 4)).toBe("← pag. 3 · → pag. 6");
+        expect(rimandoAltrePagine([], 4)).toBe("");
     });
 });
