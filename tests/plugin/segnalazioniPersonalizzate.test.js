@@ -156,7 +156,7 @@ function middlewareFiltri(configurazione, custom = null) {
     return me;
 }
 
-test("I20-1211: Edro21 dichiara il filtro Solo foto, con CSF-013 e CSF-008 solo sulle foto", () => {
+test("I20-1211: Edro21 dichiara il filtro Solo foto, con CSF-013 e CSF-008 solo sulle foto e la FNF-01 (I20-1263)", () => {
     const filtri = middlewareFiltri(customEdro21).getFiltriSegnalazioni();
 
     //I20-1248: dopo Solo foto c'e' Note category.
@@ -168,7 +168,9 @@ test("I20-1211: Edro21 dichiara il filtro Solo foto, con CSF-013 e CSF-008 solo 
         { codice: "CSF-27", testoContiene: "" },
         { codice: "CSF-19", testoContiene: "" },
         { codice: "CSF-013", testoContiene: "foto" },
-        { codice: "CSF-008", testoContiene: "foto" }
+        { codice: "CSF-008", testoContiene: "foto" },
+        //I20-1263: la foto non trovata.
+        { codice: "FNF-01", testoContiene: "" }
     ]);
 });
 

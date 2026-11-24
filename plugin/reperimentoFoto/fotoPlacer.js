@@ -81,13 +81,13 @@ const FotoPlacer =
                     //fotoRectangle.fillColor = "None";
                     fotoRectangle.fit(FitOptions.PROPORTIONALLY);
                     //fotoRectangle.fit(FitOptions.FRAME_TO_CONTENT);
-                    warningMessage = "Foto non trovata, è stata inserita " + nomeFotoNoFound;
+                    warningMessage = FotoPlacer.AVVISO_SEGNAPOSTO_INSERITO + nomeFotoNoFound;
                     fotoNotFoundErr = true;
                 }
                 catch (ex) {
                     //non è stato trovato il file fotonofound
                     console.error("Segnaposto fotonofound non impaginato da " + path + ": " + ex);
-                    warningMessage = "FotoNoFound non trovato: " + nomeFotoNoFound;
+                    warningMessage = FotoPlacer.AVVISO_SEGNAPOSTO_MANCANTE + nomeFotoNoFound;
                 }
             }
             else {
@@ -111,6 +111,27 @@ const FotoPlacer =
 
         }
         return warningMessage;
+    },
+
+    /// I20-1263: gli avvisi di placeFoto quando la foto non si trova: al suo posto e' andato il
+    /// segnaposto fotonofound, oppure mancava anche quello.
+    AVVISO_SEGNAPOSTO_INSERITO: "Foto non trovata, è stata inserita ",
+    AVVISO_SEGNAPOSTO_MANCANTE: "FotoNoFound non trovato: ",
+
+    /// I20-1263: la segnalazione della foto che non si trova, per il bollino del box che si sta
+    /// impaginando, o null. avviso e' quello che placeFoto ha restituito per nomeFoto: con il nome di
+    /// una foto, un avviso vuol dire che il file non c'era (con o senza segnaposto al suo posto). La
+    /// referenza senza foto, che prende il nofoto, non si segnala. E' un avviso, come la PSD-01; per
+    /// Edro21 cade nel filtro "Solo foto" (filtriSegnalazioni del plugin di agenzia).
+    segnalazioneFotoNonTrovata(nomeFoto, avviso) {
+        if (nomeFoto == null || String(nomeFoto).trim() === "" || typeof avviso !== "string" || avviso === "") {
+            return null;
+        }
+        const segnaposto = pluginMiddleware.nomeFotoNonTrovata();
+        const testo = avviso.indexOf(FotoPlacer.AVVISO_SEGNAPOSTO_MANCANTE) === 0
+            ? "Code FNF-01 Foto " + nomeFoto + " non trovata e manca anche il segnaposto " + segnaposto
+            : "Code FNF-01 Foto " + nomeFoto + " non trovata: al suo posto c'è " + segnaposto;
+        return { testo: testo, gravita: "warning" };
     },
 
     /// I20-1026: mette nel box un logo automatico, cioe' una voce di Foto.ExtraAuto, e restituisce
