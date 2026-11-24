@@ -43,7 +43,11 @@ public sealed partial class ServizioPropagazione
                      join p in ctx.VolantiniPagines on e.IdPagina equals p.Id
                      where p.IdVol == idVol && p.Versione == precedente && e.IdParent == null
                      select e).ToListAsync();
-        var perEtichetta = vecchiBox.GroupBy(e => e.LabelInd)
+        // I20-1257: un box derivato ha la stessa etichetta del suo originale. La chiave tiene anche
+        // l'idLavRec, cosi' il derivato eredita solo dal derivato e l'originale solo dall'originale.
+        static string ChiaveEredita(VolantiniPagineElementi e) =>
+            e.LabelInd + "*" + Correggo4.Ingestione.InterpreteDna.IdentitaDelBox(e.Dna).IdLavRec;
+        var perEtichetta = vecchiBox.GroupBy(ChiaveEredita)
             .ToDictionary(g => g.Key, g => g.First());
 
         // ---------- tutto quello che sta attaccato ai box della versione vecchia ----------
@@ -104,7 +108,7 @@ public sealed partial class ServizioPropagazione
             .Select(x => (x.IdPropagazione, x.IdElemento)));
 
         // ---------- caso B: i candidati per i prodotti nuovi ----------
-        var senzaVecchio = nuoviBox.Where(b => !perEtichetta.ContainsKey(b.LabelInd)).ToList();
+        var senzaVecchio = nuoviBox.Where(b => !perEtichetta.ContainsKey(ChiaveEredita(b))).ToList();
         List<VolantiniPagineElementi> candidati = new();
         Dictionary<long, string> promoDelBox = new();
         Dictionary<long, string> titoloDelBox = new();
@@ -149,7 +153,7 @@ public sealed partial class ServizioPropagazione
         // ---------- caso A: il prodotto c'era già nella versione precedente ----------
         foreach (var nuovo in nuoviBox)
         {
-            if (!perEtichetta.TryGetValue(nuovo.LabelInd, out var vecchio)) continue;
+            if (!perEtichetta.TryGetValue(ChiaveEredita(nuovo), out var vecchio)) continue;
 
             // 1. eredità del contatore storico (Worker.cs:1843)
             nuovo.Contatore = vecchio.Contatore;

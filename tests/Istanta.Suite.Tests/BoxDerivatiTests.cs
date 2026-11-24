@@ -327,6 +327,24 @@ public class BoxDerivatiTests
         Assert.Contains("RecordDellaLavorazione.RifiutaSulDerivato(req?.idLavRec ?? 0, \"La revisione dei campi\");", revisore);
     }
 
+    //I20-1257: una correzione di Correggo su un box derivato si rifiuta, con il motivo; la scheda chiesta
+    //da Correggo per un derivato e' composta con i suoi meta.
+    [Fact]
+    public void Le_correzioni_di_Correggo_su_un_derivato_si_rifiutano_e_la_scheda_e_quella_del_derivato()
+    {
+        var errore = Assert.Throws<ErroreIstanta>(() => RecordDellaLavorazione.RifiutaSulDerivato(55, "La correzione di Correggo"));
+        Assert.Equal("La correzione di Correggo non si fa da un box derivato: va fatta dal box originale.", errore.Message);
+        RecordDellaLavorazione.RifiutaSulDerivato(0, "La correzione di Correggo");   //l'originale passa
+
+        Assert.Equal(0, new ModificaFotoESelezioneCorreggoRequest().idLavRec);
+        Assert.Equal(0, new SchedaRefRequestFromCorreggo().idLavRec);
+
+        string fico = Sorgente("Istanta/Controllers/FicoProcessController.cs");
+        string correzione = Tratto(fico, "public async Task<IActionResult> correggiFotoESelezioniFromCorreggo(", "PromoLavorazioni? plItem");
+        Assert.Contains("RecordDellaLavorazione.RifiutaSulDerivato(request.idLavRec, \"La correzione di Correggo\");", correzione);
+        Assert.Contains("menaboController.getSchedaRef(request.codiceGruppo!, plItem.Id, request.idRec, false, FicoCombinazioneKitReadMode.Advanced, request.idLavRec);", fico);
+    }
+
     //Svuotando, i derivati della pagina (o di tutta la lavorazione) si cancellano; rimuovendo un box
     //derivato si cancella la sua riga e il record resta nel tracciato.
     [Fact]

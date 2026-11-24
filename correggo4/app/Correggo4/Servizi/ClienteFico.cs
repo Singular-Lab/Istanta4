@@ -214,13 +214,20 @@ public sealed class ClienteFico
 
     // ------------------------------------------------------------------ letture
 
-    /// <summary>FicoProcess/getSchedaRef: le referenze del gruppo con foto, P/S e loghi.</summary>
-    public async Task<EsitoFico<List<FotoIstanta>>> SchedaAsync(short idUtente, Guid? guidLavorazione, string codiceGruppo)
+    /// <summary>
+    /// FicoProcess/getSchedaRef: le referenze del gruppo con foto, P/S e loghi. I20-1257: per un box
+    /// derivato manda anche idRec e idLavRec, cosi' Istanta compone la scheda con i meta del derivato;
+    /// per gli altri box la richiesta resta quella di prima.
+    /// </summary>
+    public async Task<EsitoFico<List<FotoIstanta>>> SchedaAsync(short idUtente, Guid? guidLavorazione, string codiceGruppo,
+                                                                Ingestione.InterpreteDna.IdentitaBox? box = null)
     {
         if (guidLavorazione == null)
             return EsitoFico<List<FotoIstanta>>.No("Il volantino non è collegato a una lavorazione di Istanta.");
-        var r = await IstantaAsync(idUtente, HttpMethod.Put, "/FicoProcess/getSchedaRef",
-                                   new { guidIdLavorazione = guidLavorazione.Value.ToString(), codiceGruppo });
+        object corpo = box is { Derivato: true }
+            ? new { guidIdLavorazione = guidLavorazione.Value.ToString(), codiceGruppo, idRec = box.IdRec, idLavRec = box.IdLavRec }
+            : new { guidIdLavorazione = guidLavorazione.Value.ToString(), codiceGruppo };
+        var r = await IstantaAsync(idUtente, HttpMethod.Put, "/FicoProcess/getSchedaRef", corpo);
         if (!r.Ok) return EsitoFico<List<FotoIstanta>>.No(r.Errore!);
         try
         {
@@ -404,12 +411,16 @@ public sealed class ClienteFico
     /// Istanta applica solo il cambio di foto; P/S e loghi li ignora (FicoProcessController ~5709,
     /// "andrebbe implementata"): decisione dell'11/9, come l'originale.
     /// </summary>
-    public async Task<EsitoFico<bool>> CorreggiFotoAsync(short idUtente, Guid? guidLavorazione, string codiceGruppo, List<VoceFoto> foto)
+    public async Task<EsitoFico<bool>> CorreggiFotoAsync(short idUtente, Guid? guidLavorazione, string codiceGruppo, List<VoceFoto> foto,
+                                                         Ingestione.InterpreteDna.IdentitaBox? box = null)
     {
         if (guidLavorazione == null)
             return EsitoFico<bool>.No("Il volantino non è collegato a una lavorazione di Istanta.");
-        var r = await IstantaAsync(idUtente, HttpMethod.Put, "/FicoProcess/correggiFotoESelezioniFromCorreggo",
-                                   new { guidIdLavorazione = guidLavorazione.Value.ToString(), codice = codiceGruppo, foto });
+        // I20-1257: per un box derivato si dice a Istanta quale box e', e Istanta rifiuta la correzione
+        object corpo = box is { Derivato: true }
+            ? new { guidIdLavorazione = guidLavorazione.Value.ToString(), codice = codiceGruppo, foto, idRec = box.IdRec, idLavRec = box.IdLavRec }
+            : new { guidIdLavorazione = guidLavorazione.Value.ToString(), codice = codiceGruppo, foto };
+        var r = await IstantaAsync(idUtente, HttpMethod.Put, "/FicoProcess/correggiFotoESelezioniFromCorreggo", corpo);
         if (!r.Ok) return EsitoFico<bool>.No(r.Errore!);
         try
         {

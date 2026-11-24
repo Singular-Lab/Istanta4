@@ -19,6 +19,11 @@ public sealed class CorrezionePlugin
     public string LabelBox { get; set; } = "";
     public string Basecode { get; set; } = "";
     public short Pagina { get; set; }
+    /// <summary>I20-1257: chi e' il box nella lavorazione. Un derivato ha lo stesso Basecode del suo
+    /// originale: il Plugin lo trova con IdLavRec, e una correzione su un derivato non la applica.</summary>
+    public long IdRec { get; set; }
+    public long IdLavRec { get; set; }
+    public bool Derivato { get; set; }
     public string Autore { get; set; } = "";
     public string TipoAutore { get; set; } = "";
     public DateTime Data { get; set; }
@@ -221,7 +226,7 @@ public sealed partial class ServizioCorrezioni
             .Where(i => i != null).Select(i => i!.Value).Distinct().ToList();
         var boxes = await ctx.VolantiniPagineElementis.AsNoTracking()
             .Where(e => idBox.Contains(e.Id))
-            .Select(e => new { e.Id, e.LabelInd, e.Basecode }).ToDictionaryAsync(e => e.Id);
+            .Select(e => new { e.Id, e.LabelInd, e.Basecode, e.Dna }).ToDictionaryAsync(e => e.Id);
 
         CorrezionePlugin Nuova(string id, string tipo, long? box, short pagina, string autore, string tipoAutore, DateTime data)
         {
@@ -233,6 +238,10 @@ public sealed partial class ServizioCorrezioni
             {
                 c.LabelBox = b.LabelInd;
                 c.Basecode = b.Basecode;
+                var identita = Correggo4.Ingestione.InterpreteDna.IdentitaDelBox(b.Dna);
+                c.IdRec = identita.IdRec;
+                c.IdLavRec = identita.IdLavRec;
+                c.Derivato = identita.Derivato;
             }
             return c;
         }

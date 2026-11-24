@@ -1,6 +1,7 @@
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const { app, ExportFormat } = require('indesign');
 const path = require('path');
+const DnaBox = require('./dnaBox');
 /// I20-1002: il dialogo con Istanta su promo, kit e lavorazioni, e l'esportazione dei
 /// materiali. "Fico" e' il nome del servizio lato Istanta.
 ///
@@ -2068,6 +2069,11 @@ const FicoProcess=
                                         
                                         objToStringy["Referenza.Codice"]=objItem["Referenza.Codice"];
                                         objToStringy["Scatto.CodiceGruppo"]=objItem["Scatto.CodiceGruppo"];
+
+                                        //I20-1257: chi e' il box, dal suo DNA. Un derivato ha lo stesso codice
+                                        //dell'originale: senza questi campi Correggo li confonde. Viaggiano
+                                        //dentro itemRefStringfied, che Istanta passa a Correggo com'e'.
+                                        objToStringy["Correggo.Box"] = DnaBox.identitaPerCorreggo(dna);
 
                                         //Aggiunta custom di campi di controllo, non per forza coinvolti nelle istruzioni
                                         //Servono a Correggo ad esempio per la gestione delle policy

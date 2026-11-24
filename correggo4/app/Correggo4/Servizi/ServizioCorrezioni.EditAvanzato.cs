@@ -288,6 +288,8 @@ public sealed partial class ServizioCorrezioni
         if (!u.Scrive) return NonAutorizzato();
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
+        var derivato = SulDerivato(box!);
+        if (derivato != null) return derivato;
         var gruppo = await GruppoDelTimoneAsync(u, box!);
         if (gruppo != null) return gruppo;
 
@@ -401,6 +403,8 @@ public sealed partial class ServizioCorrezioni
         if (!u.Scrive) return NonAutorizzato();
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
+        var derivato = SulDerivato(box!);
+        if (derivato != null) return derivato;
         var gruppo = await GruppoDelTimoneAsync(u, box!);
         if (gruppo != null) return gruppo;
 
@@ -517,6 +521,8 @@ public sealed partial class ServizioCorrezioni
         if (!u.Scrive) return NonAutorizzato();
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
+        var derivato = SulDerivato(box!);
+        if (derivato != null) return derivato;
         if (file == null || file.Lunghezza <= 0)
             return EsitoCorrezione.No(400, "file_mancante", "Non è arrivato nessun file: riprova a sceglierlo.");
 
@@ -527,7 +533,7 @@ public sealed partial class ServizioCorrezioni
                 "Si possono caricare solo immagini (" + string.Join(", ", EstensioniFoto).Replace(".", "") + ").");
 
         string cod = (codice ?? "").Trim();
-        var scheda = await fico.SchedaAsync(u.Id, vol!.GuidKitRuntime, box!.Basecode);
+        var scheda = await fico.SchedaAsync(u.Id, vol!.GuidKitRuntime, box!.Basecode, Correggo4.Ingestione.InterpreteDna.IdentitaDelBox(box.Dna));
         if (!scheda.Ok) return IstantaNonDisponibile(scheda.Errore);
         if (scheda.Dati!.All(f => f.Codice != cod))
             return EsitoCorrezione.No(400, "codice_sconosciuto", $"Il codice «{cod}» non è in questo prodotto.");
@@ -559,7 +565,7 @@ public sealed partial class ServizioCorrezioni
     private async Task<(List<VoceFoto>? Voci, EsitoCorrezione? Errore)> VociFotoAsync(
         Utente u, Volantini vol, VolantiniPagineElementi box, RichiestaEditScheda r)
     {
-        var scheda = await fico.SchedaAsync(u.Id, vol.GuidKitRuntime, box.Basecode);
+        var scheda = await fico.SchedaAsync(u.Id, vol.GuidKitRuntime, box.Basecode, Correggo4.Ingestione.InterpreteDna.IdentitaDelBox(box.Dna));
         if (!scheda.Ok) return (null, IstantaNonDisponibile(scheda.Errore));
         var refs = scheda.Dati!;
         var voci = new List<VoceFoto>();
@@ -653,7 +659,7 @@ public sealed partial class ServizioCorrezioni
         if (box == null) return NonTrovata("Prodotto non trovato.");
         int idVol = await IdVolantinoAsync(box.IdPagina);
         var vol = await ctx.Volantinis.AsNoTracking().FirstAsync(v => v.Id == idVol);
-        var s = await fico.SchedaAsync(u.Id, vol.GuidKitRuntime, box.Basecode);
+        var s = await fico.SchedaAsync(u.Id, vol.GuidKitRuntime, box.Basecode, Correggo4.Ingestione.InterpreteDna.IdentitaDelBox(box.Dna));
         return s.Ok ? EsitoCorrezione.Fatto(new { foto = s.Dati }) : EsitoCorrezione.No(502, "istanta", s.Errore!);
     }
 
@@ -722,6 +728,20 @@ public sealed partial class ServizioCorrezioni
         var bloccati = await ServizioTimone.BoxNeiGruppiAsync(ctx, pagina.IdVol, pagina.Versione);
         return bloccati.Contains(box.Id) ? EsitoCorrezione.No(423, "gruppo_timone", MessaggioGruppoTimone) : null;
     }
+
+    /// <summary>I20-1257: il messaggio del rifiuto di una correzione su un box derivato.</summary>
+    public const string MessaggioBoxDerivato =
+        "Questo box è un derivato: le correzioni si fanno sul box originale. Qui puoi mettere solo note.";
+
+    /// <summary>
+    /// I20-1257: un box derivato (una seconda impaginazione dello stesso record) non si corregge: prezzi
+    /// e azioni, descrizione, foto, loghi e timbri si correggono sul box originale. Restano le note e l'OK,
+    /// che non passano di qui. Vale per tutti, Agenzia compresa.
+    /// </summary>
+    private static EsitoCorrezione? SulDerivato(VolantiniPagineElementi box) =>
+        Correggo4.Ingestione.InterpreteDna.IdentitaDelBox(box.Dna).Derivato
+            ? EsitoCorrezione.No(409, "box_derivato", MessaggioBoxDerivato)
+            : null;
 
     /// <summary>
     /// I20-1164: annulla solo i loghi, o solo descrizione e foto lasciando i loghi. Testo e foto/loghi
@@ -792,7 +812,7 @@ public sealed partial class ServizioCorrezioni
             {
                 int idVol = await IdVolantinoAsync(box.IdPagina);
                 var vol = await ctx.Volantinis.AsNoTracking().FirstAsync(v => v.Id == idVol);
-                var esito = await fico.CorreggiFotoAsync(u.Id, vol.GuidKitRuntime, box.Basecode, voci);
+                var esito = await fico.CorreggiFotoAsync(u.Id, vol.GuidKitRuntime, box.Basecode, voci, Correggo4.Ingestione.InterpreteDna.IdentitaDelBox(box.Dna));
                 if (!esito.Ok)
                     return (EsitoCorrezione.No(502, "istanta_rifiuta",
                         $"Istanta non ha accettato il cambio foto ({esito.Errore}). La correzione resta in attesa: riprova più tardi."),

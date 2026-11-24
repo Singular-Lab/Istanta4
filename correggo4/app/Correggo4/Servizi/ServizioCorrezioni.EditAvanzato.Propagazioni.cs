@@ -100,6 +100,8 @@ public sealed partial class ServizioCorrezioni
         if (parte is not (ParteOfferta or ParteDescrizione)) return NonTrovata("Parte della scheda sconosciuta.");
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
+        var derivato = SulDerivato(box!);
+        if (derivato != null) return derivato;
         var gruppo = await GruppoDelTimoneAsync(u, box!);
         if (gruppo != null) return gruppo;
 

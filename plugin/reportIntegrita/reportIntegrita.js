@@ -31,6 +31,7 @@ const confronti = require('../confronti');
 //I20-1124: la versione precedente di un box rifatto, sul suo livello.
 const VersionePrecedente = require('../versionePrecedente');
 const DnaBox = require('../dnaBox');
+const BoxDerivati = require('../boxDerivati');
 const XMLHttpRequestClient = require('../XMLHttpRequestClient');
 const { app, PDFExportOptions, CompressionQuality } = require('indesign');
 const fs = require('fs');
@@ -2213,6 +2214,8 @@ const ReportIntegrita = {
         const piano = sezioneCorreggo.pianoDellaConferma(voci);
         const esiti = {};
         const motivi = [];
+        //I20-1257: i derivati dei box rifatti, che restano col dato vecchio finche' non si reimpaginano
+        const derivati = [];
         piano.senzaLavoro.forEach(v => { esiti[v.chiave] = true; });
 
         indesignEvents.setBusy(true);
@@ -2221,7 +2224,7 @@ const ReportIntegrita = {
                 const p = piano.box[i];
                 showLoading("Correzioni di Correggo: box " + (i + 1) + " di " + piano.box.length);
                 try {
-                    await this._applicaCorrezioniAlBox(p, esiti, motivi);
+                    await this._applicaCorrezioniAlBox(p, esiti, motivi, derivati);
                 }
                 catch (e) {
                     const motivo = e && e.message ? e.message : String(e);
@@ -2267,6 +2270,11 @@ const ReportIntegrita = {
             const r = sezioneCorreggo.riepilogo(voci, esiti, chiuse);
             messaggioUtente("Code RIC-05 " + r.testo + (motivi.length > 0 ? " Non riuscite: " + motivi.join("; ") : ""),
                 motivi.length > 0 ? "warning" : r.tipo, false, motivi.length > 0 ? 0 : 8);
+            //I20-1257: i derivati non si rifanno da soli (decisione del 24/11): si dice quali reimpaginare.
+            const avvisoDerivati = BoxDerivati.testoAvvisoDerivati(derivati, "I box corretti da Correggo hanno");
+            if (avvisoDerivati != null) {
+                messaggioUtente(avvisoDerivati, "warning", false, 0);
+            }
         }
         finally {
             //I20-1233: le versioni precedenti lasciate dai box rifatti non si vedono piu' (richiesta dell'operatore).
@@ -2552,14 +2560,21 @@ const ReportIntegrita = {
     /// altrimenti dalla scheda riletta. Un timbro Elimina toglie la referenza e basta.
     /// I20-1233: il box si rifa' sempre come Reimpagina box (schedaRef.rifaiBox): il nuovo al posto
     /// del vecchio, il vecchio da parte su cloneVecchioImpaginato. La descrizione non arriva qui.
-    async _applicaCorrezioniAlBox(p, esiti, motivi) {
+    async _applicaCorrezioniAlBox(p, esiti, motivi, derivati = null) {
         const fallisce = (voci, motivo) => {
             voci.forEach(v => { esiti[v.chiave] = false; });
             motivi.push(p.basecode + ": " + motivo);
         };
         const riesce = (voci) => voci.forEach(v => { if (esiti[v.chiave] == null) esiti[v.chiave] = true; });
 
-        const box = this._resolveBoxByCodiceGruppo({ codiceGruppo: p.basecode, numeroPagina: p.pagina });
+        //I20-1257: una correzione su un box derivato non si applica: il derivato si corregge
+        //dall'originale. Le voci di un derivato non si approvano (sezioneCorreggo), questo e' il fermo.
+        if (DnaBox.idValido(p.idLavRec) > 0) {
+            fallisce(p.voci, sezioneCorreggo.MOTIVO_DERIVATO);
+            return;
+        }
+        //I20-1257: il box e' l'originale (idLavRec 0), non un suo derivato su un'altra pagina.
+        const box = this._resolveBoxByCodiceGruppo({ codiceGruppo: p.basecode, numeroPagina: p.pagina, elementoMappa: { idLavRec: 0 } });
         if (box == null) {
             fallisce(p.voci, "box non trovato nel documento");
             return;
@@ -2567,6 +2582,19 @@ const ReportIntegrita = {
         const dna = Utility.getDnaOfBox(box);
         const idRec = dna != null && dna.idRec != null && !isNaN(parseInt(dna.idRec)) ? parseInt(dna.idRec) : 0;
         const destinazione = { codiceGruppo: p.basecode, idRec: idRec };
+        //I20-1257: i derivati di questo box nel documento, da avvisare se il box si rifa'
+        const segnaDerivati = () => {
+            if (!Array.isArray(derivati)) {
+                return;
+            }
+            try {
+                BoxDerivati.derivatiNelDocumento(docInLavorazione, p.basecode, idRec, Utility.getDnaOfBox)
+                    .forEach(d => derivati.push(d));
+            }
+            catch (e) {
+                console.warn("Derivati del box " + p.basecode + " non letti:", e);
+            }
+        };
 
         if (p.elimina) {
             const elimina = p.voci.filter(v => v.eliminaRef === true);
@@ -2658,11 +2686,13 @@ const ReportIntegrita = {
                 return esito != null ? (esito.boxFinale || esito.boxAggiunto || null) : null;
             });
             riesce(daRifare);
+            segnaDerivati();
         }
         else if (cambiatoSulServer) {
             records = (await this._leggiSchedaRefAggiornata(p.basecode, idRec)) || records;
             await schedaRef.rifaiBox(records, box);
             riesce(daRifare);
+            segnaDerivati();
         }
         else {
             riesce(daRifare);

@@ -118,8 +118,12 @@ function vociDellaCorrezione(correzione, config) {
         pagina: correzione.pagina != null ? Number(correzione.pagina) : null,
         autore: String(correzione.autore || ""),
         tipoAutore: String(correzione.tipoAutore || ""),
-        propagata: correzione.propagata === true
+        propagata: correzione.propagata === true,
+        //I20-1257: chi e' il box in Correggo4. Un derivato ha lo stesso basecode del suo originale.
+        idRec: Number(correzione.idRec) > 0 ? Number(correzione.idRec) : 0,
+        idLavRec: Number(correzione.idLavRec) > 0 ? Number(correzione.idLavRec) : 0
     };
+    base.derivato = correzione.derivato === true || base.idLavRec > 0;
     const voce = (tipo, indice, altro) => Object.assign({}, base, { chiave: base.idCorrezione + "|" + tipo + "|" + indice, tipo: tipo }, altro);
     const voci = [];
 
@@ -247,8 +251,20 @@ function vociDellaCorrezione(correzione, config) {
             }));
         }
     }
+    //I20-1257: su un box derivato si mettono solo note. Una correzione arrivata comunque (per esempio
+    //registrata prima di questa regola) non si approva e non si applica: resta aperta in Correggo4.
+    if (base.derivato) {
+        voci.filter(v => v.tipo !== TIPO.nota).forEach(v => {
+            v.suDerivato = true;
+            v.automatica = false;
+            v.testo = MOTIVO_DERIVATO + " " + v.testo;
+        });
+    }
     return voci;
 }
+
+/// I20-1257: perche' una correzione su un box derivato non si applica.
+const MOTIVO_DERIVATO = "Box derivato: le correzioni si fanno sul box originale, questa non si applica.";
 
 function nomeStatoFoto(stato) {
     switch (Number(stato)) {
@@ -261,6 +277,10 @@ function nomeStatoFoto(stato) {
 /// Se l'operatore puo' approvare la voce: l'eliminazione della referenza solo un superAdmin; uno scambio
 /// da sistemare a mano nessuno.
 function approvabile(voce, superAdmin) {
+    //I20-1257: una correzione su un box derivato non si approva (si correggono gli originali)
+    if (voce != null && voce.suDerivato === true) {
+        return false;
+    }
     if (voce != null && voce.tipo === TIPO.scambio && (voce.daSistemareAMano !== "" || voce.boundsDestinazione == null)) {
         return false;
     }
@@ -334,7 +354,8 @@ function scegli(voce, scelta, superAdmin) {
 }
 
 function chiaveBox(voce) {
-    return voce.basecode + "|" + (voce.pagina != null ? voce.pagina : "");
+    //I20-1257: l'idLavRec separa un derivato dal suo originale, che ha lo stesso basecode
+    return voce.basecode + "|" + (voce.pagina != null ? voce.pagina : "") + "|" + (Number(voce.idLavRec) > 0 ? Number(voce.idLavRec) : 0);
 }
 
 /// Le referenze che la conferma eliminera': quelle con un timbro Elimina approvato, una per box.
@@ -378,6 +399,7 @@ function pianoDellaConferma(voci) {
         if (!perBox.has(k)) {
             perBox.set(k, {
                 basecode: v.basecode, pagina: v.pagina, labelBox: v.labelBox,
+                idLavRec: Number(v.idLavRec) > 0 ? Number(v.idLavRec) : 0,
                 elimina: false, azioni: [], prezzi: {}, foto: [], loghiAggiunti: [], loghiTolti: [], voci: []
             });
         }
@@ -586,6 +608,7 @@ module.exports = {
     descrizioneInChiaro,
     vociDellaCorrezione,
     approvabile,
+    MOTIVO_DERIVATO,
     sceltaIniziale,
     importa,
     scegli,

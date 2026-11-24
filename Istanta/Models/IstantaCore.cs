@@ -2710,6 +2710,10 @@ namespace Istanta.Models
         public string? codiceGruppo { get; set; }
 
         public int idRec { get; set; } = 0;
+
+        /// I20-1257: la riga del box derivato chiesto da Correggo (0 per gli altri box): la scheda e'
+        /// composta con i meta del derivato.
+        public long idLavRec { get; set; } = 0;
     }
 
     public class AllFotoRequestByCorreggo_Response
@@ -2729,6 +2733,9 @@ namespace Istanta.Models
         public string? guidIdLavorazione { get; set; }
         public string? codice { get; set; }
         public int idRec { get; set; }
+        /// I20-1257: la riga del box derivato (0 per gli altri box). Una correzione su un derivato si
+        /// rifiuta: il derivato si corregge dal box originale.
+        public long idLavRec { get; set; } = 0;
         public List<RecordFotoESelezioneCorreggo>? foto { get; set; }
     }
 
