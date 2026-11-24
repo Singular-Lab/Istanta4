@@ -83,4 +83,60 @@ public static class InterpreteDna
     /// </summary>
     public static string EtichettaDaCodice(string codice)
         => codice.Length > 25 ? codice[..22] + "..." : codice;
+
+    /// <summary>
+    /// I20-1257: la chiave con cui il Plugin mette in itemRefStringfied chi e' il box
+    /// ({idRec, idLavRec, derivato, originale}).
+    /// </summary>
+    public const string ChiaveIdentitaBox = "Correggo.Box";
+
+    /// <summary>
+    /// I20-1257: chi e' il box nella lavorazione di Istanta. Un box derivato e' una seconda
+    /// impaginazione dello stesso record, con una riga propria (IdLavRec &gt; 0): ha lo stesso
+    /// codice dell'originale, che e' il box del volantino con lo stesso codice e IdRec e senza
+    /// IdLavRec. I box esportati prima di questa regola non hanno l'identita': valgono come
+    /// originali con IdRec 0.
+    /// </summary>
+    public sealed record IdentitaBox(long IdRec, long IdLavRec)
+    {
+        public static readonly IdentitaBox Nessuna = new(0, 0);
+        public bool Derivato => IdLavRec > 0;
+
+        /// <summary>Vero se questo box e' l'originale di <paramref name="derivato"/>.</summary>
+        public bool EOriginaleDi(IdentitaBox derivato) =>
+            !Derivato && derivato.Derivato && (IdRec == 0 || derivato.IdRec == 0 || IdRec == derivato.IdRec);
+    }
+
+    /// <summary>L'identita' scritta dal Plugin in itemRefStringfied (chiave <see cref="ChiaveIdentitaBox"/>).</summary>
+    public static IdentitaBox IdentitaDaTracciato(IReadOnlyDictionary<string, JsonElement> campi)
+        => campi.TryGetValue(ChiaveIdentitaBox, out var v) ? Identita(v) : IdentitaBox.Nessuna;
+
+    /// <summary>L'identita' salvata nel DNA del box (colonna dna di volantini_pagine_elementi).</summary>
+    public static IdentitaBox IdentitaDelBox(string? dnaJson)
+    {
+        if (string.IsNullOrWhiteSpace(dnaJson) || !dnaJson.TrimStart().StartsWith('{')) return IdentitaBox.Nessuna;
+        try
+        {
+            using var d = JsonDocument.Parse(dnaJson);
+            return Identita(d.RootElement);
+        }
+        catch (JsonException)
+        {
+            return IdentitaBox.Nessuna;
+        }
+    }
+
+    private static IdentitaBox Identita(JsonElement o)
+    {
+        if (o.ValueKind != JsonValueKind.Object) return IdentitaBox.Nessuna;
+        return new IdentitaBox(Numero(o, "idRec"), Numero(o, "idLavRec"));
+    }
+
+    private static long Numero(JsonElement o, string nome)
+    {
+        if (!o.TryGetProperty(nome, out var v)) return 0;
+        if (v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var n)) return n > 0 ? n : 0;
+        if (v.ValueKind == JsonValueKind.String && long.TryParse(v.GetString(), out var s)) return s > 0 ? s : 0;
+        return 0;
+    }
 }

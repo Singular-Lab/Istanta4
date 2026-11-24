@@ -110,13 +110,15 @@ const BoxDerivati = {
 
     /// L'avviso per chi ha appena cambiato il dato dall'originale: quanti derivati ci sono nel
     /// documento e a quali pagine. Null se non ce ne sono.
-    testoAvvisoDerivati(derivati) {
+    /// I20-1257: soggetto cambia l'inizio della frase (per le correzioni di Correggo, che toccano
+    /// piu' box: "I box corretti hanno").
+    testoAvvisoDerivati(derivati, soggetto = "Questo box ha") {
         const elenco = Array.isArray(derivati) ? derivati : [];
         if (elenco.length === 0) {
             return null;
         }
         const pagine = elenco.map(d => String(d.pagina)).filter((p, i, tutte) => tutte.indexOf(p) === i);
-        return "Code DRV-06 Questo box ha " + (elenco.length === 1 ? "1 derivato" : elenco.length + " derivati")
+        return "Code DRV-06 " + soggetto + " " + (elenco.length === 1 ? "1 derivato" : elenco.length + " derivati")
             + " nel documento, a pagina " + pagine.join(", ")
             + ": " + (elenco.length === 1 ? "va reimpaginato" : "vanno reimpaginati") + " per prendere il dato nuovo.";
     },

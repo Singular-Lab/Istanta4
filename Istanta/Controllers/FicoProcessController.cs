@@ -6414,7 +6414,8 @@ namespace Istanta.Controllers
                     if (plItem != null)
                     {
                         MenaboController menaboController = new MenaboController(null, this.config, optionExternalLib, null, this.httpClientFactory, null, null, this.ficoConf, this._dbContextFactory, dbContextFactory2: this._dbContextFactory2);
-                        var resultFromMenabo = await menaboController.getSchedaRef(request.codiceGruppo!, plItem.Id, request.idRec, false, FicoCombinazioneKitReadMode.Advanced);
+                        //I20-1257: per un box derivato la scheda ha i meta del derivato
+                        var resultFromMenabo = await menaboController.getSchedaRef(request.codiceGruppo!, plItem.Id, request.idRec, false, FicoCombinazioneKitReadMode.Advanced, request.idLavRec);
                         if (resultFromMenabo is OkObjectResult && (resultFromMenabo as OkObjectResult)!.Value is ArticoloInRevisioneKitResult)
                         {
                             result = ((resultFromMenabo as OkObjectResult)!.Value as ArticoloInRevisioneKitResult)!;
@@ -6558,6 +6559,9 @@ namespace Istanta.Controllers
             {
                 try
                 {
+                    //I20-1257: un box derivato non si corregge da Correggo: si corregge il box originale
+                    RecordDellaLavorazione.RifiutaSulDerivato(request.idLavRec, "La correzione di Correggo");
+
                     PromoLavorazioni? plItem = await this.ctx2.PromoLavorazionis.FirstOrDefaultAsync(pl => pl.GuidId == request.guidIdLavorazione);
                     if (plItem != null)
                     {

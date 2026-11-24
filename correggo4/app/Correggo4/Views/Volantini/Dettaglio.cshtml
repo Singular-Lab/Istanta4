@@ -158,6 +158,21 @@
        Disegnato con box-shadow inset, cosi' non cambia la misura del box. */
     body.modo_edit .zona { background: #cfdbf563; cursor: pointer; box-shadow: inset 0 0 0 1px #5b7fc7; }
     .zona.aperta { outline: 2px solid red; }
+    /* I20-1257: il box derivato (una seconda impaginazione dello stesso record) si vede sempre,
+       anche fuori dall'Edit avanzato: bordo arancione tratteggiato ed etichetta DERIVATO, cosi'
+       a colpo d'occhio non si confonde con il suo originale. Si correggono solo note e OK. */
+    .zona[data-derivato] { outline: 2px dashed #e67e00; outline-offset: -2px; }
+    .zona[data-derivato]::before {
+        content: "DERIVATO"; position: absolute; left: 0; top: 0; padding: 1px 5px;
+        background: #e67e00; color: #fff; font: bold 10px/1.4 Arial, sans-serif; pointer-events: none;
+    }
+    /* nella testata, fra il titolo e CHIUDI: non aggiunge una riga fra la testata e le colonne */
+    .modale .avviso_derivato {
+        display: flex; align-items: center; gap: 10px; padding: 2px 10px; border-radius: 4px;
+        background: #fff3e0; border: 2px dashed #e67e00; color: #8a4b00; font-size: 12px;
+    }
+    .modale .avviso_derivato.nascosto { display: none; }
+    .modale .avviso_derivato .non_presente { color: #b3261e; font-weight: bold; }
 
     /* La nota di correzione: etichetta gialla calamitata al prodotto,
        col megafono della propagazione a sinistra (prop.gif). */
@@ -907,7 +922,8 @@
                     var t = ((double)(b.Y / p.Altezza) * 100).ToString("0.###", ci);
                     var w = ((double)(b.Larghezza / p.Larghezza) * 100).ToString("0.###", ci);
                     var h = ((double)(b.Altezza / p.Altezza) * 100).ToString("0.###", ci);
-                    <div class="zona" data-box="@b.Id" title="@b.Basecode"
+                    @* I20-1257: data-derivato solo sui derivati (null = Razor non scrive l'attributo) *@
+                    <div class="zona" data-box="@b.Id" title="@b.Basecode" data-derivato="@(b.Derivato ? "1" : null)"
                          style="left:@(l)%;top:@(t)%;width:@(w)%;height:@(h)%;"></div>
                 }
             }
@@ -957,6 +973,11 @@
 <div class="modale" id="modale">
     <div class="testa">
         <span id="mTitolo"></span>
+        @* I20-1257: sulla scheda di un box derivato: le correzioni si fanno sull'originale *@
+        <div class="avviso_derivato nascosto" id="mAvvisoDerivato">
+            <span id="mAvvisoDerivatoTesto"></span>
+            <button class="bottone" type="button" id="mVaiOriginale">VAI AL BOX ORIGINALE</button>
+        </div>
         <span class="chiudi" id="mChiudi">CHIUDI</span>
         <div class="reset_valori"><button class="bottone" type="button" id="mReset">RESET VALORI</button></div>
     </div>
@@ -1038,6 +1059,9 @@
                 figli = x.b.Figli,
                 note = x.b.Note.Select(n => new { n.Descrizione, n.Autore, data = n.Data.ToString("dd/MM/yy HH:mm") }),
                 pagina = x.p.Numero,
+                // I20-1257: derivato e, se c'e' nel volantino, il suo box originale
+                derivato = x.b.Derivato,
+                idOriginale = x.b.IdOriginale,
                 urlPagina = x.p.UrlImmagine,
                 px = (double)x.b.X,
                 py = (double)x.b.Y,
@@ -1103,6 +1127,9 @@
     var scontoAlMultiploDi5 = @(Model.ScontoAlMultiploDi5 ? "true" : "false");
     // I20-1186: lo stesso testo che il server manda col rifiuto «gruppo_timone»
     var MESSAGGIO_GRUPPO_TIMONE = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Correggo4.Servizi.ServizioCorrezioni.MessaggioGruppoTimone));
+    // I20-1257: lo stesso messaggio con cui il server rifiuta una correzione su un box derivato
+    var MESSAGGIO_BOX_DERIVATO = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Correggo4.Servizi.ServizioCorrezioni.MessaggioBoxDerivato));
+    var MESSAGGIO_ORIGINALE_ASSENTE = 'Il box originale non è presente in questa lavorazione.';
 
     function esc(s) {
         return (s === null || s === undefined) ? '' : String(s)
@@ -1361,6 +1388,7 @@
     function chiudiModale() {
         modoTimone = null;   // I20-1186: la prossima apertura e' quella normale, se il timone non dice altro
         document.getElementById('mAvvisoGruppo').classList.remove('visibile');
+        document.getElementById('mAvvisoDerivato').classList.add('nascosto');
         velo.classList.remove('visibile');
         modale.classList.remove('visibile');
         document.querySelectorAll('.zona.aperta').forEach(function (z) { z.classList.remove('aperta'); });
@@ -1425,7 +1453,38 @@
         ritaglia(b);
         ombreRitaglio();
         avvisoGruppoTimone(id);
+        avvisoDerivato(id);
     }
+
+    /* I20-1257: un box derivato e' una seconda impaginazione dello stesso record. Nella scheda il
+       riquadro arancione dice che le correzioni si fanno sull'originale e porta lì; prezzi,
+       descrizione, foto, loghi e timbri non si toccano (puoModificare), note e OK si'. */
+    function eDerivato(id) { var b = dati[id]; return !!(b && b.derivato); }
+    function avvisoDerivato(id) {
+        var av = document.getElementById('mAvvisoDerivato');
+        av.classList.toggle('nascosto', !eDerivato(id));
+        if (!eDerivato(id)) return;
+        document.getElementById('mAvvisoDerivatoTesto').textContent = MESSAGGIO_BOX_DERIVATO;
+        av.dataset.box = String(id);
+    }
+    function vaiAlBoxOriginale(id) {
+        var o = dati[id] && dati[id].idOriginale;
+        var k = o === null || o === undefined ? '' : String(o);
+        if (!k || !dati[k]) {
+            document.getElementById('mAvvisoDerivatoTesto').innerHTML =
+                esc(MESSAGGIO_BOX_DERIVATO) + ' <span class="non_presente">' + esc(MESSAGGIO_ORIGINALE_ASSENTE) + '</span>';
+            suggerisci(MESSAGGIO_ORIGINALE_ASSENTE, 4000);
+            return 'originale_assente';
+        }
+        if (fuoriPolicy(k)) { suggerisci('Il box originale non e\' fra quelli che puoi correggere.', 4000); return 'fuori_policy'; }
+        chiudiModale();
+        vaiAPagina(dati[k].pagina);
+        apri(k);
+        return 'ok';
+    }
+    document.getElementById('mVaiOriginale').addEventListener('click', function () {
+        vaiAlBoxOriginale(document.getElementById('mAvvisoDerivato').dataset.box);
+    });
 
     /* I20-1186: il messaggio del gruppo del timone, grande e al centro della scheda (screenshot
        dell'operatore del 03/11: la riga grigia sotto i campi non la vedeva nessuno). Solo nella scheda
@@ -1466,7 +1525,11 @@
                 if (!scrivibile()) { suggerisci(motivoNonScrivibile(), 3500); return; }
                 if (strumento === 'nota') { popNuovaNota(idBox, p.x, p.y, ev); return; }
                 if (strumento === 'ok') { cambiaOk(idBox, ev); return; }
-                if (strumento.indexOf('timbro:') === 0) { nuovoTimbro(idBox, strumento.slice(7), p.x, p.y, ev); return; }
+                if (strumento.indexOf('timbro:') === 0) {
+                    // I20-1257: i timbri sono correzioni; sul derivato si mettono solo note e OK
+                    if (eDerivato(idBox)) { suggerisci(MESSAGGIO_BOX_DERIVATO, 4000); return; }
+                    nuovoTimbro(idBox, strumento.slice(7), p.x, p.y, ev); return;
+                }
             }
         });
     });
@@ -2255,6 +2318,7 @@
         return ed;
     }
     function puoModificare(id, parte) {
+        if (eDerivato(id)) return false;   // I20-1257: il derivato si corregge dall'originale
         if (inModoTimone(id)) return scrivibile() && modoTimone.modificabile;
         if (bloccatoDalTimone(id)) return false;
         var ed = editDi(id, parte);
@@ -2661,6 +2725,9 @@
                 html += '<div class="ea_stato">' + esc(motivoNonScrivibile()) + '</div>';
             } else if (inModoTimone(id) && !modoTimone.modificabile) {
                 html += '<div class="ea_stato">Il timone è in sola lettura: la modifica del gruppo non si cambia.</div>';
+            } else if (eDerivato(id)) {
+                // I20-1257: niente SALVA; lo dice anche il riquadro arancione in alto
+                html += '<div class="ea_stato">' + esc(MESSAGGIO_BOX_DERIVATO) + '</div>';
             } else if (!inModoTimone(id) && bloccatoDalTimone(id)) {
                 // niente bottoni: il messaggio lo dice il riquadro rosso al centro (avvisoGruppoTimone)
             } else if (ed && ed.stato === 0 && ed.idAutore !== stato.idUtente) {

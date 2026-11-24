@@ -409,6 +409,14 @@ public class VolantiniController : Controller
                               Autore = u != null ? u.Nome + " " + u.Cognome : "—"
                           }).ToListAsync();
 
+        // I20-1257: chi e' ogni box (originale o derivato) e, per un derivato, il suo originale nel
+        // volantino: lo stesso codice e idRec, senza idLavRec. Se non c'e', IdOriginale resta null.
+        var radici = elementi.Where(x => x.IdParent == null).ToList();
+        var identita = radici.ToDictionary(x => x.Id, x => InterpreteDna.IdentitaDelBox(x.Dna));
+        long? OriginaleDi(VolantiniPagineElementi e) =>
+            radici.Where(o => o.Id != e.Id && o.Basecode == e.Basecode && identita[o.Id].EOriginaleDi(identita[e.Id]))
+                  .Select(o => (long?)o.Id).FirstOrDefault();
+
         string radice = Indirizzi.Con(HttpContext, "/volantini/" + Uri.EscapeDataString(vol.Classificazione)
                         + "/" + Uri.EscapeDataString(vol.Titolo) + "/");
 
@@ -433,8 +441,10 @@ public class VolantiniController : Controller
                     X = e.PosizioneX,
                     Y = e.PosizioneY,
                     Larghezza = e.Larghezza,
-                    Altezza = e.Altezza
+                    Altezza = e.Altezza,
+                    Derivato = identita[e.Id].Derivato
                 };
+                if (box.Derivato) box.IdOriginale = OriginaleDi(e);
 
                 if (!string.IsNullOrWhiteSpace(e.Dna))
                 {
@@ -484,11 +494,15 @@ public class VolantiniController : Controller
                             {
                                 using var d2 = JsonDocument.Parse(interno);
                                 foreach (var prop in d2.RootElement.EnumerateObject())
+                                {
+                                    // I20-1257: chi e' il box non e' un campo della referenza.
+                                    if (prop.Name == InterpreteDna.ChiaveIdentitaBox) continue;
                                     box.Tracciato.Add(new CampoReferenza
                                     {
                                         Etichetta = prop.Name,
                                         Valore = prop.Value.ToString()
                                     });
+                                }
                             }
                         }
 

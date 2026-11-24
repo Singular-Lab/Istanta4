@@ -45,6 +45,11 @@ public sealed class BoxReferenza
     public List<Correggo4.Servizi.AzioneReferenza> Schema { get; set; } = new();
     public string DescrizioneGrezza { get; set; } = "";
     public Dictionary<string, double[]> Figli { get; set; } = new();
+
+    // I20-1257: un box derivato e' una seconda impaginazione dello stesso record. Si correggono
+    // solo le note (e l'OK); IdOriginale e' il box originale nel volantino, null se non c'e'.
+    public bool Derivato { get; set; }
+    public long? IdOriginale { get; set; }
 }
 
 public sealed class PaginaCorrezione

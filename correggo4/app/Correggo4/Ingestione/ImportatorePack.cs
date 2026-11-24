@@ -202,6 +202,7 @@ public sealed class ImportatorePack
 
             string dnaGrezzo = "";
             string dnaGruppo = "";
+            var identita = InterpreteDna.IdentitaBox.Nessuna;
             if (!string.IsNullOrWhiteSpace(rif.itemRefStringfied))
             {
                 try
@@ -213,6 +214,7 @@ public sealed class ImportatorePack
                         // accede senza ContainsKey: una chiave mancante gli lancia.
                         if (campi.TryGetValue("Referenza.Codice", out var c)) dnaGrezzo = c.ToString();
                         if (campi.TryGetValue("Scatto.CodiceGruppo", out var g)) dnaGruppo = g.ToString();
+                        identita = InterpreteDna.IdentitaDaTracciato(campi);
                     }
                 }
                 catch (JsonException ex)
@@ -233,7 +235,13 @@ public sealed class ImportatorePack
                 Tipo = TipoElementoBox,
                 LabelInd = InterpreteDna.EtichettaDaCodice(dna.Codice),
                 Basecode = dna.Codice,
-                Dna = JsonSerializer.Serialize(new { codice = dna.Codice, gruppo = dna.Gruppo, descrizione = dna.Descrizione }),
+                // I20-1257: anche chi e' il box (idRec, idLavRec del derivato): un derivato ha lo
+                // stesso codice del suo originale, e solo da qui Correggo li distingue.
+                Dna = JsonSerializer.Serialize(new
+                {
+                    codice = dna.Codice, gruppo = dna.Gruppo, descrizione = dna.Descrizione,
+                    idRec = identita.IdRec, idLavRec = identita.IdLavRec, derivato = identita.Derivato
+                }),
                 Contenuto = JsonSerializer.Serialize(rif),
                 ZIndex = 0,
                 PosizioneX = rb.Length == 4 ? rb[1] : 0,

@@ -361,6 +361,9 @@ public sealed partial class ServizioCorrezioni
 
         var (box, vol, errore) = await BoxScrivibileAsync(u, idBox);
         if (errore != null) return errore;
+        // I20-1257: i timbri sono correzioni, e un box derivato non si corregge.
+        var derivato = SulDerivato(box!);
+        if (derivato != null) return derivato;
 
         // j237: la policy puo' escludere dei timbri (nell'originale ai Category venivano tolti i
         // quattro di dimensione `_3_*`, PolicyManager.cs:405-440). I20-1169: quei quattro sono

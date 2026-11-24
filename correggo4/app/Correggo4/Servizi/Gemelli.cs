@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Correggo4.Ingestione;
 using Correggo4.Models;
 
 namespace Correggo4.Servizi;
@@ -65,6 +66,10 @@ public static class Gemelli
         {
             string b1 = (pilota.Basecode ?? "").Trim(), b2 = (altro.Basecode ?? "").Trim();
             if (b1.Length == 0 || b2.Length == 0) return false;   // scelta nostra: senza codice, niente catena
+            // I20-1257: un box derivato non e' il gemello di nessuno, in nessuna direzione: le
+            // propagazioni non gli arrivano e da lui non partono (le correzioni si fanno sull'originale).
+            if (InterpreteDna.IdentitaDelBox(pilota.Dna).Derivato || InterpreteDna.IdentitaDelBox(altro.Dna).Derivato)
+                return false;
             if (b1 == b2) return true;
 
             var dna1 = LeggiDna(pilota.Dna);

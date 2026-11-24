@@ -64,6 +64,23 @@ const DnaBox = {
         return this.idLavRecDi(oggetto) > 0;
     },
 
+    /// I20-1257: i campi con cui l'esportazione dice a Correggo chi e' il box. Un derivato ha lo
+    /// stesso codice gruppo e lo stesso idRec dell'originale: l'originale e' il box del volantino
+    /// con quei due valori e senza idLavRec. Per un box che non e' un derivato `originale` e' null.
+    identitaPerCorreggo(dna) {
+        const idRec = dna != null ? this.idValido(dna.idRec) : 0;
+        const idLavRec = this.idLavRecDi(dna);
+        const derivato = idLavRec > 0;
+        return {
+            idRec: idRec,
+            idLavRec: idLavRec,
+            derivato: derivato,
+            originale: derivato
+                ? { codiceGruppo: dna.codice_gruppo == null ? "" : String(dna.codice_gruppo), idRec: idRec }
+                : null
+        };
+    },
+
     /// La label del DNA con l'idRec sostituito, tenendo l'idLavRec che lo slot aveva: dopo un
     /// ricollegamento cambia il record, non la riga del derivato. Torna null se la label non ha
     /// lo slot (indiceSlot e' 5 nel formato $DNA$, 4 in quello vecchio base$).
