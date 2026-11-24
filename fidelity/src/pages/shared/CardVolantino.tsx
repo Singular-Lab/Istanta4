@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ServerCall } from "../../../lib/server_call";
 import { MOTIVO_SENZA_PERMESSO_SCARICA, scaricaFileConsultazione } from "@/utils/scaricaFileConsultazione";
+import { urlMiniatura } from "@/utils/materiali";
 
 /** File principale del kit (il volantino), con i campi già normalizzati dalla pagina. */
 export interface FileVolantino {
@@ -131,7 +132,7 @@ function CardVolantino({
                 className="group/anteprima relative h-20 w-16 overflow-hidden rounded-control border border-slate-200 bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40 sm:h-24 sm:w-20"
                 onClick={() => setAnteprimaAperta(true)}
               >
-                <img src={anteprima} alt="" className="h-full w-full object-cover" loading="lazy" />
+                <img src={urlMiniatura(anteprima, 80)} alt="" className="h-full w-full object-cover" loading="lazy" />
                 <span
                   aria-hidden="true"
                   className="absolute inset-0 flex items-center justify-center bg-slate-900/30 text-xs font-medium text-white opacity-0 transition-opacity group-hover/anteprima:opacity-100"

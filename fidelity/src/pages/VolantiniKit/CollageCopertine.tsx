@@ -4,6 +4,7 @@ import { twMerge } from "@/utils/twMerge";
 import { useState, type CSSProperties } from "react";
 import type { VarianteConsultazione } from "../../../lib/consultazione/tipi";
 import { fogliDelCollage, type FoglioCollage } from "./collage";
+import { urlMiniatura } from "@/utils/materiali";
 
 type VarianteCollage = "scheda" | "vetrina";
 
@@ -99,7 +100,7 @@ function Foglio({
       {anteprima && !rotta ? (
         // Decorative: il nome della promozione sta nell'etichetta del collegamento che le contiene
         <img
-          src={anteprima}
+          src={urlMiniatura(anteprima, variante === "vetrina" ? 280 : 200)}
           alt=""
           loading="lazy"
           decoding="async"

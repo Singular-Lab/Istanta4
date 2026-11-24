@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Lucide from "../Base/Lucide";
 import Spinner from "../Base/Spinner";
+import { pagineDaPrecaricare, pagineVisibili } from "./paginePrecaricate";
 
 interface PreviewImmaginePdfProps {
     imageUrl: string;
@@ -19,7 +20,8 @@ export const PreviewImmaginePdf: React.FC<PreviewImmaginePdfProps> = ({
     onClose
 }) => {
     const [portalContainer, setPortalContainer] = useState<HTMLElement | null>(null);
-    const [isPreloading, setIsPreloading] = useState(true);
+    // Le pagine di cui il browser ha già l'immagine: lo spinner resta finché non ci sono quelle che si vedono
+    const [pronte, setPronte] = useState<ReadonlySet<number>>(() => new Set());
 
     const [currentPage, setCurrentPage] = useState(initialPage > 1 ? initialPage : 1);
     const [isFirstPage, setIsFirstPage] = useState(initialPage <= 1);
@@ -40,24 +42,23 @@ export const PreviewImmaginePdf: React.FC<PreviewImmaginePdfProps> = ({
     }, []);
 
     /* ------------------------------------------------------------------ */
-    /* PRELOAD TUTTE LE PAGINE                                             */
+    /* PRECARICAMENTO DELLE PAGINE VICINE                                  */
     /* ------------------------------------------------------------------ */
 
+    // Prima si scaricavano tutte le pagine all'apertura (40 richieste insieme per un volantino da 40 pagine):
+    // ora quelle che si vedono e le aperture subito prima e subito dopo, perché girando siano pronte.
     useEffect(() => {
-        let loaded = 0;
-        setIsPreloading(true);
-
-        for (let page = 1; page <= totalPages; page++) {
-            const img = new Image();
-            img.src = `${imageUrl}&page=${page}`;
-            img.onload = () => {
-                loaded++;
-                if (loaded === totalPages) {
-                    setIsPreloading(false);
-                }
-            };
-        }
+        setPronte(new Set());
     }, [imageUrl, totalPages]);
+
+    useEffect(() => {
+        const pagine = pagineDaPrecaricare(currentPage, isFirstPage, totalPages);
+        for (const page of pagine) {
+            const img = new Image();
+            img.onload = () => setPronte(prima => (prima.has(page) ? prima : new Set(prima).add(page)));
+            img.src = `${imageUrl}&page=${page}`;
+        }
+    }, [imageUrl, totalPages, currentPage, isFirstPage]);
 
     useEffect(() => {
         const safePage = Math.min(Math.max(initialPage, 1), totalPages || 1);
@@ -69,11 +70,8 @@ export const PreviewImmaginePdf: React.FC<PreviewImmaginePdfProps> = ({
     /* PAGINE VISIBILI                                                     */
     /* ------------------------------------------------------------------ */
 
-    const pagesToRender = useMemo(() => {
-        if (isFirstPage) return [1];
-        const right = currentPage + 1 <= totalPages ? currentPage + 1 : null;
-        return right ? [currentPage, right] : [currentPage];
-    }, [currentPage, isFirstPage, totalPages]);
+    const pagesToRender = useMemo(() => pagineVisibili(currentPage, isFirstPage, totalPages), [currentPage, isFirstPage, totalPages]);
+    const isPreloading = pagesToRender.some(page => !pronte.has(page));
 
     /* ------------------------------------------------------------------ */
     /* NAVIGAZIONE                                                         */

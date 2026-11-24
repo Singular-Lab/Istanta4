@@ -1103,8 +1103,14 @@ function Sfogliabile({
   const [passaggio, setPassaggio] = useState<{ firma: string; indice: number }>({ firma: "", indice: -1 });
   /** Il box su cui si passa negli elenchi del pannello. */
   const [rilievoElenco, setRilievoElenco] = useState<string | null>(null);
-  /** Altezza della pagina rifilata nelle immagini di Olimpo, in pixel: la più bassa vista. */
-  const [risoluzione, setRisoluzione] = useState<number | null>(null);
+  /**
+   * Altezza della pagina rifilata nelle immagini di Olimpo, in pixel: la più bassa vista. Le pagine si aprono
+   * a 150 dpi; quando l'utente arriva al massimo zoom di quelle (`letturaAlta`) le aperte passano a 300 dpi e
+   * il massimo raddoppia. Le immagini a 300 dpi pesano circa 35 MB l'una una volta decodificate: non si
+   * chiedono finché non servono.
+   */
+  const [risoluzione, setRisoluzione] = useState<{ pixel: number; alta: boolean } | null>(null);
+  const [letturaAlta, setLetturaAlta] = useState(false);
   const [misuraPalco, setMisuraPalco] = useState({ larghezza: 0, altezza: 0 });
   const idPannello = useId();
 
@@ -1172,15 +1178,33 @@ function Sfogliabile({
   // Lo zoom arriva fino alla risoluzione reale dell'immagine delle pagine aperte, mai sotto il 200%
   const rem = useMemo(pixelPerRem, []);
   const altezzaPagina = altezzaAdattata(misuraPalco.larghezza, misuraPalco.altezza, proporzioneApertura(aperta, proporzione).totale, rem);
-  const massimo = zoomMassimo(risoluzione, altezzaPagina, densitaSchermo());
+  const massimo = zoomMassimo(risoluzione?.pixel ?? null, altezzaPagina, densitaSchermo());
   const zoom = zoomLimitato(zoomScelto, massimo);
   const cambiaZoom = useCallback((valore: number) => setZoomScelto(zoomLimitato(valore, massimo)), [massimo]);
+  // Un altro volantino riparte dalle pagine a 150 dpi
+  useEffect(() => {
+    setLetturaAlta(false);
+    setRisoluzione(null);
+  }, [pdf?.idOlimpoCloud]);
+  // Arrivati al massimo zoom delle pagine a 150 dpi, quelle aperte passano a 300 dpi
+  useEffect(() => {
+    if (!letturaAlta && risoluzione !== null && zoom >= massimo - 0.02) setLetturaAlta(true);
+  }, [letturaAlta, risoluzione, zoom, massimo]);
   const misuraIlPalco = useCallback(
     (larghezza: number, altezza: number) =>
       setMisuraPalco(attuale => (attuale.larghezza === larghezza && attuale.altezza === altezza ? attuale : { larghezza, altezza })),
     []
   );
-  const segnaRisoluzione = useCallback((pixel: number) => setRisoluzione(attuale => (attuale === null || pixel < attuale ? pixel : attuale)), []);
+  const segnaRisoluzione = useCallback(
+    (pixel: number, alta: boolean) =>
+      setRisoluzione(attuale => {
+        if (attuale === null) return { pixel, alta };
+        // Arrivata la pagina a 300 dpi il massimo ripartisce da lì; quelle a 150 dpi non lo abbassano più
+        if (alta !== attuale.alta) return alta ? { pixel, alta } : attuale;
+        return pixel < attuale.pixel ? { pixel, alta } : attuale;
+      }),
+    []
+  );
 
   const stile = useCallback((voce: BoxInsight): StileRiquadro => stileBox(voce, modo, reparti), [modo, reparti]);
   const voci = useMemo<VoceLegenda[]>(() => legendaModo(modo, box, reparti), [box, modo, reparti]);
@@ -1250,9 +1274,18 @@ function Sfogliabile({
   const immagineDellaPagina = (numero: number | null): string | null => {
     if (numero === null) return null;
     const idOlimpo = conImmagine(numero);
-    // Le pagine aperte a 300 dpi, per leggere allo zoom le scritte dei prodotti; le miniature restano ridotte
+    // Di base a 150 dpi, come le pagine vicine da preparare; a 300 solo quando serve (immagineAltaDellaPagina)
+    return idOlimpo ? urlPaginaMateriale(idOlimpo, numero) : null;
+  };
+  /** La pagina a 300 dpi, per leggere le scritte dei prodotti: la scheda del box la ritaglia da qui. */
+  const immagineDaLeggere = (numero: number | null): string | null => {
+    if (numero === null) return null;
+    const idOlimpo = conImmagine(numero);
     return idOlimpo ? urlPaginaDaLeggere(idOlimpo, numero) : null;
   };
+  /** La pagina aperta a 300 dpi sopra quella di base, solo dopo il massimo zoom della base. */
+  const immagineAltaDellaPagina = (numero: number): string | null =>
+    letturaAlta && aperta.pagine.includes(numero) ? immagineDaLeggere(numero) : null;
 
   const boxScelto = selezionato ? (box.find(voce => voce.id === selezionato) ?? null) : null;
   /** Il box la cui scheda è aperta: chiusa la scheda, il box torna come gli altri (nascosto). */
@@ -1264,6 +1297,7 @@ function Sfogliabile({
       lato={lato}
       proporzione={proporzione(numero)}
       immagine={immagineDellaPagina(numero)}
+      immagineAlta={immagineAltaDellaPagina(numero)}
       box={perPagina.get(numero) ?? NESSUN_BOX}
       stile={stile}
       selezionato={diQuestaPagina(boxAperto, numero)}
@@ -1508,7 +1542,7 @@ function Sfogliabile({
       <SchedaBox
         box={boxScelto}
         totalePagine={totale}
-        immaginePagina={immagineDellaPagina(boxScelto.pagina)}
+        immaginePagina={immagineDaLeggere(boxScelto.pagina)}
         proporzionePagina={boxScelto.pagina !== null ? proporzione(boxScelto.pagina) : proporzioneBase}
         compatta={compatta}
         datiProdotto={configurazione?.volantino?.scheda?.datiProdotto}

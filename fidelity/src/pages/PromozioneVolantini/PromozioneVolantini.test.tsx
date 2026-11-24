@@ -302,7 +302,9 @@ describe("Consultazione di una promozione", () => {
       "href",
       "/volantini/tutti_i_volantini?kit=k2"
     );
-    expect(griglia.querySelector(`img[src="${ANTEPRIMA}"]`)).not.toBeNull();
+    // La copertina si chiede a Olimpo già ridotta alla misura mostrata, non come pagina intera
+    expect(griglia.querySelector(`img[src^="${ANTEPRIMA}"]`)).not.toBeNull();
+    expect(griglia.querySelector(`img[src="${ANTEPRIMA}"]`)).toBeNull();
     expect(within(griglia).getByRole("link", { name: "Insight del volantino Superstore · Toscana" }).querySelector("img")).toBeNull();
     // La banda non ha più il muro di copertine
     expect(within(screen.getByRole("region", { name: "La promozione" })).queryByRole("link")).not.toBeInTheDocument();

@@ -20,6 +20,11 @@ export interface PaginaConImmagineProps {
   proporzione: number;
   /** Immagine della pagina da Olimpo; null: pagina bianca. */
   immagine: string | null;
+  /**
+   * La stessa pagina a risoluzione più alta, per leggere da vicino: si mette sopra quella di base solo quando
+   * serve (zoom al massimo della base) e si vede appena è arrivata, così lo zoom non mostra mai il fondo vuoto.
+   */
+  immagineAlta?: string | null;
   /** I box della pagina, con la geometria relativa alla pagina. */
   box: readonly BoxInsight[];
   stile: (box: BoxInsight) => StileRiquadro;
@@ -35,7 +40,7 @@ export interface PaginaConImmagineProps {
    * Caricata l'immagine della pagina: l'altezza della pagina rifilata in pixel dell'immagine, per
    * sapere fin dove si può ingrandire senza sgranare.
    */
-  onRisoluzione?: (pixelPagina: number) => void;
+  onRisoluzione?: (pixelPagina: number, alta: boolean) => void;
 }
 
 /** Larghezza della pagina nelle coordinate del disegno: l'altezza segue la proporzione. */
@@ -87,6 +92,7 @@ function PaginaConImmagineBase({
   attiva = true,
   proporzione,
   immagine: immagineDisponibile,
+  immagineAlta = null,
   box,
   stile,
   selezionato,
@@ -100,6 +106,8 @@ function PaginaConImmagineBase({
   // Lontana dalla vista la pagina non chiede la sua immagine: aspetta di tornare vicina
   const immagine = attiva ? immagineDisponibile : null;
   const [esito, setEsito] = useState<EsitoImmagine | null>(null);
+  const [esitoAlta, setEsitoAlta] = useState<EsitoImmagine | null>(null);
+  const alta = attiva ? immagineAlta : null;
   const altezza = altezzaFoglio(proporzione);
 
   // L'esito vale solo per l'immagine che lo ha prodotto: cambiando pagina si riparte dal bianco
@@ -119,8 +127,16 @@ function PaginaConImmagineBase({
     const { naturalWidth, naturalHeight } = evento.currentTarget;
     const pagina = paginaNellImmagine(naturalWidth, naturalHeight, proporzione);
     setEsito({ url: immagine, pagina });
-    if (pagina) onRisoluzione?.(naturalHeight * pagina.h);
+    if (pagina) onRisoluzione?.(naturalHeight * pagina.h, false);
   };
+  const caricataAlta = (evento: SyntheticEvent<HTMLImageElement>) => {
+    if (!alta) return;
+    const { naturalWidth, naturalHeight } = evento.currentTarget;
+    const pagina = paginaNellImmagine(naturalWidth, naturalHeight, proporzione);
+    setEsitoAlta({ url: alta, pagina });
+    if (pagina) onRisoluzione?.(naturalHeight * pagina.h, true);
+  };
+  const posizioneAlta = alta && esitoAlta && esitoAlta.url === alta && esitoAlta.pagina ? stileImmagine(esitoAlta.pagina) : null;
   const nonCaricata = () => {
     if (immagine) setEsito({ url: immagine, pagina: null });
   };
@@ -173,6 +189,19 @@ function PaginaConImmagineBase({
           onError={nonCaricata}
           className={twMerge("pointer-events-none absolute max-w-none select-none", !allineamento && "invisible")}
           style={posizione}
+        />
+      )}
+      {alta && (
+        <img
+          key={alta}
+          src={alta}
+          alt=""
+          aria-hidden="true"
+          decoding="async"
+          draggable={false}
+          onLoad={caricataAlta}
+          className={twMerge("pointer-events-none absolute max-w-none select-none", !posizioneAlta && "invisible")}
+          style={posizioneAlta ?? { left: 0, top: 0, width: "100%", height: "100%" }}
         />
       )}
       <svg viewBox={`0 0 ${LARGHEZZA} ${altezza}`} preserveAspectRatio="none" focusable="false" className="absolute inset-0 block h-full w-full">

@@ -13,7 +13,7 @@ import { PERMISSIONS } from "@/constants/permissions";
 import { usePermission } from "@/context/PermissionContext";
 import { useFetchVolantiniStoriaPuntoVendita, useFetchVolantinoPuntoVendita } from "@/query/query";
 import { formatNumero } from "@/utils/format";
-import { testoValidita, urlAnteprimaMateriale } from "@/utils/materiali";
+import { testoValidita, urlAnteprimaMateriale, urlMiniatura } from "@/utils/materiali";
 import { twMerge } from "@/utils/twMerge";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -87,7 +87,7 @@ function EdizioneSelezionata({
     >
       <div className="aspect-[210/297] overflow-hidden rounded-sm border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600">
         {anteprima ? (
-          <img src={anteprima} alt="" loading="lazy" className="h-full w-full object-cover object-top" />
+          <img src={urlMiniatura(anteprima, 96)} alt="" loading="lazy" className="h-full w-full object-cover object-top" />
         ) : (
           <div className="flex h-full items-center justify-center text-slate-400">
             <Lucide icon="FileText" aria-hidden="true" className="h-5 w-5" />
@@ -581,7 +581,7 @@ function VoceVolantino({ volantino }: { volantino: VolantinoNellaStoria }) {
             className="h-24 w-20 overflow-hidden rounded-control border border-slate-200 bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-theme-1/40"
             onClick={() => setAnteprimaAperta(true)}
           >
-            <img src={anteprima} alt="" loading="lazy" className="h-full w-full object-cover object-top" />
+            <img src={urlMiniatura(anteprima, 80)} alt="" loading="lazy" className="h-full w-full object-cover object-top" />
           </button>
         ) : (
           <div className="flex h-24 w-20 items-center justify-center rounded-control border border-dashed border-slate-300 bg-slate-50">
