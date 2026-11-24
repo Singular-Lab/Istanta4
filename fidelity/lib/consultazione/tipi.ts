@@ -21,6 +21,11 @@ export interface PromoConsultazione {
   nome: string;
   validitaDal: string | null;
   validitaAl: string | null;
+  /**
+   * Codice dell'iniziativa a cui corrisponde la promo, se il cliente ne ha uno (CONAD CNO: il valore del nome
+   * prima del primo «_»). Assente per gli altri clienti: le pagine mostrano il badge solo quando c'è.
+   */
+  codiceIniziativa?: string;
 }
 
 /** File pubblicato di un kit. */

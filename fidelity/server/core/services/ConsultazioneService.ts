@@ -252,12 +252,20 @@ function idPromoEsistente(valore: unknown): string {
 
 /* ---------- Conversioni ---------- */
 
-const promoDa = (riga: RigaPromo): PromoConsultazione => ({
-  id: riga.id_promo,
-  nome: riga.nome_promo,
-  validitaDal: dataIso(riga.validita_dal),
-  validitaAl: dataIso(riga.validita_al),
-});
+/** Ricava dal nome della promo il codice dell'iniziativa (libreria agenzia del cliente); null: nessun codice. */
+type CodiceIniziativa = (nomePromo: string) => string | null;
+
+const promoDa = (riga: RigaPromo, codiceIniziativa?: CodiceIniziativa): PromoConsultazione => {
+  const codice = codiceIniziativa?.(riga.nome_promo) ?? null;
+  return {
+    id: riga.id_promo,
+    nome: riga.nome_promo,
+    validitaDal: dataIso(riga.validita_dal),
+    validitaAl: dataIso(riga.validita_al),
+    // Solo quando c'è: per gli altri clienti la promo resta com'era
+    ...(codice ? { codiceIniziativa: codice } : {}),
+  };
+};
 
 const pagine = (valore: unknown): number | null => (Number(valore) > 0 ? Number(valore) : null);
 
@@ -330,7 +338,8 @@ function confrontaVarianti(a: VarianteConsultazione, b: VarianteConsultazione): 
 export function promozioniConVarianti(
   righePromo: RigaPromo[],
   righeKit: RigaVarianteVolantino[],
-  righePuntiVendita: readonly RigaPuntiVenditaPromo[] = []
+  righePuntiVendita: readonly RigaPuntiVenditaPromo[] = [],
+  codiceIniziativa?: CodiceIniziativa
 ): PromozioneVolantiniConsultazione[] {
   const puntiVenditaPerPromo = new Map(righePuntiVendita.map(riga => [riga.id_promo, Number(riga.punti_vendita) || 0]));
   const kitPerPromo = new Map<string, RigaVarianteVolantino[]>();
@@ -348,7 +357,7 @@ export function promozioniConVarianti(
       ?? tutti.find(kit => kit.variante.copertina)?.variante.copertina
       ?? null;
     return {
-      promo: promoDa(rigaPromo),
+      promo: promoDa(rigaPromo, codiceIniziativa),
       copertina,
       numeroKit: tutti.length,
       kit: mostrati,
@@ -452,10 +461,13 @@ export class ConsultazioneService implements IConsultazioneService {
     // Loghi delle insegne (Impostazioni GDO) accanto ai nomi delle insegne del dettaglio della promozione
     private readonly loghiInsegne: FonteLoghiInsegne = loghiInsegneDaConfigurazione,
     // Linee del distributore e ruoli dei prodotti dell'assortimento, come negli insight del volantino
-    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {},
+    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino' | 'codiceIniziativaPromo'> = {},
     // Insight dei kit gia' calcolati (Redis): null = si calcolano sempre, come senza Redis
     private readonly cacheInsight: CacheConsultazione | null = CACHE_CONSULTAZIONE_REDIS
   ) { }
+
+  /** Il codice dell'iniziativa di una promo, se la libreria agenzia del cliente lo dichiara (CONAD CNO). */
+  private readonly codiceIniziativa: CodiceIniziativa = nomePromo => this.agenziaLib.codiceIniziativaPromo?.(nomePromo) ?? null;
 
   /** Solo kit pubblicati del tipo indicato, nelle promo del periodo e della GDO dell'ambito. */
   private criteri(periodo: PeriodoConsultazione, tipoLavorazione: TIPO_LAVORAZIONE, ambito: AmbitoGdo): CriteriKit {
@@ -531,11 +543,11 @@ export class ConsultazioneService implements IConsultazioneService {
     ]);
     // C'e' una riga in vetrina solo con un motivo: il controllo serve al tipo
     const vetrina: VetrinaVolantiniConsultazione | null = rigaVetrina && motivo
-      ? { motivo, promozione: promozioniConVarianti([rigaVetrina], righeKit, righePuntiVendita)[0] }
+      ? { motivo, promozione: promozioniConVarianti([rigaVetrina], righeKit, righePuntiVendita, this.codiceIniziativa)[0] }
       : null;
 
     return {
-      promozioni: promozioniConVarianti(righePromo, righeKit, righePuntiVendita),
+      promozioni: promozioniConVarianti(righePromo, righeKit, righePuntiVendita, this.codiceIniziativa),
       totale: totali.promozioni,
       totaleKit: totali.kit,
       totaleSenzaFiltri: riepilogo.promozioni,
@@ -642,7 +654,7 @@ export class ConsultazioneService implements IConsultazioneService {
     // Le righe servono ai numeri; l'elenco dei punti vendita non va piu' alla pagina (sezione "Dove arriva" tolta)
     const { kit: kitConNumeri, numeri, assortimento } = aggregaPromozioneVolantini(kit, righePuntiVendita);
     return {
-      promo: promoDa(rigaPromo),
+      promo: promoDa(rigaPromo, this.codiceIniziativa),
       periodo,
       kit: kitConNumeri,
       numeroKitTotale: varianti.length,
@@ -683,7 +695,7 @@ export class ConsultazioneService implements IConsultazioneService {
   async getVolantiniPromozione(idPromo: string, ambito: AmbitoGdo): Promise<VolantiniPromozioneConsultazione> {
     const { rigaPromo, periodo, varianti } = await this.variantiDellaPromo(idPromo, ambito);
     return {
-      promo: promoDa(rigaPromo),
+      promo: promoDa(rigaPromo, this.codiceIniziativa),
       periodo,
       volantini: varianti,
       loghiInsegne: await this.loghiDelleInsegneDellaPromo(varianti),

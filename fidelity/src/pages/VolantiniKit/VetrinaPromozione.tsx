@@ -1,3 +1,4 @@
+import { BadgeIniziativa } from "@/components/BadgeIniziativa";
 import Lucide from "@/components/Base/Lucide";
 import { formatNumero } from "@/utils/format";
 import { twMerge } from "@/utils/twMerge";
@@ -49,7 +50,7 @@ function VetrinaPromozione({ vetrina, periodo, className }: VetrinaPromozionePro
     >
       <div className="flex min-w-0 flex-col justify-center gap-3.5">
         <p className="text-2xs font-bold uppercase tracking-wider text-indigo-200 [overflow-wrap:anywhere]">
-          In vetrina · {promo.nome}
+          In vetrina · <BadgeIniziativa codice={promo.codiceIniziativa} suScuro /> {promo.nome}
         </p>
         <h2 className="text-4xl font-bold leading-none tracking-tight text-white sm:text-5xl 2xl:text-6xl">
           {periodoPromo(promo.validitaDal, promo.validitaAl, { adesso })}
