@@ -17,6 +17,7 @@ import type { MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, RegoleMenabo } 
 import { useUser } from "../../context/UserContext";
 import { ricollegaElementiSalvati } from "./menaboChiavi";
 import { pagineDelGruppo, referenzeDellaPagina } from "./menaboSelezione";
+import { gruppiDellUnione, normalizzaUnioni, nuovoUnioneId, sciogliUnione, unisciGruppi } from "./menaboUnioni";
 // ── Document dimensions (A4 in points at 72 dpi) ──────────────────────────
 const DOC_W = 595;
 const DOC_H = 842;
@@ -76,6 +77,8 @@ interface PlacedItem {
     recordKeys: string[];
     colorIdx: number;
     sourceKey: string;
+    /** I20-1255: i gruppi con lo stesso unioneId seguono un solo ordine merceologico. */
+    unioneId?: string;
 }
 
 interface RecordPreviewItem {
@@ -342,6 +345,8 @@ interface MenaboCanvasProps {
     campiIdentita?: string[];
     /** I20-1256: dalla libreria agenzia; presente = il numero di pagine si scrive a mano. */
     pagineAMano?: { conferma_da_pagine_tolte: number };
+    /** I20-1255: dalla libreria agenzia; true = si possono unire gruppi in un solo ordine merceologico. */
+    unioneGruppi?: boolean;
     idPromo: string;
     nomePromo?: string;
 }
@@ -358,6 +363,7 @@ export default function MenaboCanvas({
     canaleSelezionato,
     campiIdentita,
     pagineAMano,
+    unioneGruppi = false,
     idPromo,
     nomePromo,
 }: MenaboCanvasProps & { canaleSelezionato: import("../../../lib/types").MenaboRisultatoCanale | undefined }) {
@@ -588,6 +594,7 @@ export default function MenaboCanvas({
                 recordKeys: group.recordKeys,
                 colorIdx: group.colorIdx,
                 sourceKey: group.sourceKey,
+                ...(group.unioneId ? { unioneId: group.unioneId } : {}),
             }))
         );
         const groupMergeMap = new Map<string, PlacedItem>();
@@ -802,6 +809,42 @@ export default function MenaboCanvas({
     const selectedColor = selectedItem
         ? PALETTE[selectedItem.colorIdx % PALETTE.length]
         : PALETTE[0];
+
+    // I20-1255: unione di gruppi in un solo ordine merceologico (solo se la libreria agenzia la dichiara).
+    const [gruppiDaUnire, setGruppiDaUnire] = useState<string[]>([]);
+    useEffect(() => { setGruppiDaUnire([]); }, [selectedId]);
+    // Un'unione rimasta con un solo gruppo (l'altro è stato tolto dal menabò) si scioglie da sola.
+    useEffect(() => {
+        const normalizzati = normalizzaUnioni(items);
+        if (normalizzati.some((item, i) => item !== items[i])) setItems(normalizzati);
+    }, [items]);
+    const unioneDelSelezionato = selectedItem?.unioneId;
+    const gruppiUnitiAlSelezionato = useMemo(
+        () => gruppiDellUnione(items, unioneDelSelezionato),
+        [items, unioneDelSelezionato],
+    );
+    const gruppiUnibili = useMemo(() => {
+        if (!selectedItem) return [];
+        const visti = new Set<string>([selectedItem.groupId]);
+        return items.filter(item => {
+            if (visti.has(item.groupId) || item.records.length === 0) return false;
+            visti.add(item.groupId);
+            return true;
+        });
+    }, [items, selectedItem]);
+    const uniscigruppiScelti = useCallback(() => {
+        if (!selectedItem || gruppiDaUnire.length === 0) return;
+        pushHistory();
+        setItems(prev => unisciGruppi(prev, [selectedItem.groupId, ...gruppiDaUnire], nuovoUnioneId()));
+        setGruppiDaUnire([]);
+        markDirty();
+    }, [gruppiDaUnire, markDirty, pushHistory, selectedItem]);
+    const sciogliUnioneSelezionata = useCallback(() => {
+        if (!unioneDelSelezionato) return;
+        pushHistory();
+        setItems(prev => sciogliUnione(prev, unioneDelSelezionato));
+        markDirty();
+    }, [markDirty, pushHistory, unioneDelSelezionato]);
 
     useEffect(() => {
         if (selectedId) setIsPreviewPanelOpen(true);
@@ -1329,6 +1372,7 @@ export default function MenaboCanvas({
                         recordKeys: item.recordKeys,
                         records: item.records,
                         recordCount: item.records.length,
+                        ...(item.unioneId ? { unioneId: item.unioneId } : {}),
                     })),
                 };
             }),
@@ -1935,7 +1979,7 @@ export default function MenaboCanvas({
                                                                                                 textTransform: "uppercase",
                                                                                             }}
                                                                                         >
-                                                                                            Gruppo scelto
+                                                                                            Gruppo scelto{item.unioneId ? " · unito" : ""}
                                                                                         </span>
 
                                                                                         <span
@@ -2305,6 +2349,67 @@ export default function MenaboCanvas({
                                     </div>
                                 </div>
                             </div>
+
+                            {unioneGruppi && (
+                                <div className="border-b border-slate-200/80 px-4 py-3 text-xs dark:border-darkmode-400" data-testid="menabo-unione">
+                                    <div className="mb-1.5 font-semibold text-slate-600 dark:text-slate-200">Unione di gruppi</div>
+                                    {unioneDelSelezionato ? (
+                                        <>
+                                            <p className="mb-2 text-slate-500">
+                                                Uniti in un solo ordine merceologico: {gruppiUnitiAlSelezionato
+                                                    .map(id => items.find(item => item.groupId === id)?.label ?? id)
+                                                    .join(" + ")}.
+                                            </p>
+                                            <Button type="button" size="xs" variant="outline-secondary" onClick={sciogliUnioneSelezionata}>
+                                                Sciogli unione
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <p className="mb-2 text-slate-500">
+                                            Scegli i gruppi da unire a questo: le loro referenze seguono un solo ordine merceologico, anche su pagine diverse.
+                                        </p>
+                                    )}
+                                    <div className="mt-2 max-h-36 overflow-y-auto rounded-control border border-slate-200/80 dark:border-darkmode-400">
+                                        {gruppiUnibili.length === 0 ? (
+                                            <div className="px-2.5 py-2 text-slate-400">Nessun altro gruppo nel menabò.</div>
+                                        ) : gruppiUnibili.map(item => {
+                                            const pagine = pagineDelGruppo(paginated, item.groupId);
+                                            const giaUnito = !!unioneDelSelezionato && item.unioneId === unioneDelSelezionato;
+                                            return (
+                                                <label
+                                                    key={item.groupId}
+                                                    className="flex cursor-pointer items-start gap-2 px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-darkmode-700/40"
+                                                >
+                                                    <input
+                                                        type="checkbox"
+                                                        className="mt-0.5"
+                                                        checked={giaUnito || gruppiDaUnire.includes(item.groupId)}
+                                                        disabled={giaUnito}
+                                                        onChange={e => setGruppiDaUnire(prev =>
+                                                            e.target.checked ? [...prev, item.groupId] : prev.filter(id => id !== item.groupId))}
+                                                    />
+                                                    <span className="min-w-0 flex-1 break-words">
+                                                        {item.label}
+                                                        <span className="ml-1 text-slate-400">
+                                                            {pagine.length > 0 ? `· pag. ${pagine.join(", ")}` : ""}
+                                                        </span>
+                                                    </span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="xs"
+                                        variant="primary"
+                                        className="mt-2"
+                                        disabled={gruppiDaUnire.length === 0}
+                                        onClick={uniscigruppiScelti}
+                                    >
+                                        {unioneDelSelezionato ? "Aggiungi all'unione" : "Unisci"}
+                                    </Button>
+                                </div>
+                            )}
 
                             <div className="flex-1 overflow-y-auto p-3">
                                 {selectedPreviewItems.length === 0 ? (

@@ -421,6 +421,11 @@ export interface IAgenziaLib {
    * menabò da un elenco del cliente"). Assente = solo testo libero, come oggi.
    */
   MENABO_ETICHETTE?: readonly string[];
+  /**
+   * I20-1255: nel menabò si possono unire due o più gruppi, anche su pagine diverse, in un solo ordine
+   * merceologico (spec menabo-promo, "Unione di gruppi in un solo ordine merceologico"). Assente = niente unione.
+   */
+  MENABO_UNIONE_GRUPPI?: boolean;
   elaboraDatoPerAgenzia(data: RisultatoConfrontoMomento): Promise<TracciatoReport>;
 
   normalizzaDatoConfrontoPerScore(confrontiData: PromoScoreboardInput): Promise<PromoScoreboardInput>;

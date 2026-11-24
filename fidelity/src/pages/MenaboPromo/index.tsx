@@ -1043,6 +1043,7 @@ function MenaboPromoPage() {
                         canaleSelezionato={canaleSelezionato}
                         campiIdentita={data?.campi_identita}
                         pagineAMano={data?.pagine_a_mano}
+                        unioneGruppi={!!data?.unione_gruppi}
                         idPromo={idPromo!}
                         nomePromo={data?.nomePromo}
                     />
