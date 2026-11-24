@@ -92,6 +92,7 @@ namespace Istanta.Models
                 }
 
                 logger.LogInformation("{Contesto}: applico {Quante} migration: {Elenco}.", nome, pendenti.Count, string.Join(", ", pendenti));
+                ctx.Database.SetCommandTimeout(TimeSpan.Zero);
                 ctx.Database.Migrate();
                 logger.LogInformation("{Contesto}: migration applicate.", nome);
             }
