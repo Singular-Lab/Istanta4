@@ -475,6 +475,35 @@ describe("Schede delle promozioni", () => {
   });
 });
 
+describe("Codice iniziativa nelle schede e in vetrina (task 1f340bec)", () => {
+  it("la scheda mostra il badge con il codice quando la promo lo ha, e non quando manca", async () => {
+    finti.risultato = caricato(pagina({
+      promozioni: [
+        promozione({ promo: { ...promo, id: "p1", nome: "P2620_KIT_TOSCANA", codiceIniziativa: "P2620" } }),
+        promozione({ promo: { ...promo, id: "p2", nome: "Speciale Colazione" } }),
+      ],
+      totale: 2,
+    }));
+    await apri("/volantini/attivi");
+
+    const conCodice = screen.getByRole("link", { name: /^P2620_KIT_TOSCANA,/ });
+    expect(within(conCodice).getByTestId("badge-iniziativa")).toHaveTextContent("P2620");
+    const senzaCodice = screen.getByRole("link", { name: /^Speciale Colazione,/ });
+    expect(within(senzaCodice).queryByTestId("badge-iniziativa")).not.toBeInTheDocument();
+  });
+
+  it("la promozione in vetrina mostra il badge prima del nome", async () => {
+    finti.risultato = caricato(pagina({ vetrina: vetrina("piu_punti_vendita", { nome: "P2620_GRANDE", codiceIniziativa: "P2620" }), totaleSenzaFiltri: 2 }));
+    await apri("/volantini/attivi");
+
+    const banda = screen.getByRole("region", { name: "Promozione in vetrina" });
+    const badge = within(banda).getByTestId("badge-iniziativa");
+    expect(badge).toHaveTextContent("P2620");
+    // Prima del nome: «In vetrina · P2620 P2620_GRANDE»
+    expect(badge.parentElement).toHaveTextContent(/In vetrina · .*Iniziativa P2620.*P2620_GRANDE/);
+  });
+});
+
 describe("Promozione in vetrina", () => {
   it("senza filtri sta in testa, con nome, periodo, cartellino, numeri, perché e il collegamento al dettaglio", async () => {
     oggiE("2026-11-09T10:00:00+01:00");

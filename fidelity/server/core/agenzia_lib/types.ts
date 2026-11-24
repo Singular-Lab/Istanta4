@@ -511,4 +511,11 @@ export interface IAgenziaLib {
 
   /** Regole del cliente per il report PDF del volantino (palette, intestazione, sezioni). Opzionale. */
   insightVolantino?: InsightVolantinoAgenzia;
+
+  /**
+   * Codice dell'iniziativa a cui corrisponde una promo, ricavato dal suo nome: le pagine di visualizzazione
+   * delle promozioni lo mostrano in un badge accanto al nome. Opzionale: senza, nessun badge. Restituisce
+   * null quando il nome non ha un codice.
+   */
+  codiceIniziativaPromo?: (nomePromo: string) => string | null;
 }

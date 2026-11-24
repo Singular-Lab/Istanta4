@@ -270,6 +270,17 @@ describe("Consultazione di una promozione", () => {
     expect(screen.getByRole("link", { name: `Torna a ${vista}` })).toHaveAttribute("href", indirizzo);
   });
 
+  it("la banda mostra il badge del codice iniziativa quando la promo lo ha, e non quando manca (task 1f340bec)", async () => {
+    finti.risultato = caricato(dettaglio({ promo: { id: "p1", nome: "P2620_KIT_TOSCANA", validitaDal: "2026-11-05", validitaAl: "2026-11-18", codiceIniziativa: "P2620" } }));
+    await apri();
+    expect(within(screen.getByRole("region", { name: "La promozione" })).getByTestId("badge-iniziativa")).toHaveTextContent("P2620");
+
+    cleanup();
+    finti.risultato = caricato(dettaglio({ promo: { id: "p1", nome: "Volantino novembre", validitaDal: "2026-11-05", validitaAl: "2026-11-18" } }));
+    await apri();
+    expect(within(screen.getByRole("region", { name: "La promozione" })).queryByTestId("badge-iniziativa")).not.toBeInTheDocument();
+  });
+
   it("la striscia dei numeri della promozione non c'è: dopo le schede dei volantini viene l'assortimento", async () => {
     await apri();
 

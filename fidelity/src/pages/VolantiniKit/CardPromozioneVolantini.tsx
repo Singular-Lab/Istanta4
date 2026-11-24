@@ -1,3 +1,4 @@
+import { BadgeIniziativa } from "@/components/BadgeIniziativa";
 import Lucide from "@/components/Base/Lucide";
 import StatusBadge from "@/components/Base/StatusBadge";
 import type { TonoStato } from "@/constants/stati";
@@ -114,7 +115,10 @@ function CardPromozioneVolantini({
 
       <div className="flex flex-1 flex-col gap-1.5 px-4 pb-4 pt-3.5">
         {/* I nomi delle promo sono spesso codici senza spazi (P2622_VOL_05-11-26): vanno a capo */}
-        <span className="title-eyebrow [overflow-wrap:anywhere] dark:text-slate-400">{promo.nome}</span>
+        <span className="title-eyebrow flex flex-wrap items-center gap-1.5 [overflow-wrap:anywhere] dark:text-slate-400">
+          <BadgeIniziativa codice={promo.codiceIniziativa} />
+          <span>{promo.nome}</span>
+        </span>
         <div className="flex flex-wrap items-start justify-between gap-x-2.5 gap-y-1.5">
           <Titolo className="min-w-0 text-xl font-bold leading-tight text-slate-800 dark:text-slate-100">
             {periodoPromo(promo.validitaDal, promo.validitaAl, { adesso })}

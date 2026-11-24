@@ -1,3 +1,4 @@
+import { BadgeIniziativa } from "@/components/BadgeIniziativa";
 import type { Tinta } from "@/components/Grafici";
 import { twMerge } from "@/utils/twMerge";
 import { ETICHETTA_PERIODO_CONSULTAZIONE } from "../../../lib/consultazione/periodi";
@@ -42,7 +43,7 @@ export function Banda({ dettaglio, insegne, tinta, idCanale, onScegliInsegna }: 
 
       <div className="relative flex min-w-0 flex-col justify-center gap-3.5">
         <p className="title-eyebrow font-bold text-indigo-200 [overflow-wrap:anywhere]">
-          Volantini {ETICHETTA_PERIODO_CONSULTAZIONE[periodo]} · {promo.nome}
+          Volantini {ETICHETTA_PERIODO_CONSULTAZIONE[periodo]} · <BadgeIniziativa codice={promo.codiceIniziativa} suScuro /> {promo.nome}
         </p>
         <p className="text-4xl font-extrabold leading-[0.98] tracking-tight [text-wrap:balance] sm:text-5xl xl:text-6xl">{testoValidita(promo)}</p>
         {kit.length > 0 && <p className="max-w-[44ch] text-base text-indigo-200">{fraseKit(kit)}.</p>}

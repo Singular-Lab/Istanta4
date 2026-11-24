@@ -6,6 +6,7 @@ import { GDO } from "../../models/gdo.js";
 import { UtentiGDO } from "../../models/utenti_gdo.js";
 import { DefaultAgenziaLib } from "../default/index.js";
 import type { ExternalAuthContext, ParsedOIDCUtente } from "../types.js";
+import { codiceIniziativaConadCno } from "./codice-iniziativa.js";
 import { insightVolantinoConadCno } from "./insight-volantino.js";
 import { importPuntiVenditaConadCno } from "./punti-vendita.js";
 
@@ -93,6 +94,7 @@ export class ConadcnoAgenziaLib extends DefaultAgenziaLib {
   supportaImportStorico = true;
   importPuntiVendita = importPuntiVenditaConadCno;
   insightVolantino = insightVolantinoConadCno;
+  codiceIniziativaPromo = codiceIniziativaConadCno;
 
   async parseUtenteOIDC(
     email: string,
