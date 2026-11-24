@@ -5474,6 +5474,21 @@ function segnalazioniPersonalizzateFoto(nomeFoto) {
     }
 }
 
+/// I20-1263: la foto primaria o secondaria che non si trova: al suo posto c'e' il segnaposto
+/// fotonofound, e il bollino del box lo dice (FotoPlacer.segnalazioneFotoNonTrovata). avviso e'
+/// quello che FotoPlacer.placeFoto ha restituito. Non lancia, come le segnalazioni personalizzate.
+function segnalazioneFotoNonTrovata(nomeFoto, avviso) {
+    try {
+        const segnalazione = FotoPlacer.segnalazioneFotoNonTrovata(nomeFoto, avviso);
+        if (segnalazione != null) {
+            addSegnalazione(segnalazione.testo, segnalazione.gravita, 2, true);
+        }
+    }
+    catch (e) {
+        console.error("Code IDX-206 Segnalazione della foto non trovata " + nomeFoto + " non aggiunta: " + e);
+    }
+}
+
 /// I20-1248: le segnalazioni personalizzate del cliente sui campi del record del primario del box
 /// (tutte le regole tranne quelle su nomeFoto; Edro21: la note category compilata, NCT-01). Come
 /// quella delle foto non lancia: il box e' gia' impaginato.
@@ -6002,10 +6017,11 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
                                                         listFoto.push(photo);
                                                         try {
                                                             var label = (pluginMiddleware.getCampo("nomeFotoSecondaria") !== null ? pluginMiddleware.getCampo("nomeFotoSecondaria") + "$" : "foto_secondaria$") + elemento.codRef;
-                                                            FotoPlacer.placeFoto(nomeFoto, photo);
+                                                            var avvisoFoto = FotoPlacer.placeFoto(nomeFoto, photo);
                                                             //Impaginata comunque, resa invisibile se richiesto dai meta della lavorazione
                                                             FotoPlacer.applicaNoRender(photo, elemento.noRender);
                                                             segnalazioniPersonalizzateFoto(nomeFoto);
+                                                            segnalazioneFotoNonTrovata(nomeFoto, avvisoFoto);
                                                             secondarie++;
                                                             //mettiamo foto sul livello InPagina
                                                             photo.label = label;
@@ -6025,12 +6041,13 @@ async function impaginaBoxNelContesto(meccanica, pagCoinvolta, bounds, itemRef, 
                                                     listFoto.unshift(field);
                                                     var nomeFoto = itemRef["Foto.Nome"];
                                                     field.label = (pluginMiddleware.getCampo("nomeFotoPrimaria") !== null ? pluginMiddleware.getCampo("nomeFotoPrimaria")+"$" :"immagine$") + itemRef["Referenza.Codice"];
-                                                    FotoPlacer.placeFoto(nomeFoto, field);
+                                                    var avvisoPrimaria = FotoPlacer.placeFoto(nomeFoto, field);
                                                     //L'opzione di rendering della primaria viaggia dentro membriGruppoFoto,
                                                     //non sul record contenitore del box.
                                                     var membroPrimaria = itemRef.membriGruppoFoto.find(m => m.statoSelezione == 1);
                                                     FotoPlacer.applicaNoRender(field, membroPrimaria != null && membroPrimaria.noRender);
                                                     segnalazioniPersonalizzateFoto(nomeFoto);
+                                                    segnalazioneFotoNonTrovata(nomeFoto, avvisoPrimaria);
                                                     listElementToSendBack.push(field);
                                                 } catch (err) {
                                                     console.log(err);
