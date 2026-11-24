@@ -7,7 +7,7 @@
  * configurazioneCliente.js segue la catena e, se un anello manca, il Plugin non parte e dice quale.
  *
  * Qui: la catena con un require finto, il punto in cui indexNew.js la usa, il modello neutro
- * degli ipconfig, e monta-cliente.sh lanciato in una cartella temporanea.
+ * degli ipconfig, e monta-cliente.sh e monta-cliente.ps1 lanciati in una cartella temporanea.
  *
  * Esecuzione: node --test tests/plugin/*.test.js
  */
@@ -173,28 +173,52 @@ test("per ogni cliente del Plugin il modello porta a un custom.js che esiste", (
     }
 });
 
-/* ---- monta-cliente.sh ---- */
+/* ---- monta-cliente.sh e monta-cliente.ps1 ---- */
+
+//TASK-d5f2adb8: monta-cliente.ps1 e' la versione Windows di monta-cliente.sh, con la stessa logica e
+//gli stessi messaggi. Gli stessi casi girano su tutti e due; ognuno si salta se manca il suo interprete.
+//PowerShell: powershell.exe su Windows, pwsh altrove (dove c'e').
+function interpretePowerShell() {
+    for (const comando of process.platform === "win32" ? ["powershell", "pwsh"] : ["pwsh"]) {
+        if (spawnSync(comando, ["-NoProfile", "-Command", "exit 0"]).status === 0) {
+            return comando;
+        }
+    }
+    return null;
+}
 
 const bashDisponibile = spawnSync("bash", ["--version"]).status === 0;
+const powershell = interpretePowerShell();
+
+const SCRIPT_MONTA = [
+    { nome: "monta-cliente.sh", disponibile: bashDisponibile, lancia: (script, args) => spawnSync("bash", [script, ...args], { encoding: "utf8" }) },
+    { nome: "monta-cliente.ps1", disponibile: powershell != null,
+        lancia: (script, args) => spawnSync(powershell, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script, ...args], { encoding: "utf8" }) }
+];
+
+const MODELLO_AVVIO = path.join(RADICE, "Istanta", "Properties", "launchSettings.template.json");
 
 //Una radice finta con lo script, il modello e l'archivio di Edro21: il resto (Istanta, la dll)
 //manca, e lo script lo segnala, ma la parte del Plugin si fa lo stesso.
-function radiceFinta(prepara) {
+function radiceFinta(script, prepara, args = ["Edro21"]) {
     const cartella = fs.mkdtempSync(path.join(os.tmpdir(), "monta-cliente-"));
-    fs.copyFileSync(path.join(RADICE, "monta-cliente.sh"), path.join(cartella, "monta-cliente.sh"));
+    fs.copyFileSync(path.join(RADICE, script.nome), path.join(cartella, script.nome));
     fs.mkdirSync(path.join(cartella, "plugin", "Agenzie", "Edro21"), { recursive: true });
     fs.copyFileSync(MODELLO, path.join(cartella, "plugin", "Agenzie", "ipconfig.template.json"));
     fs.writeFileSync(path.join(cartella, "plugin", "Agenzie", "Edro21", "custom.js"), "//EDRO21 archivio\n");
     if (prepara) {
         prepara(cartella);
     }
-    const esito = spawnSync("bash", [path.join(cartella, "monta-cliente.sh"), "Edro21"], { encoding: "utf8" });
-    return { cartella, uscita: esito.stdout + esito.stderr, leggi: (relativo) => fs.readFileSync(path.join(cartella, relativo), "utf8"),
+    const esito = script.lancia(path.join(cartella, script.nome), args);
+    return { cartella, codice: esito.status, uscita: esito.stdout + esito.stderr,
+        leggi: (relativo) => fs.readFileSync(path.join(cartella, relativo), "utf8"),
         esiste: (relativo) => fs.existsSync(path.join(cartella, relativo)) };
 }
 
-test("monta-cliente scrive il puntatore e crea l'ipconfig dal modello, senza copiare il custom", { skip: !bashDisponibile }, () => {
-    const r = radiceFinta();
+for (const script of SCRIPT_MONTA) {
+
+test(`${script.nome} scrive il puntatore e crea l'ipconfig dal modello, senza copiare il custom`, { skip: !script.disponibile }, () => {
+    const r = radiceFinta(script);
     try {
         assert.deepStrictEqual(JSON.parse(r.leggi("plugin/clienteAttivo.json")), { ipconfig: "Agenzie/Edro21/ipconfig.json" });
         assert.strictEqual(JSON.parse(r.leggi("plugin/Agenzie/Edro21/ipconfig.json")).custom, "Agenzie/Edro21/custom.js");
@@ -206,9 +230,9 @@ test("monta-cliente scrive il puntatore e crea l'ipconfig dal modello, senza cop
     }
 });
 
-test("monta-cliente non tocca un ipconfig che c'e' gia', ne' i vecchi file in radice", { skip: !bashDisponibile }, () => {
+test(`${script.nome} non tocca un ipconfig che c'e' gia', ne' i vecchi file in radice`, { skip: !script.disponibile }, () => {
     const ipconfig = JSON.stringify({ testMode: false, istantaIp: "http://mio/", custom: "Agenzie/Edro21/custom.js" });
-    const r = radiceFinta(cartella => {
+    const r = radiceFinta(script, cartella => {
         fs.writeFileSync(path.join(cartella, "plugin", "Agenzie", "Edro21", "ipconfig.json"), ipconfig);
         fs.writeFileSync(path.join(cartella, "plugin", "custom.js"), "//correzione mai riportata\n");
     });
@@ -223,15 +247,64 @@ test("monta-cliente non tocca un ipconfig che c'e' gia', ne' i vecchi file in ra
     }
 });
 
-test("monta-cliente si ferma su un ipconfig senza custom, e non scrive il puntatore", { skip: !bashDisponibile }, () => {
-    const r = radiceFinta(cartella => {
+test(`${script.nome} si ferma su un ipconfig senza custom, e non scrive il puntatore`, { skip: !script.disponibile }, () => {
+    const r = radiceFinta(script, cartella => {
         fs.writeFileSync(path.join(cartella, "plugin", "Agenzie", "Edro21", "ipconfig.json"), JSON.stringify({ testMode: false }));
     });
     try {
         assert.match(r.uscita, /FERMO: plugin\/Agenzie\/Edro21\/ipconfig\.json non ha la voce "custom"/);
+        assert.match(r.uscita, /salto Istanta\/Properties\/launchSettings\.json: il montaggio non e' andato a buon fine/);
+        assert.ok(!r.esiste("plugin/clienteAttivo.json"));
+        assert.ok(!r.esiste("Istanta/Properties/launchSettings.json"));
+        assert.strictEqual(r.codice, 1);
+    }
+    finally {
+        fs.rmSync(r.cartella, { recursive: true, force: true });
+    }
+});
+
+test(`${script.nome} crea il profilo di avvio dal modello e poi ne cambia solo ISTANTA_CLIENTE`, { skip: !script.disponibile }, () => {
+    const preparaModello = cartella => {
+        fs.mkdirSync(path.join(cartella, "Istanta", "Properties"), { recursive: true });
+        fs.copyFileSync(MODELLO_AVVIO, path.join(cartella, "Istanta", "Properties", "launchSettings.template.json"));
+    };
+    const r = radiceFinta(script, preparaModello);
+    try {
+        const avvio = JSON.parse(r.leggi("Istanta/Properties/launchSettings.json"));
+        assert.strictEqual(avvio.profiles.Istanta.environmentVariables.ISTANTA_CLIENTE, "edro21");
+        assert.match(r.uscita, /ok Istanta\/Properties\/launchSettings\.json creato dal modello, ISTANTA_CLIENTE=edro21/);
+        assert.ok(!r.leggi("Istanta/Properties/launchSettings.json").startsWith("﻿"), "niente BOM");
+    }
+    finally {
+        fs.rmSync(r.cartella, { recursive: true, force: true });
+    }
+
+    //un profilo che c'e' gia', con un'impostazione personale: cambia solo il valore del cliente
+    const personale = JSON.stringify({ profiles: { Istanta: { applicationUrl: "http://localhost:5555",
+        environmentVariables: { ISTANTA_CLIENTE: "coopfi" } } } }, null, 2);
+    const r2 = radiceFinta(script, cartella => {
+        preparaModello(cartella);
+        fs.writeFileSync(path.join(cartella, "Istanta", "Properties", "launchSettings.json"), personale);
+    });
+    try {
+        assert.strictEqual(r2.leggi("Istanta/Properties/launchSettings.json"), personale.replace('"coopfi"', '"edro21"'));
+        assert.match(r2.uscita, /ok Istanta\/Properties\/launchSettings\.json aggiornato, ISTANTA_CLIENTE=edro21/);
+    }
+    finally {
+        fs.rmSync(r2.cartella, { recursive: true, force: true });
+    }
+});
+
+test(`${script.nome} rifiuta un cliente che non conosce`, { skip: !script.disponibile }, () => {
+    const r = radiceFinta(script, null, ["Nessuno"]);
+    try {
+        assert.strictEqual(r.codice, 1);
+        assert.match(r.uscita, /Clienti: Edro21 Coopfi Famila Gross/);
         assert.ok(!r.esiste("plugin/clienteAttivo.json"));
     }
     finally {
         fs.rmSync(r.cartella, { recursive: true, force: true });
     }
 });
+
+}

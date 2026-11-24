@@ -22,6 +22,10 @@ cd Istanta4
 ./monta-cliente.sh Edro21
 ```
 
+Su Windows, senza bash, c'è la stessa cosa in PowerShell: `.\monta-cliente.ps1 Edro21`, oppure
+`monta-cliente Edro21` da cmd (il `.cmd` la lancia senza fermarsi sull'execution policy). Stessi
+controlli e stessi messaggi; la variabile da terminale si imposta con `$env:ISTANTA_CLIENTE = "edro21"`.
+
 **La seconda riga non è facoltativa.** Dal 15/09/2026 i file che dicono quale cliente è montato non
 stanno in git — clonando non ce li hai, e senza di loro il server e il plugin non sanno quale
 cliente usare. `monta-cliente.sh` scrive `ISTANTA_CLIENTE` nel profilo di avvio e
