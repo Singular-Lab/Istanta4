@@ -2672,6 +2672,8 @@ export interface MenaboRisultato {
   colonna_gruppi_ridimensionabile?: boolean;
   /** I20-1259: le etichette del menabò da scegliere in una tendina (più quella libera), dalla libreria agenzia. */
   etichette_menabo?: string[];
+  /** I20-1255: true quando la libreria agenzia permette di unire gruppi del menabò in un solo ordine merceologico. */
+  unione_gruppi?: boolean;
 }
 
 export interface MenaboLayoutLabelSalvata {
@@ -2689,6 +2691,8 @@ export interface MenaboLayoutGruppoSalvato {
   recordKeys: string[];
   records: Array<Record<string, string>>;
   recordCount: number;
+  /** I20-1255: i gruppi con lo stesso `unioneId` formano un'unione e seguono un solo ordine merceologico. */
+  unioneId?: string;
 }
 
 export interface MenaboPageNote {

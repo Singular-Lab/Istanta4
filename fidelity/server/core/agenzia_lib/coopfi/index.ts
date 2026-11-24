@@ -11,7 +11,7 @@ import {
     ServiceUnavailableError,
     UnauthorizedError
 } from "../../../../lib/errors";
-import type { AnalisiMomentoTracciato, DataFields, DimensioneVisibilitaPromo, GlobalUserFilter, IndesignPluginExport, IndesignPluginFiltro, KpiCardItem, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboRisultato, RisultatoConfrontoMomento, TracciatoFieldChange, TracciatoReport, TracciatoReportCanaleAreaView, TracciatoReportWidget, TracciatoWidgetGroupedTableGroup, TracciatoWidgetGroupedTableRow, TracciatoWidgetLineChart, TracciatoWidgetPriceDiffExtraFields, TracciatoWidgetPriceDiffRow, TracciatoWidgetScoreboard, TracciatoWidgetScoreboardCodiceRow, TracciatoWidgetScoreboardRow, UtentiMeta } from "../../../../lib/types";
+import type { AnalisiMomentoTracciato, DataFields, DimensioneVisibilitaPromo, GlobalUserFilter, IndesignPluginExport, IndesignPluginFiltro, KpiCardItem, MenaboDivisioneParams, MenaboLayoutDivisioneSalvata, MenaboLayoutGruppoSalvato, MenaboRisultato, RisultatoConfrontoMomento, TracciatoFieldChange, TracciatoReport, TracciatoReportCanaleAreaView, TracciatoReportWidget, TracciatoWidgetGroupedTableGroup, TracciatoWidgetGroupedTableRow, TracciatoWidgetLineChart, TracciatoWidgetPriceDiffExtraFields, TracciatoWidgetPriceDiffRow, TracciatoWidgetScoreboard, TracciatoWidgetScoreboardCodiceRow, TracciatoWidgetScoreboardRow, UtentiMeta } from "../../../../lib/types";
 import config from "../../config/index";
 import type { OidcUserClaims } from "../../interfaces/IOidcService";
 import type { IUserService } from "../../interfaces/IUserService";
@@ -171,7 +171,14 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
         nome_campo: "tema",
         label: "Tema"
     }];
-    private TEMI_ESCLUSI_DA_FORMAT_PLUS = ["PIU VALORE", "SPENDI PUNTI"];
+    //I20-1255: PIU VALORE entra nel gruppo FORMAT+ come gli altri temi con «+» (promo 20 A: restava fuori).
+    private TEMI_ESCLUSI_DA_FORMAT_PLUS = ["SPENDI PUNTI"];
+    /** I20-1255: il tema che si ordina per sconto (dal più alto al più basso, vuoto in fondo) e non per merceologia. */
+    private TEMA_ORDINATO_PER_SCONTO = "CAMPIONI DEL RISPARMIO";
+    /** I20-1255: il campo con lo sconto della referenza. */
+    private CHIAVE_SCONTO_MENABO = "txt_sconto";
+    /** I20-1255: per Coop nel menabò si uniscono i gruppi in un solo ordine merceologico. */
+    public MENABO_UNIONE_GRUPPI = true;
     public CHIAVE_DEDUP_MENABO = "Scatto.CodiceGruppo";
     /** Una referenza del menabò si riconosce dal codice del gruppo di scatto, altrimenti dal suo codice. */
     public CAMPI_IDENTITA_MENABO: readonly string[] = [this.CHIAVE_DEDUP_MENABO, "Referenza.Codice"];
@@ -388,6 +395,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             }
 
 
+
+            // I20-1255: CAMPIONI DEL RISPARMIO segue lo sconto, non l'ordine merceologico.
+            for (const group of groups.values()) this.ordinaTemaPerSconto(group.records);
 
             const raggruppamento: MenaboRisultato['risultati'][number]['raggruppamento'] = Array.from(groups.values()).map(group => ({
                 nome_campo: group.nome_campo,
@@ -2271,54 +2281,136 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
             return { field: fallbackSecondaryField, esplicito: false };
         };
 
+        // I20-1255: i filtri delle referenze di un gruppo, o di un'unione di gruppi (`unisci`), senza `ordine`.
+        const creaFiltri = (
+            records: Array<Record<string, string>>,
+            secondaryField: string,
+            unisci: boolean,
+        ): IndesignPluginFiltro[] => {
+            const filtri: IndesignPluginFiltro[] = [];
+            const perFiltro = new Map<string, IndesignPluginFiltro>();
+            // Le referenze che il menabò mette su questa pagina per questo filtro, sia per il tema
+            // trascinato intero sia per il sottogruppo (I20-966): con 0 il plug-in lo legge «Ill.» e, su
+            // una pagina condivisa, si prende anche i posti degli altri temi. Contato per filtro, non per
+            // gruppo: un FORMAT+ intero genera un filtro per tema e ognuno ha le sue referenze.
+            const aggiungi = (pairKey: string, criteri: IndesignPluginFiltro["criteri"]): IndesignPluginFiltro => {
+                const esistente = perFiltro.get(pairKey);
+                if (esistente) {
+                    esistente.limite++;
+                    return esistente;
+                }
+                const filtro: IndesignPluginFiltro = { limite: 1, ordine: 0, criteri };
+                perFiltro.set(pairKey, filtro);
+                filtri.push(filtro);
+                return filtro;
+            };
+            const criterioSecondario = (record: Record<string, string>) => {
+                const secondary = secondaryField ? normalizeFieldValue(record[secondaryField]) : "";
+                return { secondary, criteri: secondary ? [{ chiave: secondaryField, operatore: "=" as const, valore: secondary }] : [] };
+            };
+
+            // Unione: un solo filtro per valore del criterio secondario, con i temi come valori alternativi
+            // (il Plugin li legge separati da «||»): un solo ordine merceologico per tutti i suoi temi.
+            const temiDellUnione = new Map<string, string[]>();
+            const filtriConSconto: Array<{ filtro: IndesignPluginFiltro; sconto: number }> = [];
+
+            for (const record of records) {
+                const primary = normalizeFieldValue(record[primaryField]);
+                if (!primary) continue;
+                const { secondary, criteri: criteriSecondari } = criterioSecondario(record);
+
+                // I20-1255: CAMPIONI DEL RISPARMIO segue lo sconto, non la merceologia: un filtro per ogni
+                // valore di sconto, poi ordinati dal più alto al più basso, vuoto in fondo.
+                if (this.isTemaOrdinatoPerSconto(primary)) {
+                    const scontoGrezzo = normalizeFieldValue(record[this.CHIAVE_SCONTO_MENABO]);
+                    const nuovo = !perFiltro.has(`${primary}\0${secondary}\0sconto:${scontoGrezzo}`);
+                    const filtro = aggiungi(`${primary}\0${secondary}\0sconto:${scontoGrezzo}`, [
+                        { chiave: primaryField, operatore: "=" as const, valore: primary },
+                        { chiave: this.CHIAVE_SCONTO_MENABO, operatore: "=" as const, valore: scontoGrezzo },
+                        ...criteriSecondari,
+                    ]);
+                    if (nuovo) filtriConSconto.push({ filtro, sconto: this.valoreSconto(scontoGrezzo) });
+                    continue;
+                }
+
+                if (unisci) {
+                    const temi = temiDellUnione.get(secondary) ?? [];
+                    if (!temi.includes(primary)) temi.push(primary);
+                    temiDellUnione.set(secondary, temi);
+                    continue;
+                }
+
+                // Forzatura Coopfi: i temi che contengono "jolly" vanno esportati come `tema in JOLLY`;
+                // il criterio reparto resta solo se il sottogruppo è stato trascinato esplicitamente.
+                const isJolly = primary.toLowerCase().includes("jolly");
+                const criterioTema = isJolly
+                    ? { chiave: primaryField, operatore: "in" as const, valore: "JOLLY" }
+                    : { chiave: primaryField, operatore: "=" as const, valore: primary };
+                aggiungi(`${criterioTema.valore}\0${secondary}`, [criterioTema, ...criteriSecondari]);
+            }
+
+            if (unisci) {
+                // Secondo passaggio: il limite di ogni filtro dell'unione è il numero delle sue referenze.
+                for (const [secondary, temi] of temiDellUnione) {
+                    const tuttiJolly = temi.every(t => t.toLowerCase().includes("jolly"));
+                    const criterioTema = tuttiJolly
+                        ? { chiave: primaryField, operatore: "in" as const, valore: "JOLLY" }
+                        : { chiave: primaryField, operatore: "=" as const, valore: temi.join("||") };
+                    const limite = records.filter(r => {
+                        const primary = normalizeFieldValue(r[primaryField]);
+                        return primary
+                            && temi.includes(primary)
+                            && !this.isTemaOrdinatoPerSconto(primary)
+                            && criterioSecondario(r).secondary === secondary;
+                    }).length;
+                    filtri.unshift({
+                        limite,
+                        ordine: 0,
+                        criteri: [criterioTema, ...(secondary ? [{ chiave: secondaryField, operatore: "=" as const, valore: secondary }] : [])],
+                    });
+                }
+            }
+
+            // I filtri dello sconto cambiano posto fra loro, restando dove erano gli altri.
+            const posizioni = filtri.map((f, i) => ({ f, i })).filter(({ f }) => filtriConSconto.some(x => x.filtro === f)).map(({ i }) => i);
+            const ordinati = [...filtriConSconto].sort((a, b) => b.sconto - a.sconto).map(x => x.filtro);
+            posizioni.forEach((posizione, n) => { filtri[posizione] = ordinati[n]; });
+            return filtri;
+        };
+
         return {
             source: layout.pages.map(page => {
                 const filtri: IndesignPluginFiltro[] = [];
-
-                for (const group of page.groups) {
-                    const { field: secondaryFieldRaw, esplicito: repartoEsplicito } = resolveSecondaryField(group.sourceKey);
-                    // Il criterio secondario (es. reparto) va aggiunto SOLO quando il sottogruppo è
-                    // stato trascinato esplicitamente. I gruppi/tema normali restano un unico filtro
-                    // per tema, senza suddivisione per reparto.
-                    const secondaryField = repartoEsplicito && secondaryFieldRaw && secondaryFieldRaw !== primaryField
-                        ? secondaryFieldRaw
-                        : "";
-                    const perFiltro = new Map<string, IndesignPluginFiltro>();
-                    for (const record of group.records) {
-                        const primary = normalizeFieldValue(record[primaryField]);
-                        if (!primary) continue;
-                        // Forzatura Coopfi: i temi che contengono "jolly" vanno esportati come `tema in JOLLY`;
-                        // il criterio reparto resta solo se il sottogruppo è stato trascinato esplicitamente.
-                        const isJolly = primary.toLowerCase().includes("jolly");
-                        const criterioTema = isJolly
-                            ? { chiave: primaryField, operatore: "in" as const, valore: "JOLLY" }
-                            : { chiave: primaryField, operatore: "=" as const, valore: primary };
-                        const secondary = secondaryField
-                            ? normalizeFieldValue(record[secondaryField])
-                            : "";
-                        const pairKey = `${criterioTema.valore}\0${secondary}`;
-                        const esistente = perFiltro.get(pairKey);
-                        if (esistente) {
-                            esistente.limite++;
-                            continue;
-                        }
-
-                        const filtro: IndesignPluginFiltro = {
-                            // Le referenze che il menabò mette su questa pagina per questo filtro, sia
-                            // per il tema trascinato intero sia per il sottogruppo (I20-966): con 0 il
-                            // plug-in lo legge «Ill.» e, su una pagina condivisa, si prende anche i
-                            // posti degli altri temi. Contato per filtro, non per gruppo: un FORMAT+
-                            // intero genera un filtro per tema e ognuno ha le sue referenze.
-                            limite: 1,
-                            ordine: filtri.length + 1,
-                            criteri: [
-                                criterioTema,
-                                ...(secondary ? [{ chiave: secondaryField, operatore: "=" as const, valore: secondary }] : []),
-                            ],
-                        };
-                        perFiltro.set(pairKey, filtro);
+                const aggiungiFiltri = (nuovi: IndesignPluginFiltro[]) => {
+                    for (const filtro of nuovi) {
+                        filtro.ordine = filtri.length + 1;
                         filtri.push(filtro);
                     }
+                };
+                // Il criterio secondario (es. reparto) va aggiunto SOLO quando il sottogruppo è stato
+                // trascinato esplicitamente. I gruppi/tema normali restano un unico filtro per tema,
+                // senza suddivisione per reparto.
+                const secondarioDelGruppo = (group: MenaboLayoutGruppoSalvato): string => {
+                    const { field, esplicito } = resolveSecondaryField(group.sourceKey);
+                    return esplicito && field && field !== primaryField ? field : "";
+                };
+
+                const unioniFatte = new Set<string>();
+                for (const group of page.groups) {
+                    const unioneId = group.unioneId?.trim();
+                    if (!unioneId) {
+                        aggiungiFiltri(creaFiltri(group.records, secondarioDelGruppo(group), false));
+                        continue;
+                    }
+                    // I20-1255: i gruppi della pagina con lo stesso unioneId diventano un solo filtro,
+                    // nella posizione del primo.
+                    if (unioniFatte.has(unioneId)) continue;
+                    unioniFatte.add(unioneId);
+                    const membri = page.groups.filter(g => g.unioneId?.trim() === unioneId);
+                    const secondari = new Set(membri.map(secondarioDelGruppo));
+                    // Se i membri non hanno lo stesso criterio secondario, l'unione non ne usa nessuno.
+                    const secondario = secondari.size === 1 ? [...secondari][0] : "";
+                    aggiungiFiltri(creaFiltri(membri.flatMap(g => g.records), secondario, true));
                 }
 
                 return {
@@ -2330,6 +2422,32 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 };
             }),
         };
+    }
+
+    /** I20-1255: il tema si ordina per sconto e non per merceologia? */
+    private isTemaOrdinatoPerSconto(tema: unknown): boolean {
+        return this.normalizeMenaboGroupValue(tema).includes(this.normalizeMenaboGroupValue(this.TEMA_ORDINATO_PER_SCONTO));
+    }
+
+    /** I20-1255: lo sconto come numero; vuoto, zero o illeggibile valgono meno di qualunque sconto. */
+    private valoreSconto(valore: unknown): number {
+        const numero = Number(String(valore ?? "").trim().replace(",", "."));
+        return Number.isFinite(numero) && numero > 0 ? numero : -1;
+    }
+
+    /**
+     * I20-1255: le referenze del tema ordinato per sconto cambiano posto fra loro (sconto più alto per
+     * primo, vuoto in fondo, a parità l'ordine di arrivo), le altre restano dove sono.
+     */
+    private ordinaTemaPerSconto(records: Array<Record<string, string>>): void {
+        const posizioni: number[] = [];
+        records.forEach((r, i) => { if (this.isTemaOrdinatoPerSconto(r[this.CHIAVE_CAMPO_MENABO])) posizioni.push(i); });
+        if (posizioni.length < 2) return;
+        const ordinate = posizioni
+            .map((i, n) => ({ r: records[i], n, sconto: this.valoreSconto(records[i][this.CHIAVE_SCONTO_MENABO]) }))
+            .sort((a, b) => b.sconto - a.sconto || a.n - b.n)
+            .map(x => x.r);
+        posizioni.forEach((posizione, n) => { records[posizione] = ordinate[n]; });
     }
 
     //#region Plugin builder privati per getReportOptions

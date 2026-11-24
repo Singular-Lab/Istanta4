@@ -133,10 +133,11 @@ describe("coopfi menabo", () => {
     const groupsA = new Map(sezioneA?.raggruppamento.map((g) => [`${g.nome_campo}:${g.valore_campo}`, g.conteggio]));
     const groupsB = new Map(sezioneB?.raggruppamento.map((g) => [`${g.nome_campo}:${g.valore_campo}`, g.conteggio]));
 
-    expect(groupsA.get("format1:FORMAT+")).toBe(1);
+    //I20-1255: PIU VALORE entra in FORMAT+ come gli altri temi con «+»; solo SPENDI PUNTI resta nel suo tema.
+    expect(groupsA.get("format1:FORMAT+")).toBe(2);
     expect(groupsA.get("tema:Ortofrutta")).toBe(1);
     expect(groupsA.get("tema:SPENDI PUNTI EXTRA (F) ZAINO STARTER")).toBe(1);
-    expect(groupsA.get("tema:PIU VALORE SOCI (OS15A)")).toBe(1);
+    expect(groupsA.has("tema:PIU VALORE SOCI (OS15A)")).toBe(false);
     expect(groupsA.has("tema:Vini")).toBe(false);
     expect(groupsB.get("format1:FORMAT+")).toBe(1);
     expect(groupsB.get("tema:Cantina")).toBe(1);
@@ -144,7 +145,7 @@ describe("coopfi menabo", () => {
 
     const formatPlusA = sezioneA?.raggruppamento.find((g) => g.nome_campo === "format1" && g.valore_campo === "FORMAT+");
     const formatPlusB = sezioneB?.raggruppamento.find((g) => g.nome_campo === "format1" && g.valore_campo === "FORMAT+");
-    expect(formatPlusA?.records.map((record) => record.tema)).toEqual(["Vini"]);
+    expect(formatPlusA?.records.map((record) => record.tema)).toEqual(["Vini", "PIU VALORE SOCI (OS15A)"]);
     expect(formatPlusB?.records.map((record) => record.tema)).toEqual(["Dispensa"]);
     expect(formatPlusA?.chiavi_sottogruppi).toEqual([{ nome_campo: "tema", label: "Tema" }]);
     expect(formatPlusB?.chiavi_sottogruppi).toEqual([{ nome_campo: "tema", label: "Tema" }]);
@@ -512,6 +513,193 @@ describe("coopfi menabo: etichette della tendina (I20-1259)", () => {
       "SPENDI PUNTI",
       "PRODOTTI SPRINT",
       "PROMO WEE",
+    ]);
+  });
+});
+
+describe("coopfi menabo: CAMPIONI DEL RISPARMIO per sconto (I20-1255)", () => {
+  const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
+  const campioni = (codice: string, sconto: unknown) => ({
+    tema: "CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM",
+    reparto: "Drogheria",
+    txt_sconto: sconto as string,
+    "Scatto.CodiceGruppo": `G${codice}`,
+    codice_referenza: codice,
+  });
+  const pagina = (groups: Array<{ id: string; records: Array<Record<string, string>>; unioneId?: string }>) => ({
+    divisionId: "canale-1",
+    divisionLabel: "Canale 1",
+    pageCount: 1,
+    updatedAt: new Date().toISOString(),
+    pages: [{
+      pageIndex: 0,
+      pageNumber: 1,
+      referenzePerPagina: 20,
+      groups: groups.map(g => ({
+        id: g.id,
+        groupId: g.id,
+        sourceKey: "s",
+        label: g.id,
+        colorIdx: 0,
+        recordKeys: g.records.map((_, i) => String(i)),
+        records: g.records,
+        recordCount: g.records.length,
+        ...(g.unioneId ? { unioneId: g.unioneId } : {}),
+      })),
+    }],
+  });
+
+  it("nel menabò il tema segue lo sconto, dal più alto al più basso, vuoto in fondo", async () => {
+    const result = await sut.getDatoPerMenabo([
+      buildTracciato("canale-1", "area-1", [
+        campioni("1", "20"),
+        campioni("2", ""),
+        campioni("3", "40"),
+        campioni("4", "30"),
+        campioni("5", "0"),
+      ]),
+    ], { tipoDivisione: "canale", dataDivisione: [] });
+
+    const gruppo = result.risultati[0].raggruppamento.find(g => g.valore_campo.startsWith("CAMPIONI"));
+    expect(gruppo?.records.map(r => r.codice_referenza)).toEqual(["3", "4", "1", "2", "5"]);
+  });
+
+  it("a parità di sconto resta l'ordine di arrivo (merceologico)", async () => {
+    const result = await sut.getDatoPerMenabo([
+      buildTracciato("canale-1", "area-1", [campioni("1", "30"), campioni("2", "40"), campioni("3", "30")]),
+    ], { tipoDivisione: "canale", dataDivisione: [] });
+
+    const gruppo = result.risultati[0].raggruppamento.find(g => g.valore_campo.startsWith("CAMPIONI"));
+    expect(gruppo?.records.map(r => r.codice_referenza)).toEqual(["2", "1", "3"]);
+  });
+
+  it("gli altri temi non cambiano ordine", async () => {
+    const altro = (codice: string, sconto: string) => ({
+      tema: "Ortofrutta", txt_sconto: sconto, "Scatto.CodiceGruppo": `G${codice}`, codice_referenza: codice,
+    });
+    const result = await sut.getDatoPerMenabo([
+      buildTracciato("canale-1", "area-1", [altro("1", "10"), altro("2", "50")]),
+    ], { tipoDivisione: "canale", dataDivisione: [] });
+
+    const gruppo = result.risultati[0].raggruppamento.find(g => g.valore_campo === "Ortofrutta");
+    expect(gruppo?.records.map(r => r.codice_referenza)).toEqual(["1", "2"]);
+  });
+
+  it("verso il Plugin esporta un filtro per sconto, dal più alto al più basso, con il vuoto in fondo", () => {
+    const payload = sut.buildIndesignPluginJson(pagina([
+      { id: "campioni", records: [campioni("1", "20"), campioni("2", ""), campioni("3", "40"), campioni("4", "40")] },
+    ]));
+
+    const filtri = payload.source[0].filtri;
+    expect(filtri.map(f => f.criteri.map(c => c.valore))).toEqual([
+      ["CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM", "40"],
+      ["CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM", "20"],
+      ["CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM", ""],
+    ]);
+    expect(filtri.map(f => f.limite)).toEqual([2, 1, 1]);
+    expect(filtri.map(f => f.ordine)).toEqual([1, 2, 3]);
+    expect(filtri[0].criteri[1]).toEqual({ chiave: "txt_sconto", operatore: "=", valore: "40" });
+  });
+
+  it("un tema normale resta un solo filtro, senza criterio di sconto", () => {
+    const payload = sut.buildIndesignPluginJson(pagina([
+      { id: "orto", records: [{ tema: "Ortofrutta", txt_sconto: "10" }, { tema: "Ortofrutta", txt_sconto: "20" }] },
+    ]));
+
+    expect(payload.source[0].filtri).toEqual([
+      { limite: 2, ordine: 1, criteri: [{ chiave: "tema", operatore: "=", valore: "Ortofrutta" }] },
+    ]);
+  });
+});
+
+describe("coopfi menabo: unione di gruppi (I20-1255)", () => {
+  const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
+  const gruppo = (tema: string, quante: number, unioneId?: string) => ({
+    id: `g-${tema}`,
+    groupId: `g-${tema}`,
+    sourceKey: "s",
+    label: tema,
+    colorIdx: 0,
+    recordKeys: Array.from({ length: quante }, (_, i) => String(i)),
+    records: Array.from({ length: quante }, () => ({ tema, reparto: "Drogheria" })),
+    recordCount: quante,
+    ...(unioneId ? { unioneId } : {}),
+  });
+  const layout = (pagine: Array<Array<ReturnType<typeof gruppo>>>) => ({
+    divisionId: "canale-1",
+    divisionLabel: "Canale 1",
+    pageCount: pagine.length,
+    updatedAt: new Date().toISOString(),
+    pages: pagine.map((groups, i) => ({ pageIndex: i, pageNumber: i + 1, referenzePerPagina: 20, groups })),
+  });
+
+  it("Coop dichiara l'unione di gruppi", () => {
+    expect(sut.MENABO_UNIONE_GRUPPI).toBe(true);
+  });
+
+  it("due temi uniti nella stessa pagina diventano un solo filtro con i temi come valori alternativi", () => {
+    const payload = sut.buildIndesignPluginJson(layout([[gruppo("TEMA A", 3, "u1"), gruppo("TEMA B", 2, "u1")]]));
+
+    expect(payload.source[0].filtri).toEqual([
+      { limite: 5, ordine: 1, criteri: [{ chiave: "tema", operatore: "=", valore: "TEMA A||TEMA B" }] },
+    ]);
+  });
+
+  it("senza unione ogni tema ha il suo filtro e il suo ordine", () => {
+    const payload = sut.buildIndesignPluginJson(layout([[gruppo("TEMA A", 3), gruppo("TEMA B", 2)]]));
+
+    expect(payload.source[0].filtri.map(f => [f.criteri[0].valore, f.limite, f.ordine])).toEqual([
+      ["TEMA A", 3, 1],
+      ["TEMA B", 2, 2],
+    ]);
+  });
+
+  it("l'unione su più pagine genera un filtro per pagina, col limite delle referenze di quella pagina", () => {
+    const payload = sut.buildIndesignPluginJson(layout([
+      [gruppo("TEMA A", 4, "u1"), gruppo("TEMA B", 1, "u1")],
+      [gruppo("TEMA B", 3, "u1")],
+    ]));
+
+    expect(payload.source[0].filtri).toEqual([
+      { limite: 5, ordine: 1, criteri: [{ chiave: "tema", operatore: "=", valore: "TEMA A||TEMA B" }] },
+    ]);
+    expect(payload.source[1].filtri).toEqual([
+      { limite: 3, ordine: 1, criteri: [{ chiave: "tema", operatore: "=", valore: "TEMA B" }] },
+    ]);
+  });
+
+  it("un gruppo fuori dall'unione tiene il suo filtro, e l'unione sta dove era il suo primo gruppo", () => {
+    const payload = sut.buildIndesignPluginJson(layout([[
+      gruppo("TEMA A", 2, "u1"),
+      gruppo("ALTRO", 2),
+      gruppo("TEMA B", 2, "u1"),
+    ]]));
+
+    expect(payload.source[0].filtri.map(f => [f.criteri[0].valore, f.limite, f.ordine])).toEqual([
+      ["TEMA A||TEMA B", 4, 1],
+      ["ALTRO", 2, 2],
+    ]);
+  });
+
+  it("un'unione con CAMPIONI DEL RISPARMIO tiene a parte quel tema, ordinato per sconto", () => {
+    const campioni = { ...gruppo("CAMPIONI DEL RISPARMIO", 0, "u1"), records: [
+      { tema: "CAMPIONI DEL RISPARMIO", reparto: "Drogheria", txt_sconto: "30" },
+      { tema: "CAMPIONI DEL RISPARMIO", reparto: "Drogheria", txt_sconto: "40" },
+    ], recordCount: 2 };
+    const payload = sut.buildIndesignPluginJson(layout([[gruppo("TEMA A", 2, "u1"), campioni]]));
+
+    expect(payload.source[0].filtri.map(f => [f.criteri.map(c => c.valore).join("/"), f.limite, f.ordine])).toEqual([
+      ["TEMA A", 2, 1],
+      ["CAMPIONI DEL RISPARMIO/40", 1, 2],
+      ["CAMPIONI DEL RISPARMIO/30", 1, 3],
+    ]);
+  });
+
+  it("i temi jolly uniti restano `tema in JOLLY`", () => {
+    const payload = sut.buildIndesignPluginJson(layout([[gruppo("2026 JOLLY A", 1, "u1"), gruppo("2026 JOLLY B", 1, "u1")]]));
+
+    expect(payload.source[0].filtri).toEqual([
+      { limite: 2, ordine: 1, criteri: [{ chiave: "tema", operatore: "in", valore: "JOLLY" }] },
     ]);
   });
 });
