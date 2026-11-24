@@ -2373,7 +2373,7 @@ export default function MenaboCanvas({
 
                 {selectedItem && (
                     isPreviewPanelOpen ? (
-                        <aside className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[24rem] flex-shrink-0 flex-col border-l border-slate-200/80 bg-white shadow-2xl dark:border-darkmode-400 dark:bg-darkmode-600 lg:static lg:z-auto lg:w-96 lg:max-w-none lg:shadow-none">
+                        <aside className="absolute inset-y-0 right-0 z-30 flex w-full max-w-[32rem] flex-shrink-0 flex-col border-l border-slate-200/80 bg-white shadow-2xl dark:border-darkmode-400 dark:bg-darkmode-600 lg:static lg:z-auto lg:w-[32rem] lg:max-w-none lg:shadow-none">
                             <div className="flex items-start justify-between gap-3 border-b border-slate-200/80 bg-slate-50/80 px-4 py-3 dark:border-darkmode-400 dark:bg-darkmode-700/40">
                                 <div className="flex min-w-0 items-start gap-2.5">
                                     <span

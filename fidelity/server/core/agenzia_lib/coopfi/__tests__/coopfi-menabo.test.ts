@@ -611,29 +611,28 @@ describe("coopfi menabo: CAMPIONI DEL RISPARMIO per sconto (I20-1255)", () => {
     return result.risultati[0].raggruppamento.find(g => g.valore_campo.startsWith("CAMPIONI"))!;
   };
 
-  it("i sottogruppi di CAMPIONI sono la fascia di sconto e poi lo sconto preciso", async () => {
+  it("i sottogruppi di CAMPIONI sono la sola fascia di sconto, senza lo sconto preciso", async () => {
     const gruppo = await gruppoCampioni(["40", "45"]);
     expect(gruppo.chiavi_sottogruppi).toEqual([
       { nome_campo: "fascia_sconto", label: "Fascia di sconto" },
-      { nome_campo: "txt_sconto", label: "Sconto" },
     ]);
   });
 
-  it("ogni referenza porta la sua fascia: 45 e 40 in 40-49, 30 in 30-39, vuoto e zero senza sconto", async () => {
-    const gruppo = await gruppoCampioni(["45", "40", "30", "", "0"]);
+  it("ogni referenza porta la sua fascia da cinque punti: 47 e 45 in 45-49, 42 in 40-44, vuoto e zero senza sconto", async () => {
+    const gruppo = await gruppoCampioni(["47", "45", "42", "", "0"]);
     expect(gruppo.records.map(r => [r.txt_sconto, r.fascia_sconto])).toEqual([
-      ["45", "40-49"], ["40", "40-49"], ["30", "30-39"], ["", "Senza sconto"], ["0", "Senza sconto"],
+      ["47", "45-49"], ["45", "45-49"], ["42", "40-44"], ["", "Senza sconto"], ["0", "Senza sconto"],
     ]);
   });
 
   it("lo sconto decimale, con «%» o con il segno meno sta nella fascia giusta", async () => {
     const gruppo = await gruppoCampioni(["32,5", "-30%", "9", "100"]);
-    expect(gruppo.records.map(r => r.fascia_sconto)).toEqual(["100-109", "30-39", "30-39", "0-9"]);
+    expect(gruppo.records.map(r => r.fascia_sconto)).toEqual(["100-104", "30-34", "30-34", "5-9"]);
   });
 
   it("le fasce restano in ordine decrescente, con «Senza sconto» in fondo", async () => {
     const gruppo = await gruppoCampioni(["", "20", "45", "35", "40"]);
-    expect([...new Set(gruppo.records.map(r => r.fascia_sconto))]).toEqual(["40-49", "30-39", "20-29", "Senza sconto"]);
+    expect([...new Set(gruppo.records.map(r => r.fascia_sconto))]).toEqual(["45-49", "40-44", "35-39", "20-24", "Senza sconto"]);
   });
 
   it("la fascia non diventa un campo filtro e non cambia i record del tracciato", async () => {
@@ -890,5 +889,28 @@ describe("coopfi menabo: filtri esportati conformi al Plugin", () => {
     const filtri = esportazioneMista().source[0].filtri
       .filter(f => f.criteri[0].valore === "CAMPIONI DEL RISPARMIO");
     expect(filtri.map(f => f.criteri[1].valore)).toEqual(["40", "20", ""]);
+  });
+});
+
+describe("coopfi menabo: retrocompatibilità dei sottogruppi di CAMPIONI salvati", () => {
+  const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
+
+  it("un sottogruppo salvato per sconto preciso esporta ancora il filtro dello sconto", () => {
+    const records = [{
+      tema: "CAMPIONI DEL RISPARMIO (OS20A)", reparto: "Drogheria", txt_sconto: "40",
+      "Scatto.CodiceGruppo": "G1", codice_referenza: "1",
+    }];
+    const sourceKey = JSON.stringify([JSON.stringify(["canale-1", "tema", "CAMPIONI DEL RISPARMIO (OS20A)", 0]), "sub", "txt_sconto", "40"]);
+    const payload = sut.buildIndesignPluginJson({
+      divisionId: "canale-1", divisionLabel: "Canale 1", pageCount: 1, updatedAt: new Date().toISOString(),
+      pages: [{
+        pageIndex: 0, pageNumber: 1, referenzePerPagina: 20,
+        groups: [{
+          id: "g", groupId: "g", label: "g", colorIdx: 0, sourceKey,
+          recordKeys: ["0"], records, recordCount: 1,
+        }],
+      }],
+    } as never);
+    expect(payload.source[0].filtri[0].criteri.map(c => c.chiave)).toEqual(["tema", "txt_sconto"]);
   });
 });
