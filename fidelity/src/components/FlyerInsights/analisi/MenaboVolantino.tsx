@@ -13,12 +13,17 @@ export interface PaginaDelMenabo {
   nome: string | null;
   /** Indice del colore della sezione (coloreSezione); null senza sezione. */
   colore: number | null;
+  /** Colore deciso da una regola delle Impostazioni GDO: vale al posto di quello automatico. */
+  coloreRegola?: string | null;
+  /** Il titolo della regola che ha deciso la pagina; assente: la sezione è quella di sempre. */
+  regola?: string | null;
 }
 
 /** Una sezione del menabò con le sue pagine, nell'ordine in cui compare. */
 export interface SezioneDelMenabo {
   nome: string;
   colore: number;
+  coloreRegola?: string | null;
   pagine: number[];
 }
 
@@ -128,7 +133,14 @@ export const pagineDelMenabo = (menabo: Menabo, totalePagine: number): PaginaDel
     }
     const nome = voce.nome || voce.sezione;
     if (!colori.has(nome)) colori.set(nome, colori.size);
-    pagine.push({ pagina, sezione: voce.sezione, nome, colore: colori.get(nome) ?? null });
+    pagine.push({
+      pagina,
+      sezione: voce.sezione,
+      nome,
+      colore: colori.get(nome) ?? null,
+      ...(voce.colore ? { coloreRegola: voce.colore } : {}),
+      ...(voce.regola ? { regola: voce.regola } : {}),
+    });
   }
   return pagine;
 };
@@ -138,7 +150,7 @@ export const sezioniDelMenabo = (pagine: readonly PaginaDelMenabo[]): SezioneDel
   const sezioni = new Map<string, SezioneDelMenabo>();
   for (const voce of pagine) {
     if (voce.nome === null || voce.colore === null) continue;
-    const sezione = sezioni.get(voce.nome) ?? { nome: voce.nome, colore: voce.colore, pagine: [] };
+    const sezione = sezioni.get(voce.nome) ?? { nome: voce.nome, colore: voce.colore, ...(voce.coloreRegola ? { coloreRegola: voce.coloreRegola } : {}), pagine: [] };
     sezione.pagine.push(voce.pagina);
     sezioni.set(voce.nome, sezione);
   }
@@ -181,6 +193,12 @@ export const SEZIONE_NON_TROVATA = "Non trovata";
 const descrizionePagina = (voce: PaginaDelMenabo): string =>
   voce.nome ? `Pagina ${voce.pagina}: ${voce.nome}` : `Pagina ${voce.pagina}: sezione non trovata`;
 
+/** Il suggerimento di una pagina: il valore della fonte e, se l'ha deciso una regola, quale. */
+const suggerimentoPagina = (voce: PaginaDelMenabo): string | undefined => {
+  if (!voce.sezione) return undefined;
+  return voce.regola ? `${voce.sezione} · Regola: ${voce.regola}` : voce.sezione;
+};
+
 export interface MenaboVolantinoProps {
   menabo: Menabo;
   /** Le pagine del volantino: il menabò le mostra tutte, anche quelle senza sezione. */
@@ -221,7 +239,7 @@ export function MenaboVolantino({ menabo, totalePagine, pdf, proporzione, pagina
         <ul aria-label="Menabò: le pagine con la loro sezione" className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fill,minmax(10.5rem,1fr))] gap-2">
           {pagine.map(voce => {
             const corrente = voce.pagina === paginaCorrente;
-            const colore = voce.colore !== null ? coloreSezione(voce.colore) : null;
+            const colore = voce.coloreRegola ?? (voce.colore !== null ? coloreSezione(voce.colore) : null);
             const contenuto = (
               <>
                 <span
@@ -248,7 +266,7 @@ export function MenaboVolantino({ menabo, totalePagine, pdf, proporzione, pagina
                 {onVaiAllaPagina ? (
                   <button
                     type="button"
-                    title={voce.sezione ?? undefined}
+                    title={suggerimentoPagina(voce)}
                     aria-label={descrizionePagina(voce)}
                     aria-current={corrente ? "page" : undefined}
                     onClick={() => onVaiAllaPagina(voce.pagina)}
@@ -261,7 +279,7 @@ export function MenaboVolantino({ menabo, totalePagine, pdf, proporzione, pagina
                     {contenuto}
                   </button>
                 ) : (
-                  <div title={voce.sezione ?? undefined} className={classi}>
+                  <div title={suggerimentoPagina(voce)} className={classi}>
                     {contenuto}
                   </div>
                 )}
@@ -275,7 +293,7 @@ export function MenaboVolantino({ menabo, totalePagine, pdf, proporzione, pagina
           <ul aria-label="Le sezioni del volantino e le loro pagine" className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs">
             {sezioni.map(sezione => (
               <li key={sezione.nome} className="inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200">
-                <span aria-hidden="true" className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: coloreSezione(sezione.colore) }} />
+                <span aria-hidden="true" className="h-2.5 w-2.5 flex-none rounded-full" style={{ backgroundColor: sezione.coloreRegola ?? coloreSezione(sezione.colore) }} />
                 <span>
                   <span className="font-semibold">{sezione.nome}</span>: <span className="tabular-nums text-slate-500 dark:text-slate-400">{intervalliPagine(sezione.pagine)}</span>
                 </span>

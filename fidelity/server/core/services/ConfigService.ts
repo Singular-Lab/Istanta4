@@ -39,6 +39,15 @@ async function leggiFileConfigInsight(): Promise<Record<string, any>> {
   return JSON.parse(fileContent) as Record<string, unknown>;
 }
 
+/**
+ * Le regole delle sezioni del menabò della GDO (Impostazioni GDO) viaggiano con la sua configurazione degli
+ * insight, nella chiave `menaboRegole`: così la cache e l'impronta del risultato degli insight le seguono.
+ * Senza regole la configurazione resta com'era.
+ */
+function conRegoleMenabo<T extends Record<string, unknown>>(configurazione: T, regole: readonly unknown[] | undefined): T {
+  return regole && regole.length > 0 ? { ...configurazione, menaboRegole: regole } : configurazione;
+}
+
 export class ConfigService implements IConfigService {
   constructor(private readonly impostazioniGdo: FonteImpostazioniGdo = IMPOSTAZIONI_GDO_PREDEFINITE) { }
 
@@ -391,11 +400,12 @@ export class ConfigService implements IConfigService {
    */
   async getFlyerInsightsConfig(idGdo?: string | null): Promise<Record<string, any>> {
     const leggi = async (): Promise<Record<string, any>> => {
+      let salvate: Awaited<ReturnType<FonteImpostazioniGdo['trova']>> = null;
       if (idGdo) {
-        const salvate = await this.impostazioniGdo.trova(idGdo);
-        if (salvate?.insightVolantino) return salvate.insightVolantino;
+        salvate = await this.impostazioniGdo.trova(idGdo);
+        if (salvate?.insightVolantino) return conRegoleMenabo(salvate.insightVolantino, salvate.regoleMenabo);
       }
-      return leggiFileConfigInsight();
+      return conRegoleMenabo(await leggiFileConfigInsight(), salvate?.regoleMenabo);
     };
 
     try {

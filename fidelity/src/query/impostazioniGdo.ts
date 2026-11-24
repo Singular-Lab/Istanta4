@@ -3,11 +3,16 @@ import {
   percorsiImpostazioniGdo as percorsi,
   type CampiReferenzeDaSalvare,
   type ErroreConfigurazione,
+  type EsitoProvaMenabo,
   type EsitoVerificaConfigurazione,
   type IdentitaGdoDaSalvare,
   type ImpostazioniGdo,
+  type RegoleMenaboDaSalvare,
+  type SuggerimentiCampiMenabo,
+  type SuggerimentiValoriMenabo,
   type RepartiDaSalvare,
   type SitoWebDaSalvare,
+  type VolantinoProvaMenabo,
 } from "../../lib/impostazioniGdo/tipi";
 import { ServerCall } from "../../lib/server_call";
 import type { PuntoVenditaResponseDTO } from "../../server/core/dto";
@@ -77,6 +82,57 @@ export const useSalvaCampiReferenze = () =>
 export const useSalvaSitoWeb = () =>
   useSalvaSezione<SitoWebDaSalvare>(percorsi.sitoWeb, (queryClient) => {
     queryClient.invalidateQueries({ queryKey: CHIAVE_CONFIG });
+  });
+
+/* ---------- Regole delle sezioni del menabò ---------- */
+
+/** Salvare le regole cambia i menabò degli insight: quelli in cache si rileggono. */
+export const useSalvaRegoleMenabo = () =>
+  useSalvaSezione<RegoleMenaboDaSalvare>(percorsi.menabo, (queryClient) => {
+    queryClient.invalidateQueries({ queryKey: CHIAVE_INSIGHT });
+    queryClient.invalidateQueries({ queryKey: CHIAVE_CONFIG_INSIGHT });
+  });
+
+/** I campi reali delle referenze della GDO e il campo del menabò: per autocompilare il campo delle condizioni. */
+export const useSuggerimentiCampiMenabo = () =>
+  useQuery({
+    queryKey: ["impostazioniGdo", "menabo", "suggerimenti", "campi"],
+    queryFn: () => ServerCall.get<SuggerimentiCampiMenabo>(percorsi.suggerimentiMenabo),
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+/** I valori reali di un campo, per autocompilare il valore delle condizioni; si legge solo quando serve. */
+export const useSuggerimentiValoriMenabo = (campo: string, abilitata: boolean) =>
+  useQuery({
+    queryKey: ["impostazioniGdo", "menabo", "suggerimenti", "valori", campo.trim().toLowerCase()],
+    queryFn: () => ServerCall.get<SuggerimentiValoriMenabo>(`${percorsi.suggerimentiMenabo}?campo=${encodeURIComponent(campo.trim())}`),
+    enabled: abilitata && campo.trim() !== "",
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
+  });
+
+/** Legge i valori reali di un campo (per generare le regole dal campo del menabò). */
+export const useCaricaValoriMenabo = () =>
+  useMutation({
+    mutationFn: (campo: string) =>
+      ServerCall.get<SuggerimentiValoriMenabo>(`${percorsi.suggerimentiMenabo}?campo=${encodeURIComponent(campo.trim())}`),
+  });
+
+/** Gli ultimi volantini della GDO, su cui provare le regole. */
+export const useVolantiniPerProvaMenabo = (abilitata = true) =>
+  useQuery({
+    queryKey: ["impostazioniGdo", "menabo", "volantini"],
+    queryFn: () => ServerCall.get<VolantinoProvaMenabo[]>(percorsi.volantiniMenabo),
+    enabled: abilitata,
+    refetchOnWindowFocus: false,
+  });
+
+/** Il menabò di un volantino prima e dopo le regole (anche non salvate); non salva niente. */
+export const useProvaRegoleMenabo = () =>
+  useMutation({
+    mutationFn: (dati: { idKit: string } & RegoleMenaboDaSalvare) =>
+      ServerCall.post<EsitoProvaMenabo>(percorsi.provaMenabo, dati),
   });
 
 /* ---------- Insight del volantino ---------- */

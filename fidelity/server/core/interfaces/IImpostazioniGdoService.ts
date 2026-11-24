@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import type { EsitoVerificaConfigurazione, ImpostazioniGdo } from '../../../lib/impostazioniGdo/tipi';
+import type { EsitoProvaMenabo, EsitoVerificaConfigurazione, ImpostazioniGdo, SuggerimentiCampiMenabo, SuggerimentiValoriMenabo, VolantinoProvaMenabo } from '../../../lib/impostazioniGdo/tipi';
 
 /**
  * Impostazioni GDO (spec impostazioni-gdo, contratto in lib/impostazioniGdo/tipi.ts). Ogni salvataggio
@@ -12,6 +12,14 @@ export interface IImpostazioniGdoService {
   salvaIdentita(idGdo: string, dati: unknown, richiesta?: Request): Promise<ImpostazioniGdo>;
   /** { reparti }: codice, nome nei dati, nome per il marketing, colore. */
   salvaReparti(idGdo: string, dati: unknown, richiesta?: Request): Promise<ImpostazioniGdo>;
+  /** { regole }: le regole delle sezioni del menabò degli insight; BadRequestError se non valide. */
+  salvaRegoleMenabo(idGdo: string, dati: unknown, richiesta?: Request): Promise<ImpostazioniGdo>;
+  /** Gli ultimi volantini della GDO su cui provare le regole del menabò. */
+  volantiniPerProvaMenabo(idGdo: string): Promise<VolantinoProvaMenabo[]>;
+  /** I campi reali delle referenze della GDO (senza `campo`) o i valori reali di un campo, per autocompilare le regole. */
+  suggerimentiMenabo(idGdo: string, campo?: string): Promise<SuggerimentiCampiMenabo | SuggerimentiValoriMenabo>;
+  /** { idKit, regole }: il menabò del volantino prima e dopo le regole, senza salvare niente. */
+  provaRegoleMenabo(idGdo: string, dati: unknown): Promise<EsitoProvaMenabo>;
   /** { campiReferenze }: i data_fields_refs di WebPliant. */
   salvaCampiReferenze(idGdo: string, dati: unknown, richiesta?: Request): Promise<ImpostazioniGdo>;
   /** Solo le chiavi presenti; loghi e icona in base64 si caricano su Olimpo con la chiave dell'utente. */

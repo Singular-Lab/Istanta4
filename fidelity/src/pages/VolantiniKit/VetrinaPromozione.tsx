@@ -49,9 +49,13 @@ function VetrinaPromozione({ vetrina, periodo, className }: VetrinaPromozionePro
       )}
     >
       <div className="flex min-w-0 flex-col justify-center gap-3.5">
-        <p className="text-2xs font-bold uppercase tracking-wider text-indigo-200 [overflow-wrap:anywhere]">
-          In vetrina · <BadgeIniziativa codice={promo.codiceIniziativa} suScuro /> {promo.nome}
-        </p>
+        {/* Il codice dell'iniziativa per primo, poi il nome della promozione */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <BadgeIniziativa codice={promo.codiceIniziativa} suScuro />
+          <p className="text-2xs font-bold uppercase tracking-wider text-indigo-200 [overflow-wrap:anywhere]">
+            In vetrina · {promo.nome}
+          </p>
+        </div>
         <h2 className="text-4xl font-bold leading-none tracking-tight text-white sm:text-5xl 2xl:text-6xl">
           {periodoPromo(promo.validitaDal, promo.validitaAl, { adesso })}
         </h2>

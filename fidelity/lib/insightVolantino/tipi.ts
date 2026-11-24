@@ -307,6 +307,10 @@ export interface PaginaMenabo {
    * ("DIS-DISPENSA_doppia" e "DIS-DISPENSA_singola" sono "Dispensa") hanno lo stesso colore.
    */
   nome: string;
+  /** Colore esadecimale deciso da una regola delle Impostazioni GDO; assente: il colore automatico per nome. */
+  colore?: string | null;
+  /** Il titolo (o l'id) della regola che ha deciso la pagina; assente: la sezione è quella di prima. */
+  regola?: string | null;
 }
 
 /** Il menabò del volantino: solo le pagine con una sezione, in ordine di pagina. */

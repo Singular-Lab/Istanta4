@@ -61,6 +61,44 @@ describe("pagineDelMenabo", () => {
   });
 });
 
+describe("regole delle Impostazioni GDO nel menabò", () => {
+  it("il colore e il motivo di una regola passano alle pagine e alle sezioni; senza regola non ci sono chiavi in più", () => {
+    const pagine = pagineDelMenabo(
+      {
+        pagine: [
+          { pagina: 1, sezione: "Pulizia casa", nome: "Pulizia casa", colore: "#ff0000", regola: "Pulizia da regola" },
+          { pagina: 2, sezione: "Pulizia casa", nome: "Pulizia casa", colore: "#ff0000", regola: "Pulizia da regola" },
+          { pagina: 3, sezione: "DIS-DISPENSA_doppia", nome: "Dispensa" },
+        ],
+      },
+      3
+    );
+
+    expect(pagine[0]).toMatchObject({ coloreRegola: "#ff0000", regola: "Pulizia da regola" });
+    expect(pagine[2]).not.toHaveProperty("coloreRegola");
+    expect(pagine[2]).not.toHaveProperty("regola");
+    expect(sezioniDelMenabo(pagine).map(s => [s.nome, s.coloreRegola ?? null])).toEqual([
+      ["Pulizia casa", "#ff0000"],
+      ["Dispensa", null],
+    ]);
+  });
+
+  it("il riquadro usa il colore della regola e dice nel suggerimento quale regola ha deciso", () => {
+    render(
+      <MenaboVolantino
+        menabo={{ pagine: [{ pagina: 1, sezione: "Pulizia casa", nome: "Pulizia casa", colore: "#ff0000", regola: "Pulizia da regola" }] }}
+        totalePagine={1}
+        pdf={null}
+        onVaiAllaPagina={() => undefined}
+      />
+    );
+
+    const riquadro = screen.getByRole("button", { name: "Pagina 1: Pulizia casa" });
+    expect(riquadro).toHaveAttribute("title", "Pulizia casa · Regola: Pulizia da regola");
+    expect(riquadro.querySelector("span[style]")).toHaveStyle({ backgroundColor: "#ff0000" });
+  });
+});
+
 describe("colori delle sezioni", () => {
   it("undici sezioni hanno undici colori diversi, e anche oltre i sedici della palette", () => {
     expect(new Set(Array.from({ length: 11 }, (_, i) => coloreSezione(i))).size).toBe(11);

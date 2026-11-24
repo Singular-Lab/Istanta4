@@ -9,6 +9,7 @@ import type { ICatalogoLoghiService, LogoDelCatalogo } from '../interfaces/ICata
 import { log } from '../logger';
 import { urlImmagineLogo } from '../utils/lineeDistributore';
 import { opzioniDellAgenzia } from '../utils/insightAgenzia';
+import { regoleMenaboDa } from '../utils/regoleMenabo';
 import { type FonteRepartiGdo, nomeRepartoLeggibile, type RisolutoreReparti, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
 import { caricaRisolutoreReparti } from './risolutoreRepartiGdo';
@@ -396,7 +397,7 @@ export class VolantinoService implements IVolantinoService {
       // Quello che dichiara la libreria agenzia del cliente, come nel dettaglio della promozione:
       // linee del distributore con i loghi assegnati da Istanta, descrizione del box, etichette dei
       // ruoli e menabò. Il catalogo dei loghi serve solo con le linee, ed e' letto prima delle sezioni
-      const dellAgenzia = opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe);
+      const dellAgenzia = opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe, regoleMenaboDa(insightsConfig.menaboRegole));
       const catalogo = dellAgenzia.lineeDistributore ? await this.catalogo(richiesta) : new Map<string, LogoDelCatalogo>();
       const sezioni = sezioniInsight(
         boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico }))),

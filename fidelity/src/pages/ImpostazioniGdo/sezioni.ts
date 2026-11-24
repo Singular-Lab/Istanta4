@@ -9,6 +9,7 @@ export const SEZIONI_IMPOSTAZIONI_GDO = [
   { id: "marchi-distributore", etichetta: "Private Labels", icona: "BadgeCheck" },
   { id: "campi-referenze", etichetta: "Campi delle referenze", icona: "ArrowLeftRight" },
   { id: "insight-volantino", etichetta: "Insight del volantino", icona: "FileJson" },
+  { id: "menabo-volantino", etichetta: "Menabò del volantino", icona: "LayoutGrid" },
   { id: "aspetto-sito-web", etichetta: "Aspetto del sito web", icona: "Palette" },
 ] as const;
 

@@ -43,7 +43,7 @@ const ID_GDO = '11111111-1111-4111-8111-111111111111';
 const DELLA_GDO = { dataMapping: { referenzaFields: { reparto: 'data_fields.reparto' } }, origine: 'gdo' };
 
 const salvate = (insightVolantino: Record<string, unknown> | null): ImpostazioniGdoSalvate => ({
-  idGdo: ID_GDO, reparti: [], insightVolantino, insightAggiornatoIl: null, insightAggiornatoDa: null, aggiornatoIl: new Date(0),
+  idGdo: ID_GDO, reparti: [], insightVolantino, insightAggiornatoIl: null, insightAggiornatoDa: null, aggiornatoIl: new Date(0), regoleMenabo: [],
 });
 
 beforeEach(() => {
@@ -112,5 +112,42 @@ describe('ConfigService.getFlyerInsightsConfig per GDO', () => {
 
     expect(cache.del).toHaveBeenCalledWith(chiaveCacheConfigInsight(ID_GDO));
     await expect(servizio.getFlyerInsightsConfig(ID_GDO)).resolves.toEqual(DELLA_GDO);
+  });
+});
+
+describe('ConfigService.getFlyerInsightsConfig: regole del menabò della GDO', () => {
+  const REGOLE = [{ id: 'r', titolo: null, livello: 'box', sezione: 'Pulizia casa', colore: null, condizione: { tipo: 'gruppo', logica: 'tutte', figli: [] } }];
+
+  it('le regole viaggiano con la configurazione della GDO, nella chiave menaboRegole', async () => {
+    const impostazioni = { trova: vi.fn(async () => ({ ...salvate(DELLA_GDO), regoleMenabo: REGOLE as never })) };
+
+    const config = await new ConfigService(impostazioni).getFlyerInsightsConfig(ID_GDO);
+
+    expect(config).toEqual({ ...DELLA_GDO, menaboRegole: REGOLE });
+  });
+
+  it('vale anche quando la configurazione è quella del file', async () => {
+    const impostazioni = { trova: vi.fn(async () => ({ ...salvate(null), regoleMenabo: REGOLE as never })) };
+
+    const config = await new ConfigService(impostazioni).getFlyerInsightsConfig(ID_GDO);
+
+    expect(config).toMatchObject({ origine: 'file', menaboRegole: REGOLE });
+  });
+
+  it('senza regole la configurazione resta com\'era, senza la chiave', async () => {
+    const impostazioni = { trova: vi.fn(async () => salvate(DELLA_GDO)) };
+
+    const config = await new ConfigService(impostazioni).getFlyerInsightsConfig(ID_GDO);
+
+    expect(config).toEqual(DELLA_GDO);
+    expect(config).not.toHaveProperty('menaboRegole');
+  });
+
+  it('senza GDO non ci sono regole', async () => {
+    const impostazioni = { trova: vi.fn(async () => ({ ...salvate(null), regoleMenabo: REGOLE as never })) };
+
+    const config = await new ConfigService(impostazioni).getFlyerInsightsConfig(null);
+
+    expect(config).not.toHaveProperty('menaboRegole');
   });
 });

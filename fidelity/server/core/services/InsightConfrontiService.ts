@@ -27,6 +27,8 @@ import {
 } from '../utils/campiInsights';
 import { confrontoSintesi, confrontoSpazioPerReparto, prodottiAssenti } from '../utils/diffVarianti';
 import { opzioniDellAgenzia } from '../utils/insightAgenzia';
+import { regoleMenaboDa } from '../utils/regoleMenabo';
+import type { RegolaMenabo } from '../../../lib/impostazioniGdo/tipi';
 import { type OpzioniInsight, sezioniInsight } from '../utils/insightVolantino';
 import { DESCRIZIONE_ASSENTE, leggiReferenza, type RigaReferenza, scontoDaiPrezzi } from '../utils/referenzaStampata';
 import { type FonteRepartiGdo, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
@@ -79,6 +81,8 @@ export interface ContestoConfig {
   percorsoMeccanica: PercorsoCampo | null;
   /** Nome per il marketing e colore dei reparti della GDO (Impostazioni GDO); senza, i reparti dei dati. */
   risolviReparto?: (reparto: RepartoInsight) => RepartoInsight;
+  /** Le regole delle sezioni del menabò della GDO (Impostazioni GDO); senza, vale la sezione della libreria agenzia. */
+  regoleMenabo?: RegolaMenabo[];
 }
 
 /** Un volantino letto: le sue referenze in box e le opzioni con cui gli insight le descrivono. */
@@ -121,6 +125,7 @@ export function contestoDallaConfig(config: unknown): ContestoConfig {
   const gruppoMeccaniche: Record<string, unknown> = oggetto(oggetto(radice.meccaniche)?.groupBy) ?? { field: 'meccanica' };
   const campo = (nome: unknown): PercorsoCampo | null => (typeof nome === 'string' && nome !== '' ? percorso(campi[nome]) : null);
   const distributore = oggetto(radice.marche)?.distributore;
+  const regoleDelMenabo = regoleMenaboDa(radice.menaboRegole);
   return {
     anagraficaReparti: leggiAnagraficaReparti(mappatura.reparti),
     marcheDistributore: Array.isArray(distributore)
@@ -128,6 +133,8 @@ export function contestoDallaConfig(config: unknown): ContestoConfig {
       : [],
     percorsoReparto: campo(gruppoReparti.field),
     percorsoDescrizioneReparto: campo(gruppoReparti.descriptionField),
+    // Solo quando la GDO ha delle regole: senza, il contesto resta quello di sempre
+    ...(regoleDelMenabo.length > 0 ? { regoleMenabo: regoleDelMenabo } : {}),
     percorsoMeccanica: campo(gruppoMeccaniche.field),
   };
 }
@@ -195,7 +202,7 @@ export function opzioniDelKit(
     urlFoto: guid => urlFotoOlimpo(guid, { performante: true }),
     origine: kit.storico ? codiceBox => (fuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino') : undefined,
     risolviReparto: contesto.risolviReparto,
-    ...opzioniDellAgenzia(agenzia, righe),
+    ...opzioniDellAgenzia(agenzia, righe, contesto.regoleMenabo),
   };
 }
 

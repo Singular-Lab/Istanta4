@@ -54,6 +54,7 @@ const IMPOSTAZIONI: Impostazioni = {
     { expected_input: "promo_db1", expected_output: "codice_promo", core: false },
   ],
   sitoWeb: { css_text: "body{color:red}", icona_pagina: "", logo_header: [], stili: [], meta_volantino: { title: "", description: "" } },
+  regoleMenabo: [],
   insightVolantino: {
     configurazione: { reparti: { colorStrategy: { type: "auto" } } },
     origine: "gdo",
@@ -105,6 +106,173 @@ describe("Impostazioni GDO", () => {
     });
   });
 
+  describe("Menabò del volantino: regole delle sezioni", () => {
+    it("senza regole mostra lo stato vuoto e non permette di salvare", async () => {
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      expect(within(menabo).getByText("Nessuna regola")).toBeInTheDocument();
+      expect(within(menabo).getByRole("button", { name: "Salva regole" })).toBeDisabled();
+    });
+
+    it("una regola nuova si compila e si salva con la sua sola PUT", async () => {
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      await userEvent.click(within(menabo).getByRole("button", { name: "Nuova regola" }));
+      await userEvent.type(within(menabo).getByRole("textbox", { name: "Nome della sezione della regola 1" }), "Pulizia casa");
+      await userEvent.type(within(menabo).getByRole("combobox", { name: "Valore" }), "PULIZIA");
+      await userEvent.click(within(menabo).getByRole("button", { name: "Salva regole" }));
+
+      await waitFor(() => expect(chiamatePut()).toContain("/impostazioni-gdo/menabo"));
+      const corpo = finti.servizio.put.mock.calls.find(([url]) => url === "/impostazioni-gdo/menabo")?.[1] as { regole: Array<Record<string, unknown>> };
+      expect(corpo.regole).toHaveLength(1);
+      expect(corpo.regole[0]).toMatchObject({ livello: "box", sezione: "Pulizia casa" });
+      expect(JSON.stringify(corpo.regole[0].condizione)).toContain("PULIZIA");
+    });
+
+    it("la sezione può rinviare a un altro campo: campo e trasformazioni diventano il modello salvato", async () => {
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      await userEvent.click(within(menabo).getByRole("button", { name: "Nuova regola" }));
+      await userEvent.selectOptions(within(menabo).getByRole("combobox", { name: "Esito della regola 1" }), "campo");
+      // Il nome scritto a mano lascia il posto a campo e trasformazioni
+      expect(within(menabo).queryByRole("textbox", { name: "Nome della sezione della regola 1" })).not.toBeInTheDocument();
+      const campo = within(menabo).getByRole("combobox", { name: "Campo da cui prendere la sezione della regola 1" });
+      await userEvent.clear(campo);
+      await userEvent.type(campo, "tema/mastro");
+      await userEvent.click(within(menabo).getByRole("checkbox", { name: "senza-sigla" }));
+      await userEvent.click(within(menabo).getByRole("combobox", { name: "Valore" }));
+      await userEvent.type(within(menabo).getByRole("combobox", { name: "Valore" }), "X");
+      await userEvent.click(within(menabo).getByRole("button", { name: "Salva regole" }));
+
+      await waitFor(() => expect(chiamatePut()).toContain("/impostazioni-gdo/menabo"));
+      const corpo = finti.servizio.put.mock.calls.find(([url]) => url === "/impostazioni-gdo/menabo")?.[1] as { regole: Array<{ sezione: string }> };
+      expect(corpo.regole[0].sezione).toBe("{tema/mastro|spazi|titolo}");
+    });
+
+    it("«non è una sezione» toglie il nome e salva sezione null", async () => {
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      await userEvent.click(within(menabo).getByRole("button", { name: "Nuova regola" }));
+      await userEvent.selectOptions(within(menabo).getByRole("combobox", { name: "Esito della regola 1" }), "no");
+      expect(within(menabo).queryByRole("textbox", { name: "Nome della sezione della regola 1" })).not.toBeInTheDocument();
+    });
+
+    it("le regole salvate si mostrano e si riordinano", async () => {
+      finti.stato = {
+        ...structuredClone(IMPOSTAZIONI),
+        regoleMenabo: [
+          { id: "a", titolo: "Prima", livello: "box", sezione: "Uno", colore: null, condizione: { tipo: "gruppo", logica: "tutte", figli: [{ tipo: "condizione", campo: "mastro", operatore: "contiene", valore: "X", valori: [] }] } },
+          { id: "b", titolo: "Seconda", livello: "pagina", sezione: "Due", colore: "#ff0000", condizione: { tipo: "gruppo", logica: "tutte", figli: [{ tipo: "condizione", campo: "@pagina", operatore: "tra", valore: "", valori: ["1", "3"] }] } },
+        ],
+      };
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      expect(within(menabo).getAllByTestId("regola")).toHaveLength(2);
+      await userEvent.click(within(menabo).getByRole("button", { name: "Sposta giù la regola 1" }));
+      const titoli = within(menabo).getAllByRole("textbox", { name: /^Titolo della regola/ }).map((t) => (t as HTMLInputElement).value);
+      expect(titoli).toEqual(["Seconda", "Prima"]);
+    });
+
+    describe("autocompilazione dai dati dei volantini", () => {
+      const suggerimenti = (url: string) => {
+        if (url === "/impostazioni-gdo") return structuredClone(finti.stato);
+        if (url === "/impostazioni-gdo/menabo/suggerimenti") {
+          return { campoMenabo: "mastro", campi: [{ campo: "mastro", referenze: 120 }, { campo: "codice_referenza", referenze: 118 }] };
+        }
+        if (url.startsWith("/impostazioni-gdo/menabo/suggerimenti?campo=")) {
+          return {
+            campo: "mastro",
+            valori: [
+              { valore: "DIS-DISPENSA_doppia", referenze: 40, nomeLeggibile: "Dispensa" },
+              { valore: "DIS-DISPENSA_singola", referenze: 11, nomeLeggibile: "Dispensa" },
+              { valore: "PB-Pagina bianca", referenze: 3, nomeLeggibile: null },
+            ],
+          };
+        }
+        if (url === "/impostazioni-gdo/menabo/volantini") return [];
+        return [];
+      };
+
+      it("il campo propone i campi veri delle referenze e il valore i valori veri, con quante referenze", async () => {
+        finti.servizio.get.mockImplementation(async (url: string) => suggerimenti(url));
+        apri();
+        const menabo = await sezione("Menabò del volantino");
+        await userEvent.click(within(menabo).getByRole("button", { name: "Nuova regola" }));
+
+        await waitFor(() => expect(menabo.querySelector("#campi-menabo option[value='codice_referenza']")).not.toBeNull());
+        await userEvent.click(within(menabo).getByRole("combobox", { name: "Valore" }));
+
+        await waitFor(() => expect(finti.servizio.get).toHaveBeenCalledWith(expect.stringContaining("/impostazioni-gdo/menabo/suggerimenti?campo=mastro")));
+        await waitFor(() => expect(within(menabo).getByTestId("valori-suggeriti").querySelectorAll("option")).toHaveLength(3));
+        expect(within(menabo).getByTestId("valori-suggeriti").querySelector("option[value='DIS-DISPENSA_doppia']")).toHaveTextContent("40 referenze");
+      });
+
+      it("«Genera dalle mastro» crea una regola per nome leggibile, già compilata, senza salvare", async () => {
+        finti.servizio.get.mockImplementation(async (url: string) => suggerimenti(url));
+        apri();
+        const menabo = await sezione("Menabò del volantino");
+
+        await userEvent.click(await within(menabo).findByRole("button", { name: "Genera dalle mastro" }));
+
+        await waitFor(() => expect(within(menabo).getAllByTestId("regola")).toHaveLength(2));
+        expect(within(menabo).getByRole("textbox", { name: "Nome della sezione della regola 1" })).toHaveValue("Dispensa");
+        expect(within(menabo).getByRole("combobox", { name: "Esito della regola 2" })).toHaveValue("no");
+        expect(within(menabo).getByRole("button", { name: "Salva regole" })).toBeEnabled();
+        expect(chiamatePut()).not.toContain("/impostazioni-gdo/menabo");
+      });
+
+      it("senza il campo del menabò dichiarato dalla libreria il pulsante non c'è", async () => {
+        finti.servizio.get.mockImplementation(async (url: string) =>
+          url === "/impostazioni-gdo/menabo/suggerimenti" ? { campoMenabo: null, campi: [] } : suggerimenti(url));
+        apri();
+        const menabo = await sezione("Menabò del volantino");
+
+        await waitFor(() => expect(finti.servizio.get).toHaveBeenCalledWith("/impostazioni-gdo/menabo/suggerimenti"));
+        expect(within(menabo).queryByRole("button", { name: /^Genera dalle/ })).not.toBeInTheDocument();
+      });
+    });
+
+    it("la prova mostra le pagine che cambiano e non salva niente", async () => {
+      finti.stato = {
+        ...structuredClone(IMPOSTAZIONI),
+        regoleMenabo: [
+          { id: "a", titolo: "Pulizia", livello: "box", sezione: "Pulizia casa", colore: null, condizione: { tipo: "gruppo", logica: "tutte", figli: [{ tipo: "condizione", campo: "mastro", operatore: "contiene", valore: "PUL", valori: [] }] } },
+        ],
+      };
+      finti.servizio.get.mockImplementation(async (url: string) => {
+        if (url === "/impostazioni-gdo") return structuredClone(finti.stato);
+        if (url === "/impostazioni-gdo/menabo/volantini") return [{ idKit: "kit-1", titolo: "Toscana", nomePromo: "P2620_KIT" }];
+        if (url === "/referenze/campi-non-tradotti") return [];
+        return [];
+      });
+      finti.servizio.post.mockImplementation(async (url: string) => {
+        if (url === "/impostazioni-gdo/menabo/prova") {
+          return {
+            volantino: { idKit: "kit-1", titolo: "Toscana", nomePromo: "P2620_KIT" },
+            pagine: [{ pagina: 22, prima: "Pulizia", dopo: "Pulizia casa", cambia: true, regola: "Pulizia" }, { pagina: 23, prima: "Dispensa", dopo: "Dispensa", cambia: false, regola: null }],
+            cambiate: 1,
+          };
+        }
+        return {};
+      });
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      await userEvent.click(await within(menabo).findByRole("button", { name: "Prova le regole" }));
+
+      expect(await within(menabo).findByText("1 pagina cambia")).toBeInTheDocument();
+      const riga22 = within(menabo).getByText("Pulizia casa").closest("tr");
+      expect(riga22).toHaveAttribute("data-cambia", "si");
+      expect(finti.servizio.post).toHaveBeenCalledWith("/impostazioni-gdo/menabo/prova", expect.objectContaining({ idKit: "kit-1" }));
+      expect(chiamatePut()).not.toContain("/impostazioni-gdo/menabo");
+    });
+  });
+
   it("mostra le sezioni con i dati della GDO e nell'indice i reparti da nominare e i mapping da sincronizzare", async () => {
     apri();
 
@@ -118,6 +286,7 @@ describe("Impostazioni GDO", () => {
       "Private Labels",
       "Campi delle referenze",
       "Insight del volantino",
+      "Menabò del volantino",
       "Aspetto del sito web",
     ]) {
       expect(screen.getByRole("region", { name: titolo })).toBeInTheDocument();

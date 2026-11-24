@@ -15,6 +15,7 @@ import SezioneIdentita from "./SezioneIdentita";
 import SezioneInsightVolantino from "./SezioneInsightVolantino";
 import SezioneLoghiInsegne from "./SezioneLoghiInsegne";
 import SezioneMarchiDistributore from "./SezioneMarchiDistributore";
+import SezioneMenabo from "./SezioneMenabo";
 import SezioneReparti, { repartoDaNominare } from "./SezioneReparti";
 import { SEZIONI_IMPOSTAZIONI_GDO, type IdSezioneImpostazioniGdo } from "./sezioni";
 
@@ -81,7 +82,7 @@ function ImpostazioniGdo() {
   return (
     <Pagina
       titolo="Impostazioni GDO"
-      descrizione={`Identità, reparti, campi delle referenze, insight del volantino e sito web di ${dati.gdo.nome}. Ogni sezione si salva da sola.`}
+      descrizione={`Identità, reparti, campi delle referenze, insight e menabò del volantino e sito web di ${dati.gdo.nome}. Ogni sezione si salva da sola.`}
     >
       <div className="grid grid-cols-12 gap-6">
         <div className="col-span-12 xl:col-span-3">
@@ -117,6 +118,7 @@ function ImpostazioniGdo() {
           <SezioneMarchiDistributore lineeDistributore={dati.lineeDistributore} />
           <SezioneCampiReferenze campi={dati.campiReferenze ?? []} />
           <SezioneInsightVolantino insight={dati.insightVolantino} />
+          <SezioneMenabo regole={dati.regoleMenabo ?? []} />
           <SezioneAspettoSitoWeb sitoWeb={dati.sitoWeb} />
         </div>
       </div>

@@ -1,6 +1,8 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../db';
+import type { CampoSuggerito, RegolaMenabo, ValoreSuggerito, VolantinoProvaMenabo } from '../../../lib/impostazioniGdo/tipi';
 import type { PercorsoCampo } from '../utils/campiInsights';
+import { regoleMenaboDa } from '../utils/regoleMenabo';
 import type { FonteRepartiGdo, RepartoNelleReferenze, RepartoSalvato } from '../utils/repartiGdo';
 import { KIT_VALIDI, SOSTITUZIONI_FISSE } from './PuntiVenditaVolantinoRepository';
 
@@ -19,6 +21,8 @@ export interface ImpostazioniGdoSalvate {
   insightAggiornatoIl: Date | null;
   insightAggiornatoDa: string | null;
   aggiornatoIl: Date;
+  /** Le regole delle sezioni del menabò degli insight; vuoto: vale la sezione della libreria agenzia. */
+  regoleMenabo: RegolaMenabo[];
 }
 
 export interface GdoDelleImpostazioni {
@@ -37,6 +41,13 @@ export interface IImpostazioniGdoRepository extends FonteRepartiGdo {
   trova(idGdo: string): Promise<ImpostazioniGdoSalvate | null>;
   gdo(idGdo: string): Promise<GdoDelleImpostazioni | null>;
   salvaReparti(idGdo: string, reparti: readonly RepartoSalvato[]): Promise<void>;
+  salvaRegoleMenabo(idGdo: string, regole: readonly RegolaMenabo[]): Promise<void>;
+  /** I campi dei dati delle referenze degli ultimi volantini della GDO, dal più usato, per suggerirli nelle regole. */
+  campiDelleReferenze(idGdo: string, limite: number): Promise<CampoSuggerito[]>;
+  /** I valori (testo o numero) di un campo nelle referenze degli ultimi volantini della GDO, dal più frequente. */
+  valoriDelCampo(idGdo: string, campo: string, limite: number): Promise<Array<Omit<ValoreSuggerito, 'nomeLeggibile'>>>;
+  /** Gli ultimi volantini (kit non eliminati) della GDO, dal più recente, per provare le regole del menabò. */
+  volantiniDellaGdo(idGdo: string, limite: number): Promise<VolantinoProvaMenabo[]>;
   salvaInsightVolantino(idGdo: string, configurazione: Record<string, unknown>, aggiornatoDa: string | null): Promise<void>;
   /** Toglie la configurazione degli insight della GDO: si torna a quella del file. */
   eliminaInsightVolantino(idGdo: string): Promise<void>;
@@ -53,6 +64,7 @@ interface RigaImpostazioni {
   insight_aggiornato_il: Date | string | null;
   insight_aggiornato_da: string | null;
   aggiornato_il: Date | string;
+  regole_menabo: unknown;
 }
 
 const comeData = (valore: Date | string | null): Date | null => (valore === null ? null : new Date(valore));
@@ -138,6 +150,18 @@ export const PERCORSI_REPARTO_PREDEFINITI: PercorsiReparto = {
   descrizione: 'data_fields.descrizione_reparto',
 };
 
+/** Quanti volantini recenti si guardano per i suggerimenti delle regole: abbastanza per vedere le mastro in uso, senza leggere tutto lo storico. */
+const KIT_PER_SUGGERIMENTI = 40;
+
+/** Gli ultimi volantini della GDO con referenze (CTE `ultimi`), dal più recente. */
+const ULTIMI_KIT = `
+  SELECT k.id FROM runtime_kit k
+  JOIN promo p ON p.id_promo = k.id_promo
+  WHERE p.gdo = :idGdo AND ${KIT_VALIDI}
+    AND EXISTS (SELECT 1 FROM referenze x WHERE x.id_runtime_kit = k.id)
+  ORDER BY COALESCE(p.validita_dal, p.validita_al, k."createdAt") DESC, k.id
+  LIMIT :limiteKit`;
+
 export class ImpostazioniGdoRepository implements IImpostazioniGdoRepository {
   private async seleziona<T extends object>(sql: string, sostituzioni: Sostituzioni): Promise<T[]> {
     return sequelize.query<T>(sql, { replacements: { ...SOSTITUZIONI_FISSE, ...sostituzioni }, type: QueryTypes.SELECT });
@@ -145,7 +169,7 @@ export class ImpostazioniGdoRepository implements IImpostazioniGdoRepository {
 
   async trova(idGdo: string): Promise<ImpostazioniGdoSalvate | null> {
     const [riga] = await this.seleziona<RigaImpostazioni>(
-      `SELECT id_gdo::text AS id_gdo, reparti, insight_volantino, insight_aggiornato_il, insight_aggiornato_da, aggiornato_il
+      `SELECT id_gdo::text AS id_gdo, reparti, insight_volantino, insight_aggiornato_il, insight_aggiornato_da, aggiornato_il, regole_menabo
        FROM impostazioni_gdo WHERE id_gdo = :idGdo`,
       { idGdo }
     );
@@ -157,6 +181,7 @@ export class ImpostazioniGdoRepository implements IImpostazioniGdoRepository {
       insightAggiornatoIl: comeData(riga.insight_aggiornato_il),
       insightAggiornatoDa: riga.insight_aggiornato_da ?? null,
       aggiornatoIl: comeData(riga.aggiornato_il) ?? new Date(0),
+      regoleMenabo: regoleMenaboDa(riga.regole_menabo),
     };
   }
 
@@ -180,6 +205,60 @@ export class ImpostazioniGdoRepository implements IImpostazioniGdoRepository {
        ON CONFLICT (id_gdo) DO UPDATE SET reparti = EXCLUDED.reparti, aggiornato_il = NOW()`,
       { replacements: { idGdo, reparti: JSON.stringify(reparti) } }
     );
+  }
+
+  async salvaRegoleMenabo(idGdo: string, regole: readonly RegolaMenabo[]): Promise<void> {
+    await sequelize.query(
+      `INSERT INTO impostazioni_gdo (id_gdo, regole_menabo, aggiornato_il)
+       VALUES (:idGdo, CAST(:regole AS jsonb), NOW())
+       ON CONFLICT (id_gdo) DO UPDATE SET regole_menabo = EXCLUDED.regole_menabo, aggiornato_il = NOW()`,
+      { replacements: { idGdo, regole: JSON.stringify(regole) } }
+    );
+  }
+
+  async campiDelleReferenze(idGdo: string, limite: number): Promise<CampoSuggerito[]> {
+    const righe = await this.seleziona<{ campo: string; referenze: number | string }>(
+      `WITH ultimi AS (${ULTIMI_KIT})
+       SELECT chiave AS campo, count(*)::int AS referenze
+       FROM referenze r
+       CROSS JOIN LATERAL jsonb_object_keys(CASE WHEN jsonb_typeof(r.data_fields) = 'object' THEN r.data_fields ELSE '{}'::jsonb END) AS chiave
+       WHERE r.id_runtime_kit IN (SELECT id FROM ultimi)
+       GROUP BY chiave
+       ORDER BY referenze DESC, chiave
+       LIMIT :limite`,
+      { idGdo, limiteKit: KIT_PER_SUGGERIMENTI, limite }
+    );
+    return righe.map(riga => ({ campo: riga.campo, referenze: Number(riga.referenze) || 0 }));
+  }
+
+  async valoriDelCampo(idGdo: string, campo: string, limite: number): Promise<Array<Omit<ValoreSuggerito, 'nomeLeggibile'>>> {
+    const righe = await this.seleziona<{ valore: string; referenze: number | string }>(
+      `WITH ultimi AS (${ULTIMI_KIT})
+       SELECT btrim(r.data_fields ->> :campo) AS valore, count(*)::int AS referenze
+       FROM referenze r
+       WHERE r.id_runtime_kit IN (SELECT id FROM ultimi)
+         AND jsonb_typeof(r.data_fields -> :campo) IN ('string', 'number')
+         AND btrim(r.data_fields ->> :campo) <> ''
+       GROUP BY 1
+       ORDER BY referenze DESC, valore
+       LIMIT :limite`,
+      { idGdo, limiteKit: KIT_PER_SUGGERIMENTI, campo, limite }
+    );
+    return righe.map(riga => ({ valore: riga.valore, referenze: Number(riga.referenze) || 0 }));
+  }
+
+  async volantiniDellaGdo(idGdo: string, limite: number): Promise<VolantinoProvaMenabo[]> {
+    const righe = await this.seleziona<{ id_kit: string; titolo: string | null; nome_promo: string | null }>(
+      `SELECT k.id::text AS id_kit, k.titolo, p.nome_promo
+       FROM runtime_kit k
+       JOIN promo p ON p.id_promo = k.id_promo
+       WHERE p.gdo = :idGdo AND ${KIT_VALIDI}
+         AND EXISTS (SELECT 1 FROM referenze r WHERE r.id_runtime_kit = k.id)
+       ORDER BY COALESCE(p.validita_dal, p.validita_al, k."createdAt") DESC, k.id
+       LIMIT :limite`,
+      { idGdo, limite }
+    );
+    return righe.map(riga => ({ idKit: riga.id_kit, titolo: riga.titolo ?? '', nomePromo: riga.nome_promo ?? '' }));
   }
 
   async salvaInsightVolantino(idGdo: string, configurazione: Record<string, unknown>, aggiornatoDa: string | null): Promise<void> {

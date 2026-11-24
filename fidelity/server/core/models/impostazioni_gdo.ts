@@ -1,4 +1,5 @@
 import { DataTypes, Model, Optional } from 'sequelize';
+import type { RegolaMenabo } from '../../../lib/impostazioniGdo/tipi';
 import type { RepartoSalvato } from '../utils/repartiGdo';
 import { sequelize } from '../db/SequelizeConnector';
 
@@ -19,11 +20,13 @@ export interface ImpostazioniGdoAttributes {
   /** Nome dell'utente che ha salvato la configurazione degli insight. */
   insight_aggiornato_da: string | null;
   aggiornato_il: Date;
+  /** Le regole delle sezioni del menabò degli insight (spec impostazioni-gdo); vuoto: vale la mastro come prima. */
+  regole_menabo: RegolaMenabo[];
 }
 
 type ImpostazioniGdoCreationAttributes = Optional<
   ImpostazioniGdoAttributes,
-  'reparti' | 'insight_volantino' | 'insight_aggiornato_il' | 'insight_aggiornato_da' | 'aggiornato_il'
+  'reparti' | 'insight_volantino' | 'insight_aggiornato_il' | 'insight_aggiornato_da' | 'aggiornato_il' | 'regole_menabo'
 >;
 
 class ImpostazioniGdo extends Model<ImpostazioniGdoAttributes, ImpostazioniGdoCreationAttributes> implements ImpostazioniGdoAttributes {
@@ -33,6 +36,7 @@ class ImpostazioniGdo extends Model<ImpostazioniGdoAttributes, ImpostazioniGdoCr
   declare insight_aggiornato_il: Date | null;
   declare insight_aggiornato_da: string | null;
   declare aggiornato_il: Date;
+  declare regole_menabo: RegolaMenabo[];
 }
 
 const ImpostazioniGdoDefine = sequelize.define<ImpostazioniGdo>('impostazioni_gdo', {
@@ -66,6 +70,11 @@ const ImpostazioniGdoDefine = sequelize.define<ImpostazioniGdo>('impostazioni_gd
     type: DataTypes.DATE,
     allowNull: false,
     defaultValue: DataTypes.NOW,
+  },
+  regole_menabo: {
+    type: DataTypes.JSONB,
+    allowNull: false,
+    defaultValue: [],
   },
 }, {
   tableName: 'impostazioni_gdo',

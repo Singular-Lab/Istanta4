@@ -499,8 +499,9 @@ describe("Codice iniziativa nelle schede e in vetrina (task 1f340bec)", () => {
     const banda = screen.getByRole("region", { name: "Promozione in vetrina" });
     const badge = within(banda).getByTestId("badge-iniziativa");
     expect(badge).toHaveTextContent("P2620");
-    // Prima del nome: «In vetrina · P2620 P2620_GRANDE»
-    expect(badge.parentElement).toHaveTextContent(/In vetrina · .*Iniziativa P2620.*P2620_GRANDE/);
+    // Per primo nella riga del nome: «P2620» e poi «In vetrina · P2620_GRANDE»
+    expect(badge.parentElement).toHaveTextContent(/Iniziativa P2620.*In vetrina · P2620_GRANDE/);
+    expect(badge.parentElement?.firstElementChild).toBe(badge);
   });
 });
 
