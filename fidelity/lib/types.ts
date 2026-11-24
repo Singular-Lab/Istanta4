@@ -2739,7 +2739,7 @@ export interface IndesignPluginFiltro {
   ordine: number;
   criteri: {
     chiave: string;
-    operatore: '=' | 'in';
+    operatore: '=' | '!=' | 'IN' | '!IN';
     valore: string;
   }[];
 }

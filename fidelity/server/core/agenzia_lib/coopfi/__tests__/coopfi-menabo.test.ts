@@ -1,4 +1,6 @@
 import type { AnalisiMomentoTracciato, DataFields } from "../../../../../lib/types";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { CoopfiAgenziaLib } from "../index.js";
 
@@ -454,7 +456,7 @@ describe("coopfi menabo", () => {
     });
 
     expect(payload.source[0].filtri).toEqual([
-      { limite: 3, ordine: 1, criteri: [{ chiave: "tema", operatore: "in", valore: "JOLLY" }] },
+      { limite: 3, ordine: 1, criteri: [{ chiave: "tema", operatore: "IN", valore: "JOLLY" }] },
     ]);
   });
 });
@@ -601,6 +603,96 @@ describe("coopfi menabo: CAMPIONI DEL RISPARMIO per sconto (I20-1255)", () => {
     expect(filtri[0].criteri[1]).toEqual({ chiave: "txt_sconto", operatore: "=", valore: "40" });
   });
 
+  // Task 17ac016e: sottogruppi a fasce di dieci punti, poi lo sconto preciso.
+  const gruppoCampioni = async (sconti: unknown[]) => {
+    const result = await sut.getDatoPerMenabo([
+      buildTracciato("canale-1", "area-1", sconti.map((s, i) => campioni(String(i + 1), s))),
+    ], { tipoDivisione: "canale", dataDivisione: [] });
+    return result.risultati[0].raggruppamento.find(g => g.valore_campo.startsWith("CAMPIONI"))!;
+  };
+
+  it("i sottogruppi di CAMPIONI sono la fascia di sconto e poi lo sconto preciso", async () => {
+    const gruppo = await gruppoCampioni(["40", "45"]);
+    expect(gruppo.chiavi_sottogruppi).toEqual([
+      { nome_campo: "fascia_sconto", label: "Fascia di sconto" },
+      { nome_campo: "txt_sconto", label: "Sconto" },
+    ]);
+  });
+
+  it("ogni referenza porta la sua fascia: 45 e 40 in 40-49, 30 in 30-39, vuoto e zero senza sconto", async () => {
+    const gruppo = await gruppoCampioni(["45", "40", "30", "", "0"]);
+    expect(gruppo.records.map(r => [r.txt_sconto, r.fascia_sconto])).toEqual([
+      ["45", "40-49"], ["40", "40-49"], ["30", "30-39"], ["", "Senza sconto"], ["0", "Senza sconto"],
+    ]);
+  });
+
+  it("lo sconto decimale, con «%» o con il segno meno sta nella fascia giusta", async () => {
+    const gruppo = await gruppoCampioni(["32,5", "-30%", "9", "100"]);
+    expect(gruppo.records.map(r => r.fascia_sconto)).toEqual(["100-109", "30-39", "30-39", "0-9"]);
+  });
+
+  it("le fasce restano in ordine decrescente, con «Senza sconto» in fondo", async () => {
+    const gruppo = await gruppoCampioni(["", "20", "45", "35", "40"]);
+    expect([...new Set(gruppo.records.map(r => r.fascia_sconto))]).toEqual(["40-49", "30-39", "20-29", "Senza sconto"]);
+  });
+
+  it("la fascia non diventa un campo filtro e non cambia i record del tracciato", async () => {
+    const origine = [campioni("1", "40"), campioni("2", "20")];
+    const result = await sut.getDatoPerMenabo([buildTracciato("canale-1", "area-1", origine)], { tipoDivisione: "canale", dataDivisione: [] });
+    expect(result.risultati[0].campi_filtro.map(c => c.nome_campo)).not.toContain("fascia_sconto");
+    expect(origine.every(r => !("fascia_sconto" in r))).toBe(true);
+  });
+
+  it("gli altri temi tengono i sottogruppi per reparto, senza fascia", async () => {
+    const result = await sut.getDatoPerMenabo([
+      buildTracciato("canale-1", "area-1", [{ tema: "Ortofrutta", reparto: "Frutta", txt_sconto: "40", "Scatto.CodiceGruppo": "G1", codice_referenza: "1" }]),
+    ], { tipoDivisione: "canale", dataDivisione: [] });
+    const gruppo = result.risultati[0].raggruppamento.find(g => g.valore_campo === "Ortofrutta")!;
+    expect(gruppo.chiavi_sottogruppi?.map(c => c.nome_campo)).toEqual(["reparto"]);
+    expect(gruppo.records[0]).not.toHaveProperty("fascia_sconto");
+  });
+
+  it("una fascia trascinata sulla pagina esporta un filtro per sconto, senza il criterio della fascia", () => {
+    const records = [campioni("1", "45"), campioni("2", "40"), campioni("3", "40")].map(r => ({ ...r, fascia_sconto: "40-49" }));
+    const payload = sut.buildIndesignPluginJson({
+      ...pagina([{ id: "campioni", records }]),
+      pages: [{
+        pageIndex: 0, pageNumber: 1, referenzePerPagina: 20,
+        groups: [{
+          id: "f", groupId: "f", label: "CAMPIONI · 40-49", colorIdx: 0,
+          sourceKey: JSON.stringify(["canale-1", "sub", "fascia_sconto", "40-49"]),
+          recordKeys: records.map((_, i) => String(i)), records, recordCount: records.length,
+        }],
+      }],
+    } as never);
+
+    const filtri = payload.source[0].filtri;
+    expect(filtri.map(f => f.criteri.map(c => c.chiave))).toEqual([
+      ["tema", "txt_sconto"], ["tema", "txt_sconto"],
+    ]);
+    expect(filtri.map(f => f.criteri[1].valore)).toEqual(["45", "40"]);
+    expect(filtri.map(f => f.limite)).toEqual([1, 2]);
+  });
+
+  it("un solo sconto trascinato esporta un filtro con il solo sconto, una volta", () => {
+    const records = [campioni("1", "40"), campioni("2", "40")];
+    const payload = sut.buildIndesignPluginJson({
+      divisionId: "canale-1", divisionLabel: "Canale 1", pageCount: 1, updatedAt: new Date().toISOString(),
+      pages: [{
+        pageIndex: 0, pageNumber: 1, referenzePerPagina: 20,
+        groups: [{
+          id: "s", groupId: "s", label: "CAMPIONI · 40%", colorIdx: 0,
+          sourceKey: JSON.stringify(["canale-1", "sub", "txt_sconto", "40"]),
+          recordKeys: ["0", "1"], records, recordCount: 2,
+        }],
+      }],
+    } as never);
+
+    expect(payload.source[0].filtri).toHaveLength(1);
+    expect(payload.source[0].filtri[0].criteri.map(c => c.chiave)).toEqual(["tema", "txt_sconto"]);
+    expect(payload.source[0].filtri[0].limite).toBe(2);
+  });
+
   it("un tema normale resta un solo filtro, senza criterio di sconto", () => {
     const payload = sut.buildIndesignPluginJson(pagina([
       { id: "orto", records: [{ tema: "Ortofrutta", txt_sconto: "10" }, { tema: "Ortofrutta", txt_sconto: "20" }] },
@@ -699,7 +791,104 @@ describe("coopfi menabo: unione di gruppi (I20-1255)", () => {
     const payload = sut.buildIndesignPluginJson(layout([[gruppo("2026 JOLLY A", 1, "u1"), gruppo("2026 JOLLY B", 1, "u1")]]));
 
     expect(payload.source[0].filtri).toEqual([
-      { limite: 2, ordine: 1, criteri: [{ chiave: "tema", operatore: "in", valore: "JOLLY" }] },
+      { limite: 2, ordine: 1, criteri: [{ chiave: "tema", operatore: "IN", valore: "JOLLY" }] },
     ]);
+  });
+});
+
+// Task 17ac016e: i filtri esportati devono essere letti dal Plugin senza errori. Il Plugin conosce solo gli
+// operatori del suo picker (filtri.js, addCriterio), le chiavi dichiarate in campiFiltro del cliente e vuole
+// limite intero positivo, ordine progressivo senza buchi e pagina in forma di testo.
+describe("coopfi menabo: filtri esportati conformi al Plugin", () => {
+  const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
+  const OPERATORI_DEL_PLUGIN = ["=", "!=", "IN", "!IN", ">", ">=", "<", "<="];
+  const sorgenteCustom = JSON.parse(readFileSync(
+    fileURLToPath(new URL("../../../../../../Istanta/wwwroot/external_source/Coopfi/SourceCustomPlugin.json", import.meta.url)),
+    "utf8",
+  ).replace(/^\uFEFF/, ""));
+  const CHIAVI_DEL_PLUGIN: string[] = (sorgenteCustom.campiFiltro as Array<{ campoAssociato: string }>).map(c => c.campoAssociato);
+
+  const gruppo = (tema: string, records: Array<Record<string, string>>, unioneId?: string) => ({
+    id: `g-${tema}`,
+    groupId: `g-${tema}`,
+    sourceKey: "s",
+    label: tema,
+    colorIdx: 0,
+    recordKeys: records.map((_, i) => String(i)),
+    records,
+    recordCount: records.length,
+    ...(unioneId ? { unioneId } : {}),
+  });
+  const rec = (tema: string, extra: Record<string, string> = {}) => ({ tema, reparto: "Drogheria", ...extra });
+  const layout = (pagine: Array<Array<ReturnType<typeof gruppo>>>) => ({
+    divisionId: "canale-1",
+    divisionLabel: "Canale 1",
+    pageCount: pagine.length,
+    updatedAt: new Date().toISOString(),
+    pages: pagine.map((groups, i) => ({ pageIndex: i, pageNumber: i + 1, referenzePerPagina: 20, groups })),
+  });
+
+  const esportazioneMista = () => sut.buildIndesignPluginJson(layout([
+    [
+      gruppo("TEMA A", [rec("TEMA A"), rec("TEMA A")], "u1"),
+      gruppo("TEMA B", [rec("TEMA B")], "u1"),
+      gruppo("JOLLY UNO", [rec("JOLLY UNO"), rec("JOLLY UNO")]),
+      gruppo("CAMPIONI DEL RISPARMIO", [
+        rec("CAMPIONI DEL RISPARMIO", { txt_sconto: "20" }),
+        rec("CAMPIONI DEL RISPARMIO", { txt_sconto: "40" }),
+        rec("CAMPIONI DEL RISPARMIO", { txt_sconto: "" }),
+      ]),
+    ],
+    [gruppo("TEMA B", [rec("TEMA B")], "u1"), gruppo("TEMA C", [rec("TEMA C")])],
+    [],
+  ]));
+
+  it("ogni criterio usa un operatore e una chiave che il Plugin legge", () => {
+    for (const pagina of esportazioneMista().source) {
+      for (const filtro of pagina.filtri) {
+        expect(filtro.criteri.length).toBeGreaterThan(0);
+        for (const criterio of filtro.criteri) {
+          expect(OPERATORI_DEL_PLUGIN).toContain(criterio.operatore);
+          expect(CHIAVI_DEL_PLUGIN).toContain(criterio.chiave);
+          expect(typeof criterio.valore).toBe("string");
+          // Il solo valore che può essere vuoto è lo sconto di una referenza senza sconto (il Plugin lo legge <VUOTO>).
+          if (criterio.chiave !== "txt_sconto") expect(criterio.valore.trim()).not.toBe("");
+        }
+      }
+    }
+  });
+
+  it("il filtro Jolly usa IN maiuscolo, come la voce del picker del Plugin", () => {
+    const filtri = esportazioneMista().source[0].filtri;
+    const jolly = filtri.find(f => f.criteri.some(c => c.valore === "JOLLY"));
+    expect(jolly?.criteri[0].operatore).toBe("IN");
+  });
+
+  it("limiti interi positivi, ordine progressivo senza buchi, pagina in forma di testo", () => {
+    for (const pagina of esportazioneMista().source) {
+      expect(typeof pagina.pagina).toBe("string");
+      expect(typeof pagina.limite).toBe("number");
+      pagina.filtri.forEach((filtro, i) => {
+        expect(Number.isInteger(filtro.limite)).toBe(true);
+        expect(filtro.limite).toBeGreaterThan(0);
+        expect(filtro.ordine).toBe(i + 1);
+      });
+      expect(pagina.blocco).toBe(pagina.filtri.length === 0);
+    }
+  });
+
+  it("l'unione resta un solo filtro con i temi separati da || e il limite di quella pagina", () => {
+    const [p1, p2] = esportazioneMista().source;
+    const unione1 = p1.filtri.filter(f => f.criteri[0].valore === "TEMA A||TEMA B");
+    expect(unione1).toHaveLength(1);
+    expect(unione1[0].limite).toBe(3);
+    // Sulla seconda pagina l'unione ha un solo tema: il valore alternativo resta quello solo.
+    expect(p2.filtri.find(f => f.criteri[0].valore === "TEMA B")?.limite).toBe(1);
+  });
+
+  it("CAMPIONI DEL RISPARMIO: un filtro per sconto, dal più alto al più basso, vuoto in fondo", () => {
+    const filtri = esportazioneMista().source[0].filtri
+      .filter(f => f.criteri[0].valore === "CAMPIONI DEL RISPARMIO");
+    expect(filtri.map(f => f.criteri[1].valore)).toEqual(["40", "20", ""]);
   });
 });
