@@ -181,7 +181,11 @@ public sealed partial class ServizioPropagazione
             var volPilota = await (from p in ctx.VolantiniPagines.AsNoTracking()
                                    join v in ctx.Volantinis.AsNoTracking() on p.IdVol equals v.Id
                                    where p.Id == pilota.IdPagina
-                                   select new { v.Id, v.Titolo, v.Classificazione }).FirstAsync(ferma);
+                                   select new { v.Id, v.Titolo, v.Classificazione, p.Versione, p.IdVersione }).FirstAsync(ferma);
+            // I20-1262: una correzione di una versione gia' superata non propone niente: sulla
+            // versione nuova si chiude come Irrisolta (EreditaAsync), non si ripropone ai gemelli.
+            bool pilotaSuperato = volPilota.IdVersione != null && await ctx.VolantiniVersionis.AsNoTracking()
+                .AnyAsync(ver => ver.Id == volPilota.IdVersione && ver.DataChiusura != null, ferma);
             string classif = "", canale = "";
             if (pol.SoloStessaPromo)
             {
@@ -200,10 +204,13 @@ public sealed partial class ServizioPropagazione
                           && v.Status == StatoVolantinoAperto && v.DataScadenza > adesso
                           // versione non chiusa, come l'originale
                           && !ctx.VolantiniVersionis.Any(ver => ver.Id == p.IdVersione && ver.DataChiusura != null)
+                          // I20-1262: un'altra versione dello stesso volantino non e' un gemello
+                          && !(p.IdVol == volPilota.Id && p.Versione != volPilota.Versione)
                           && e.Basecode != ""
                     select new { e, v.Titolo, v.Classificazione };
             if (classif != "") q = q.Where(x => x.Classificazione == classif);
             else if (canale != "") q = q.Where(x => x.Titolo.StartsWith(canale));
+            if (pilotaSuperato) q = q.Where(x => false);
             var candidati = await q.ToListAsync(ferma);
 
             // 3. gemellaggio in memoria, come l'originale (tutti i gemelli, non il primo)

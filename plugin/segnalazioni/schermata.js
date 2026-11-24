@@ -59,6 +59,8 @@ const reportConfrontoCsv = require('../reportIntegrita/csv');
 const VistaAffiancata = require('../vistaAffiancata');
 //I20-1123: riaprendo il popup dopo la scheda, il campo in cui si scriveva torna a riposo.
 const CampiARiposo = require('../campiARiposo');
+//I20-1261: la traccia SGN-17 sulla scelta delle segnalazioni disattivate, nel registro logs/.
+const { Logger } = require('../logger');
 
 //I colori della schermata, gli stessi del bollino: rosso gli errori, arancione i warning.
 const COLORE_CSS = { error: "#c62828", warning: "#ef6c00", notifica: "#1565c0" };
@@ -102,7 +104,9 @@ const SchermataSegnalazioni = {
     CAMPO_DISATTIVATE: "segnalazioniDisattivate",
 
     /// I20-1126: l'ultima lettura del campo, per documento: finalizzaSegnalazioni lo chiede a ogni box,
-    /// e il file delle lavorazioni non si rilegge ogni volta. { documento, valore }.
+    /// e il file delle lavorazioni non si rilegge ogni volta. { documento, cartella, valore }.
+    /// I20-1261: vale solo per lo stesso documento nella stessa cartella della lavorazione, e solo se
+    /// il file si e' letto davvero (vedi disattivate).
     _disattivateInMemoria: null,
 
     /// I20-1116, lotto 2: la colonna della vista affiancata (regole in vistaAffiancata.js, I20-1121).
@@ -544,6 +548,13 @@ const SchermataSegnalazioni = {
     /// di pagina. Senza pagine non si apre. Il report del giro resta il parametro di prima: le sue
     /// segnalazioni sono gia' nei bollini.
     apriSeCiSono(reportImpaginazioneObj, pagine = null) {
+        //I20-1261: a fine impaginazione, che cosa vale e da dove (memoria o file).
+        const inMemoria = SchermataSegnalazioni._disattivateInMemoria;
+        SchermataSegnalazioni._traccia("fine impaginazione", {
+            documento: (SchermataSegnalazioni._documento() || {}).name || null,
+            inMemoria: inMemoria != null ? inMemoria.documento + " = " + inMemoria.valore : "niente",
+            disattivate: SchermataSegnalazioni.disattivate()
+        });
         //I20-1126: con le segnalazioni disattivate la schermata non si apre da sola.
         if (SchermataSegnalazioni.disattivate()) {
             return Promise.resolve(false);
@@ -1040,21 +1051,49 @@ const SchermataSegnalazioni = {
     /// I20-1126: la voce della lavorazione del documento aperto, su questa macchina; null senza
     /// lavorazione. Usa le globali di indexNew (pathLavorazione, idMacchina,
     /// libroDelDocumentoInLavorazione).
-    _voceDellaLavorazione() {
+    /// I20-1261: dettagli, se c'e', riceve da dove si e' letto (documento, cartella, libro, esito)
+    /// per la traccia SGN-17.
+    _voceDellaLavorazione(dettagli = null) {
+        const annota = (campi) => { if (dettagli != null) Object.assign(dettagli, campi); };
         try {
             const documento = SchermataSegnalazioni._documento();
+            const cartella = typeof pathLavorazione === "undefined" ? undefined : pathLavorazione;
+            annota({ documento: documento != null ? documento.name : null, cartella: cartella });
             if (documento == null || typeof pathLavorazione === "undefined" || !pathLavorazione) {
+                annota({ esito: documento == null ? "nessun documento" : "cartella della lavorazione vuota" });
                 return null;
             }
             const nome = documento.name;
             const libro = typeof libroDelDocumentoInLavorazione === "function" ? libroDelDocumentoInLavorazione(nome) : null;
-            return Utility.voceLavorazione(pathLavorazione, idMacchina(), nome, libro);
+            annota({ libro: libro });
+            const voce = Utility.voceLavorazione(pathLavorazione, idMacchina(), nome, libro);
+            annota({ esito: voce != null ? "voce trovata" : "voce non trovata in lavorazioni.json" });
+            return voce;
         }
         catch (e) {
             console.error("Code SGN-11 Voce della lavorazione non letta:", e);
+            annota({ esito: "errore: " + (e && e.message ? e.message : e) });
             return null;
         }
     },
+
+    /// I20-1261: una riga SGN-17 nel registro del Plugin (logs/, file [segnalazioni]-log_<giorno>.log)
+    /// e in console. Serve a vedere quando la scelta delle segnalazioni disattivate si perde: non
+    /// cambia niente, e un errore della traccia non ferma niente.
+    _traccia(evento, dati = null) {
+        try {
+            const testo = "Code SGN-17 " + evento + (dati != null ? " " + JSON.stringify(dati) : "");
+            console.log(testo);
+            Logger.log(testo, "segnalazioni");
+        }
+        catch (e) {
+            //la traccia non deve fermare niente
+        }
+    },
+
+    /// I20-1261: gli esiti di _voceDellaLavorazione che vengono dal file delle lavorazioni: solo
+    /// questi si tengono in memoria. Senza documento, senza cartella o con un errore si rilegge.
+    ESITI_DAL_FILE: ["voce trovata", "voce non trovata in lavorazioni.json"],
 
     /// I20-1126: se la voce dice che le segnalazioni sono disattivate.
     disattivateNellaVoce(voce) {
@@ -1063,6 +1102,10 @@ const SchermataSegnalazioni = {
 
     /// I20-1126: se le segnalazioni sono disattivate per la lavorazione del documento aperto. La
     /// lettura si tiene per documento: la chiede ogni box impaginato.
+    /// I20-1261: il segnalino la chiede anche cambiando documento e all'avvio, prima che il Plugin
+    /// sappia in quale cartella sta la lavorazione: quella risposta ("attive") non si tiene, e la
+    /// memoria vale solo per la stessa cartella. Altrimenti la scelta salvata nel file non si
+    /// rileggeva piu' e i bollini tornavano.
     disattivate() {
         try {
             const documento = SchermataSegnalazioni._documento();
@@ -1070,15 +1113,27 @@ const SchermataSegnalazioni = {
             if (chiave == null) {
                 return false;
             }
+            const cartella = typeof pathLavorazione === "undefined" ? "" : (pathLavorazione || "");
             const inMemoria = SchermataSegnalazioni._disattivateInMemoria;
-            if (inMemoria != null && inMemoria.documento === chiave) {
+            if (inMemoria != null && inMemoria.documento === chiave && inMemoria.cartella === cartella) {
                 return inMemoria.valore;
             }
-            const valore = SchermataSegnalazioni.disattivateNellaVoce(SchermataSegnalazioni._voceDellaLavorazione());
-            SchermataSegnalazioni._disattivateInMemoria = { documento: chiave, valore: valore };
+            const dettagli = {};
+            const voce = SchermataSegnalazioni._voceDellaLavorazione(dettagli);
+            const valore = SchermataSegnalazioni.disattivateNellaVoce(voce);
+            //I20-1261: ogni lettura dal file, con quello che c'era in memoria prima.
+            SchermataSegnalazioni._traccia("lettura dal file", Object.assign(dettagli, {
+                campo: voce != null ? (voce[SchermataSegnalazioni.CAMPO_DISATTIVATE] === undefined ? "assente" : voce[SchermataSegnalazioni.CAMPO_DISATTIVATE]) : "nessuna voce",
+                disattivate: valore,
+                inMemoriaPrima: inMemoria != null ? inMemoria.documento + " = " + inMemoria.valore : "niente"
+            }));
+            SchermataSegnalazioni._disattivateInMemoria = SchermataSegnalazioni.ESITI_DAL_FILE.includes(dettagli.esito)
+                ? { documento: chiave, cartella: cartella, valore: valore }
+                : null;
             return valore;
         }
         catch (e) {
+            SchermataSegnalazioni._traccia("lettura non riuscita, vale 'attive'", { errore: e && e.message ? e.message : String(e) });
             return false;
         }
     },
@@ -1101,6 +1156,7 @@ const SchermataSegnalazioni = {
                 voce[SchermataSegnalazioni.CAMPO_DISATTIVATE] = false;
             }
             Utility.salvaVoceLavorazione(pathLavorazione, idMacchina(), voce);
+            SchermataSegnalazioni._traccia("scelta salvata", { disattivate: disattivate === true, documento: voce.file, libro: voce.libro || null, idLavorazione: voce.id, cartella: pathLavorazione });
         }
         catch (e) {
             console.error("Code SGN-13 Voce della lavorazione non salvata:", e);

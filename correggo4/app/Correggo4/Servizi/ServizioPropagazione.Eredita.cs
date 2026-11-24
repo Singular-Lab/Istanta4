@@ -120,7 +120,13 @@ public sealed partial class ServizioPropagazione
                                 join v in ctx.Volantinis.AsNoTracking() on p.IdVol equals v.Id
                                 where e.IdParent == null && e.Basecode != ""
                                       && v.Status == StatoVolantinoAperto && v.DataScadenza > adesso
-                                      && !(p.IdVol == idVol && p.Versione == versioneNuova)
+                                      // I20-1262: i gemelli stanno su altri volantini. La versione
+                                      // precedente di questo volantino non lo e': le sue correzioni non
+                                      // eseguite restano li' come Irrisolte (caso A) e non tornano sulla
+                                      // versione nuova come proposte sbiadite. Le versioni chiuse non
+                                      // propongono niente, come nella costruzione della catena.
+                                      && p.IdVol != idVol
+                                      && !ctx.VolantiniVersionis.Any(ver => ver.Id == p.IdVersione && ver.DataChiusura != null)
                                       // I20-1149: mai dalle versioni revocate (negative), neanche di
                                       // un volantino alla versione 0
                                       && p.Versione > 0

@@ -473,24 +473,35 @@ function MenaboPromoPage() {
         setTimeout(() => ghost.remove(), 0);
     };
 
-    // Nota di pagina: nessun payload (il testo si scrive dopo il drop, sul post-it).
+    // Nota di pagina: nessun payload (il testo si scrive dopo il drop, sulla nota).
+    // L'immagine trascinata è una piccola scheda come quella che comparirà nel pannello delle note della pagina.
     const onNoteDragStart = (e: React.DragEvent) => {
         e.dataTransfer.setData(DRAG_TYPE_NOTE, "1");
         e.dataTransfer.effectAllowed = "copy";
 
         const ghost = document.createElement("div");
         ghost.style.cssText = [
-            "position:fixed;top:-9999px;left:0",
-            "background:#fef3c7;color:#92400e;border:1px solid #fcd34d",
-            "padding:6px 12px;border-radius:6px",
-            "font-size:12px;font-weight:600",
-            "white-space:nowrap;pointer-events:none",
-            "box-shadow:0 6px 18px rgba(15,23,42,0.18)",
+            "position:fixed;top:-9999px;left:0;width:150px",
+            "background:#ffffff;color:#334155;border:1px solid #fcd34d;border-radius:8px",
+            "padding:8px 10px;pointer-events:none",
+            "box-shadow:0 10px 24px rgba(15,23,42,0.22)",
+            "font:600 11px system-ui,sans-serif",
         ].join(";");
-        ghost.textContent = "Nota";
+        const intestazione = document.createElement("div");
+        intestazione.style.cssText = "display:flex;align-items:center;gap:6px;margin-bottom:7px";
+        const pallino = document.createElement("span");
+        pallino.style.cssText = "width:6px;height:6px;border-radius:999px;background:#f59e0b;flex:none";
+        const titolo = document.createElement("span");
+        titolo.textContent = "Nota";
+        intestazione.append(pallino, titolo);
+        ghost.appendChild(intestazione);
+        for (const larghezza of ["100%", "72%"]) {
+            const riga = document.createElement("div");
+            riga.style.cssText = `height:5px;border-radius:3px;background:#e2e8f0;margin-top:5px;width:${larghezza}`;
+            ghost.appendChild(riga);
+        }
         document.body.appendChild(ghost);
-        const _w = ghost.offsetWidth;
-        e.dataTransfer.setDragImage(ghost, _w / 2, 16);
+        e.dataTransfer.setDragImage(ghost, 75, 20);
         setTimeout(() => ghost.remove(), 0);
     };
 
@@ -960,22 +971,18 @@ function MenaboPromoPage() {
                             <div
                                 draggable
                                 onDragStart={onNoteDragStart}
-                                className="group relative flex cursor-grab items-center justify-between overflow-hidden rounded-card border border-amber-200/80 bg-gradient-to-br from-amber-50 via-white to-orange-50 px-3 py-2.5 text-left shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-300 hover:shadow-md active:translate-y-0 active:cursor-grabbing dark:border-amber-500/30 dark:from-amber-950/35 dark:via-darkmode-700 dark:to-darkmode-700"
+                                className="group flex cursor-grab items-center justify-between rounded-control border border-primary/20 bg-primary/5 px-3 py-2 text-left transition-opacity active:cursor-grabbing"
                                 title="Trascina su una pagina per aggiungere un promemoria (non viene stampato)"
                             >
-                                <span className="absolute inset-y-2 left-0 w-1 rounded-r-full bg-amber-400/80 dark:bg-amber-300/70" />
-                                <span className="flex min-w-0 items-center gap-2 truncate pl-1 text-xs font-semibold text-slate-700 dark:text-slate-100">
-                                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-control bg-amber-100 text-amber-700 ring-1 ring-amber-200/80 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-400/25">
-                                        <Lucide icon="StickyNote" className="h-3.5 w-3.5" />
-                                    </span>
-                                    <span className="flex min-w-0 flex-col">
-                                        <span className="truncate">Promemoria pagina</span>
-                                        <span className="truncate text-3xs font-medium text-slate-400 dark:text-slate-500">visibile solo nel menabò</span>
+                                <span className="flex min-w-0 items-center gap-2">
+                                    <Lucide icon="StickyNote" className="h-3.5 w-3.5 flex-shrink-0 text-amber-600 dark:text-amber-300" />
+                                    <span className="truncate text-xs font-bold uppercase tracking-normal text-slate-700 dark:text-slate-200">
+                                        Promemoria pagina
                                     </span>
                                 </span>
                                 <Lucide
                                     icon="GripVertical"
-                                    className="ml-2 h-3.5 w-3.5 flex-shrink-0 text-amber-500/70 opacity-60 transition-opacity group-hover:opacity-100"
+                                    className="ml-2 h-3.5 w-3.5 flex-shrink-0 text-slate-400 opacity-70 transition-opacity group-hover:opacity-100"
                                 />
                             </div>
                             <p className="text-2xs leading-snug text-slate-400">

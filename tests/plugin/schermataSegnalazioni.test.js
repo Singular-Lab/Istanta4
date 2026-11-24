@@ -1763,3 +1763,99 @@ test("I20-1234: solo la lettura di tutto il documento si tiene per il riuso", ()
     const corpo = schermata.substring(schermata.indexOf("    letturaControllata(pagine) {"), schermata.indexOf("    ricontrollaElementiDaPosizionare(lette) {"));
     assert.match(corpo, /SchermataSegnalazioni\._ultimaLettura = Array\.isArray\(pagine\) \? SchermataSegnalazioni\._ultimaLettura\s*: \{ documento: SchermataSegnalazioni\._identitaDocumento\(\), lette: lette\.slice\(\), quando: Date\.now\(\) \};/);
 });
+
+test("I20-1261: la traccia SGN-17 dice da dove viene la scelta, e non la cambia", () => {
+    const prima = SchermataSegnalazioni._traccia;
+    const righe = [];
+    SchermataSegnalazioni._traccia = (evento, dati) => righe.push({ evento, dati });
+    try {
+        conLavorazione({ file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: true }, () => {
+            assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+            assert.strictEqual(SchermataSegnalazioni.disattivate(), true);   //dalla memoria: nessuna riga in piu'
+            assert.strictEqual(righe.length, 1);
+            assert.strictEqual(righe[0].evento, "lettura dal file");
+            assert.deepStrictEqual(righe[0].dati, {
+                documento: "VOL_P2623.indd", cartella: "/lavorazioni/", libro: null, esito: "voce trovata",
+                campo: true, disattivate: true, inMemoriaPrima: "niente"
+            });
+        });
+
+        //Senza la cartella della lavorazione la voce non si legge: oggi vale "attive", e la traccia lo dice.
+        righe.length = 0;
+        conLavorazione({ file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: true }, () => {
+            global.pathLavorazione = "";
+            assert.strictEqual(SchermataSegnalazioni.disattivate(), false);
+            assert.strictEqual(righe[0].dati.esito, "cartella della lavorazione vuota");
+            assert.strictEqual(righe[0].dati.campo, "nessuna voce");
+        });
+
+        //Il salvataggio della scelta si traccia anche lui.
+        righe.length = 0;
+        conLavorazione({ file: "VOL_P2623.indd", id: 3227 }, () => {
+            assert.strictEqual(SchermataSegnalazioni.impostaDisattivate(true), true);
+            const salvata = righe.find(r => r.evento === "scelta salvata");
+            assert.deepStrictEqual(salvata.dati, { disattivate: true, documento: "VOL_P2623.indd", libro: null, idLavorazione: 3227, cartella: "/lavorazioni/" });
+        });
+    }
+    finally {
+        SchermataSegnalazioni._traccia = prima;
+    }
+});
+
+test("I20-1261: la traccia va nel registro del Plugin con il codice SGN-17", () => {
+    const schermata = leggiFileDelPlugin("segnalazioni/schermata.js");
+    assert.ok(schermata.includes("const { Logger } = require('../logger');"));
+    assert.ok(schermata.includes('Logger.log(testo, "segnalazioni");'));
+    assert.ok(schermata.includes('SchermataSegnalazioni._traccia("fine impaginazione", {'));
+});
+
+test("I20-1261: la risposta data prima di conoscere la cartella non resta: la scelta del file vale appena la cartella c'e'", () => {
+    //Cambiando documento, o all'avvio, il segnalino chiede la scelta prima che il Plugin sappia la
+    //cartella della lavorazione: oggi risponde "attive", ma la volta dopo deve rileggere il file.
+    conLavorazione({ file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: true }, () => {
+        global.pathLavorazione = "";
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), false);
+        assert.strictEqual(SchermataSegnalazioni._disattivateInMemoria, null);
+
+        global.pathLavorazione = "/lavorazioni/";
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+        assert.deepStrictEqual(SchermataSegnalazioni._disattivateInMemoria, { documento: "VOL_P2623.indd", cartella: "/lavorazioni/", valore: true });
+    });
+});
+
+test("I20-1261: la risposta letta nella cartella del documento di prima non vale per quella giusta", () => {
+    conLavorazione({ file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: true }, () => {
+        //Nella cartella di un altro documento la voce di questo non c'e'.
+        const vera = global.Utility.voceLavorazione;
+        global.pathLavorazione = "/altro-documento/";
+        global.Utility.voceLavorazione = (base, ...resto) => base === "/altro-documento/" ? null : vera(base, ...resto);
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), false);
+
+        global.pathLavorazione = "/lavorazioni/";
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+    });
+});
+
+test("I20-1261: una lettura in errore non resta in memoria", () => {
+    conLavorazione({ file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: true }, () => {
+        const vera = global.Utility.voceLavorazione;
+        global.Utility.voceLavorazione = () => { throw new Error("file occupato"); };
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), false);
+        assert.strictEqual(SchermataSegnalazioni._disattivateInMemoria, null);
+
+        global.Utility.voceLavorazione = vera;
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+    });
+});
+
+test("I20-1261: stesso documento e stessa cartella, la scelta viene dalla memoria senza rileggere il file", () => {
+    conLavorazione({ file: "VOL_P2623.indd", id: 3227, segnalazioniDisattivate: true }, () => {
+        let letture = 0;
+        const vera = global.Utility.voceLavorazione;
+        global.Utility.voceLavorazione = (...a) => { letture++; return vera(...a); };
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+        assert.strictEqual(SchermataSegnalazioni.disattivate(), true);
+        assert.strictEqual(letture, 1);
+    });
+});
