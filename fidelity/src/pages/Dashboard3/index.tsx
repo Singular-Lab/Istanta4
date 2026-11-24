@@ -28,6 +28,7 @@ import type { PeriodoConsultazione } from "../../../lib/consultazione/periodi";
 import type { PaginaVolantiniConsultazione, VolantinoConsultazione } from "../../../lib/consultazione/tipi";
 import { dimensioneSezionePanoramica, urlVolantiniConsultazione } from "../../query/consultazione";
 import { MOTIVO_SENZA_PERMESSO_SCARICA, useScaricaFileConsultazione } from "../../utils/scaricaFileConsultazione";
+import { urlMiniatura } from "../../utils/materiali";
 
 // Dati di consultazione: solo volantini pubblicati della GDO, senza stato di lavorazione
 type KitVolantino = VolantinoConsultazione;
@@ -148,7 +149,7 @@ const KitCard: FC<{ kit: KitVolantino; showValidita?: boolean, routeClickable?: 
                                 onClick={() => setIsPreviewOpen(true)}
                             >
                                 <img
-                                    src={previewUrl}
+                                    src={urlMiniatura(previewUrl, 80)}
                                     alt={kit.titolo}
                                     className="h-full w-full object-cover"
                                     loading="lazy"

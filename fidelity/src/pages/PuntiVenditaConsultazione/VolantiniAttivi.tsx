@@ -4,6 +4,7 @@ import Sezione from "@/components/Base/Sezione";
 import Spinner from "@/components/Base/Spinner";
 import { useFetchVolantiniAttiviPuntoVendita } from "@/query/query";
 import { formatData } from "@/utils/format";
+import { urlMiniatura } from "@/utils/materiali";
 
 /**
  * Volantini delle promo valide, dai kit pubblicati con la stessa area e lo stesso canale del
@@ -55,7 +56,7 @@ export function VolantiniAttivi({ idPv, canaleArea }: { idPv: string; canaleArea
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6">
                 {v.files.map(f => (
                   <div key={f.id} className="overflow-hidden rounded-control border border-slate-200 dark:border-darkmode-400">
-                    <img src={f.url} alt={f.nome} loading="lazy" className="h-28 w-full bg-slate-50 object-cover object-top dark:bg-darkmode-700" />
+                    <img src={urlMiniatura(f.url, 280)} alt={f.nome} loading="lazy" className="h-28 w-full bg-slate-50 object-cover object-top dark:bg-darkmode-700" />
                     <div className="flex items-center gap-2 px-2.5 py-2">
                       <span className="truncate text-xs" title={f.nome}>{f.nome}</span>
                       <a href={f.url_download} download={f.nome_download} className="ml-auto flex flex-none items-center text-xs text-primary">

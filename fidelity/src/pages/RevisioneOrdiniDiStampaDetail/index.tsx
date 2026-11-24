@@ -31,6 +31,7 @@ import type { PromoResponseDTO } from '../../../server/core/dto';
 import DirectoryPicker from '../../components/DirectoryPicker';
 import { PreviewImmaginePdf } from '../../components/PreviewImmaginePdf';
 import { contaSelezionati, selezioneDaInviare } from './selezioneKit';
+import { urlMiniatura } from '../../utils/materiali';
 
 type GroupingResultFile = {
   id_olimpo_cloud: string;
@@ -1584,7 +1585,7 @@ const RevisioneOrdiniDiStampa: React.FC = () => {
                                     }}
                                   >
                                     <img
-                                      src={thumbSrc}
+                                      src={urlMiniatura(thumbSrc, 80)}
                                       alt={`Anteprima ${file.nome}`}
                                       className="h-full w-full object-contain p-1 transition-transform duration-200 group-hover/thumb:scale-110"
                                       loading="lazy"

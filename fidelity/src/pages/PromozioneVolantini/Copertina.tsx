@@ -3,6 +3,7 @@ import { twMerge } from "@/utils/twMerge";
 import { useState } from "react";
 import type { KitPromozioneConsultazione } from "../../../lib/consultazione/tipi";
 import { nomeKit } from "./analisi";
+import { urlMiniatura } from "@/utils/materiali";
 
 export interface CopertinaProps {
   kit: Pick<KitPromozioneConsultazione, "canale" | "area" | "copertina">;
@@ -54,7 +55,7 @@ export function Copertina({ kit, className, conNome = true, carta = false }: Cop
 
   return (
     <img
-      src={anteprima}
+      src={urlMiniatura(anteprima, 160)}
       alt=""
       loading="lazy"
       onLoad={() => setCaricata(true)}

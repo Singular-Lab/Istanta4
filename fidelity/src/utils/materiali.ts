@@ -42,6 +42,27 @@ export const urlPaginaMateriale = (idOlimpoCloud: string, pagina: number, misura
   return `${base}&width=${larghezza}&height=${altezza}`;
 };
 
+/** Proporzione larghezza/altezza di una pagina A4, quando non si conosce quella della pagina vera. */
+const PROPORZIONE_A4 = 210 / 297;
+
+/** Pixel dello schermo per px CSS con cui chiedere le miniature: il doppio, per gli schermi ad alta densità. */
+const DENSITA_MINIATURE = 2;
+
+/**
+ * Miniatura di un volantino alla misura in cui la scheda la mostra. Le anteprime degli elenchi arrivano come
+ * la pagina intera a 150 dpi (circa 9 MB di memoria una volta decodificata) per essere mostrate in poche
+ * decine di pixel: con `width` e `height` Olimpo la restituisce già ridotta. Un indirizzo che non è di
+ * Olimpo, o che ha già la sua misura, resta com'è. L'anteprima a pagina intera non passa di qui.
+ */
+export const urlMiniatura = (url: string, larghezzaCss: number, proporzione: number = PROPORZIONE_A4): string => {
+  if (!url || !url.includes("/materiali/getThumbnailMaterialePdfs") || /[?&]width=/.test(url)) return url;
+  if (!Number.isFinite(larghezzaCss) || larghezzaCss <= 0) return url;
+  const valida = Number.isFinite(proporzione) && proporzione > 0 ? proporzione : PROPORZIONE_A4;
+  const larghezza = Math.max(1, Math.round(larghezzaCss * DENSITA_MINIATURE));
+  const altezza = Math.max(1, Math.round(larghezza / valida));
+  return `${url}${url.includes("?") ? "&" : "?"}width=${larghezza}&height=${altezza}`;
+};
+
 /** Risoluzione delle pagine da leggere: quella delle foto dei volantini, sotto la quale le scritte piccole si perdono. */
 export const DPI_LETTURA = 300;
 

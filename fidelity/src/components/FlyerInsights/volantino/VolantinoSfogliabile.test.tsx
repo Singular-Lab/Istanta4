@@ -321,9 +321,9 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
     const { container } = disegna({ pdf: PDF, box: [boxDi("a")] });
 
     const immagine = immagineDi(1);
-    // La pagina da leggere arriva a 300 dpi, per le scritte dei prodotti allo zoom
-    expect(immagine).toHaveAttribute("src", urlPaginaDaLeggere("olimpo-1", 1));
-    expect(immagine.getAttribute("src")).toMatch(/&page=1&dpi=300$/);
+    // Si apre a 150 dpi: i 300 dpi (circa 35 MB per pagina in memoria) si chiedono solo allo zoom massimo
+    expect(immagine).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
+    expect(immagine.getAttribute("src")).not.toContain("dpi=");
     expect(immagine).toHaveAttribute("loading", "lazy");
     expect(pagina(1)).toHaveAttribute("data-immagine", "caricamento");
     // Nessun PDF scaricato né disegnato: solo immagini
@@ -372,7 +372,7 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
 
     expect(pagineSulPalco()).toEqual(["Pagina 4", "Pagina 5"]);
     const pronte = [...screen.getByTestId("pagine-pronte").querySelectorAll("img")].map(img => img.getAttribute("src"));
-    expect(pronte).toEqual([2, 3, 6, 7].map(numero => urlPaginaDaLeggere("olimpo-1", numero)));
+    expect(pronte).toEqual([2, 3, 6, 7].map(numero => urlPaginaMateriale("olimpo-1", numero)));
     expect(screen.queryByRole("group", { name: "Pagina 9" })).not.toBeInTheDocument();
   });
 
@@ -398,7 +398,7 @@ describe("VolantinoSfogliabile: pagine dalle immagini di Olimpo", () => {
     fireEvent.click(screen.getByRole("button", { name: "Schermo intero" }));
 
     const grande = await screen.findByTestId("volantino-schermo-intero");
-    expect(within(grande).getByRole("group", { name: "Pagina 1" }).querySelector("img")).toHaveAttribute("src", urlPaginaDaLeggere("olimpo-1", 1));
+    expect(within(grande).getByRole("group", { name: "Pagina 1" }).querySelector("img")).toHaveAttribute("src", urlPaginaMateriale("olimpo-1", 1));
   });
 });
 
@@ -799,6 +799,78 @@ describe("VolantinoSfogliabile: zoom", () => {
     expect(zoom()).toHaveTextContent(`${Math.round(massimo * 100)}%`);
     expect(libro()).toHaveAttribute("data-zoom", String(massimo));
     expect(ingrandisci).toBeDisabled();
+  });
+
+  describe("pagine a 150 dpi, a 300 dpi solo allo zoom massimo (task a2fb02c1)", () => {
+    const caricaBase = (immagine: HTMLImageElement) => {
+      Object.defineProperty(immagine, "naturalWidth", { configurable: true, value: 1240 });
+      Object.defineProperty(immagine, "naturalHeight", { configurable: true, value: 1754 });
+      fireEvent.load(immagine);
+    };
+    const arrivaAlMassimo = () => {
+      const ingrandisci = screen.getByRole("button", { name: "Ingrandisci" });
+      for (let volta = 0; volta < 12 && !ingrandisci.hasAttribute("disabled"); volta++) fireEvent.click(ingrandisci);
+      return ingrandisci;
+    };
+    const preparaPalco = () => {
+      vi.spyOn(Element.prototype, "clientWidth", "get").mockReturnValue(1600);
+      vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(800);
+    };
+
+    it("senza zoom le pagine aperte hanno una sola immagine, a 150 dpi", () => {
+      preparaPalco();
+      disegna({ pdf: { idOlimpoCloud: "olimpo-1", pagine: 5 }, box: [boxDi("a")] });
+
+      const immagini = pagina(1).querySelectorAll("img");
+      expect(immagini).toHaveLength(1);
+      expect(immagini[0].getAttribute("src")).not.toContain("dpi=");
+    });
+
+    it("al massimo zoom della pagina a 150 dpi si aggiunge la stessa pagina a 300 dpi, invisibile finché non arriva", () => {
+      preparaPalco();
+      disegna({ pdf: { idOlimpoCloud: "olimpo-1", pagine: 5 }, box: [boxDi("a")] });
+      caricaBase(pagina(1).querySelector("img") as HTMLImageElement);
+      arrivaAlMassimo();
+
+      const immagini = pagina(1).querySelectorAll("img");
+      expect(immagini).toHaveLength(2);
+      // La pagina a 150 dpi resta sotto: lo zoom non mostra mai il fondo vuoto
+      expect(immagini[0].getAttribute("src")).not.toContain("dpi=");
+      expect(immagini[1]).toHaveAttribute("src", urlPaginaDaLeggere("olimpo-1", 1));
+      expect(immagini[1].className).toContain("invisible");
+    });
+
+    it("arrivata la pagina a 300 dpi si vede e il massimo zoom raddoppia", () => {
+      preparaPalco();
+      disegna({ pdf: { idOlimpoCloud: "olimpo-1", pagine: 5 }, box: [boxDi("a")] });
+      caricaBase(pagina(1).querySelector("img") as HTMLImageElement);
+      const ingrandisci = arrivaAlMassimo();
+      const massimoBase = zoomMassimo(1754, altezzaAdattata(1600, 800, 2 * A4), 1);
+      expect(libro()).toHaveAttribute("data-zoom", String(massimoBase));
+      expect(ingrandisci).toBeDisabled();
+
+      const alta = pagina(1).querySelectorAll("img")[1] as HTMLImageElement;
+      Object.defineProperty(alta, "naturalWidth", { configurable: true, value: 2480 });
+      Object.defineProperty(alta, "naturalHeight", { configurable: true, value: 3508 });
+      fireEvent.load(alta);
+
+      expect(alta.className).not.toContain("invisible");
+      expect(ingrandisci).not.toBeDisabled();
+      for (let volta = 0; volta < 12 && !ingrandisci.hasAttribute("disabled"); volta++) fireEvent.click(ingrandisci);
+      expect(Number(libro().getAttribute("data-zoom"))).toBeGreaterThan(massimoBase * 1.5);
+    });
+
+    it("le pagine vicine da preparare restano a 150 dpi anche allo zoom massimo", () => {
+      preparaPalco();
+      const { container } = disegna({ pdf: { idOlimpoCloud: "olimpo-1", pagine: 5 }, box: [boxDi("a")] });
+      caricaBase(pagina(1).querySelector("img") as HTMLImageElement);
+      arrivaAlMassimo();
+
+      const pronte = container.querySelector('[data-testid="pagine-pronte"]');
+      const url = [...(pronte?.querySelectorAll("img") ?? [])].map(img => img.getAttribute("src") ?? "");
+      expect(url.length).toBeGreaterThan(0);
+      expect(url.every(indirizzo => !indirizzo.includes("dpi="))).toBe(true);
+    });
   });
 
   it("Ctrl + rotella ingrandisce e riduce sul palco; la rotella da sola scorre senza cambiare lo zoom", () => {

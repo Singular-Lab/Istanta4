@@ -23,6 +23,7 @@ import { useLoaderData, useNavigate } from 'react-router-dom';
 import { ItemDisposition, STATO_LOG_FILE } from '../../../lib/enums';
 import { ServerCall } from '../../../lib/server_call';
 import { FileItemKit, RUNTIME_KIT } from '../../../lib/types';
+import { urlMiniatura } from '../../utils/materiali';
 
 const PROPERTY_LABELS: Record<string, string> = {
   nome: 'Nome file',
@@ -374,7 +375,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                           >
                             {file.url ? (
                               <img
-                                src={file.url}
+                                src={urlMiniatura(file.url, 200)}
                                 alt={file.nome}
                                 className="h-full w-full object-scale-down p-2"
                                 loading="lazy"
@@ -442,7 +443,7 @@ const DettagliKitOrdiniDiStampa: React.FC = () => {
                           >
                             {file.url ? (
                               <img
-                                src={file.url}
+                                src={urlMiniatura(file.url, 48)}
                                 alt={file.nome}
                                 className="h-full w-full object-contain p-1.5"
                                 loading="lazy"
