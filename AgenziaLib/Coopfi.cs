@@ -4902,7 +4902,7 @@ namespace AgenziaLib
                                 //Console.WriteLine($"Applico nuovo sconto {txt_sconto}");
                             }
 
-                            if (tema.Contains("PIU VALORE NEW CLIENTI") || tema.Contains("PIU VALORE CLIENTI"))
+                            if (tema.Contains("PIU VALORE NEW CLIENTI") || tema.Contains("PIU VALORE CLIENTI") || tema.Contains("PIU RISPARMIO CLIENTI"))
                             {
                                 //Cacolo prezzo soci
                                 decimal sconto_soci = txt_sconto;
@@ -4911,6 +4911,10 @@ namespace AgenziaLib
                                     sconto_soci = 40;
                                 }
                                 else if (txt_sconto == 30)
+                                {
+                                    sconto_soci = 50;
+                                }
+                                else if (txt_sconto == 40)
                                 {
                                     sconto_soci = 50;
                                 }
@@ -4966,7 +4970,7 @@ namespace AgenziaLib
                                 //va persa, e il codice si segnala come doppio. Non e' doppia la riga stessa, che ritrova se
                                 //stessa quando lo stesso canale e' ripetuto in canaliList.
                                 bool fusa = false;
-                                if (tema.Contains("PIU VALORE NEW CLIENTI"))
+                                if (tema.Contains("PIU VALORE NEW CLIENTI") || tema.Contains("PIU RISPARMIO CLIENTI"))
                                 {
                                     fusa = true;
                                     dictExist["txt_sconto_soci_doppia"] = dictObj["txt_sconto_soci_doppia"];
@@ -4974,7 +4978,7 @@ namespace AgenziaLib
                                     dictExist["prezzo_promo_kgl_soci_doppia"] = dictObj["prezzo_promo_kgl_soci_doppia"];
                                     dictExist["txt_sconto"] = dictObj["txt_sconto"];
                                 }
-                                else if (tema.Contains("PIU VALORE NEW SOCI") || tema.Contains("PIU VALORE SOCI"))
+                                else if (tema.Contains("PIU VALORE NEW SOCI") || tema.Contains("PIU VALORE SOCI") || tema.Contains("PIU RISPARMIO SOCI"))
                                 {
                                     fusa = true;
                                     //Deve ereditare le brciature
@@ -4984,7 +4988,7 @@ namespace AgenziaLib
                                     //Normalizzazione della colonna tema che prende SOCI
                                     dictExist["tema"] = tema;
                                 }
-                                else if (tipo_evento.Contains("PROMO"))
+                                else if (tipo_evento.Contains("PROMO") || tipo_evento.Contains("DEPLIANT"))
                                 {
                                     ////Significa che l'esistente ha i prezzi socio
                                     string tipo_evento_esistente = dictExist["tipo_evento"].ToString();
