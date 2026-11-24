@@ -21,6 +21,13 @@ describe("sottogruppi del menabò a due livelli (task 17ac016e)", () => {
         expect(sub[2].figli?.map(f => f.valoreCampo)).toEqual(["—"]);
     });
 
+    it("con la sola chiave della fascia i sottogruppi sono le fasce, senza figli", () => {
+        const sub = computeSubgroups([{ nome_campo: "fascia_sconto", label: "Fascia di sconto" }], "g", dati);
+        expect(sub.map(s => s.valoreCampo)).toEqual(["40-49", "30-39", "Senza sconto"]);
+        expect(sub.every(s => s.figli === undefined)).toBe(true);
+        expect(sub[0].availableRecords).toHaveLength(3);
+    });
+
     it("la fascia contiene tutte le referenze dei suoi sconti", () => {
         const [fascia] = computeSubgroups(SCONTO, "g", dati);
         expect(fascia.availableRecords.map(r => r.record.codice)).toEqual(["1", "2", "3"]);

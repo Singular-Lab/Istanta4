@@ -177,10 +177,13 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     private TEMA_ORDINATO_PER_SCONTO = "CAMPIONI DEL RISPARMIO";
     /** Task 17ac016e: campo calcolato con la fascia di sconto (solo per il tema ordinato per sconto). */
     private CHIAVE_FASCIA_SCONTO_MENABO = "fascia_sconto";
+    /** Solo le fasce: lo sconto preciso non è più un sottogruppo (i menabò salvati con la vecchia chiave restano validi). */
     private CHIAVI_SOTTOGRUPPI_MENABO_SCONTO = [
         { nome_campo: "fascia_sconto", label: "Fascia di sconto" },
-        { nome_campo: "txt_sconto", label: "Sconto" },
     ];
+    /** Ampiezza in punti delle fasce di sconto di CAMPIONI DEL RISPARMIO. */
+    private AMPIEZZA_FASCIA_SCONTO = 5;
+
     /** I20-1255: il campo con lo sconto della referenza. */
     private CHIAVE_SCONTO_MENABO = "txt_sconto";
     /** I20-1255: per Coop nel menabò si uniscono i gruppi in un solo ordine merceologico. */
@@ -2336,8 +2339,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 // valore di sconto, poi ordinati dal più alto al più basso, vuoto in fondo.
                 if (this.isTemaOrdinatoPerSconto(primary)) {
                     const scontoGrezzo = normalizeFieldValue(record[this.CHIAVE_SCONTO_MENABO]);
-                    const nuovo = !perFiltro.has(`${primary}\0${secondary}\0sconto:${scontoGrezzo}`);
-                    const filtro = aggiungi(`${primary}\0${secondary}\0sconto:${scontoGrezzo}`, [
+                    const chiaveSconto = `${primary}\0${secondary}\0sconto:${scontoGrezzo}`;
+                    const nuovo = !perFiltro.has(chiaveSconto);
+                    const filtro = aggiungi(chiaveSconto, [
                         { chiave: primaryField, operatore: "=" as const, valore: primary },
                         { chiave: this.CHIAVE_SCONTO_MENABO, operatore: "=" as const, valore: scontoGrezzo },
                         ...criteriSecondari,
@@ -2452,12 +2456,12 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
         return Number.isFinite(numero) && numero > 0 ? numero : -1;
     }
 
-    /** Task 17ac016e: la fascia di dieci punti dello sconto («40-49»), «Senza sconto» se vuoto, zero o illeggibile. */
+    /** Task 17ac016e: la fascia di cinque punti dello sconto («45-49»), «Senza sconto» se vuoto, zero o illeggibile. */
     private fasciaDiSconto(valore: unknown): string {
         const sconto = this.valoreSconto(valore);
         if (sconto <= 0) return "Senza sconto";
-        const inizio = Math.floor(sconto / 10) * 10;
-        return `${inizio}-${inizio + 9}`;
+        const inizio = Math.floor(sconto / this.AMPIEZZA_FASCIA_SCONTO) * this.AMPIEZZA_FASCIA_SCONTO;
+        return `${inizio}-${inizio + this.AMPIEZZA_FASCIA_SCONTO - 1}`;
     }
 
     /** Task 17ac016e: ai record del tema ordinato per sconto aggiunge la fascia, per i sottogruppi del menabò. */
