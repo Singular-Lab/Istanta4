@@ -175,6 +175,12 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     private TEMI_ESCLUSI_DA_FORMAT_PLUS = ["SPENDI PUNTI"];
     /** I20-1255: il tema che si ordina per sconto (dal più alto al più basso, vuoto in fondo) e non per merceologia. */
     private TEMA_ORDINATO_PER_SCONTO = "CAMPIONI DEL RISPARMIO";
+    /** Task 17ac016e: campo calcolato con la fascia di sconto (solo per il tema ordinato per sconto). */
+    private CHIAVE_FASCIA_SCONTO_MENABO = "fascia_sconto";
+    private CHIAVI_SOTTOGRUPPI_MENABO_SCONTO = [
+        { nome_campo: "fascia_sconto", label: "Fascia di sconto" },
+        { nome_campo: "txt_sconto", label: "Sconto" },
+    ];
     /** I20-1255: il campo con lo sconto della referenza. */
     private CHIAVE_SCONTO_MENABO = "txt_sconto";
     /** I20-1255: per Coop nel menabò si uniscono i gruppi in un solo ordine merceologico. */
@@ -233,6 +239,10 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
     }
 
     private getMenaboSubgroupKeys(nomeCampo: string, valoreCampo: string) {
+        // Task 17ac016e: CAMPIONI DEL RISPARMIO a fasce di sconto di dieci punti, poi lo sconto preciso.
+        if (nomeCampo === this.CHIAVE_CAMPO_MENABO && this.isTemaOrdinatoPerSconto(valoreCampo)) {
+            return this.CHIAVI_SOTTOGRUPPI_MENABO_SCONTO;
+        }
         if (nomeCampo === "format1" && valoreCampo === "FORMAT+") {
             return this.CHIAVI_SOTTOGRUPPI_MENABO_FORMAT_PLUS;
         }
@@ -397,7 +407,10 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
 
             // I20-1255: CAMPIONI DEL RISPARMIO segue lo sconto, non l'ordine merceologico.
-            for (const group of groups.values()) this.ordinaTemaPerSconto(group.records);
+            for (const group of groups.values()) {
+                this.ordinaTemaPerSconto(group.records);
+                this.aggiungiFasciaSconto(group.records);
+            }
 
             const raggruppamento: MenaboRisultato['risultati'][number]['raggruppamento'] = Array.from(groups.values()).map(group => ({
                 nome_campo: group.nome_campo,
@@ -2344,7 +2357,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 // il criterio reparto resta solo se il sottogruppo è stato trascinato esplicitamente.
                 const isJolly = primary.toLowerCase().includes("jolly");
                 const criterioTema = isJolly
-                    ? { chiave: primaryField, operatore: "in" as const, valore: "JOLLY" }
+                    ? { chiave: primaryField, operatore: "IN" as const, valore: "JOLLY" }
                     : { chiave: primaryField, operatore: "=" as const, valore: primary };
                 aggiungi(`${criterioTema.valore}\0${secondary}`, [criterioTema, ...criteriSecondari]);
             }
@@ -2354,7 +2367,7 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 for (const [secondary, temi] of temiDellUnione) {
                     const tuttiJolly = temi.every(t => t.toLowerCase().includes("jolly"));
                     const criterioTema = tuttiJolly
-                        ? { chiave: primaryField, operatore: "in" as const, valore: "JOLLY" }
+                        ? { chiave: primaryField, operatore: "IN" as const, valore: "JOLLY" }
                         : { chiave: primaryField, operatore: "=" as const, valore: temi.join("||") };
                     const limite = records.filter(r => {
                         const primary = normalizeFieldValue(r[primaryField]);
@@ -2392,6 +2405,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
                 // senza suddivisione per reparto.
                 const secondarioDelGruppo = (group: MenaboLayoutGruppoSalvato): string => {
                     const { field, esplicito } = resolveSecondaryField(group.sourceKey);
+                    // La fascia di sconto e lo sconto preciso sono già nei filtri dello sconto di CAMPIONI: il Plugin
+                    // non conosce la fascia e lo sconto non va ripetuto.
+                    if (field === this.CHIAVE_FASCIA_SCONTO_MENABO || field === this.CHIAVE_SCONTO_MENABO) return "";
                     return esplicito && field && field !== primaryField ? field : "";
                 };
 
@@ -2431,8 +2447,26 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
     /** I20-1255: lo sconto come numero; vuoto, zero o illeggibile valgono meno di qualunque sconto. */
     private valoreSconto(valore: unknown): number {
-        const numero = Number(String(valore ?? "").trim().replace(",", "."));
+        // Tollera «%», il segno meno («-30%») e la virgola decimale.
+        const numero = Number(String(valore ?? "").trim().replace("%", "").replace(",", ".").replace(/^[-−]/, ""));
         return Number.isFinite(numero) && numero > 0 ? numero : -1;
+    }
+
+    /** Task 17ac016e: la fascia di dieci punti dello sconto («40-49»), «Senza sconto» se vuoto, zero o illeggibile. */
+    private fasciaDiSconto(valore: unknown): string {
+        const sconto = this.valoreSconto(valore);
+        if (sconto <= 0) return "Senza sconto";
+        const inizio = Math.floor(sconto / 10) * 10;
+        return `${inizio}-${inizio + 9}`;
+    }
+
+    /** Task 17ac016e: ai record del tema ordinato per sconto aggiunge la fascia, per i sottogruppi del menabò. */
+    private aggiungiFasciaSconto(records: Array<Record<string, string>>): void {
+        // Copie: i record del tracciato non cambiano, così la fascia non diventa un campo filtro alla lettura dopo.
+        records.forEach((record, i) => {
+            if (!this.isTemaOrdinatoPerSconto(record[this.CHIAVE_CAMPO_MENABO])) return;
+            records[i] = { ...record, [this.CHIAVE_FASCIA_SCONTO_MENABO]: this.fasciaDiSconto(record[this.CHIAVE_SCONTO_MENABO]) };
+        });
     }
 
     /**

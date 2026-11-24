@@ -15,9 +15,10 @@ import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { TIPO_UTENTI } from "../../../lib/enums";
-import type { MenaboLayoutDivisioneSalvata, MenaboRisultatoCanale, MenaboSottogruppoChiave } from "../../../lib/types";
+import type { MenaboLayoutDivisioneSalvata, MenaboRisultatoCanale } from "../../../lib/types";
 import MenaboCanvas, { DRAG_TYPE_LABEL, DRAG_TYPE_NOTE, DRAG_TYPE_SIDEBAR, type CanvasRecordsPayload, type LabelDragPayload, type SidebarDragPayload } from "./MenaboCanvas";
-import { getGroupSourceKey, getRecordKey, getSubgroupSourceKey } from "./menaboChiavi";
+import { getGroupSourceKey, getRecordKey } from "./menaboChiavi";
+import { computeSubgroups, etichettaSottogruppo, filtraSottogruppi, type SubgroupEntry } from "./menaboSottogruppi";
 import { useMenaboPresence } from "./useMenaboPresence";
 
 const PALETTE = [
@@ -91,36 +92,6 @@ function parseScattoSubCodici(record: Record<string, string>): string[] {
     const codice = getRecordCodice(record);
     if (scatto.toLowerCase() === codice) return [];
     return scatto.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
-}
-
-interface SubgroupEntry {
-    nomeCampo: string;
-    valoreCampo: string;
-    label: string;
-    sourceKey: string;
-    availableRecords: { record: Record<string, string>; recordKey: string }[];
-}
-
-function computeSubgroups(
-    chiave: MenaboSottogruppoChiave,
-    groupSourceKey: string,
-    availableRecords: { record: Record<string, string>; recordKey: string }[],
-): SubgroupEntry[] {
-    const subMap = new Map<string, { record: Record<string, string>; recordKey: string }[]>();
-
-    for (const entry of availableRecords) {
-        const val = String(entry.record[chiave.nome_campo] ?? "").trim() || "—";
-        const arr = subMap.get(val) ?? [];
-        arr.push(entry);
-        subMap.set(val, arr);
-    }
-    return Array.from(subMap.entries()).map(([val, recs]) => ({
-        nomeCampo: chiave.nome_campo,
-        valoreCampo: val,
-        label: chiave.label,
-        sourceKey: getSubgroupSourceKey(groupSourceKey, chiave.nome_campo, val),
-        availableRecords: recs,
-    }));
 }
 
 function MenaboPromoPage() {
@@ -259,13 +230,11 @@ function MenaboPromoPage() {
             }));
             const availableRecords = records.filter(({ record, recordKey }) => !isHidden(record, recordKey));
 
-            const chiave = item.chiavi_sottogruppi?.[0];
-            const subgroups = chiave
-                ? computeSubgroups(chiave, sourceKey, records).map(sub => ({
-                    ...sub,
-                    availableRecords: sub.availableRecords.filter(({ record, recordKey }) => !isHidden(record, recordKey)),
-                }))
-                : [];
+            // CAMPIONI DEL RISPARMIO ha due chiavi (fascia di sconto, sconto preciso): i sottogruppi annidano.
+            const subgroups = filtraSottogruppi(
+                computeSubgroups(item.chiavi_sottogruppi ?? [], sourceKey, records),
+                ({ record, recordKey }) => !isHidden(record, recordKey),
+            );
 
             return { item, idx, sourceKey, availableRecords, subgroups };
         });
@@ -413,7 +382,7 @@ function MenaboPromoPage() {
     ) => {
         const records = sub.availableRecords.map(({ record }) => record);
         const recordKeys = sub.availableRecords.map(({ recordKey }) => recordKey);
-        const label = `${parentItem.valore_campo} · ${sub.valoreCampo}`;
+        const label = `${parentItem.valore_campo} · ${etichettaSottogruppo(sub.nomeCampo, sub.valoreCampo)}`;
         const payload: SidebarDragPayload = {
             valore_campo: label,
             nome_campo: sub.nomeCampo,
@@ -632,61 +601,72 @@ function MenaboPromoPage() {
                         {hasSubgroups && isExpanded && (
                             <div className="ml-6 flex flex-col border-l border-slate-200 dark:border-darkmode-400 pl-2 mb-1">
                                 {subgroups.map(sub => {
-                                    const hasSubgroupRecords = sub.availableRecords.length > 0;
+                                    const riga = (voce: SubgroupEntry, annidato: boolean) => {
+                                        const hasSubgroupRecords = voce.availableRecords.length > 0;
+
+                                        return (
+                                            <button
+                                                key={voce.sourceKey}
+                                                type="button"
+                                                draggable={hasSubgroupRecords}
+                                                onDragStart={e => {
+                                                    if (!hasSubgroupRecords) {
+                                                        e.preventDefault();
+                                                        return;
+                                                    }
+                                                    onSubgroupDragStart(e, item, voce, idx);
+                                                }}
+                                                onClick={e => {
+                                                    e.stopPropagation();
+                                                    if (!hasSubgroupRecords) return;
+                                                    setSelectedItem(voce.sourceKey);
+                                                }}
+                                                disabled={!hasSubgroupRecords}
+                                                className={clsx([
+                                                    "group flex items-center py-1.5",
+                                                    "text-left w-full rounded-control px-1 transition-colors",
+                                                    annidato && "pl-4",
+                                                    hasSubgroupRecords
+                                                        ? "cursor-grab active:cursor-grabbing hover:bg-slate-50 dark:hover:bg-darkmode-400"
+                                                        : "cursor-not-allowed opacity-40",
+                                                    selectedItem === voce.sourceKey &&
+                                                    "bg-slate-50 dark:bg-darkmode-400",
+                                                ])}
+                                            >
+                                                <div
+                                                    className="w-1.5 h-1.5 rounded-full flex-shrink-0 mr-2"
+                                                    style={{ background: color, opacity: annidato ? 0.5 : 0.75 }}
+                                                />
+                                                <span
+                                                    className={clsx(
+                                                        "truncate flex-1 text-xs",
+                                                        selectedItem === voce.sourceKey
+                                                            ? "text-primary font-medium"
+                                                            : annidato ? "text-slate-400 dark:text-slate-500" : "text-slate-500 dark:text-slate-400",
+                                                        !annidato && voce.figli && "font-semibold",
+                                                    )}
+                                                >
+                                                    {etichettaSottogruppo(voce.nomeCampo, voce.valoreCampo)}
+                                                </span>
+                                                <span className="ml-1.5 text-xs text-slate-400 flex-shrink-0 tabular-nums">
+                                                    {voce.availableRecords.length}
+                                                </span>
+                                                <Lucide
+                                                    icon="GripVertical"
+                                                    className={clsx(
+                                                        "w-3 h-3 ml-1 flex-shrink-0 text-slate-300 transition-opacity",
+                                                        hasSubgroupRecords ? "opacity-0 group-hover:opacity-100" : "opacity-0",
+                                                    )}
+                                                />
+                                            </button>
+                                        );
+                                    };
 
                                     return (
-                                        <button
-                                            key={sub.sourceKey}
-                                            type="button"
-                                            draggable={hasSubgroupRecords}
-                                            onDragStart={e => {
-                                                if (!hasSubgroupRecords) {
-                                                    e.preventDefault();
-                                                    return;
-                                                }
-                                                onSubgroupDragStart(e, item, sub, idx);
-                                            }}
-                                            onClick={e => {
-                                                e.stopPropagation();
-                                                if (!hasSubgroupRecords) return;
-                                                setSelectedItem(sub.sourceKey);
-                                            }}
-                                            disabled={!hasSubgroupRecords}
-                                            className={clsx([
-                                                "group flex items-center py-1.5",
-                                                "text-left w-full rounded-control px-1 transition-colors",
-                                                hasSubgroupRecords
-                                                    ? "cursor-grab active:cursor-grabbing hover:bg-slate-50 dark:hover:bg-darkmode-400"
-                                                    : "cursor-not-allowed opacity-40",
-                                                selectedItem === sub.sourceKey &&
-                                                "bg-slate-50 dark:bg-darkmode-400",
-                                            ])}
-                                        >
-                                            <div
-                                                className="w-1.5 h-1.5 rounded-full flex-shrink-0 mr-2"
-                                                style={{ background: color, opacity: 0.75 }}
-                                            />
-                                            <span
-                                                className={clsx(
-                                                    "truncate flex-1 text-xs",
-                                                    selectedItem === sub.sourceKey
-                                                        ? "text-primary font-medium"
-                                                        : "text-slate-500 dark:text-slate-400",
-                                                )}
-                                            >
-                                                {sub.valoreCampo}
-                                            </span>
-                                            <span className="ml-1.5 text-xs text-slate-400 flex-shrink-0 tabular-nums">
-                                                {sub.availableRecords.length}
-                                            </span>
-                                            <Lucide
-                                                icon="GripVertical"
-                                                className={clsx(
-                                                    "w-3 h-3 ml-1 flex-shrink-0 text-slate-300 transition-opacity",
-                                                    hasSubgroupRecords ? "opacity-0 group-hover:opacity-100" : "opacity-0",
-                                                )}
-                                            />
-                                        </button>
+                                        <div key={sub.sourceKey} className="flex flex-col">
+                                            {riga(sub, false)}
+                                            {sub.figli?.map(figlio => riga(figlio, true))}
+                                        </div>
                                     );
                                 })}
                             </div>

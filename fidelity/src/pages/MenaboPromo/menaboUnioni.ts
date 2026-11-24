@@ -82,3 +82,15 @@ export function normalizzaUnioni<T extends ElementoUnibile>(elementi: readonly T
 export function nuovoUnioneId(): string {
     return `unione-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
+
+/**
+ * Numero progressivo di ogni unione, nell'ordine in cui compare per prima: l'operatore legge «Unione 1»,
+ * «Unione 2» invece di un identificativo, e lo stesso numero vale su tutte le pagine del gruppo.
+ */
+export function numeroDelleUnioni<T extends ElementoUnibile>(elementi: readonly T[]): Map<string, number> {
+    const numeri = new Map<string, number>();
+    for (const e of elementi) {
+        if (e.unioneId && !numeri.has(e.unioneId)) numeri.set(e.unioneId, numeri.size + 1);
+    }
+    return numeri;
+}

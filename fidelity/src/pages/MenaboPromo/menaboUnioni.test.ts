@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gruppiDellUnione, normalizzaUnioni, sciogliUnione, togliGruppoDallUnione, unisciGruppi } from "./menaboUnioni";
+import { gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, sciogliUnione, togliGruppoDallUnione, unisciGruppi } from "./menaboUnioni";
 
 type El = { id: string; groupId: string; unioneId?: string };
 const base: El[] = [
@@ -51,5 +51,24 @@ describe("unioni di gruppi del menabò", () => {
     it("normalizza le unioni rimaste con un solo gruppo", () => {
         const r = normalizzaUnioni([{ id: "x", groupId: "A", unioneId: "u9" }, { id: "y", groupId: "B" }] as El[]);
         expect(r[0].unioneId).toBeUndefined();
+    });
+});
+
+describe("lettura dell'unione nel menabò (task 17ac016e)", () => {
+    it("numera le unioni nell'ordine in cui compaiono, lo stesso numero su tutte le pagine", () => {
+        const el: El[] = [
+            { id: "a-p1", groupId: "A", unioneId: "ux" },
+            { id: "b-p1", groupId: "B" },
+            { id: "c-p1", groupId: "C", unioneId: "uy" },
+            { id: "a-p2", groupId: "A", unioneId: "ux" },
+        ];
+        const numeri = numeroDelleUnioni(el);
+        expect(numeri.get("ux")).toBe(1);
+        expect(numeri.get("uy")).toBe(2);
+        expect(numeri.size).toBe(2);
+    });
+
+    it("senza unioni non numera niente", () => {
+        expect(numeroDelleUnioni(base).size).toBe(0);
     });
 });

@@ -17,7 +17,7 @@ import type { MenaboLayoutDivisioneSalvata, MenaboLayoutSalvato, RegoleMenabo } 
 import { useUser } from "../../context/UserContext";
 import { ricollegaElementiSalvati } from "./menaboChiavi";
 import { pagineDelGruppo, referenzeDellaPagina } from "./menaboSelezione";
-import { gruppiDellUnione, normalizzaUnioni, nuovoUnioneId, sciogliUnione, unisciGruppi } from "./menaboUnioni";
+import { gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, nuovoUnioneId, sciogliUnione, unisciGruppi } from "./menaboUnioni";
 // ── Document dimensions (A4 in points at 72 dpi) ──────────────────────────
 const DOC_W = 595;
 const DOC_H = 842;
@@ -819,6 +819,8 @@ export default function MenaboCanvas({
         if (normalizzati.some((item, i) => item !== items[i])) setItems(normalizzati);
     }, [items]);
     const unioneDelSelezionato = selectedItem?.unioneId;
+    // Task 17ac016e: «Unione 1», «Unione 2»… su ogni gruppo unito.
+    const numeriUnione = useMemo(() => numeroDelleUnioni(items), [items]);
     const gruppiUnitiAlSelezionato = useMemo(
         () => gruppiDellUnione(items, unioneDelSelezionato),
         [items, unioneDelSelezionato],
@@ -1979,7 +1981,7 @@ export default function MenaboCanvas({
                                                                                                 textTransform: "uppercase",
                                                                                             }}
                                                                                         >
-                                                                                            Gruppo scelto{item.unioneId ? " · unito" : ""}
+                                                                                            Gruppo scelto{item.unioneId ? ` · Unione ${numeriUnione.get(item.unioneId) ?? ""}` : ""}
                                                                                         </span>
 
                                                                                         <span
@@ -2356,10 +2358,21 @@ export default function MenaboCanvas({
                                     {unioneDelSelezionato ? (
                                         <>
                                             <p className="mb-2 text-slate-500">
-                                                Uniti in un solo ordine merceologico: {gruppiUnitiAlSelezionato
+                                                Unione {numeriUnione.get(unioneDelSelezionato) ?? ""}, in un solo ordine merceologico: {gruppiUnitiAlSelezionato
                                                     .map(id => items.find(item => item.groupId === id)?.label ?? id)
                                                     .join(" + ")}.
                                             </p>
+                                            <ul className="mb-2 list-disc pl-4 text-slate-500" data-testid="menabo-unione-pagine">
+                                                {gruppiUnitiAlSelezionato.map(id => {
+                                                    const pagine = pagineDelGruppo(paginated, id);
+                                                    return (
+                                                        <li key={id}>
+                                                            {items.find(item => item.groupId === id)?.label ?? id}
+                                                            <span className="ml-1 text-slate-400">{pagine.length > 0 ? `· pag. ${pagine.join(", ")}` : "· non collocato"}</span>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
                                             <Button type="button" size="xs" variant="outline-secondary" onClick={sciogliUnioneSelezionata}>
                                                 Sciogli unione
                                             </Button>
