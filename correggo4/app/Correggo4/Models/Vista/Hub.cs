@@ -28,6 +28,9 @@ public sealed class HubVolantini
     /// <summary>URL del logo del cliente (config "Cliente:LogoUrl"). Vuoto = segnaposto.</summary>
     public string LogoCliente { get; set; } = "";
 
+    /// <summary>I20-1271: le promo si dividono per canale (cartelline) solo per Agenzia e Marketing.</summary>
+    public bool CanaliVisibili { get; set; }
+
     public List<PromoHub> Promo { get; set; } = new();
 }
 
@@ -38,6 +41,8 @@ public sealed class PromoHub
     public DateTime? ValiditaInizio { get; set; }
     public DateTime? ValiditaFine { get; set; }
     public DateTime? Aggiornata { get; set; }
+    /// <summary>I20-1271: l'id della promo in Fidelity, per chiederle il canale. Null se nessun volantino lo porta.</summary>
+    public Guid? IdPromoFp { get; set; }
     public List<PdfHub> Volantini { get; set; } = new();
 }
 

@@ -72,7 +72,7 @@ public class VolantiniController : Controller
                 v.Id, v.Titolo, v.Classificazione,
                 v.DataValiditaInizio, v.DataValiditaFine, v.DataScadenza,
                 v.DataPubblicazione, v.UltimaPubblicazione,
-                v.IdAutoreBlocco, v.DataScadenzaBlocco
+                v.IdAutoreBlocco, v.DataScadenzaBlocco, v.IdPromoFp
             })
             .ToListAsync();
 
@@ -141,7 +141,7 @@ public class VolantiniController : Controller
             .ToDictionaryAsync(x => x.IdNota, x => x.Quanti);
 
         var pdfs = new List<(string Classificazione, DateTime Scadenza, DateTime Inizio, DateTime Fine,
-                              DateTime? Aggiornata, DateTime? Caricata, PdfHub Pdf)>();
+                              DateTime? Aggiornata, DateTime? Caricata, Guid? IdPromoFp, PdfHub Pdf)>();
 
         foreach (var v in vols)
         {
@@ -178,7 +178,7 @@ public class VolantiniController : Controller
             };
 
             pdfs.Add((v.Classificazione, v.DataScadenza, v.DataValiditaInizio, v.DataValiditaFine,
-                      v.UltimaPubblicazione ?? v.DataPubblicazione, v.DataPubblicazione, pdf));
+                      v.UltimaPubblicazione ?? v.DataPubblicazione, v.DataPubblicazione, v.IdPromoFp, pdf));
         }
 
         // Una promo e' attiva finche' e' valida: almeno un suo PDF ha la fine validita' da oggi in
@@ -199,6 +199,8 @@ public class VolantiniController : Controller
                 .Where(x => x.IdUtente == IdUtente).Select(x => (bool?)x.EmailNotifiche)
                 .FirstOrDefaultAsync() ?? true,
             LogoCliente = config["Cliente:LogoUrl"] ?? "",
+            // I20-1271: le cartelline dei canali solo per Agenzia e Marketing
+            CanaliVisibili = VedeCanali(utenteHome),
             // I20-1270: le promo stanno ferme, in ordine di primo caricamento su Correggo: in cima la
             // prima caricata, in fondo l'ultima. Una ripubblicazione dal Plugin non le sposta piu'
             // (prima si ordinava per ultima pubblicazione, decrescente). Il primo caricamento e'
@@ -213,6 +215,8 @@ public class VolantiniController : Controller
                         ValiditaInizio = g.Min(x => x.Inizio),
                         ValiditaFine = g.Max(x => x.Fine),
                         Aggiornata = g.Max(x => x.Aggiornata),
+                        // I20-1271: con questo la pagina chiede a Fidelity il canale della promo
+                        IdPromoFp = g.Select(x => x.IdPromoFp).FirstOrDefault(x => x != null),
                         Volantini = g.Select(x => x.Pdf).OrderBy(p => p.Titolo).ToList()
                     },
                     PrimoCaricamento = g.Min(x => x.Caricata),
@@ -226,6 +230,89 @@ public class VolantiniController : Controller
         };
 
         return View(modello);
+    }
+
+    /// <summary>
+    /// I20-1271: il canale delle promo della home, chiesto a Fidelity con l'id della promo
+    /// (?id=&lt;guid&gt;&amp;id=...). La home si disegna subito e chiama questa rotta: appena risponde,
+    /// divide la colonna Promo attive sotto le intestazioni dei canali. Risponde
+    /// { ok, dati: { canali: { idPromo: "B &amp; B1" }, ordine: ["A", "A-", "B &amp; B1"] } };
+    /// una promo che non e' in canali va in «Altre promo». Con Fidelity non configurato o che non
+    /// risponde: { ok: false, errore }, e la home resta com'era.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> CanaliPromo([FromQuery(Name = "id")] List<Guid>? id, [FromServices] ClienteFico fico)
+    {
+        // Solo Agenzia e Marketing: agli altri (Category, GDO senza tipo) si risponde di no senza chiamare Fidelity
+        if (!VedeCanali(await correzioni.UtenteAsync(IdUtente)))
+            return StatusCode(StatusCodes.Status403Forbidden, new { ok = false, errore = "La divisione per canale è solo per Agenzia e Marketing." });
+
+        var ids = (id ?? new()).Where(g => g != Guid.Empty).Distinct().Take(MaxPromoCanali).ToList();
+        if (ids.Count == 0)
+            return Ok(new { ok = true, dati = new { canali = new Dictionary<string, string>(), ordine = new List<string>() } });
+
+        var aree = await fico.AreePromoAsync(IdUtente, ids);
+        if (!aree.Ok)
+            return Ok(new { ok = false, errore = aree.Errore });
+
+        var (canali, ordine) = CanaliDaAree(aree.Dati!);
+        return Ok(new
+        {
+            ok = true,
+            dati = new { canali = canali.ToDictionary(c => c.Key.ToString(), c => c.Value), ordine }
+        });
+    }
+
+    /// <summary>
+    /// I20-1271: chi vede le promo divise per canale. L'Agenzia, e fra i GDO solo il Marketing: i Category
+    /// (e i GDO senza tipo) vedono la colonna come prima.
+    /// </summary>
+    public static bool VedeCanali(ServizioCorrezioni.Utente? u) =>
+        u != null && (u.Ruolo == Ruoli.CodiceAgenzia
+                      || (u.Ruolo == Ruoli.CodiceGdo && u.TipoFico == ServizioCorrezioni.TipoFicoMarketing));
+
+    /// <summary>Quante promo la home puo' chiedere in una volta (lo stesso limite di Fidelity).</summary>
+    private const int MaxPromoCanali = 200;
+
+    /// <summary>
+    /// I20-1271: il canale di ogni promo dalle aree dei suoi kit. Le promo con aree in comune stanno
+    /// sotto lo stesso canale, che le nomina tutte: per la Coop 0S26_26_B (aree B e B1) e
+    /// 0S26_26_TERRANUOVA_B1_UFI (area B1) vanno in «B &amp; B1», mentre A e A- restano separati.
+    /// Nessuna regola del cliente: lo dicono i dati di Fidelity. Una promo senza aree non ha canale
+    /// (va in «Altre promo»). I canali escono in ordine alfabetico: A, A-, B &amp; B1.
+    /// </summary>
+    public static (Dictionary<Guid, string> Canali, List<string> Ordine) CanaliDaAree(IReadOnlyDictionary<Guid, List<string>> aree)
+    {
+        // Unione delle aree che compaiono insieme in una promo (union-find sui codici)
+        var padre = new Dictionary<string, string>(StringComparer.Ordinal);
+        string Radice(string a)
+        {
+            while (padre[a] != a) a = padre[a] = padre[padre[a]];
+            return a;
+        }
+        foreach (var elenco in aree.Values)
+        {
+            var codici = elenco.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).ToList();
+            foreach (var c in codici) padre.TryAdd(c, c);
+            for (int i = 1; i < codici.Count; i++)
+            {
+                string r0 = Radice(codici[0]), ri = Radice(codici[i]);
+                if (r0 != ri) padre[ri] = r0;
+            }
+        }
+
+        var nomi = padre.Keys
+            .GroupBy(Radice)
+            .ToDictionary(g => g.Key, g => string.Join(" & ", g.OrderBy(c => c, StringComparer.Ordinal)));
+
+        var canali = new Dictionary<Guid, string>();
+        foreach (var (idPromo, elenco) in aree)
+        {
+            string? primo = elenco.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.Trim()).FirstOrDefault();
+            if (primo != null) canali[idPromo] = nomi[Radice(primo)];
+        }
+        var ordine = canali.Values.Distinct().OrderBy(n => n, StringComparer.Ordinal).ToList();
+        return (canali, ordine);
     }
 
     /// <summary>

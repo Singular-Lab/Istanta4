@@ -335,6 +335,77 @@ public sealed class ClienteFico
         }
     }
 
+    // ------------------------------------------------------------------ aree delle promo (Fidelity)
+
+    /// <summary>
+    /// I20-1271: le aree dei kit di ogni promo, chieste a Fidelity (GET getAreeKitByPromo) col
+    /// passaporto dell'utente come Bearer, come le chiamate a Istanta. Servono a dividere per canale la
+    /// colonna Promo attive. Fico:FidelityUrl e' la radice delle API di Fidelity (es.
+    /// "http://fidelity:3010/api"); senza, la home resta senza divisione. Le risposte si tengono in
+    /// memoria qualche minuto per promo: le aree di una promo cambiano di rado e la home si apre spesso.
+    /// </summary>
+    public async Task<EsitoFico<Dictionary<Guid, List<string>>>> AreePromoAsync(short idUtente, IReadOnlyCollection<Guid> idPromo)
+    {
+        var risultato = new Dictionary<Guid, List<string>>();
+        var mancanti = new List<Guid>();
+        foreach (var id in idPromo.Distinct())
+        {
+            if (AreeInMemoria.TryGetValue(id, out var m) && m.Scade > DateTime.UtcNow) risultato[id] = m.Aree;
+            else mancanti.Add(id);
+        }
+        if (mancanti.Count == 0) return EsitoFico<Dictionary<Guid, List<string>>>.Si(risultato);
+
+        string? radice = config["Fico:FidelityUrl"]?.Trim().TrimEnd('/');
+        if (string.IsNullOrEmpty(radice))
+            return EsitoFico<Dictionary<Guid, List<string>>>.No("Il collegamento con Fidelity non è configurato.");
+
+        string percorso = "/getAreeKitByPromo?idPromo=" + string.Join(",", mancanti);
+        for (int tentativo = 0; tentativo < 2; tentativo++)
+        {
+            var pass = await PassaportoAsync(idUtente, rinnova: tentativo > 0);
+            if (!pass.Ok) return EsitoFico<Dictionary<Guid, List<string>>>.No(pass.Errore!);
+
+            using var req = new HttpRequestMessage(HttpMethod.Get, radice + percorso);
+            req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", pass.Dati);
+            try
+            {
+                using var r = await Client().SendAsync(req);
+                string t = await r.Content.ReadAsStringAsync();
+                if (r.StatusCode == HttpStatusCode.Unauthorized && tentativo == 0) continue;
+                if (!r.IsSuccessStatusCode)
+                {
+                    log.LogWarning("Fidelity getAreeKitByPromo: HTTP {Http} {Testo}", (int)r.StatusCode, Taglia(t));
+                    return EsitoFico<Dictionary<Guid, List<string>>>.No($"Fidelity ha risposto con un errore ({(int)r.StatusCode}).");
+                }
+                using var d = JsonDocument.Parse(t);
+                if (!d.RootElement.TryGetProperty("aree", out var aree) || aree.ValueKind != JsonValueKind.Object)
+                    return EsitoFico<Dictionary<Guid, List<string>>>.No("Fidelity ha risposto in un formato inatteso.");
+                var scade = DateTime.UtcNow.AddMinutes(MinutiAreeInMemoria);
+                foreach (var id in mancanti)
+                {
+                    var elenco = new List<string>();
+                    if (aree.TryGetProperty(id.ToString(), out var a) && a.ValueKind == JsonValueKind.Array)
+                        foreach (var x in a.EnumerateArray())
+                            if (x.ValueKind == JsonValueKind.String && x.GetString() is { Length: > 0 } codice)
+                                elenco.Add(codice);
+                    risultato[id] = elenco;
+                    AreeInMemoria[id] = (elenco, scade);
+                }
+                return EsitoFico<Dictionary<Guid, List<string>>>.Si(risultato);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+            {
+                log.LogWarning(ex, "Fidelity getAreeKitByPromo non riuscita");
+                return EsitoFico<Dictionary<Guid, List<string>>>.No("Fidelity non risponde.");
+            }
+        }
+        return EsitoFico<Dictionary<Guid, List<string>>>.No("Fidelity non accetta l'accesso.");
+    }
+
+    /// <summary>Per quanti minuti si tengono in memoria le aree di una promo.</summary>
+    private const int MinutiAreeInMemoria = 10;
+    private static readonly ConcurrentDictionary<Guid, (List<string> Aree, DateTime Scade)> AreeInMemoria = new();
+
     /// <summary>Miniatura da Olimpo (rotte /foto pubbliche, lette dal server: il browser non deve vedere Olimpo).</summary>
     public async Task<(byte[]? Dati, string Tipo)> MiniaturaAsync(Guid guid, int larghezza, int altezza)
     {

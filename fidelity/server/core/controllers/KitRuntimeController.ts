@@ -35,6 +35,9 @@ const riassuntoDesign = (design: DESIGN_KIT) => ({
   filtriContesto: design.filtroContesto?.length ?? 0,
 });
 
+/** I20-1271: quante promo Correggo4 puo' chiedere in una volta a getAreeKitByPromo. */
+const MAX_PROMO_AREE = 200;
+
 export class KitRuntimeController extends BaseController {
 
   constructor(
@@ -53,6 +56,8 @@ export class KitRuntimeController extends BaseController {
     this.router.get('/getAllKitPerGestioneLavorazione/:idPromo', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getAllKitPerGestioneLavorazione.bind(this));
     this.router.get('/get_kit_per_gestione_lavorazione/:idPromo/:idKit', authMiddleware, permissionGuard('kit_runtime.visualizza'), this.getKitPerGestioneLavorazione.bind(this));
     this.router.put('/getKitByPromo', integrationAuthMiddleware, permissionGuard('kit_runtime.crea'), this.getKitByPromo.bind(this));
+    // I20-1271: la chiama Correggo4 da server, col bearer di Olympus, per dividere per canale le promo attive
+    this.router.get('/getAreeKitByPromo', integrationAuthMiddleware, permissionGuard('kit_runtime.visualizza'), this.getAreeKitByPromo.bind(this));
     this.router.delete('/mettiInStatoDiEliminazione/:id', authMiddleware, permissionGuard('kit_runtime.elimina'), this.mettiInStatoDiEliminazione.bind(this));
     this.router.delete('/eliminaKitRuntime/:id', authMiddleware, permissionGuard('kit_runtime.elimina'), this.eliminaKitRuntime.bind(this));
     this.router.delete('/eliminaFileKitRuntime/:id', authMiddleware, permissionGuard('kit_runtime.elimina_file'), this.eliminaFileKitRuntime.bind(this));
@@ -448,6 +453,28 @@ export class KitRuntimeController extends BaseController {
       );
       res.status(HttpStatusCode.OK).json(published);
     } catch (error: any) {
+      this.handleError(res, error);
+    }
+  }
+
+  /**
+   * I20-1271: GET /api/getAreeKitByPromo?idPromo=<id>,<id>,... -> { aree: { <id>: ["A", ...] } }.
+   * Gli id si possono anche ripetere (?idPromo=a&idPromo=b). Al massimo MAX_PROMO_AREE promo per chiamata.
+   */
+  private async getAreeKitByPromo(req: Request, res: Response): Promise<void> {
+    try {
+      const grezzi = ([] as unknown[]).concat(req.query.idPromo ?? []);
+      const idPromo = grezzi
+        .flatMap(v => typeof v === 'string' ? v.split(',') : [])
+        .map(v => v.trim())
+        .filter(Boolean);
+      if (idPromo.length > MAX_PROMO_AREE) {
+        res.status(HttpStatusCode.BAD_REQUEST).json({ message: `Al massimo ${MAX_PROMO_AREE} promo per richiesta` });
+        return;
+      }
+      const aree = await this.kitRuntimeService.getAreeKitByPromo(idPromo);
+      res.status(HttpStatusCode.OK).json({ aree });
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }
