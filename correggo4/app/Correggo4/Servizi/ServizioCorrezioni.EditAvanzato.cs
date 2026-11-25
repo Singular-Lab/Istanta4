@@ -92,6 +92,16 @@ public sealed partial class ServizioCorrezioni
 {
     public const short EaRegistrato = 0;   // StatoEditAvanzato.Registrato
     public const short EaCorretto = 2;     // StatoEditAvanzato.Corretto: confermata dall'Agenzia
+    /// <summary>
+    /// I20-1268: solo sulle righe propagate (rimandi) di un gemello. L'Agenzia ha confermato la correzione
+    /// sul volantino pilota e la conferma e' arrivata qui: per l'editor e' confermata come la 2, ma il
+    /// Plugin della lavorazione del gemello la riceve ancora fra quelle da applicare. Quando il Plugin la
+    /// applica diventa 2. Non e' un valore dell'originale.
+    /// </summary>
+    public const short EaConfermataDaApplicare = 3;
+
+    /// <summary>Confermata dall'Agenzia, qui o sul volantino pilota (I20-1268).</summary>
+    public static bool Confermata(short stato) => stato is EaCorretto or EaConfermataDaApplicare;
     public const short EaAnnullato = 4;    // StatoEditAvanzato.Annullato
 
     public const string ParteOfferta = "offerta";
@@ -690,7 +700,7 @@ public sealed partial class ServizioCorrezioni
         var (righe, capo) = await RigheParteAsync(box!.Id, parte == ParteLoghi ? ParteDescrizione : parte);
         if (capo == null || capo.Stato == EaAnnullato)
             return NonTrovata("Non c'è nessuna correzione da annullare.");
-        if (capo.Stato == EaCorretto)
+        if (Confermata(capo.Stato))
             return EsitoCorrezione.No(409, "gia_confermata",
                 "L'Agenzia ha già confermato questa correzione: non si può più annullare.");
         if (capo.IdAutore != u.Id)
@@ -799,6 +809,14 @@ public sealed partial class ServizioCorrezioni
         var finestraAperta = await FinestraApertaAsync(box.IdPagina);   // j209
         if (finestraAperta != null) return (finestraAperta, box.IdPagina);
 
+        // I20-1268: la conferma era gia' arrivata dal volantino pilota; ora il Plugin l'ha applicata.
+        if (capo.Stato == EaConfermataDaApplicare)
+        {
+            foreach (var riga in righe.Where(x => x.Stato == EaConfermataDaApplicare)) riga.Stato = EaCorretto;
+            await ctx.SaveChangesAsync();
+            return (null, box.IdPagina);
+        }
+
         // Passo 2 (decisione dell'11/9): il cambio foto va a Istanta; se Istanta rifiuta la conferma non
         // passa e la correzione resta in attesa. L'originale (Service.cs:2720) confermava comunque.
         if (parte == ParteDescrizione && fotoAIstanta)
@@ -823,6 +841,10 @@ public sealed partial class ServizioCorrezioni
         // TODO finestra Category: come AccettaNotaAsync, quando esistera' si rifiuta a finestra aperta.
         foreach (var riga in righe.Where(x => x.Stato == EaRegistrato)) riga.Stato = EaCorretto;
         await ctx.SaveChangesAsync();
+
+        // I20-1268: confermata sul volantino in cui e' nata, la correzione arriva confermata sui gemelli.
+        if (capo.IdElementoMaster == null)
+            await PropagaConfermaAiGemelliAsync(u, box, parte, capo.IdAutore);
         return (null, box.IdPagina);
     }
 

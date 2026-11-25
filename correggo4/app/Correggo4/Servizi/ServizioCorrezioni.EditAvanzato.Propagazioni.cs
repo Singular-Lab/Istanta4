@@ -70,7 +70,7 @@ public sealed partial class ServizioCorrezioni
                 Versione = g.Versione,
                 Etichetta = EtichettaProdotto(g.Box),
                 Propagato = rimando != null,
-                Fatto = rimando != null && rimando.Stato == EaCorretto,
+                Fatto = rimando != null && Confermata(rimando.Stato),
                 Proprio = proprio,
                 Bloccato = Bloccato(g.Vol, adesso),
                 Scaduto = Scaduto(g.Vol, adesso)
@@ -129,19 +129,10 @@ public sealed partial class ServizioCorrezioni
         if (Scaduto(volGemello, adesso))
             return EsitoCorrezione.No(423, "volantino_scaduto", $"«{volGemello.Titolo}» è scaduto.");
 
-        // dove va il rimando: sul box per i prezzi, sul figlio descrizione (o immagine) per la scheda
-        long bersaglio = gemello.Id;
-        if (parte == ParteDescrizione)
-        {
-            var figli = await ctx.VolantiniPagineElementis.AsNoTracking()
-                .Where(e => e.IdParent == gemello.Id).Select(e => new { e.Id, e.LabelInd }).ToListAsync();
-            var f = figli.FirstOrDefault(x => x.LabelInd == SchemaReferenza.LabelDescrizione)
-                    ?? figli.FirstOrDefault(x => x.LabelInd == SchemaReferenza.LabelImmagine);
-            if (f == null)
-                return EsitoCorrezione.No(409, "niente_da_propagare",
-                    "Il prodotto gemello non ha la descrizione: non c'è dove portare la correzione.");
-            bersaglio = f.Id;
-        }
+        var bersaglio = await BersaglioRimandoAsync(gemello.Id, parte);
+        if (bersaglio == null)
+            return EsitoCorrezione.No(409, "niente_da_propagare",
+                "Il prodotto gemello non ha la descrizione: non c'è dove portare la correzione.");
 
         var (righeGemello, capoGemello) = await RigheParteAsync(gemello.Id, parte);
         var rimando = righeGemello.FirstOrDefault(v => v.IdElementoMaster != null && v.Stato != EaAnnullato);
@@ -163,7 +154,7 @@ public sealed partial class ServizioCorrezioni
             }
             else
             {
-                var riga = NuovaRiga(bersaglio, gemello.IdPagina, u.Id, adesso, "[]");
+                var riga = NuovaRiga(bersaglio.Value, gemello.IdPagina, u.Id, adesso, "[]");
                 riga.IdElementoMaster = box.Id;
                 ctx.VolantiniPagineElementiVersionis.Add(riga);
             }
@@ -172,13 +163,67 @@ public sealed partial class ServizioCorrezioni
         {
             if (rimando == null || rimando.IdElementoMaster != box.Id)
                 return EsitoCorrezione.No(409, "uguale", "Su questo volantino non era propagata.");
-            if (rimando.Stato == EaCorretto)
+            if (Confermata(rimando.Stato))
                 return EsitoCorrezione.No(409, "gia_confermata",
                     "L'Agenzia ha già eseguito la correzione su questo volantino: non si toglie più.");
             ctx.VolantiniPagineElementiVersionis.Remove(rimando);
         }
         await ctx.SaveChangesAsync();
         return EsitoCorrezione.Fatto(new { idBox = gemello.Id, propagato = propaga });
+    }
+
+    /// <summary>
+    /// Dove va il rimando sul gemello: sul box per i prezzi, sul figlio descrizione (o immagine) per la
+    /// scheda. Null se il gemello non ha dove riceverla.
+    /// </summary>
+    private async Task<long?> BersaglioRimandoAsync(long idGemello, string parte)
+    {
+        if (parte != ParteDescrizione) return idGemello;
+        var figli = await ctx.VolantiniPagineElementis.AsNoTracking()
+            .Where(e => e.IdParent == idGemello).Select(e => new { e.Id, e.LabelInd }).ToListAsync();
+        var f = figli.FirstOrDefault(x => x.LabelInd == SchemaReferenza.LabelDescrizione)
+                ?? figli.FirstOrDefault(x => x.LabelInd == SchemaReferenza.LabelImmagine);
+        return f?.Id;
+    }
+
+    /// <summary>
+    /// I20-1268: l'Agenzia ha confermato la correzione sul volantino pilota (dall'editor o dal Plugin) e la
+    /// conferma va sui gemelli aperti, come "confermata, da applicare nel Plugin". Descrizione, foto e loghi
+    /// su tutti, anche dove non era ancora arrivata (gemelli aperti dopo il SALVA); i prezzi solo dove chi
+    /// correggeva l'aveva spuntata. Si saltano, come al SALVA, i gemelli con una correzione propria,
+    /// bloccati o scaduti. Il rimando nuovo porta l'autore della correzione, non chi conferma.
+    /// </summary>
+    private async Task PropagaConfermaAiGemelliAsync(Utente u, VolantiniPagineElementi box, string parte, short idAutore)
+    {
+        var elenco = await GemelliEditAsync(u, box.Id, parte);
+        if (!elenco.Ok || elenco.Dati is not List<GemelloEditVista> gemelli) return;
+        var adesso = DateTime.UtcNow;
+        foreach (var g in gemelli.Where(g => !g.Proprio && !g.Bloccato && !g.Scaduto))
+        {
+            if (parte == ParteOfferta && !g.Propagato) continue;   // prezzi: solo i gemelli spuntati
+
+            var (righeGemello, _) = await RigheParteAsync(g.IdBox, parte);
+            var rimando = righeGemello.FirstOrDefault(v => v.IdElementoMaster != null && v.Stato != EaAnnullato);
+            if (rimando == null)
+            {
+                var bersaglio = await BersaglioRimandoAsync(g.IdBox, parte);
+                if (bersaglio == null) continue;
+                int idPagina = await ctx.VolantiniPagineElementis.AsNoTracking()
+                    .Where(e => e.Id == g.IdBox).Select(e => e.IdPagina).FirstAsync();
+                rimando = NuovaRiga(bersaglio.Value, idPagina, idAutore, adesso, "[]");
+                rimando.IdElementoMaster = box.Id;
+                ctx.VolantiniPagineElementiVersionis.Add(rimando);
+            }
+            else if (rimando.IdElementoMaster != box.Id)
+            {
+                // arrivava da un altro pilota: si ripunta a questo, come al SALVA
+                rimando.IdElementoMaster = box.Id;
+                rimando.IdAutore = idAutore;
+                rimando.DataModifica = adesso;
+            }
+            if (rimando.Stato == EaRegistrato) rimando.Stato = EaConfermataDaApplicare;
+        }
+        await ctx.SaveChangesAsync();
     }
 
     // ------------------------------------------------------------------ lettura sul gemello
@@ -194,7 +239,7 @@ public sealed partial class ServizioCorrezioni
         var righe = await (from v in ctx.VolantiniPagineElementiVersionis.AsNoTracking()
                            join e in ctx.VolantiniPagineElementis.AsNoTracking() on v.IdElemento equals e.Id
                            where idPagine.Contains(e.IdPagina) && v.IdElementoMaster != null
-                                 && (v.Stato == EaRegistrato || v.Stato == EaCorretto)
+                                 && (v.Stato == EaRegistrato || v.Stato == EaCorretto || v.Stato == EaConfermataDaApplicare)
                            orderby v.Id
                            select new
                            {
@@ -250,7 +295,9 @@ public sealed partial class ServizioCorrezioni
                 IdPagina = r.IdPagina,
                 Pagina = numero.TryGetValue(r.IdPagina, out short np) ? np : (short)0,
                 Parte = parte,
-                Stato = r.Stato,
+                // I20-1268: confermata sul pilota e non ancora applicata dal Plugin: per l'editor e' confermata
+                Stato = r.Stato == EaConfermataDaApplicare ? EaCorretto : r.Stato,
+                DaApplicareNelPlugin = r.Stato == EaConfermataDaApplicare,
                 IdAutore = capoMaster.IdAutore,
                 Autore = nome(capoMaster.IdAutore),
                 TipoAutore = tipo(capoMaster.IdAutore),

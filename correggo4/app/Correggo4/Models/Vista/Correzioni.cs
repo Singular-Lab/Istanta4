@@ -97,6 +97,11 @@ public sealed class EditVista
     /// e le foto sono quelli del pilota; le evidenze sono sui campi di **questo** prodotto.
     /// </summary>
     public bool Propagata { get; set; }
+    /// <summary>
+    /// I20-1268: confermata dall'Agenzia sul volantino pilota (Stato 2 qui) ma non ancora applicata dal
+    /// Plugin di questa lavorazione, che la riceve ancora fra le correzioni da applicare.
+    /// </summary>
+    public bool DaApplicareNelPlugin { get; set; }
     /// <summary>Il box pilota, per aprire la correzione di partenza.</summary>
     public long IdBoxMaster { get; set; }
     /// <summary>Promo e volantino di provenienza ("vol_di_provenienza" dell'originale).</summary>

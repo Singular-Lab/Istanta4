@@ -263,7 +263,8 @@ public sealed partial class ServizioCorrezioni
             risultato.Correzioni.Add(c);
         }
 
-        foreach (var e in stato.Edit.Where(e => e.Stato == EaRegistrato))
+        // I20-1268: anche quelle confermate sul volantino pilota e arrivate qui, finche' il Plugin non le applica
+        foreach (var e in stato.Edit.Where(e => e.Stato == EaRegistrato || e.DaApplicareNelPlugin))
         {
             var c = Nuova($"{CorrezioneEdit}:{e.IdBox}:{e.Parte}", CorrezioneEdit, e.IdBox, e.Pagina, e.Autore, e.TipoAutore,
                           e.Data);
