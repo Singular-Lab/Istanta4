@@ -5,6 +5,8 @@
         this.editorContainer = null;
         this.sourceUri = null;
         this.initialized = false;
+        //I20-1269: un testo da mostrare al posto del file (lo schema generato dalla sezione Excel)
+        this.valoreIniziale = null;
 
         require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@latest/min/vs' } });
 
@@ -30,7 +32,7 @@
         let rndVersion = Math.floor(Math.random() * 999999);
         $.getJSON('/' + getWebAppRootFolder() + 'external_source' + exPathCustom + '/' + this.sourceUri + '.json?v1.' + rndVersion, function (data) {
 
-            let val = JSON.stringify(data);
+            let val = me.valoreIniziale != null ? me.valoreIniziale : JSON.stringify(data);
             console.log(val);
             require(['vs/editor/editor.main'], function () {
                 me.editorInstance = monaco.editor.create(me.editorContainer, {
@@ -60,6 +62,15 @@
         });
 
         
+    }
+
+    //I20-1269: mette nell'editor un testo che non viene dal file, senza salvarlo: se l'editor c'e' gia'
+    //lo sostituisce, altrimenti init lo usera' al posto del file. Si salva, come sempre, con save.
+    impostaValore(testo) {
+        this.valoreIniziale = testo;
+        if (this.editorInstance != null) {
+            this.editorInstance.setValue(testo);
+        }
     }
 
     //I20-1136: alTermine, facoltativo, riceve l'esito del salvataggio ({ esito, error }) per chi lo
