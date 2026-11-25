@@ -141,7 +141,7 @@ public class VolantiniController : Controller
             .ToDictionaryAsync(x => x.IdNota, x => x.Quanti);
 
         var pdfs = new List<(string Classificazione, DateTime Scadenza, DateTime Inizio, DateTime Fine,
-                              DateTime? Aggiornata, PdfHub Pdf)>();
+                              DateTime? Aggiornata, DateTime? Caricata, PdfHub Pdf)>();
 
         foreach (var v in vols)
         {
@@ -178,7 +178,7 @@ public class VolantiniController : Controller
             };
 
             pdfs.Add((v.Classificazione, v.DataScadenza, v.DataValiditaInizio, v.DataValiditaFine,
-                      v.UltimaPubblicazione ?? v.DataPubblicazione, pdf));
+                      v.UltimaPubblicazione ?? v.DataPubblicazione, v.DataPubblicazione, pdf));
         }
 
         // Una promo e' attiva finche' e' valida: almeno un suo PDF ha la fine validita' da oggi in
@@ -199,16 +199,29 @@ public class VolantiniController : Controller
                 .Where(x => x.IdUtente == IdUtente).Select(x => (bool?)x.EmailNotifiche)
                 .FirstOrDefaultAsync() ?? true,
             LogoCliente = config["Cliente:LogoUrl"] ?? "",
+            // I20-1270: le promo stanno ferme, in ordine di primo caricamento su Correggo: in cima la
+            // prima caricata, in fondo l'ultima. Una ripubblicazione dal Plugin non le sposta piu'
+            // (prima si ordinava per ultima pubblicazione, decrescente). Il primo caricamento e'
+            // data_pubblicazione, che ImportatorePack scrive alla prima pubblicazione riuscita e non
+            // tocca piu'; a parita', o senza data (in coda), vale l'ordine di inserimento (Id).
             Promo = attive
-                .Select(g => new PromoHub
+                .Select(g => new
                 {
-                    Classificazione = g.Key,
-                    ValiditaInizio = g.Min(x => x.Inizio),
-                    ValiditaFine = g.Max(x => x.Fine),
-                    Aggiornata = g.Max(x => x.Aggiornata),
-                    Volantini = g.Select(x => x.Pdf).OrderBy(p => p.Titolo).ToList()
+                    Hub = new PromoHub
+                    {
+                        Classificazione = g.Key,
+                        ValiditaInizio = g.Min(x => x.Inizio),
+                        ValiditaFine = g.Max(x => x.Fine),
+                        Aggiornata = g.Max(x => x.Aggiornata),
+                        Volantini = g.Select(x => x.Pdf).OrderBy(p => p.Titolo).ToList()
+                    },
+                    PrimoCaricamento = g.Min(x => x.Caricata),
+                    PrimoId = g.Min(x => x.Pdf.Id)
                 })
-                .OrderByDescending(p => p.Aggiornata)
+                .OrderBy(p => p.PrimoCaricamento == null)
+                .ThenBy(p => p.PrimoCaricamento)
+                .ThenBy(p => p.PrimoId)
+                .Select(p => p.Hub)
                 .ToList()
         };
 
