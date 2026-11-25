@@ -277,7 +277,7 @@ public sealed partial class ServizioStorico
         ids.AddRange(await (from v in ctx.VolantiniPagineElementiVersionis.AsNoTracking()
                             join e in ctx.VolantiniPagineElementis.AsNoTracking() on v.IdElemento equals e.Id
                             where pagine.Contains(e.IdPagina)
-                                  && (v.Stato == ServizioCorrezioni.EaRegistrato || v.Stato == ServizioCorrezioni.EaCorretto)
+                                  && (v.Stato == ServizioCorrezioni.EaRegistrato || ServizioCorrezioni.Confermata(v.Stato))
                             select (long?)e.Id).Distinct().ToListAsync());
         var idElementi = ids.Where(x => x != null).Select(x => x!.Value).Distinct().ToList();
         if (idElementi.Count == 0) return new();

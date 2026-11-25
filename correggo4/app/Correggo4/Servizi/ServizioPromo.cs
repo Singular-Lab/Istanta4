@@ -250,7 +250,7 @@ public sealed class ServizioPromo
             c.Stato = ServizioCorrezioni.StatoArchiviato;
         var idElementi = await ctx.VolantiniPagineElementis.Where(e => idPagine.Contains(e.IdPagina)).Select(e => e.Id).ToListAsync();
         foreach (var r in await ctx.VolantiniPagineElementiVersionis.Where(r => idElementi.Contains(r.IdElemento)
-                     && (r.Stato == ServizioCorrezioni.EaRegistrato || r.Stato == ServizioCorrezioni.EaCorretto)).ToListAsync())
+                     && (r.Stato == ServizioCorrezioni.EaRegistrato || ServizioCorrezioni.Confermata(r.Stato))).ToListAsync())
             r.Stato = ServizioCorrezioni.EaAnnullato;
 
         // 2. la versione esce di scena. L'originale le dava versione 0; qui un numero negativo sempre
