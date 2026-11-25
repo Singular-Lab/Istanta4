@@ -266,3 +266,37 @@ describe('menabò sempre corretto: pagine generiche, quota minima ed ereditariet
     expect(menabo(RIGHE, BOX, r)!.pagine.find(p => p.pagina === 22)?.nome).toBe('Pulizia casa');
   });
 });
+
+describe('quota del reparto prevalente con referenze senza reparto', () => {
+  const GENERICA = 'Og-OFFERTE generiche';
+  const lettura = {
+    repartoConfigurato: (id: string) => (id.startsWith('x') ? null : { codice: id.split('-')[0], descrizione: id.split('-')[0] }),
+    risolviReparto: (r: { codice: string; descrizione: string }) => ({ ...r, descrizione: r.codice === '24' ? 'Libero Servizio' : r.codice, marketing: true }),
+  };
+  // Il reparto si legge dall'id; gli id che iniziano per «x» sono referenze senza reparto
+  const pezzo = (id: string, pagina: number) => ({ riga: riga(id, { mastro: GENERICA }), box: scatola(id, pagina) });
+  const regolaFreschi = regole({
+    id: 'f', livello: 'pagina', sezione: 'Freschi',
+    condizione: gruppo(['@mastro_prevalente', 'contiene', 'Og-'], ['@reparto_prevalente', 'uguale', 'Libero Servizio'], ['@quota_reparto_prevalente', 'tra', '', ['70', '100']]),
+  });
+  const nome = (pezzi: Array<ReturnType<typeof pezzo>>) =>
+    menaboDi(pezzi.map(p => p.box), opzioniDellAgenzia(agenzia, pezzi.map(p => p.riga), regolaFreschi, lettura as never))?.pagine[0].nome;
+
+  it('metà delle referenze senza reparto: la quota si calcola su quelle che lo hanno', () => {
+    const sette = (prefisso: string, p: number) => [1, 2, 3, 4, 5, 6, 7].map(n => pezzo(`${prefisso}${n}`, p));
+    const conReparto = [1, 2, 3, 4, 5, 6, 7].map(n => pezzo(`24-${n}`, 7));
+    expect(nome([...sette('x', 7), ...conReparto])).toBe('Freschi');
+  });
+
+  it('meno di metà delle referenze con reparto: la quota resta calcolata su tutta la pagina', () => {
+    const senza = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => pezzo(`x${n}`, 7));
+    const con = [1, 2, 3].map(n => pezzo(`24-${n}`, 7));
+    // 3 su 13 = 23%: non arriva al 70%, la pagina resta «Offerte generiche»
+    expect(nome([...senza, ...con])).toBe('Offerte generiche');
+  });
+
+  it('tutti i reparti noti: la quota è quella di sempre', () => {
+    const misto = [...[1, 2, 3, 4, 5, 6].map(n => pezzo(`24-${n}`, 7)), ...[1, 2, 3, 4, 5].map(n => pezzo(`3-${n}`, 7))];
+    expect(nome(misto)).toBe('Offerte generiche');
+  });
+});

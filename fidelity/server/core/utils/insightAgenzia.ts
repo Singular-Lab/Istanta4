@@ -84,7 +84,10 @@ export function opzioniDellAgenzia(
           for (const valore of valoriDelleReferenze) if (valore) conti.set(valore, (conti.get(valore) ?? 0) + 1);
           let migliore: [string, number] | null = null;
           for (const voce of conti) if (!migliore || voce[1] > migliore[1]) migliore = voce;
-          return { valore: migliore?.[0] ?? null, quota: migliore && valoriDelleReferenze.length > 0 ? Math.round((migliore[1] * 100) / valoriDelleReferenze.length) : 0 };
+          // La quota si calcola sulle referenze che hanno il dato, se almeno metà della pagina lo ha; sotto, su tutte
+          const conDato = valoriDelleReferenze.filter(Boolean).length;
+          const base = conDato * 2 >= valoriDelleReferenze.length ? conDato : valoriDelleReferenze.length;
+          return { valore: migliore?.[0] ?? null, quota: migliore && base > 0 ? Math.round((migliore[1] * 100) / base) : 0 };
         };
         let sezioneDiPrima: string | null | undefined;
         let repartoPrevalente: { valore: string | null; quota: number } | undefined;

@@ -32,8 +32,14 @@ export function Banda({ dettaglio, insegne, tinta, idCanale, onScegliInsegna }: 
   return (
     <section
       aria-label="La promozione"
-      className="relative grid grid-cols-1 gap-6 overflow-hidden rounded-2xl bg-theme-1 px-5 py-6 text-white shadow-card sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-center lg:py-8"
+      className={twMerge(
+        "relative grid grid-cols-1 gap-6 overflow-hidden rounded-2xl bg-theme-1 px-5 py-6 text-white shadow-card sm:px-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-center lg:py-8",
+        // Il codice dell'iniziativa sta in alto a sinistra: il contenuto scende per lasciargli posto
+        promo.codiceIniziativa?.trim() && "pt-16 lg:pt-16"
+      )}
     >
+      {/* Il codice dell'iniziativa in alto a sinistra della banda */}
+      <BadgeIniziativa codice={promo.codiceIniziativa} suScuro className="absolute left-5 top-5 z-10 sm:left-8" />
       {/* Luce in diagonale e trama a puntini sopra la tinta del tema */}
       <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-transparent to-white/10" />
       <span
@@ -42,13 +48,9 @@ export function Banda({ dettaglio, insegne, tinta, idCanale, onScegliInsegna }: 
       />
 
       <div className="relative flex min-w-0 flex-col justify-center gap-3.5">
-        {/* Il codice dell'iniziativa per primo, poi il nome della promozione */}
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-          <BadgeIniziativa codice={promo.codiceIniziativa} suScuro />
-          <p className="title-eyebrow font-bold text-indigo-200 [overflow-wrap:anywhere]">
-            Volantini {ETICHETTA_PERIODO_CONSULTAZIONE[periodo]} · {promo.nome}
-          </p>
-        </div>
+        <p className="title-eyebrow font-bold text-indigo-200 [overflow-wrap:anywhere]">
+          Volantini {ETICHETTA_PERIODO_CONSULTAZIONE[periodo]} · {promo.nome}
+        </p>
         <p className="text-4xl font-extrabold leading-[0.98] tracking-tight [text-wrap:balance] sm:text-5xl xl:text-6xl">{testoValidita(promo)}</p>
         {kit.length > 0 && <p className="max-w-[44ch] text-base text-indigo-200">{fraseKit(kit)}.</p>}
       </div>
