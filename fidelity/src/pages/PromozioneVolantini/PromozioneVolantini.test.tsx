@@ -273,7 +273,12 @@ describe("Consultazione di una promozione", () => {
   it("la banda mostra il badge del codice iniziativa quando la promo lo ha, e non quando manca (task 1f340bec)", async () => {
     finti.risultato = caricato(dettaglio({ promo: { id: "p1", nome: "P2620_KIT_TOSCANA", validitaDal: "2026-11-05", validitaAl: "2026-11-18", codiceIniziativa: "P2620" } }));
     await apri();
-    expect(within(screen.getByRole("region", { name: "La promozione" })).getByTestId("badge-iniziativa")).toHaveTextContent("P2620");
+    const banda = screen.getByRole("region", { name: "La promozione" });
+    const badge = within(banda).getByTestId("badge-iniziativa");
+    expect(badge).toHaveTextContent("P2620");
+    // In alto a sinistra della banda, non nella riga del nome
+    expect(badge).toHaveClass("absolute", "left-5", "top-5");
+    expect(within(banda).getByText(/Volantini .* · P2620_KIT_TOSCANA/)).not.toContainElement(badge);
 
     cleanup();
     finti.risultato = caricato(dettaglio({ promo: { id: "p1", nome: "Volantino novembre", validitaDal: "2026-11-05", validitaAl: "2026-11-18" } }));

@@ -49,13 +49,9 @@ function VetrinaPromozione({ vetrina, periodo, className }: VetrinaPromozionePro
       )}
     >
       <div className="flex min-w-0 flex-col justify-center gap-3.5">
-        {/* Il codice dell'iniziativa per primo, poi il nome della promozione */}
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
-          <BadgeIniziativa codice={promo.codiceIniziativa} suScuro />
-          <p className="text-2xs font-bold uppercase tracking-wider text-indigo-200 [overflow-wrap:anywhere]">
-            In vetrina · {promo.nome}
-          </p>
-        </div>
+        <p className="text-2xs font-bold uppercase tracking-wider text-indigo-200 [overflow-wrap:anywhere]">
+          In vetrina · {promo.nome}
+        </p>
         <h2 className="text-4xl font-bold leading-none tracking-tight text-white sm:text-5xl 2xl:text-6xl">
           {periodoPromo(promo.validitaDal, promo.validitaAl, { adesso })}
         </h2>
@@ -85,7 +81,11 @@ function VetrinaPromozione({ vetrina, periodo, className }: VetrinaPromozionePro
       </div>
 
       <div className="flex min-w-0 flex-col justify-center gap-2">
-        <CollageCopertine kit={kit} massimo={COPERTINE_VETRINA} variante="vetrina" />
+        {/* Il codice dell'iniziativa in alto a sinistra, sopra le copertine */}
+        <div className="relative">
+          <CollageCopertine kit={kit} massimo={COPERTINE_VETRINA} variante="vetrina" />
+          <BadgeIniziativa codice={promo.codiceIniziativa} suScuro className="absolute left-0 top-0 z-30" />
+        </div>
         <p className="text-right text-2xs text-indigo-200">{MOTIVO_IN_VETRINA[vetrina.motivo]}</p>
       </div>
     </section>
