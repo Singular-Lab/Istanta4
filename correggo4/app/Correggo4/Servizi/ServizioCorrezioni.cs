@@ -481,8 +481,15 @@ public sealed partial class ServizioCorrezioni
 
     // ------------------------------------------------------------------ regole comuni
 
-    public static bool Bloccato(Volantini v, DateTime adesso) =>
-        v.IdAutoreBlocco != null && v.DataScadenzaBlocco != null && v.DataScadenzaBlocco > adesso;
+    /// <summary>
+    /// Bloccato finche' la scadenza del blocco e' nel futuro. I20-1265: l'autore non conta, perche' il
+    /// blocco di un'ora alla pubblicazione di una versione non ne ha (ImportatorePack); lo sblocco
+    /// dell'Agenzia azzera la scadenza.
+    /// </summary>
+    public static bool Bloccato(Volantini v, DateTime adesso) => BloccatoFino(v.DataScadenzaBlocco, adesso);
+
+    public static bool BloccatoFino(DateTime? scadenzaBlocco, DateTime adesso) =>
+        scadenzaBlocco != null && scadenzaBlocco > adesso;
 
     /// <summary>S:3046: data_scadenza passata = correzioni chiuse.</summary>
     public static bool Scaduto(Volantini v, DateTime adesso) => v.DataScadenza < adesso;

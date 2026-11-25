@@ -636,7 +636,7 @@ public sealed partial class ServizioPropagazione
             VersioneSuperata = superata,
             Etichetta = descr == "" ? dati.Basecode : $"{dati.Basecode} – {descr}",
             Codici = dati.Basecode,
-            Bloccato = dati.IdAutoreBlocco != null && dati.DataScadenzaBlocco != null && dati.DataScadenzaBlocco > adesso,
+            Bloccato = ServizioCorrezioni.BloccatoFino(dati.DataScadenzaBlocco, adesso),
             GiorniAllaScadenza = (int)Math.Floor((dati.DataScadenza - adesso).TotalDays),
             // stesso indirizzo che usa l'editor per le pagine (VolantiniController.CorrezioniAsync)
             UrlPagina = Indirizzi.Con(http.HttpContext, "/volantini/" + Uri.EscapeDataString(dati.Classificazione) + "/"
