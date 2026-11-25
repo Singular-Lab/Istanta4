@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { altrePagineDellUnione, gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, raggruppaPerUnione, rimandoAltrePagine, sciogliUnione, togliGruppoDallUnione, unisciGruppi } from "./menaboUnioni";
+import { alternaGruppoDaUnire, altrePagineDellUnione, filtraGruppiUnibili, gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, raggruppaPerUnione, rimandoAltrePagine, sciogliUnione, togliGruppoDallUnione, unisciGruppi } from "./menaboUnioni";
 
 type El = { id: string; groupId: string; unioneId?: string };
 const base: El[] = [
@@ -117,5 +117,35 @@ describe("riconoscere le unioni sulle pagine (task 769e2865)", () => {
         expect(rimandoAltrePagine([3], 4)).toBe("← pag. 4");
         expect(rimandoAltrePagine([2, 5], 4)).toBe("← pag. 3 · → pag. 6");
         expect(rimandoAltrePagine([], 4)).toBe("");
+    });
+});
+
+describe("ricerca fra i gruppi unibili (I20-1267)", () => {
+    const gruppi = [
+        { groupId: "a", label: "CAMPIONI DEL RISPARMIO (OS20A)" },
+        { groupId: "b", label: "CONVENIENZA (OS20A)" },
+        { groupId: "c", label: "Più valore SOCI" },
+    ];
+
+    it("senza testo restituisce tutti i gruppi", () => {
+        expect(filtraGruppiUnibili(gruppi, "  ")).toHaveLength(3);
+    });
+
+    it("cerca per parole, senza maiuscole né accenti", () => {
+        expect(filtraGruppiUnibili(gruppi, "campioni risparmio").map(g => g.groupId)).toEqual(["a"]);
+        expect(filtraGruppiUnibili(gruppi, "piu VALORE").map(g => g.groupId)).toEqual(["c"]);
+    });
+
+    it("tiene visibili i gruppi già spuntati anche se non corrispondono", () => {
+        expect(filtraGruppiUnibili(gruppi, "convenienza", new Set(["c"])).map(g => g.groupId)).toEqual(["b", "c"]);
+    });
+
+    it("nessuna corrispondenza: elenco vuoto", () => {
+        expect(filtraGruppiUnibili(gruppi, "zzz")).toEqual([]);
+    });
+
+    it("alternaGruppoDaUnire aggiunge e toglie la spunta", () => {
+        expect(alternaGruppoDaUnire(["a"], "b")).toEqual(["a", "b"]);
+        expect(alternaGruppoDaUnire(["a", "b"], "a")).toEqual(["b"]);
     });
 });
