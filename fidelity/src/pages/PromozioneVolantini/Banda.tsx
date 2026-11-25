@@ -42,9 +42,13 @@ export function Banda({ dettaglio, insegne, tinta, idCanale, onScegliInsegna }: 
       />
 
       <div className="relative flex min-w-0 flex-col justify-center gap-3.5">
-        <p className="title-eyebrow font-bold text-indigo-200 [overflow-wrap:anywhere]">
-          Volantini {ETICHETTA_PERIODO_CONSULTAZIONE[periodo]} · <BadgeIniziativa codice={promo.codiceIniziativa} suScuro /> {promo.nome}
-        </p>
+        {/* Il codice dell'iniziativa per primo, poi il nome della promozione */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+          <BadgeIniziativa codice={promo.codiceIniziativa} suScuro />
+          <p className="title-eyebrow font-bold text-indigo-200 [overflow-wrap:anywhere]">
+            Volantini {ETICHETTA_PERIODO_CONSULTAZIONE[periodo]} · {promo.nome}
+          </p>
+        </div>
         <p className="text-4xl font-extrabold leading-[0.98] tracking-tight [text-wrap:balance] sm:text-5xl xl:text-6xl">{testoValidita(promo)}</p>
         {kit.length > 0 && <p className="max-w-[44ch] text-base text-indigo-200">{fraseKit(kit)}.</p>}
       </div>

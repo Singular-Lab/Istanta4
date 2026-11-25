@@ -9,8 +9,9 @@ export interface BadgeIniziativaProps {
 }
 
 /**
- * Badge piccolo con il codice dell'iniziativa a cui corrisponde una promozione (per CONAD CNO il valore del
- * nome prima del primo «_»). Il server lo manda solo per i clienti che lo hanno: senza codice non c'è.
+ * Badge ben leggibile con il codice dell'iniziativa a cui corrisponde una promozione (per CONAD CNO il valore del
+ * nome prima del primo «_»): testo di dimensione normale a contrasto pieno, da mettere per primo nella riga
+ * del nome. Il server lo manda solo per i clienti che lo hanno: senza codice non c'è.
  */
 export function BadgeIniziativa({ codice, suScuro = false, className }: BadgeIniziativaProps) {
   const testo = codice?.trim();
@@ -20,10 +21,10 @@ export function BadgeIniziativa({ codice, suScuro = false, className }: BadgeIni
       data-testid="badge-iniziativa"
       title={`Codice iniziativa ${testo}`}
       className={twMerge(
-        "inline-flex flex-none items-center rounded-control border px-1.5 py-0.5 align-middle text-3xs font-bold leading-none tabular-nums tracking-normal normal-case",
+        "inline-flex flex-none items-center rounded-control border px-2.5 py-1 align-middle text-sm font-extrabold leading-none tabular-nums tracking-wide normal-case shadow-sm",
         suScuro
-          ? "border-white/30 bg-white/15 text-white"
-          : "border-primary/20 bg-primary/5 text-primary dark:border-indigo-300/30 dark:bg-indigo-300/10 dark:text-indigo-200",
+          ? "border-white bg-white text-slate-900"
+          : "border-primary bg-primary text-white dark:border-indigo-300 dark:bg-indigo-300 dark:text-slate-900",
         className
       )}
     >

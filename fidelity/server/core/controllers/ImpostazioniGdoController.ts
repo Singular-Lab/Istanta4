@@ -38,6 +38,15 @@ export class ImpostazioniGdoController extends BaseController {
       this.salva(req, res, 'identita', idGdo => this.impostazioni.salvaIdentita(idGdo, req.body, req)));
     this.router.put(percorsi.reparti, ...modifica, (req, res) =>
       this.salva(req, res, 'reparti', idGdo => this.impostazioni.salvaReparti(idGdo, req.body, req)));
+    this.router.put(percorsi.menabo, ...modifica, (req, res) =>
+      this.salva(req, res, 'menabo', idGdo => this.impostazioni.salvaRegoleMenabo(idGdo, req.body, req)));
+    this.router.get(percorsi.volantiniMenabo, ...modifica, (req, res) =>
+      this.rispondi(req, res, idGdo => this.impostazioni.volantiniPerProvaMenabo(idGdo)));
+    this.router.get(percorsi.suggerimentiMenabo, ...modifica, (req, res) =>
+      this.rispondi(req, res, idGdo => this.impostazioni.suggerimentiMenabo(idGdo, typeof req.query.campo === 'string' ? req.query.campo : undefined)));
+    // La prova non salva niente: niente voce nel Registro Audit
+    this.router.post(percorsi.provaMenabo, ...modifica, (req, res) =>
+      this.rispondi(req, res, idGdo => this.impostazioni.provaRegoleMenabo(idGdo, req.body)));
     this.router.put(percorsi.campiReferenze, ...modifica, (req, res) =>
       this.salva(req, res, 'campi_referenze', idGdo => this.impostazioni.salvaCampiReferenze(idGdo, req.body, req)));
     // Loghi e icona in base64: il body grande si legge solo dopo autenticazione e permesso

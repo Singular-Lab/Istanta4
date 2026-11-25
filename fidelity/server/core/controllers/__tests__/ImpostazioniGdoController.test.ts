@@ -56,6 +56,10 @@ function servizioFinto() {
     salvaReparti: vi.fn(async () => IMPOSTAZIONI),
     salvaCampiReferenze: vi.fn(async () => IMPOSTAZIONI),
     salvaSitoWeb: vi.fn(async () => IMPOSTAZIONI),
+    salvaRegoleMenabo: vi.fn(async () => IMPOSTAZIONI),
+    volantiniPerProvaMenabo: vi.fn(async () => []),
+    suggerimentiMenabo: vi.fn(async () => ({ campoMenabo: 'mastro', campi: [] })),
+    provaRegoleMenabo: vi.fn(async () => ({ volantino: { idKit: 'k', titolo: '', nomePromo: '' }, pagine: [], cambiate: 0 })),
     verificaInsightVolantino: vi.fn(() => ESITO_VALIDO),
     salvaInsightVolantino: vi.fn(async () => IMPOSTAZIONI),
     eliminaInsightVolantino: vi.fn(async () => IMPOSTAZIONI),
@@ -121,10 +125,12 @@ describe('le sezioni', () => {
     await request(app).put('/api/impostazioni-gdo/reparti').send({ reparti: [{ codice: '01' }] });
     await request(app).put('/api/impostazioni-gdo/campi-referenze').send({ campiReferenze: [] });
     await request(app).put('/api/impostazioni-gdo/sito-web').send({ css_text: '.a{}' });
+    await request(app).put('/api/impostazioni-gdo/menabo').send({ regole: [] });
 
     expect(servizio.salvaIdentita).toHaveBeenCalledWith('gdo-sessione', { colore: '#123456' }, expect.anything());
     expect(servizio.salvaReparti).toHaveBeenCalledWith('gdo-sessione', { reparti: [{ codice: '01' }] }, expect.anything());
     expect(servizio.salvaCampiReferenze).toHaveBeenCalledWith('gdo-sessione', { campiReferenze: [] }, expect.anything());
+    expect(servizio.salvaRegoleMenabo).toHaveBeenCalledWith('gdo-sessione', { regole: [] }, expect.anything());
     // Loghi e icona si caricano su Olimpo con la chiave privata della sessione
     expect(servizio.salvaSitoWeb).toHaveBeenCalledWith('gdo-sessione', { css_text: '.a{}' }, 'chiave-privata', expect.anything());
     expect(audit.configurationChanged.mock.calls.map(chiamata => chiamata.slice(1))).toEqual([
@@ -132,7 +138,33 @@ describe('le sezioni', () => {
       ['impostazioni_gdo', 'set', { idGdo: 'gdo-sessione', sezione: 'reparti' }],
       ['impostazioni_gdo', 'set', { idGdo: 'gdo-sessione', sezione: 'campi_referenze' }],
       ['impostazioni_gdo', 'set', { idGdo: 'gdo-sessione', sezione: 'sito_web' }],
+      ['impostazioni_gdo', 'set', { idGdo: 'gdo-sessione', sezione: 'menabo' }],
     ]);
+  });
+
+  it('la lista dei volantini e la prova delle regole del menabò non salvano niente e non vanno nel Registro Audit', async () => {
+    const { app, servizio } = creaApp();
+
+    const lista = await request(app).get('/api/impostazioni-gdo/menabo/volantini');
+    const prova = await request(app).post('/api/impostazioni-gdo/menabo/prova').send({ idKit: 'k', regole: [] });
+
+    expect(lista.status).toBe(200);
+    expect(prova.status).toBe(200);
+    expect(servizio.volantiniPerProvaMenabo).toHaveBeenCalledWith('gdo-sessione');
+    expect(servizio.provaRegoleMenabo).toHaveBeenCalledWith('gdo-sessione', { idKit: 'k', regole: [] });
+    expect(servizio.salvaRegoleMenabo).not.toHaveBeenCalled();
+    expect(audit.configurationChanged).not.toHaveBeenCalled();
+  });
+
+  it('i suggerimenti del menabò leggono i campi, o i valori di un campo, senza Registro Audit', async () => {
+    const { app, servizio } = creaApp();
+
+    await request(app).get('/api/impostazioni-gdo/menabo/suggerimenti');
+    await request(app).get('/api/impostazioni-gdo/menabo/suggerimenti').query({ campo: 'mastro' });
+
+    expect(servizio.suggerimentiMenabo).toHaveBeenNthCalledWith(1, 'gdo-sessione', undefined);
+    expect(servizio.suggerimentiMenabo).toHaveBeenNthCalledWith(2, 'gdo-sessione', 'mastro');
+    expect(audit.configurationChanged).not.toHaveBeenCalled();
   });
 
   it('configurazione degli insight: verifica, salvataggio con l\'utente della sessione, ritorno al file', async () => {

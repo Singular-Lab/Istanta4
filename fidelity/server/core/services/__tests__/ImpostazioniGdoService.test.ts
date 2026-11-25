@@ -43,6 +43,14 @@ function crea(opzioni: {
     repartiSalvati: vi.fn(async (_idGdo: string) => opzioni.salvate?.reparti ?? []),
     gdo: vi.fn(async (idGdo: string) => (idGdo === ID_GDO ? { id: ID_GDO, nome: 'CONAD CNO', haIcona: true } : null)),
     salvaReparti: vi.fn(async () => undefined),
+    salvaRegoleMenabo: vi.fn(async () => undefined),
+    volantiniDellaGdo: vi.fn(async () => []),
+    campiDelleReferenze: vi.fn(async () => [{ campo: 'mastro', referenze: 120 }, { campo: 'tema', referenze: 118 }]),
+    valoriDelCampo: vi.fn(async (_idGdo: string, _campo: string, _limite: number) => [
+      { valore: 'DIS-DISPENSA_doppia', referenze: 40 },
+      { valore: 'DIS-DISPENSA_singola', referenze: 11 },
+      { valore: 'PB-Pagina bianca', referenze: 3 },
+    ]),
     salvaInsightVolantino: vi.fn(async () => undefined),
     eliminaInsightVolantino: vi.fn(async () => undefined),
     repartiNelleReferenze: vi.fn(async () => [{ codice: '1', descrizione: null, referenze: 12 }, { codice: '09', descrizione: 'PROFUMERIA', referenze: 3 }]),
@@ -123,6 +131,7 @@ describe('leggi', () => {
         insightAggiornatoIl: new Date('2026-11-10T09:00:00Z'),
         insightAggiornatoDa: 'Mario Rossi',
         aggiornatoIl: new Date('2026-11-10T09:00:00Z'),
+        regoleMenabo: [],
       },
     });
 
@@ -297,10 +306,192 @@ describe('configurazione degli insight', () => {
 
 describe('configurazioneInsight', () => {
   it('prima quella della GDO, poi il file, poi nessuna', () => {
-    const salvate = { idGdo: ID_GDO, reparti: [], insightVolantino: CONFIG_GDO, insightAggiornatoIl: null, insightAggiornatoDa: null, aggiornatoIl: new Date(0) };
+    const salvate = { idGdo: ID_GDO, reparti: [], insightVolantino: CONFIG_GDO, insightAggiornatoIl: null, insightAggiornatoDa: null, aggiornatoIl: new Date(0), regoleMenabo: [] };
 
     expect(configurazioneInsight(salvate, CONFIG_FILE).origine).toBe('gdo');
     expect(configurazioneInsight({ ...salvate, insightVolantino: null }, CONFIG_FILE).origine).toBe('file');
     expect(configurazioneInsight(null, null)).toEqual({ configurazione: null, origine: 'assente', aggiornatoIl: null, aggiornatoDa: null });
+  });
+});
+
+describe('regole delle sezioni del menabò', () => {
+  const regolaValida = {
+    id: 'r1', titolo: 'Pulizia', livello: 'box', sezione: 'Pulizia casa', colore: null,
+    condizione: { tipo: 'gruppo', logica: 'tutte', figli: [{ tipo: 'condizione', campo: 'mastro', operatore: 'contiene', valore: 'PUL', valori: [] }] },
+  };
+
+  it('si salvano le regole verificate e si dimentica la cache della configurazione della GDO', async () => {
+    const { servizio, repository, dimentica } = crea();
+
+    await servizio.salvaRegoleMenabo(ID_GDO, { regole: [regolaValida] });
+
+    expect(repository.salvaRegoleMenabo).toHaveBeenCalledWith(ID_GDO, [expect.objectContaining({ id: 'r1', sezione: 'Pulizia casa', livello: 'box' })]);
+    expect(dimentica).toHaveBeenCalledWith(ID_GDO);
+  });
+
+  it('una regola non valida è una richiesta non valida che dice quale, senza salvare', async () => {
+    const { servizio, repository } = crea();
+
+    await expect(servizio.salvaRegoleMenabo(ID_GDO, { regole: [regolaValida, { ...regolaValida, id: 'r2', sezione: '' }] }))
+      .rejects.toThrow(/regola 2: manca il nome della sezione/);
+    await expect(servizio.salvaRegoleMenabo(ID_GDO, { regole: [regolaValida, { ...regolaValida, id: 'r2', sezione: '' }] }))
+      .rejects.toBeInstanceOf(BadRequestError);
+    expect(repository.salvaRegoleMenabo).not.toHaveBeenCalled();
+  });
+
+  it('una GDO che non esiste: non trovata', async () => {
+    const { servizio, repository } = crea();
+
+    await expect(servizio.salvaRegoleMenabo('00000000-0000-4000-8000-000000000000', { regole: [] })).rejects.toBeInstanceOf(NotFoundError);
+    expect(repository.salvaRegoleMenabo).not.toHaveBeenCalled();
+  });
+
+  it('un elenco vuoto toglie le regole', async () => {
+    const { servizio, repository } = crea();
+
+    await servizio.salvaRegoleMenabo(ID_GDO, { regole: [] });
+
+    expect(repository.salvaRegoleMenabo).toHaveBeenCalledWith(ID_GDO, []);
+  });
+
+  it('leggi riporta le regole salvate, vuote se la GDO non ne ha', async () => {
+    const senza = await crea().servizio.leggi(ID_GDO);
+    expect(senza.regoleMenabo).toEqual([]);
+
+    const salvate: ImpostazioniGdoSalvate = {
+      idGdo: ID_GDO, reparti: [], insightVolantino: null, insightAggiornatoIl: null, insightAggiornatoDa: null, aggiornatoIl: new Date(0),
+      regoleMenabo: [{ ...regolaValida, livello: 'box', colore: null, condizione: regolaValida.condizione } as never],
+    };
+    const con = await crea({ salvate }).servizio.leggi(ID_GDO);
+    expect(con.regoleMenabo).toHaveLength(1);
+  });
+});
+
+describe('prova delle regole del menabò', () => {
+  const regole = [{
+    id: 'r1', titolo: 'Pulizia da regola', livello: 'box', sezione: 'Pulizia casa', colore: null,
+    condizione: { tipo: 'gruppo', logica: 'tutte', figli: [{ tipo: 'condizione', campo: 'mastro', operatore: 'contiene', valore: 'PUL', valori: [] }] },
+  }];
+  const riga = (id: string, mastro: string, pag: number) => ({
+    id, pag, x: 0, y: 0, w: 100, h: 100, w_page: 600, h_page: 800, codice_box: id, foto: [], foto_extra: [],
+    compiled_fields: [], deleted_fields: [], group_elements: [], meccanica: '', perc_ingombro: null, aspect_ratio: null,
+    data_fields: { codice_referenza: id, descrizione_uno: id, mastro, reparto: pag === 22 ? '01' : '24' },
+  });
+
+  function conProva(kit: { id: string; storico: boolean; gdo: string | null } | null) {
+    const lettureKit = {
+      kitNellAmbito: vi.fn(async () => kit),
+      righeDelKit: vi.fn(async () => [riga('a1', 'PUL-PULIZIA_singola', 22), riga('d1', 'DIS-DISPENSA_doppia', 14)] as never),
+    };
+    const agenzia = { insightVolantino: { menabo: { campo: 'mastro', nome: (v: string) => v.slice(v.indexOf('-') + 1) } } } as never;
+    const fatto = crea({ agenzia });
+    // I nomi per il marketing dei reparti, come nelle Impostazioni GDO: "01" è la Dispensa
+    (fatto.repository as unknown as { repartiSalvati: unknown }).repartiSalvati = vi.fn(async () => [
+      { codice: '1', nomeDati: 'DROGHERIA', nomeMarketing: 'Dispensa', colore: null },
+      { codice: '24', nomeDati: 'FRESCHI', nomeMarketing: 'Freschissimi', colore: null },
+    ]);
+    const servizio = new ImpostazioniGdoService(
+      fatto.repository, fatto.righeConfig, fatto.configInsight, agenzia, fatto.catalogo,
+      { dizionario: async () => ({}), caricaSuOlimpo: fatto.caricaSuOlimpo, dimenticaConfigInsight: fatto.dimentica, nomeUtente: fatto.nomeUtente, lettureKit },
+    );
+    return { servizio, lettureKit, repository: fatto.repository };
+  }
+
+  it('mostra il menabò di prima e di dopo, le pagine che cambiano e la regola che decide', async () => {
+    const { servizio, repository } = conProva({ id: 'kit-1', storico: false, gdo: ID_GDO });
+
+    const esito = await servizio.provaRegoleMenabo(ID_GDO, { idKit: 'kit-1', regole });
+
+    expect(esito.pagine).toEqual([
+      { pagina: 14, reparto: 'Freschissimi', prima: 'DISPENSA_doppia', dopo: 'DISPENSA_doppia', cambia: false, regola: null },
+      // «01» e «1» sono lo stesso reparto: la Dispensa
+      { pagina: 22, reparto: 'Dispensa', prima: 'PULIZIA_singola', dopo: 'Pulizia casa', cambia: true, regola: 'Pulizia da regola' },
+    ]);
+    expect(esito.cambiate).toBe(1);
+    // La prova non salva niente
+    expect(repository.salvaRegoleMenabo).not.toHaveBeenCalled();
+  });
+
+  it('un volantino di un\'altra GDO, o inesistente: non trovato', async () => {
+    await expect(conProva({ id: 'kit-1', storico: false, gdo: 'altra-gdo' }).servizio.provaRegoleMenabo(ID_GDO, { idKit: 'kit-1', regole }))
+      .rejects.toBeInstanceOf(NotFoundError);
+    await expect(conProva(null).servizio.provaRegoleMenabo(ID_GDO, { idKit: 'kit-1', regole }))
+      .rejects.toBeInstanceOf(NotFoundError);
+    await expect(conProva({ id: 'kit-1', storico: false, gdo: ID_GDO }).servizio.provaRegoleMenabo(ID_GDO, { regole }))
+      .rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('regole non valide: richiesta non valida, senza leggere il volantino', async () => {
+    const { servizio, lettureKit } = conProva({ id: 'kit-1', storico: false, gdo: ID_GDO });
+
+    await expect(servizio.provaRegoleMenabo(ID_GDO, { idKit: 'kit-1', regole: [{ ...regole[0], sezione: '' }] })).rejects.toBeInstanceOf(BadRequestError);
+    expect(lettureKit.righeDelKit).not.toHaveBeenCalled();
+  });
+
+  it('i volantini proposti vengono dal repository', async () => {
+    const { servizio, repository } = conProva({ id: 'kit-1', storico: false, gdo: ID_GDO });
+    repository.volantiniDellaGdo.mockResolvedValueOnce([{ idKit: 'kit-1', titolo: 'Toscana', nomePromo: 'P2620_KIT' }]);
+
+    await expect(servizio.volantiniPerProvaMenabo(ID_GDO)).resolves.toEqual([{ idKit: 'kit-1', titolo: 'Toscana', nomePromo: 'P2620_KIT' }]);
+    expect(repository.volantiniDellaGdo).toHaveBeenCalledWith(ID_GDO, expect.any(Number));
+  });
+});
+
+describe('suggerimenti per autocompilare le regole del menabò', () => {
+  const agenzia = {
+    insightVolantino: {
+      menabo: {
+        campo: 'mastro',
+        nome: (valore: string) => (/pagina bianca/i.test(valore) ? null : valore.slice(valore.indexOf('-') + 1).split('_')[0]),
+      },
+    },
+  } as never;
+
+  it('senza campo: i campi reali delle referenze e il campo del menabò dichiarato dalla libreria', async () => {
+    const { servizio, repository } = crea({ agenzia });
+
+    await expect(servizio.suggerimentiMenabo(ID_GDO)).resolves.toEqual({
+      campoMenabo: 'mastro',
+      campi: [{ campo: 'mastro', referenze: 120 }, { campo: 'tema', referenze: 118 }],
+    });
+    expect(repository.campiDelleReferenze).toHaveBeenCalledWith(ID_GDO, expect.any(Number));
+  });
+
+  it('senza libreria che dichiara il menabò, il campo del menabò è null', async () => {
+    const { servizio } = crea();
+
+    await expect(servizio.suggerimentiMenabo(ID_GDO)).resolves.toMatchObject({ campoMenabo: null });
+  });
+
+  it('con il campo del menabò: i valori con il nome leggibile, null per ciò che non è una sezione', async () => {
+    const { servizio, repository } = crea({ agenzia });
+
+    const esito = await servizio.suggerimentiMenabo(ID_GDO, 'Mastro');
+
+    expect(repository.valoriDelCampo).toHaveBeenCalledWith(ID_GDO, 'Mastro', expect.any(Number));
+    expect(esito).toEqual({
+      campo: 'Mastro',
+      valori: [
+        { valore: 'DIS-DISPENSA_doppia', referenze: 40, nomeLeggibile: 'DISPENSA' },
+        { valore: 'DIS-DISPENSA_singola', referenze: 11, nomeLeggibile: 'DISPENSA' },
+        { valore: 'PB-Pagina bianca', referenze: 3, nomeLeggibile: null },
+      ],
+    });
+  });
+
+  it('con un altro campo: solo i valori, senza nome leggibile', async () => {
+    const { servizio } = crea({ agenzia });
+
+    const esito = await servizio.suggerimentiMenabo(ID_GDO, 'tema') as unknown as { valori: Array<Record<string, unknown>> };
+
+    expect(esito.valori.every(voce => !('nomeLeggibile' in voce))).toBe(true);
+  });
+
+  it('un campo troppo lungo è una richiesta non valida; una GDO che non esiste, non trovata', async () => {
+    const { servizio, repository } = crea({ agenzia });
+
+    await expect(servizio.suggerimentiMenabo(ID_GDO, 'x'.repeat(101))).rejects.toBeInstanceOf(BadRequestError);
+    await expect(servizio.suggerimentiMenabo('00000000-0000-4000-8000-000000000000')).rejects.toBeInstanceOf(NotFoundError);
+    expect(repository.valoriDelCampo).not.toHaveBeenCalled();
   });
 });

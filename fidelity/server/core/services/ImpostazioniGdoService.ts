@@ -6,9 +6,13 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   BolloDichiarato,
   ConfigurazioneInsightGdo,
+  EsitoProvaMenabo,
   EsitoVerificaConfigurazione,
   ImpostazioniGdo,
   LineaDichiarata,
+  SuggerimentiCampiMenabo,
+  SuggerimentiValoriMenabo,
+  VolantinoProvaMenabo,
 } from '../../../lib/impostazioniGdo/tipi';
 import { verificaConfigurazioneInsight } from '../../../lib/insightVolantino/configurazione';
 import { BadRequestError, ExternalApiError, NotFoundError } from '../../../lib/errors';
@@ -21,11 +25,18 @@ import type { IImpostazioniGdoService } from '../interfaces/IImpostazioniGdoServ
 import { log } from '../logger';
 import type { IConfigWebpliantGdoRepository } from '../repositories/ConfigWebpliantGdoRepository';
 import type { IImpostazioniGdoRepository, ImpostazioniGdoSalvate } from '../repositories/ImpostazioniGdoRepository';
+import { type LetturaReparti, nomeRepartoDellaReferenza, opzioniDellAgenzia } from '../utils/insightAgenzia';
+import { menaboDi } from '../utils/insightVolantino';
+import { boxDelKit } from '../utils/analisiKit';
+import { leggiReferenza, type RigaReferenza } from '../utils/referenzaStampata';
+import type { AmbitoGdo } from '../accessi/contestoAccesso';
+import { kitNellAmbito, righeDelKit } from '../repositories/InsightVolantinoRepository';
 import { urlImmagineLogo } from '../utils/lineeDistributore';
 import { COLORE_ESADECIMALE, dizionarioNormalizzato, repartiDellaGdo, verificaRepartiDaSalvare } from '../utils/repartiGdo';
+import { verificaRegoleMenabo } from '../utils/regoleMenabo';
 import { isUrlOlimpo, urlFotoOlimpo, urlOlimpo } from '../utils/urlOlimpo';
 import { dimenticaConfigInsight } from './cacheConfigInsight';
-import { contestoDallaConfig } from './InsightConfrontiService';
+import { contestoDallaConfig, contestoDellaGdo, repartoConfigurato } from './InsightConfrontiService';
 
 /**
  * Impostazioni GDO (spec impostazioni-gdo, contratto in lib/impostazioniGdo/tipi.ts): identita',
@@ -94,7 +105,23 @@ export interface OpzioniImpostazioniGdo {
   caricaSuOlimpo?: CaricatoreOlimpo;
   dimenticaConfigInsight?: (idGdo: string | null) => Promise<void>;
   nomeUtente?: (idUtente: string) => Promise<string | null>;
+  /** Le letture di un kit per provare le regole del menabò; senza, quelle degli insight. */
+  lettureKit?: LettureProvaMenabo;
 }
+
+/** Quello che serve di un kit per provare le regole del menabò. */
+export interface LettureProvaMenabo {
+  kitNellAmbito(idKit: string, ambito: AmbitoGdo): Promise<{ id: string; storico: boolean; gdo: string | null } | null>;
+  righeDelKit(idKit: string): Promise<RigaReferenza[]>;
+}
+
+/** I volantini proposti per la prova e le pagine confrontate: abbastanza per scegliere, senza leggere tutto lo storico. */
+const VOLANTINI_PER_PROVA = 40;
+
+/** Quanti campi e quanti valori si suggeriscono al massimo. */
+const CAMPI_SUGGERITI = 120;
+const VALORI_SUGGERITI = 300;
+const LUNGHEZZA_MASSIMA_CAMPO = 100;
 
 const BASE64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)?$/;
 
@@ -154,6 +181,7 @@ export class ImpostazioniGdoService implements IImpostazioniGdoService {
   private readonly caricaSuOlimpo: CaricatoreOlimpo;
   private readonly dimentica: (idGdo: string | null) => Promise<void>;
   private readonly nomeUtente: (idUtente: string) => Promise<string | null>;
+  private readonly lettureKit: LettureProvaMenabo;
 
   constructor(
     private readonly repository: IImpostazioniGdoRepository,
@@ -167,6 +195,7 @@ export class ImpostazioniGdoService implements IImpostazioniGdoService {
     this.caricaSuOlimpo = opzioni.caricaSuOlimpo ?? CARICATORE_OLIMPO;
     this.dimentica = opzioni.dimenticaConfigInsight ?? dimenticaConfigInsight;
     this.nomeUtente = opzioni.nomeUtente ?? NOME_UTENTE;
+    this.lettureKit = opzioni.lettureKit ?? { kitNellAmbito, righeDelKit };
   }
 
   // ─── Lettura ───────────────────────────────────────────────────────
@@ -196,6 +225,7 @@ export class ImpostazioniGdoService implements IImpostazioniGdoService {
       campiReferenze: Array.isArray(webpliant.data_fields_refs) ? webpliant.data_fields_refs as ConfigWebpliant['data_fields_refs'] : [],
       sitoWeb: sitoWebDa(webpliant),
       insightVolantino,
+      regoleMenabo: salvate?.regoleMenabo ?? [],
     };
   }
 
@@ -324,6 +354,105 @@ export class ImpostazioniGdoService implements IImpostazioniGdoService {
     if (errori.length > 0) throw new BadRequestError({ message: `Reparti non validi: ${errori.join('; ')}`, details: { errori } });
     await this.repository.salvaReparti(idGdo, reparti);
     return this.leggi(idGdo, richiesta);
+  }
+
+  // ─── Regole delle sezioni del menabò (impostazioni_gdo) ────────────
+
+  async salvaRegoleMenabo(idGdo: string, dati: unknown, richiesta?: Request): Promise<ImpostazioniGdo> {
+    await this.gdoEsistente(idGdo);
+    const { regole, errori } = verificaRegoleMenabo(dati);
+    if (errori.length > 0) throw new BadRequestError({ message: `Regole del menabò non valide: ${errori.join('; ')}`, details: { errori } });
+    await this.repository.salvaRegoleMenabo(idGdo, regole);
+    // Le regole viaggiano con la configurazione degli insight in cache: si dimentica per usarle subito
+    await this.dimenticaCache(idGdo);
+    return this.leggi(idGdo, richiesta);
+  }
+
+  async volantiniPerProvaMenabo(idGdo: string): Promise<VolantinoProvaMenabo[]> {
+    await this.gdoEsistente(idGdo);
+    return this.repository.volantiniDellaGdo(idGdo, VOLANTINI_PER_PROVA);
+  }
+
+  /**
+   * Per autocompilare le regole: senza `campo` i campi reali delle referenze della GDO e il campo da cui la libreria
+   * agenzia ricava la sezione (per Conad CNO «mastro»); con `campo` i suoi valori reali, e per il campo del menabò
+   * anche il nome leggibile che la libreria ne ricava (null se il valore non è una sezione).
+   */
+  async suggerimentiMenabo(idGdo: string, campo?: string): Promise<SuggerimentiCampiMenabo | SuggerimentiValoriMenabo> {
+    await this.gdoEsistente(idGdo);
+    const dichiarato = this.agenziaLib.insightVolantino?.menabo;
+    const campoMenabo = dichiarato?.campo?.trim() || null;
+    const richiesto = testo(campo).trim();
+    if (richiesto === '') {
+      return { campoMenabo, campi: await this.repository.campiDelleReferenze(idGdo, CAMPI_SUGGERITI) };
+    }
+    if (richiesto.length > LUNGHEZZA_MASSIMA_CAMPO) throw new BadRequestError({ message: `campo: al massimo ${LUNGHEZZA_MASSIMA_CAMPO} caratteri` });
+    const valori = await this.repository.valoriDelCampo(idGdo, richiesto, VALORI_SUGGERITI);
+    if (!dichiarato || campoMenabo === null || richiesto.toLowerCase() !== campoMenabo.toLowerCase()) return { campo: richiesto, valori };
+    return {
+      campo: richiesto,
+      valori: valori.map(voce => ({ ...voce, nomeLeggibile: dichiarato.nome ? dichiarato.nome(voce.valore) : voce.valore })),
+    };
+  }
+
+  /**
+   * Il menabò di un volantino della GDO prima e dopo le regole (anche non salvate): niente si salva.
+   * Le due letture usano le stesse referenze e le stesse opzioni della libreria agenzia, solo le regole cambiano.
+   */
+  async provaRegoleMenabo(idGdo: string, dati: unknown): Promise<EsitoProvaMenabo> {
+    await this.gdoEsistente(idGdo);
+    const { regole, errori } = verificaRegoleMenabo(dati);
+    if (errori.length > 0) throw new BadRequestError({ message: `Regole del menabò non valide: ${errori.join('; ')}`, details: { errori } });
+    const idKit = testo(oggetto(dati)?.idKit);
+    const kit = idKit === '' ? null : await this.lettureKit.kitNellAmbito(idKit, { idGdo });
+    if (!kit || (kit.gdo !== null && kit.gdo !== idGdo)) {
+      throw new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: idKit });
+    }
+    const righe = await this.lettureKit.righeDelKit(kit.id);
+    const box = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
+    // I reparti come li vedono gli insight: quello della config e i nomi per il marketing della GDO
+    const contesto = await contestoDellaGdo(this.configInsight, this.repository, idGdo, 'Prova delle regole del menabò');
+    const repartiDelleRighe = new Map(righe.map(riga => [String(riga.id), repartoConfigurato(riga, contesto)] as const));
+    const lettura: LetturaReparti = {
+      repartoConfigurato: idReferenza => repartiDelleRighe.get(idReferenza) ?? null,
+      risolviReparto: contesto.risolviReparto,
+    };
+    const prima = menaboDi(box, opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe, [], lettura));
+    const dopo = menaboDi(box, opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe, regole, lettura));
+    const rigaPerId = new Map(righe.map(riga => [String(riga.id), riga] as const));
+    // Il reparto con più box nella pagina, per capire perché una pagina ha quel nome
+    const repartoDellaPagina = (pagina: number): string | null => {
+      const conteggi = new Map<string, number>();
+      for (const scatola of box.filter(voce => voce.pagina === pagina)) {
+        for (const referenza of scatola.referenze) {
+          const nome = nomeRepartoDellaReferenza(String(referenza.id), rigaPerId.get(String(referenza.id)), lettura);
+          if (nome) conteggi.set(nome, (conteggi.get(nome) ?? 0) + 1);
+        }
+      }
+      return [...conteggi.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    };
+    const perPagina = (menabo: typeof prima) => new Map((menabo?.pagine ?? []).map(voce => [voce.pagina, voce] as const));
+    const vistaPrima = perPagina(prima);
+    const vistaDopo = perPagina(dopo);
+    const numeri = [...new Set([...vistaPrima.keys(), ...vistaDopo.keys()])].sort((a, b) => a - b);
+    const pagine = numeri.map(pagina => {
+      const nomePrima = vistaPrima.get(pagina)?.nome ?? null;
+      const nomeDopo = vistaDopo.get(pagina)?.nome ?? null;
+      return {
+        pagina,
+        reparto: repartoDellaPagina(pagina),
+        prima: nomePrima,
+        dopo: nomeDopo,
+        cambia: (nomePrima ?? '').toLocaleLowerCase('it-IT') !== (nomeDopo ?? '').toLocaleLowerCase('it-IT'),
+        regola: vistaDopo.get(pagina)?.regola ?? null,
+      };
+    });
+    const volantino = (await this.repository.volantiniDellaGdo(idGdo, VOLANTINI_PER_PROVA)).find(v => v.idKit.toLowerCase() === kit.id.toLowerCase());
+    return {
+      volantino: volantino ?? { idKit: kit.id, titolo: '', nomePromo: '' },
+      pagine,
+      cambiate: pagine.filter(voce => voce.cambia).length,
+    };
   }
 
   // ─── Configurazione degli insight (impostazioni_gdo) ───────────────

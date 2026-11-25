@@ -6,6 +6,7 @@ import {
   type FasciaSconto,
   type MarcaInsight,
   type MenaboVolantino,
+  type PaginaMenabo,
   type MarcheVolantino,
   type ParteDescrizione,
   type PrezziSconti,
@@ -19,6 +20,7 @@ import {
 } from '../../../lib/insightVolantino/tipi';
 import { ETICHETTA_MECCANICA } from '../../../lib/puntiVendita/analisi';
 import type { BoxKit } from './analisiKit';
+import type { RisultatoRegolaMenabo } from './regoleMenabo';
 import { repartoInAnagrafica, type RepartoAnagrafica } from './campiInsights';
 import { lineaEBolli, lineeDelVolantino, type RegoleLinee } from './lineeDistributore';
 import { DESCRIZIONE_ASSENTE, type ProdottoStampato, type ReferenzaStampata } from './referenzaStampata';
@@ -76,6 +78,14 @@ export interface OpzioniInsight {
    * e' una sezione (per Conad CNO la mastro della pagina bianca): quei box non decidono la sezione.
    */
   nomeSezione?: (sezione: string) => string | null;
+  /**
+   * Le regole delle Impostazioni GDO (spec impostazioni-gdo, "Regole delle sezioni del menabò del volantino"):
+   * `regolaSezione` per una referenza di un box, `regolaPagina` per le referenze di tutti i box di una pagina.
+   * Il risultato ha il nome della sezione (null: non è una sezione), il colore e il titolo della regola; senza
+   * regola soddisfatta (null) vale la sezione di sezionePagina.
+   */
+  regolaSezione?: (idReferenza: string, posizione: PosizioneMenabo) => RisultatoRegolaMenabo | null;
+  regolaPagina?: (idReferenze: readonly string[], posizione: PosizioneMenabo) => RisultatoRegolaMenabo | null;
 }
 
 /** I gruppi dei box che non hanno il dato: chiave vuota, cosi' non si confondono con un valore vero. */
@@ -423,39 +433,82 @@ export function marcheDi(box: readonly BoxInsight[], marcheDistributore: readonl
  * box, a parita' quella che compare prima. Un valore che il nome dichiara non sezione (null) non conta.
  * Null senza la lettura della sezione o quando nessun box ne ha una.
  */
-export function menaboDi(box: readonly BoxKit[], opzioni: Pick<OpzioniInsight, 'sezionePagina' | 'nomeSezione'>): MenaboVolantino | null {
+/** Dove sta un box nel volantino, per le regole che guardano la pagina (campi @pagina, @prima_pagina, @ultima_pagina). */
+export interface PosizioneMenabo {
+  pagina: number;
+  ultimaPagina: number;
+}
+
+export function menaboDi(box: readonly BoxKit[], opzioni: Pick<OpzioniInsight, 'sezionePagina' | 'nomeSezione' | 'regolaSezione' | 'regolaPagina'>): MenaboVolantino | null {
   const leggi = opzioni.sezionePagina;
   if (!leggi) return null;
+  const ultimaPagina = box.reduce((massima, singolo) => Math.max(massima, singolo.pagina ?? 0), 0);
   // Lo stesso nome scritto in modi diversi e' la stessa sezione: vale il primo visto nel volantino
   const nomi = new Map<string, string>();
-  // Per pagina: nome leggibile -> primo valore della fonte e numero di box
-  const perPagina = new Map<number, Map<string, { sezione: string; box: number }>>();
+  const chiaveDi = (nome: string): string => nome.toLocaleLowerCase('it-IT').replace(/\s+/g, '');
+  const nomeUnico = (nome: string): string => {
+    const chiave = chiaveDi(nome);
+    if (!nomi.has(chiave)) nomi.set(chiave, nome);
+    return nomi.get(chiave) ?? nome;
+  };
+
+  // Le regole di pagina decidono la pagina intera, qualunque sia la sezione dei suoi box
+  const decise = new Map<number, RisultatoRegolaMenabo>();
+  if (opzioni.regolaPagina) {
+    const perPaginaBox = new Map<number, BoxKit[]>();
+    for (const singolo of box) {
+      if (singolo.pagina === null) continue;
+      perPaginaBox.set(singolo.pagina, [...(perPaginaBox.get(singolo.pagina) ?? []), singolo]);
+    }
+    for (const [pagina, dellaPagina] of perPaginaBox) {
+      const esito = opzioni.regolaPagina(dellaPagina.flatMap(singolo => singolo.referenze.map(referenza => referenza.id)), { pagina, ultimaPagina });
+      if (esito) decise.set(pagina, esito);
+    }
+  }
+
+  // Per pagina: nome leggibile -> primo valore della fonte, numero di box e regola che l'ha deciso
+  interface Voce { sezione: string; box: number; colore: string | null; regola: string | null }
+  const perPagina = new Map<number, Map<string, Voce>>();
   for (const singolo of box) {
-    if (singolo.pagina === null) continue;
-    const sezione = primo(singolo.referenze, referenza => leggi(referenza.id)?.trim() || null);
+    if (singolo.pagina === null || decise.has(singolo.pagina)) continue;
+    const posizione = { pagina: singolo.pagina, ultimaPagina };
+    // La prima regola che vale per una referenza del box decide la sezione del box; senza, quella di prima
+    const regola = opzioni.regolaSezione
+      ? primo(singolo.referenze, referenza => opzioni.regolaSezione!(referenza.id, posizione))
+      : null;
+    if (regola && regola.nome === null) continue;
+    const sezione = regola?.nome ?? primo(singolo.referenze, referenza => leggi(referenza.id)?.trim() || null);
     if (!sezione) continue;
-    const nome = opzioni.nomeSezione ? opzioni.nomeSezione(sezione) : sezione;
+    const nome = regola ? regola.nome : opzioni.nomeSezione ? opzioni.nomeSezione(sezione) : sezione;
     if (nome === null) continue;
-    const letto = nome || sezione;
-    const chiaveNome = letto.toLocaleLowerCase('it-IT').replace(/\s+/g, '');
-    if (!nomi.has(chiaveNome)) nomi.set(chiaveNome, letto);
-    const chiave = nomi.get(chiaveNome) ?? letto;
-    const conti = perPagina.get(singolo.pagina) ?? new Map<string, { sezione: string; box: number }>();
+    const chiave = nomeUnico(nome || sezione);
+    const conti = perPagina.get(singolo.pagina) ?? new Map<string, Voce>();
     const voce = conti.get(chiave);
     if (voce) voce.box += 1;
-    else conti.set(chiave, { sezione, box: 1 });
+    else conti.set(chiave, { sezione, box: 1, colore: regola?.colore ?? null, regola: regola?.regola ?? null });
     perPagina.set(singolo.pagina, conti);
   }
-  if (perPagina.size === 0) return null;
-  const pagine = [...perPagina]
-    .sort(([a], [b]) => a - b)
-    .map(([pagina, conti]) => {
-      // Map tiene l'ordine d'inserimento: a parita' di box resta la sezione vista per prima
-      let scelta = { nome: '', sezione: '', box: 0 };
-      for (const [nome, voce] of conti) if (voce.box > scelta.box) scelta = { nome, ...voce };
-      return { pagina, sezione: scelta.sezione, nome: scelta.nome };
+
+  const pagine: PaginaMenabo[] = [];
+  for (const [pagina, esito] of decise) {
+    if (esito.nome === null) continue;
+    pagine.push({ pagina, sezione: esito.nome, nome: nomeUnico(esito.nome), colore: esito.colore, regola: esito.regola });
+  }
+  for (const [pagina, conti] of perPagina) {
+    // Map tiene l'ordine d'inserimento: a parita' di box resta la sezione vista per prima
+    let scelta: { nome: string } & Voce = { nome: '', sezione: '', box: 0, colore: null, regola: null };
+    for (const [nome, voce] of conti) if (voce.box > scelta.box) scelta = { nome, ...voce };
+    pagine.push({
+      pagina,
+      sezione: scelta.sezione,
+      nome: scelta.nome,
+      // Le chiavi assenti restano assenti: senza regole il menabò e' quello di sempre
+      ...(scelta.colore ? { colore: scelta.colore } : {}),
+      ...(scelta.regola ? { regola: scelta.regola } : {}),
     });
-  return { pagine };
+  }
+  if (pagine.length === 0) return null;
+  return { pagine: pagine.sort((a, b) => a.pagina - b.pagina) };
 }
 
 /** Box e sezioni degli insight del volantino; il PDF lo aggiunge chi conosce il kit. */

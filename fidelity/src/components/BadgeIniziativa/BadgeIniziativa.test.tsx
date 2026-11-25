@@ -30,9 +30,21 @@ describe("BadgeIniziativa (task 1f340bec)", () => {
     expect(screen.queryByTestId("badge-iniziativa")).not.toBeInTheDocument();
   });
 
-  it("su fondo scuro usa i colori chiari", () => {
+  it("su fondo chiaro è pieno, a contrasto, con testo di dimensione normale", () => {
+    render(<BadgeIniziativa codice="P2620" />);
+
+    const classi = screen.getByTestId("badge-iniziativa").className;
+    expect(classi).toContain("bg-primary");
+    expect(classi).toContain("text-white");
+    expect(classi).toContain("text-sm");
+    expect(classi).not.toContain("text-3xs");
+  });
+
+  it("su fondo scuro è chiaro con testo scuro, a contrasto", () => {
     render(<BadgeIniziativa codice="P2620" suScuro />);
 
-    expect(screen.getByTestId("badge-iniziativa").className).toContain("text-white");
+    const classi = screen.getByTestId("badge-iniziativa").className;
+    expect(classi).toContain("bg-white");
+    expect(classi).toContain("text-slate-900");
   });
 });

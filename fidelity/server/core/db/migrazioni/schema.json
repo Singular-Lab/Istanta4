@@ -5558,6 +5558,15 @@
           "tipo": "jsonb",
           "unico": false
         },
+        "regole_menabo": {
+          "autoIncremento": false,
+          "chiavePrimaria": false,
+          "default": "'[]'",
+          "nullable": false,
+          "riferimento": null,
+          "tipo": "jsonb",
+          "unico": false
+        },
         "reparti": {
           "autoIncremento": false,
           "chiavePrimaria": false,

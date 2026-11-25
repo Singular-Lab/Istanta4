@@ -479,3 +479,22 @@ describe('contestoDallaConfig', () => {
     expect(contesto).toMatchObject({ percorsoReparto: 'dataFields.reparto', percorsoDescrizioneReparto: ['dataFields.desc'], percorsoMeccanica: 'meccanica' });
   });
 });
+
+describe('contestoDallaConfig: regole del menabò della GDO', () => {
+  const regola = {
+    id: 'r', titolo: null, livello: 'box', sezione: 'Pulizia casa', colore: null,
+    condizione: { tipo: 'gruppo', logica: 'tutte', figli: [{ tipo: 'condizione', campo: 'mastro', operatore: 'contiene', valore: 'PUL', valori: [] }] },
+  };
+
+  it('le regole in menaboRegole entrano nel contesto; quelle rotte si scartano', () => {
+    const contesto = contestoDallaConfig({ menaboRegole: [regola, { rotta: true }] });
+
+    expect(contesto.regoleMenabo).toHaveLength(1);
+    expect(contesto.regoleMenabo?.[0]).toMatchObject({ id: 'r', sezione: 'Pulizia casa' });
+  });
+
+  it('senza regole il contesto non ha la chiave', () => {
+    expect(contestoDallaConfig({})).not.toHaveProperty('regoleMenabo');
+    expect(contestoDallaConfig({ menaboRegole: [] })).not.toHaveProperty('regoleMenabo');
+  });
+});

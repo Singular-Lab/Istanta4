@@ -13,6 +13,11 @@ import type { ConfigWebpliant } from '../types';
  * - PUT    /api/impostazioni-gdo/reparti                       RepartiDaSalvare -> ImpostazioniGdo
  * - PUT    /api/impostazioni-gdo/campi-referenze               CampiReferenzeDaSalvare -> ImpostazioniGdo
  * - PUT    /api/impostazioni-gdo/sito-web                      SitoWebDaSalvare -> ImpostazioniGdo
+ * - PUT    /api/impostazioni-gdo/menabo                        RegoleMenaboDaSalvare -> ImpostazioniGdo
+ * - GET    /api/impostazioni-gdo/menabo/volantini              -> VolantinoProvaMenabo[] (gli ultimi della GDO, per la prova)
+ * - POST   /api/impostazioni-gdo/menabo/prova                  { idKit, regole } -> EsitoProvaMenabo (non salva niente)
+ * - GET    /api/impostazioni-gdo/menabo/suggerimenti           -> SuggerimentiCampiMenabo (campi reali e campo del menabò)
+ * - GET    /api/impostazioni-gdo/menabo/suggerimenti?campo=x   -> SuggerimentiValoriMenabo (valori reali del campo)
  * - POST   /api/impostazioni-gdo/insight-volantino/verifica    { configurazione } -> EsitoVerificaConfigurazione
  * - PUT    /api/impostazioni-gdo/insight-volantino             { configurazione } -> ImpostazioniGdo
  *          (non valida: 400 BadRequestError del progetto, con l'EsitoVerificaConfigurazione in details:
@@ -30,6 +35,10 @@ export const percorsiImpostazioniGdo = {
   reparti: `${PERCORSO_IMPOSTAZIONI_GDO}/reparti`,
   campiReferenze: `${PERCORSO_IMPOSTAZIONI_GDO}/campi-referenze`,
   sitoWeb: `${PERCORSO_IMPOSTAZIONI_GDO}/sito-web`,
+  menabo: `${PERCORSO_IMPOSTAZIONI_GDO}/menabo`,
+  volantiniMenabo: `${PERCORSO_IMPOSTAZIONI_GDO}/menabo/volantini`,
+  provaMenabo: `${PERCORSO_IMPOSTAZIONI_GDO}/menabo/prova`,
+  suggerimentiMenabo: `${PERCORSO_IMPOSTAZIONI_GDO}/menabo/suggerimenti`,
   insightVolantino: `${PERCORSO_IMPOSTAZIONI_GDO}/insight-volantino`,
   verificaInsightVolantino: `${PERCORSO_IMPOSTAZIONI_GDO}/insight-volantino/verifica`,
 } as const;
@@ -50,6 +59,115 @@ export interface RepartoGdo {
   daNominare: boolean;
   /** Nome proposto (es. da dictionary_translation.json), da accettare a mano; null se nessuno. */
   suggerimento: string | null;
+}
+
+/** Come una condizione confronta il campo della referenza (o la pagina) con il valore. */
+export const OPERATORI_REGOLA_MENABO = [
+  'uguale', 'diverso', 'contiene', 'non_contiene', 'inizia', 'finisce', 'uno_di',
+  'vuoto', 'non_vuoto', 'regex', 'maggiore', 'minore', 'tra',
+] as const;
+export type OperatoreRegolaMenabo = (typeof OPERATORI_REGOLA_MENABO)[number];
+
+/** Le trasformazioni di un campo in un modello di nome: `{mastro|senza-sigla|spazi|titolo}`. */
+export const TRASFORMAZIONI_NOME_MENABO = [
+  'parte-1', 'parte-2', 'parte-3', 'senza-sigla', 'spazi', 'minuscolo', 'maiuscolo', 'titolo', 'taglia', 'leggibile',
+] as const;
+export type TrasformazioneNomeMenabo = (typeof TRASFORMAZIONI_NOME_MENABO)[number];
+
+/**
+ * I campi che non stanno nei dati della referenza ma si ricavano dal box: `@pagina`, `@prima_pagina`,
+ * `@ultima_pagina` e `@reparto_nome` (il nome del reparto come nelle Impostazioni GDO, uguale in ogni volantino).
+ */
+export const CAMPI_DERIVATI_MENABO = ['@pagina', '@prima_pagina', '@ultima_pagina', '@reparto_nome'] as const;
+
+/**
+ * Una condizione semplice su un campo della referenza (es. mastro, tema, reparto) o su un campo derivato.
+ * `valore` per la maggior parte degli operatori; `valori` per `uno_di` (alternative) e per `tra` (minimo e massimo).
+ * `vuoto` e `non_vuoto` non usano il valore.
+ */
+export interface CondizioneRegolaMenabo {
+  tipo: 'condizione';
+  campo: string;
+  operatore: OperatoreRegolaMenabo;
+  valore: string;
+  valori: string[];
+}
+
+/** Un gruppo di nodi: vale se valgono tutti i nodi, almeno uno, o nessuno. I gruppi si annidano. */
+export interface GruppoRegolaMenabo {
+  tipo: 'gruppo';
+  logica: 'tutte' | 'una' | 'nessuna';
+  figli: NodoRegolaMenabo[];
+}
+
+export type NodoRegolaMenabo = CondizioneRegolaMenabo | GruppoRegolaMenabo;
+
+/**
+ * Una regola delle sezioni del menabò degli insight (spec impostazioni-gdo, "Regole delle sezioni del
+ * menabò del volantino"). Livello `box`: vale per il box con una referenza che soddisfa la condizione.
+ * Livello `pagina`: vale per la pagina se la condizione è soddisfatta da almeno un suo box, e decide la
+ * sezione di tutta la pagina. `sezione` è un testo o un modello (`{mastro|senza-sigla|titolo}`); null:
+ * non è una sezione. Si applica la prima regola che vale, nell'ordine scelto.
+ */
+export interface RegolaMenabo {
+  id: string;
+  /** Un nome per riconoscerla (compare nel motivo delle pagine); facoltativo. */
+  titolo: string | null;
+  livello: 'box' | 'pagina';
+  sezione: string | null;
+  /** Colore esadecimale (#rrggbb) della sezione; null: automatico. */
+  colore: string | null;
+  condizione: GruppoRegolaMenabo;
+}
+
+/** Un campo che compare nelle referenze dei volantini della GDO, con quante referenze lo hanno. */
+export interface CampoSuggerito {
+  campo: string;
+  referenze: number;
+}
+
+/** I campi reali delle referenze e il campo da cui la libreria agenzia ricava la sezione (per Conad CNO «mastro»). */
+export interface SuggerimentiCampiMenabo {
+  campoMenabo: string | null;
+  campi: CampoSuggerito[];
+}
+
+/** Un valore reale di un campo; per il campo del menabò, il nome leggibile che ne ricava la libreria agenzia. */
+export interface ValoreSuggerito {
+  valore: string;
+  referenze: number;
+  /** Il nome leggibile della sezione; null se il valore non è una sezione; assente per gli altri campi. */
+  nomeLeggibile?: string | null;
+}
+
+export interface SuggerimentiValoriMenabo {
+  campo: string;
+  valori: ValoreSuggerito[];
+}
+
+/** La prova delle regole su un volantino reale (POST /menabo/prova). */
+export interface PaginaProvaMenabo {
+  pagina: number;
+  /** Il reparto con più box nella pagina (nome come nelle Impostazioni GDO); null se non si legge. */
+  reparto?: string | null;
+  prima: string | null;
+  dopo: string | null;
+  cambia: boolean;
+  /** La regola che ha deciso la pagina; null se nessuna. */
+  regola: string | null;
+}
+
+export interface VolantinoProvaMenabo {
+  idKit: string;
+  titolo: string;
+  nomePromo: string;
+}
+
+export interface EsitoProvaMenabo {
+  volantino: VolantinoProvaMenabo;
+  pagine: PaginaProvaMenabo[];
+  /** Quante pagine cambiano sezione con le regole. */
+  cambiate: number;
 }
 
 export interface LineaDichiarata {
@@ -90,6 +208,12 @@ export interface ImpostazioniGdo {
     meta_volantino?: ConfigWebpliant['meta_volantino'];
   };
   insightVolantino: ConfigurazioneInsightGdo;
+  /** Le regole delle sezioni del menabò della GDO; vuoto: la sezione è quella ricavata dalla libreria agenzia. */
+  regoleMenabo: RegolaMenabo[];
+}
+
+export interface RegoleMenaboDaSalvare {
+  regole: RegolaMenabo[];
 }
 
 export interface IdentitaGdoDaSalvare {

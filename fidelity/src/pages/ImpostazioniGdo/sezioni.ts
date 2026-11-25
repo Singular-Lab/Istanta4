@@ -9,8 +9,16 @@ export const SEZIONI_IMPOSTAZIONI_GDO = [
   { id: "marchi-distributore", etichetta: "Private Labels", icona: "BadgeCheck" },
   { id: "campi-referenze", etichetta: "Campi delle referenze", icona: "ArrowLeftRight" },
   { id: "insight-volantino", etichetta: "Insight del volantino", icona: "FileJson" },
+  { id: "menabo-volantino", etichetta: "Menabò del volantino", icona: "LayoutGrid" },
   { id: "aspetto-sito-web", etichetta: "Aspetto del sito web", icona: "Palette" },
 ] as const;
+
+/** Come l'indice raggruppa le sezioni: una sola sezione alla volta si apre dal suo id. */
+export const GRUPPI_IMPOSTAZIONI_GDO: ReadonlyArray<{ titolo: string; sezioni: ReadonlyArray<(typeof SEZIONI_IMPOSTAZIONI_GDO)[number]["id"]> }> = [
+  { titolo: "Generale", sezioni: ["identita", "loghi-insegne", "aspetto-sito-web"] },
+  { titolo: "Dati", sezioni: ["reparti", "marchi-distributore", "campi-referenze"] },
+  { titolo: "Volantino", sezioni: ["insight-volantino", "menabo-volantino"] },
+];
 
 export type IdSezioneImpostazioniGdo = (typeof SEZIONI_IMPOSTAZIONI_GDO)[number]["id"];
 
