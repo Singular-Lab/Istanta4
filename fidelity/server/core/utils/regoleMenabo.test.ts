@@ -168,11 +168,11 @@ describe('primaRegolaChe', () => {
 
   it('vale la prima regola del livello, nell\'ordine', () => {
     const esito = primaRegolaChe(regole, 'box', [da({ mastro: 'PUL-PULIZIA_singola', tema: 'x' })]);
-    expect(esito).toEqual({ nome: 'Pulizia casa', colore: '#ff0000', regola: 'b' });
+    expect(esito).toEqual({ nome: 'Pulizia casa', colore: '#ff0000', regola: 'b', idRegola: 'b', quotaMinima: null });
   });
 
   it('«non è una sezione» dà nome null e usa il titolo della regola', () => {
-    expect(primaRegolaChe(regole, 'box', [da({ mastro: 'A-Principale' })])).toEqual({ nome: null, colore: null, regola: 'Principale non vale' });
+    expect(primaRegolaChe(regole, 'box', [da({ mastro: 'A-Principale' })])).toEqual({ nome: null, colore: null, regola: 'Principale non vale', idRegola: 'a', quotaMinima: null });
   });
 
   it('i livelli non si mescolano', () => {
@@ -263,5 +263,49 @@ describe('regoleMenaboDa (lettura dal database)', () => {
   it('non è un elenco: vuoto', () => {
     expect(regoleMenaboDa(undefined)).toEqual([]);
     expect(regoleMenaboDa({})).toEqual([]);
+  });
+});
+
+describe('quota minima e campi della pagina', () => {
+  const dati = (...regole: unknown[]) => verificaRegoleMenabo({ regole });
+  const box = (extra: Record<string, unknown> = {}) => ({
+    id: 'r', livello: 'box', sezione: 'La Dispensa', condizione: tutte(cond('reparto', 'uguale', '1')), ...extra,
+  });
+
+  it('la quota minima di una regola per box è un intero da 1 a 100 e si conserva', () => {
+    const esito = dati(box({ quotaMinima: 60 }));
+    expect(esito.errori).toEqual([]);
+    expect(esito.regole[0].quotaMinima).toBe(60);
+    expect(regoleMenaboDa([esito.regole[0]])[0].quotaMinima).toBe(60);
+    for (const sbagliata of [0, 101, 12.5, 'molta']) {
+      expect(dati(box({ quotaMinima: sbagliata })).errori[0]).toContain('la quota minima deve essere un numero intero da 1 a 100');
+    }
+  });
+
+  it('senza quota minima la regola è quella di sempre, senza la chiave', () => {
+    expect('quotaMinima' in dati(box()).regole[0]).toBe(false);
+    expect(dati(box({ quotaMinima: null })).errori).toEqual([]);
+  });
+
+  it('la quota minima non vale per le regole per pagina', () => {
+    expect(dati(box({ livello: 'pagina', quotaMinima: 50 })).errori[0]).toContain('vale solo per le regole per box');
+  });
+
+  it('i campi calcolati sulla pagina si rifiutano nelle regole per box e valgono in quelle per pagina', () => {
+    const inCondizione = dati(box({ condizione: tutte(cond('@quota_reparto_prevalente', 'maggiore', '79')) }));
+    expect(inCondizione.errori[0]).toContain('@quota_reparto_prevalente si calcola sulla pagina');
+    const inNome = dati(box({ sezione: '{@reparto_prevalente|titolo}' }));
+    expect(inNome.errori[0]).toContain('@reparto_prevalente si calcola sulla pagina');
+    const dellaPagina = dati(box({ livello: 'pagina', sezione: '{@reparto_prevalente|titolo}', condizione: tutte(cond('@quota_reparto_prevalente', 'maggiore', '79')) }));
+    expect(dellaPagina.errori).toEqual([]);
+  });
+
+  it('primaRegolaChe salta le regole escluse', () => {
+    const regole = [
+      regola('Prima', tutte(cond('mastro', 'non_vuoto')), { id: 'a' }),
+      regola('Seconda', tutte(cond('mastro', 'non_vuoto')), { id: 'b' }),
+    ];
+    expect(primaRegolaChe(regole, 'box', [da({ mastro: 'X' })], { escluse: new Set(['a']) })?.nome).toBe('Seconda');
+    expect(primaRegolaChe(regole, 'box', [da({ mastro: 'X' })], { escluse: new Set(['a', 'b']) })).toBeNull();
   });
 });

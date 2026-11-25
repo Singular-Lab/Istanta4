@@ -177,3 +177,92 @@ describe('@reparto_nome: il nome del reparto, uguale in ogni volantino', () => {
     expect(conReparti([scatola('l1', 11)], [])).toEqual(menabo(righe, [scatola('l1', 11)]));
   });
 });
+
+describe('menabò sempre corretto: pagine generiche, quota minima ed ereditarietà', () => {
+  // Come nel volantino P2620: pagine sul master generico, con il reparto che dà il titolo stampato
+  const nomiReparto: Record<string, string> = { '1': 'La Dispensa', '3': 'Bevande', '24': 'Freschi', '25': 'Freschi', '84': 'Occasioni Extra' };
+  const lettura = {
+    repartoConfigurato: (id: string) => {
+      const codice = id.split('-')[0];
+      return { codice, descrizione: codice };
+    },
+    risolviReparto: (r: { codice: string; descrizione: string }) => ({ ...r, descrizione: nomiReparto[r.codice] ?? r.descrizione, marketing: true }),
+  };
+  const GENERICA = 'Og-OFFERTE generiche';
+  // id = «codice reparto-numero»: il reparto si legge dall'id
+  const generica = (reparto: string, n: number, pagina: number) => ({ riga: riga(`${reparto}-${n}`, { mastro: GENERICA, reparto }), box: scatola(`${reparto}-${n}`, pagina) });
+  const conPagine = (pezzi: Array<ReturnType<typeof generica>>, r: RegolaMenabo[]) =>
+    menaboDi(pezzi.map(p => p.box), opzioniDellAgenzia(agenzia, pezzi.map(p => p.riga), r, lettura as never))!.pagine;
+  const perPagina = (pagine: ReturnType<typeof conPagine>) => pagine.map(p => [p.pagina, p.nome]);
+
+  const regolaGenerica = {
+    id: 'g', titolo: 'Titolo dal reparto', livello: 'pagina', sezione: '{@reparto_prevalente}',
+    condizione: gruppo(['@mastro_prevalente', 'contiene', 'Og-'], ['@quota_reparto_prevalente', 'tra', '', ['80', '100']]),
+  };
+  const regolaEredita = {
+    id: 'e', titolo: 'Come la pagina prima', livello: 'pagina', sezione: '{@sezione_precedente}',
+    condizione: gruppo(['@mastro_prevalente', 'contiene', 'Og-'], ['@sezione_precedente', 'non_vuoto']),
+  };
+
+  it('la pagina generica prende il reparto prevalente se arriva alla soglia', () => {
+    const pezzi = [
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => generica('1', n, 16)),
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(n => generica('3', n, 19)),
+      generica('1', 11, 19),
+    ];
+    const pagine = conPagine(pezzi, regole(regolaGenerica));
+    expect(perPagina(pagine)).toEqual([[16, 'La Dispensa'], [19, 'Bevande']]);
+    expect(pagine[0]).toMatchObject({ regola: 'Titolo dal reparto' });
+  });
+
+  it('sotto soglia la regola non decide: resta la sezione di prima (Offerte generiche)', () => {
+    const pezzi = [generica('1', 1, 15), generica('1', 2, 15), generica('1', 3, 15), generica('3', 1, 15), generica('3', 2, 15)];
+    expect(perPagina(conPagine(pezzi, regole(regolaGenerica)))).toEqual([[15, 'Offerte generiche']]);
+  });
+
+  it('una pagina con un master specifico non è toccata dalla regola delle pagine generiche', () => {
+    const specifica = { riga: riga('84-1', { mastro: 'OF-ORTOFRUTTA', reparto: '84' }), box: scatola('84-1', 10) };
+    expect(perPagina(conPagine([specifica], regole(regolaGenerica)))).toEqual([[10, 'Ortofrutta']]);
+  });
+
+  it('la pagina senza titolo eredita la sezione della pagina prima, in sequenza', () => {
+    const pezzi = [
+      ...[1, 2, 3, 4].map(n => generica('24', n, 13)),
+      ...[1, 2].map(n => generica('24', n, 14)), ...[1, 2].map(n => generica('3', n, 14)),
+      ...[1, 2].map(n => generica('1', n, 15)), ...[1, 2].map(n => generica('3', n, 15)),
+    ];
+    const pagine = conPagine(pezzi, regole(regolaGenerica, regolaEredita));
+    expect(perPagina(pagine)).toEqual([[13, 'Freschi'], [14, 'Freschi'], [15, 'Freschi']]);
+    // La prima pagina senza pagina prima non eredita niente
+    expect(perPagina(conPagine([generica('1', 1, 5), generica('3', 1, 5)], regole(regolaGenerica, regolaEredita)))).toEqual([[5, 'Offerte generiche']]);
+  });
+
+  it('le pagine che non sono consecutive non ereditano', () => {
+    const pezzi = [...[1, 2, 3].map(n => generica('24', n, 13)), generica('1', 1, 16), generica('3', 1, 16)];
+    expect(perPagina(conPagine(pezzi, regole(regolaGenerica, regolaEredita)))).toEqual([[13, 'Freschi'], [16, 'Offerte generiche']]);
+  });
+
+  it('quota minima: un solo box che soddisfa la regola non decide la pagina', () => {
+    const pezzi = [
+      { riga: riga('a', { mastro: 'PB-Pagina bianca', reparto: '1' }), box: scatola('a', 27) },
+      { riga: riga('b', { mastro: 'PB-Pagina bianca', reparto: '24' }), box: scatola('b', 27) },
+      { riga: riga('c', { mastro: 'PB-Pagina bianca', reparto: '24' }), box: scatola('c', 27) },
+      { riga: riga('d', { mastro: 'PB-Pagina bianca', reparto: '5' }), box: scatola('d', 27) },
+    ];
+    const dispensa = (quotaMinima?: number) => regole({
+      id: 'd', titolo: 'La dispensa', livello: 'box', sezione: 'La Dispensa', condizione: gruppo(['reparto', 'uguale', '1']), ...(quotaMinima ? { quotaMinima } : {}),
+    });
+    const nome = (r: RegolaMenabo[]) => menaboDi(pezzi.map(p => p.box), opzioniDellAgenzia(agenzia, pezzi.map(p => p.riga), r))?.pagine.map(p => p.nome);
+    // Senza quota: un box decide la pagina (il comportamento di sempre)
+    expect(nome(dispensa())).toEqual(['La Dispensa']);
+    // Con il 50%: un box su quattro non basta, i box tornano alla sezione di prima (pagina bianca: nessuna sezione)
+    expect(nome(dispensa(50))).toBeUndefined();
+    // Con il 25%: un box su quattro basta
+    expect(nome(dispensa(25))).toEqual(['La Dispensa']);
+  });
+
+  it('senza i nuovi campi e senza quota le regole fanno quello di prima', () => {
+    const r = regole({ id: 'r1', livello: 'box', sezione: 'Pulizia casa', condizione: gruppo(['mastro', 'contiene', 'PULIZIA']) });
+    expect(menabo(RIGHE, BOX, r)!.pagine.find(p => p.pagina === 22)?.nome).toBe('Pulizia casa');
+  });
+});

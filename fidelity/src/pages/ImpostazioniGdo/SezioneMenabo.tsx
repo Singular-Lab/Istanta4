@@ -393,7 +393,12 @@ function RegolaEditor({
               formSelectSize="sm"
               aria-label={`Livello della regola ${indice + 1}`}
               value={regola.livello}
-              onChange={(e) => onChange({ ...regola, livello: e.target.value as RegolaMenabo["livello"] })}
+              onChange={(e) => {
+                const livello = e.target.value as RegolaMenabo["livello"];
+                // La quota minima vale solo per le regole per box
+                const { quotaMinima: _quota, ...senza } = regola;
+                onChange(livello === "box" ? { ...regola, livello } : { ...senza, livello });
+              }}
               className="w-44"
               title={
                 regola.livello === "box"
@@ -404,6 +409,24 @@ function RegolaEditor({
               <option value="box">Per box</option>
               <option value="pagina">Per pagina</option>
             </FormSelect>
+            {regola.livello === "box" && (
+              <FormInput
+                type="number"
+                formInputSize="sm"
+                min={1}
+                max={100}
+                aria-label={`Quota minima di pagina della regola ${indice + 1}`}
+                title="La regola vale per una pagina solo se almeno questa percentuale dei suoi box la soddisfa; sotto, i box tornano alla sezione di prima."
+                placeholder="Quota minima % (facoltativa)"
+                value={regola.quotaMinima ?? ""}
+                onChange={(e) => {
+                  const { quotaMinima: _tolta, ...senza } = regola;
+                  const numero = Number(e.target.value);
+                  onChange(e.target.value === "" || !Number.isFinite(numero) ? senza : { ...senza, quotaMinima: Math.min(100, Math.max(1, Math.round(numero))) });
+                }}
+                className="w-56"
+              />
+            )}
           </div>
           <GruppoEditor gruppo={regola.condizione} onChange={(condizione) => onChange({ ...regola, condizione })} />
           <div className="flex flex-wrap items-center gap-2">
@@ -767,7 +790,7 @@ function SezioneMenabo({ regole }: { regole: RegolaMenabo[] }) {
             </ol>
           )}
           <p className="text-xs text-slate-500">
-            Parti del valore: {PARTI_VALORE.join(", ")}. Trasformazioni: {ALTRE_TRASFORMAZIONI.join(", ")}. Campi derivati: {CAMPI_DERIVATI_MENABO.join(", ")} (@reparto_nome è il nome del reparto come nelle Impostazioni GDO, uguale in ogni volantino).
+            Parti del valore: {PARTI_VALORE.join(", ")}. Trasformazioni: {ALTRE_TRASFORMAZIONI.join(", ")}. Campi derivati: {CAMPI_DERIVATI_MENABO.join(", ")}. @reparto_nome è il nome del reparto come nelle Impostazioni GDO; i campi @…_prevalente e @sezione_precedente si calcolano sulla pagina e valgono solo nelle regole per pagina.
           </p>
         </div>
 

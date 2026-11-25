@@ -84,7 +84,7 @@ export interface OpzioniInsight {
    * Il risultato ha il nome della sezione (null: non è una sezione), il colore e il titolo della regola; senza
    * regola soddisfatta (null) vale la sezione di sezionePagina.
    */
-  regolaSezione?: (idReferenza: string, posizione: PosizioneMenabo) => RisultatoRegolaMenabo | null;
+  regolaSezione?: (idReferenza: string, posizione: PosizioneMenabo, escluse?: ReadonlySet<string>) => RisultatoRegolaMenabo | null;
   regolaPagina?: (idReferenze: readonly string[], posizione: PosizioneMenabo) => RisultatoRegolaMenabo | null;
 }
 
@@ -437,6 +437,8 @@ export function marcheDi(box: readonly BoxInsight[], marcheDistributore: readonl
 export interface PosizioneMenabo {
   pagina: number;
   ultimaPagina: number;
+  /** Il nome della sezione finale della pagina prima; null se la pagina prima non c'è o non ha sezione. */
+  sezionePrecedente: string | null;
 }
 
 export function menaboDi(box: readonly BoxKit[], opzioni: Pick<OpzioniInsight, 'sezionePagina' | 'nomeSezione' | 'regolaSezione' | 'regolaPagina'>): MenaboVolantino | null {
@@ -452,60 +454,87 @@ export function menaboDi(box: readonly BoxKit[], opzioni: Pick<OpzioniInsight, '
     return nomi.get(chiave) ?? nome;
   };
 
-  // Le regole di pagina decidono la pagina intera, qualunque sia la sezione dei suoi box
-  const decise = new Map<number, RisultatoRegolaMenabo>();
-  if (opzioni.regolaPagina) {
-    const perPaginaBox = new Map<number, BoxKit[]>();
-    for (const singolo of box) {
-      if (singolo.pagina === null) continue;
-      perPaginaBox.set(singolo.pagina, [...(perPaginaBox.get(singolo.pagina) ?? []), singolo]);
-    }
-    for (const [pagina, dellaPagina] of perPaginaBox) {
-      const esito = opzioni.regolaPagina(dellaPagina.flatMap(singolo => singolo.referenze.map(referenza => referenza.id)), { pagina, ultimaPagina });
-      if (esito) decise.set(pagina, esito);
-    }
+  const perPaginaBox = new Map<number, BoxKit[]>();
+  for (const singolo of box) {
+    if (singolo.pagina === null) continue;
+    perPaginaBox.set(singolo.pagina, [...(perPaginaBox.get(singolo.pagina) ?? []), singolo]);
   }
 
   // Per pagina: nome leggibile -> primo valore della fonte, numero di box e regola che l'ha deciso
   interface Voce { sezione: string; box: number; colore: string | null; regola: string | null }
-  const perPagina = new Map<number, Map<string, Voce>>();
-  for (const singolo of box) {
-    if (singolo.pagina === null || decise.has(singolo.pagina)) continue;
-    const posizione = { pagina: singolo.pagina, ultimaPagina };
-    // La prima regola che vale per una referenza del box decide la sezione del box; senza, quella di prima
-    const regola = opzioni.regolaSezione
-      ? primo(singolo.referenze, referenza => opzioni.regolaSezione!(referenza.id, posizione))
-      : null;
-    if (regola && regola.nome === null) continue;
-    const sezione = regola?.nome ?? primo(singolo.referenze, referenza => leggi(referenza.id)?.trim() || null);
-    if (!sezione) continue;
-    const nome = regola ? regola.nome : opzioni.nomeSezione ? opzioni.nomeSezione(sezione) : sezione;
-    if (nome === null) continue;
-    const chiave = nomeUnico(nome || sezione);
-    const conti = perPagina.get(singolo.pagina) ?? new Map<string, Voce>();
-    const voce = conti.get(chiave);
-    if (voce) voce.box += 1;
-    else conti.set(chiave, { sezione, box: 1, colore: regola?.colore ?? null, regola: regola?.regola ?? null });
-    perPagina.set(singolo.pagina, conti);
-  }
+  /**
+   * La sezione di una pagina dai suoi box: la prima regola di box che vale per una referenza decide il box,
+   * senza regole quella di prima. Una regola con la quota minima che non arriva alla quota della pagina si
+   * toglie e i suoi box tornano alla sezione di prima.
+   */
+  const votaLaPagina = (dellaPagina: readonly BoxKit[], posizione: PosizioneMenabo): Map<string, Voce> => {
+    const escluse = new Set<string>();
+    for (let giro = 0; ; giro += 1) {
+      const conti = new Map<string, Voce>();
+      const perRegola = new Map<string, { box: number; quota: number | null }>();
+      for (const singolo of dellaPagina) {
+        const regola = opzioni.regolaSezione
+          ? primo(singolo.referenze, referenza => opzioni.regolaSezione!(referenza.id, posizione, escluse))
+          : null;
+        if (regola) {
+          const conto = perRegola.get(regola.idRegola) ?? { box: 0, quota: regola.quotaMinima };
+          conto.box += 1;
+          perRegola.set(regola.idRegola, conto);
+        }
+        if (regola && regola.nome === null) continue;
+        const sezione = regola?.nome ?? primo(singolo.referenze, referenza => leggi(referenza.id)?.trim() || null);
+        if (!sezione) continue;
+        const nome = regola ? regola.nome : opzioni.nomeSezione ? opzioni.nomeSezione(sezione) : sezione;
+        if (nome === null) continue;
+        const chiave = nomeUnico(nome || sezione);
+        const voce = conti.get(chiave);
+        if (voce) voce.box += 1;
+        else conti.set(chiave, { sezione, box: 1, colore: regola?.colore ?? null, regola: regola?.regola ?? null });
+      }
+      const sotto = [...perRegola].filter(([, conto]) => conto.quota !== null && (conto.box * 100) / dellaPagina.length < conto.quota);
+      if (sotto.length === 0 || giro >= 20) return conti;
+      for (const [id] of sotto) escluse.add(id);
+    }
+  };
 
+  // Le pagine in ordine: la sezione di una pagina serve alla successiva (campo @sezione_precedente)
   const pagine: PaginaMenabo[] = [];
-  for (const [pagina, esito] of decise) {
-    if (esito.nome === null) continue;
-    pagine.push({ pagina, sezione: esito.nome, nome: nomeUnico(esito.nome), colore: esito.colore, regola: esito.regola });
-  }
-  for (const [pagina, conti] of perPagina) {
-    // Map tiene l'ordine d'inserimento: a parita' di box resta la sezione vista per prima
-    let scelta: { nome: string } & Voce = { nome: '', sezione: '', box: 0, colore: null, regola: null };
-    for (const [nome, voce] of conti) if (voce.box > scelta.box) scelta = { nome, ...voce };
-    pagine.push({
+  let precedente: { pagina: number; nome: string | null } | null = null;
+  for (const pagina of [...perPaginaBox.keys()].sort((a, b) => a - b)) {
+    const dellaPagina = perPaginaBox.get(pagina) ?? [];
+    const posizione: PosizioneMenabo = {
       pagina,
-      sezione: scelta.sezione,
-      nome: scelta.nome,
-      // Le chiavi assenti restano assenti: senza regole il menabò e' quello di sempre
-      ...(scelta.colore ? { colore: scelta.colore } : {}),
-      ...(scelta.regola ? { regola: scelta.regola } : {}),
-    });
+      ultimaPagina,
+      sezionePrecedente: precedente && precedente.pagina === pagina - 1 ? precedente.nome : null,
+    };
+    let nomeFinale: string | null = null;
+    // Le regole di pagina decidono la pagina intera, qualunque sia la sezione dei suoi box
+    const esito = opzioni.regolaPagina
+      ? opzioni.regolaPagina(dellaPagina.flatMap(singolo => singolo.referenze.map(referenza => referenza.id)), posizione)
+      : null;
+    if (esito) {
+      if (esito.nome !== null) {
+        nomeFinale = nomeUnico(esito.nome);
+        pagine.push({ pagina, sezione: esito.nome, nome: nomeFinale, colore: esito.colore, regola: esito.regola });
+      }
+    } else {
+      const conti = votaLaPagina(dellaPagina, posizione);
+      if (conti.size > 0) {
+        // Map tiene l'ordine d'inserimento: a parita' di box resta la sezione vista per prima
+        let scelta: { nome: string } & Voce = { nome: '', sezione: '', box: 0, colore: null, regola: null };
+        for (const [nome, voce] of conti) if (voce.box > scelta.box) scelta = { nome, ...voce };
+        nomeFinale = scelta.nome;
+        pagine.push({
+          pagina,
+          sezione: scelta.sezione,
+          nome: scelta.nome,
+          // Le chiavi assenti restano assenti: senza regole il menabò e' quello di sempre
+          ...(scelta.colore ? { colore: scelta.colore } : {}),
+          ...(scelta.regola ? { regola: scelta.regola } : {}),
+        });
+      }
+    }
+    precedente = { pagina, nome: nomeFinale };
   }
   if (pagine.length === 0) return null;
   return { pagine: pagine.sort((a, b) => a.pagina - b.pagina) };
