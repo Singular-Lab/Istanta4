@@ -7,7 +7,7 @@ import {
 } from "@/components/Base/ContextMenu";
 import Button from "@/components/Base/Button";
 import Dialog from "@/components/Base/Headless/Dialog";
-import { FormTextarea } from "@/components/Base/Form";
+import { FormCheck, FormInput, FormTextarea } from "@/components/Base/Form";
 import Menu from "@/components/Base/Headless/Menu";
 import Lucide from "@/components/Base/Lucide";
 import clsx from "clsx";
@@ -18,7 +18,7 @@ import { useUser } from "../../context/UserContext";
 import { ricollegaElementiSalvati } from "./menaboChiavi";
 import { anteprimaNote } from "./menaboNote";
 import { pagineDelGruppo, referenzeDellaPagina } from "./menaboSelezione";
-import { altrePagineDellUnione, gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, nuovoUnioneId, raggruppaPerUnione, rimandoAltrePagine, sciogliUnione, unisciGruppi } from "./menaboUnioni";
+import { alternaGruppoDaUnire, altrePagineDellUnione, filtraGruppiUnibili, gruppiDellUnione, normalizzaUnioni, numeroDelleUnioni, nuovoUnioneId, raggruppaPerUnione, rimandoAltrePagine, sciogliUnione, unisciGruppi } from "./menaboUnioni";
 // ── Document dimensions (A4 in points at 72 dpi) ──────────────────────────
 const DOC_W = 595;
 const DOC_H = 842;
@@ -838,6 +838,24 @@ export default function MenaboCanvas({
             return true;
         });
     }, [items, selectedItem]);
+    const [ricercaUnione, setRicercaUnione] = useState("");
+    useEffect(() => { setRicercaUnione(""); }, [selectedId]);
+    const gruppiUnibiliVisibili = useMemo(
+        () => filtraGruppiUnibili(gruppiUnibili, ricercaUnione, new Set(gruppiDaUnire)),
+        [gruppiUnibili, ricercaUnione, gruppiDaUnire],
+    );
+    const unioneRef = useRef<HTMLDivElement | null>(null);
+    // Ctrl/Cmd+clic su un gruppo in pagina: lo spunta nell'elenco dell'unione e lo mostra (I20-1267).
+    const spuntaPerUnione = useCallback((groupId: string): boolean => {
+        if (!unioneGruppi || !selectedItem || groupId === selectedItem.groupId) return false;
+        if (unioneDelSelezionato && items.some(item => item.groupId === groupId && item.unioneId === unioneDelSelezionato)) return false;
+        setGruppiDaUnire(prev => alternaGruppoDaUnire(prev, groupId));
+        setRicercaUnione("");
+        requestAnimationFrame(() => {
+            unioneRef.current?.querySelector(`[data-gruppo-unibile="${CSS.escape(groupId)}"]`)?.scrollIntoView({ block: "nearest" });
+        });
+        return true;
+    }, [items, selectedItem, unioneDelSelezionato, unioneGruppi]);
     const uniscigruppiScelti = useCallback(() => {
         if (!selectedItem || gruppiDaUnire.length === 0) return;
         pushHistory();
@@ -1952,6 +1970,7 @@ export default function MenaboCanvas({
                                                                                 <div
                                                                                     onClick={e => {
                                                                                         e.stopPropagation();
+                                                                                        if (!isLocked && (e.ctrlKey || e.metaKey) && spuntaPerUnione(item.groupId)) return;
                                                                                         if (!isLocked) {
                                                                                             setSelectedId(item.id);
                                                                                             setSelectedPageIndex(item.pageIndex);
@@ -2465,32 +2484,46 @@ export default function MenaboCanvas({
                                             Scegli i gruppi da unire a questo: le loro referenze seguono un solo ordine merceologico, anche su pagine diverse.
                                         </p>
                                     )}
-                                    <div className="mt-2 max-h-36 overflow-y-auto rounded-control border border-slate-200/80 dark:border-darkmode-400">
+                                    <FormInput
+                                        type="search"
+                                        value={ricercaUnione}
+                                        onChange={e => setRicercaUnione(e.target.value)}
+                                        placeholder="Cerca un tema o un gruppo…"
+                                        aria-label="Cerca fra i gruppi da unire"
+                                        className="mt-2 !py-1.5 text-xs"
+                                        data-testid="menabo-unione-ricerca"
+                                    />
+                                    <p className="mt-1 text-[11px] text-slate-400">Ctrl/Cmd + clic su un gruppo in pagina lo spunta qui.</p>
+                                    <div ref={unioneRef} className="mt-1.5 max-h-[45vh] min-h-40 overflow-y-auto rounded-control border border-slate-200/80 dark:border-darkmode-400">
                                         {gruppiUnibili.length === 0 ? (
                                             <div className="px-2.5 py-2 text-slate-400">Nessun altro gruppo nel menabò.</div>
-                                        ) : gruppiUnibili.map(item => {
+                                        ) : gruppiUnibiliVisibili.length === 0 ? (
+                                            <div className="px-2.5 py-2 text-slate-400">Nessun gruppo corrisponde alla ricerca.</div>
+                                        ) : gruppiUnibiliVisibili.map(item => {
                                             const pagine = pagineDelGruppo(paginated, item.groupId);
                                             const giaUnito = !!unioneDelSelezionato && item.unioneId === unioneDelSelezionato;
+                                            const idCheck = `unione-gruppo-${item.groupId}`;
                                             return (
-                                                <label
+                                                <FormCheck
                                                     key={item.groupId}
-                                                    className="flex cursor-pointer items-start gap-2 px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-darkmode-700/40"
+                                                    data-gruppo-unibile={item.groupId}
+                                                    className="items-start px-2.5 py-1.5 hover:bg-slate-50 dark:hover:bg-darkmode-700/40"
                                                 >
-                                                    <input
+                                                    <FormCheck.Input
+                                                        id={idCheck}
                                                         type="checkbox"
-                                                        className="mt-0.5"
+                                                        className="mt-0.5 shrink-0"
                                                         checked={giaUnito || gruppiDaUnire.includes(item.groupId)}
                                                         disabled={giaUnito}
-                                                        onChange={e => setGruppiDaUnire(prev =>
-                                                            e.target.checked ? [...prev, item.groupId] : prev.filter(id => id !== item.groupId))}
+                                                        onChange={() => setGruppiDaUnire(prev => alternaGruppoDaUnire(prev, item.groupId))}
                                                     />
-                                                    <span className="min-w-0 flex-1 break-words">
+                                                    <FormCheck.Label htmlFor={idCheck} className="min-w-0 flex-1 break-words">
                                                         {item.label}
                                                         <span className="ml-1 text-slate-400">
                                                             {pagine.length > 0 ? `· pag. ${pagine.join(", ")}` : ""}
                                                         </span>
-                                                    </span>
-                                                </label>
+                                                    </FormCheck.Label>
+                                                </FormCheck>
                                             );
                                         })}
                                     </div>

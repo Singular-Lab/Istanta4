@@ -140,3 +140,30 @@ export function rimandoAltrePagine(altre: readonly number[], pagina: number): st
     if (dopo.length > 0) parti.push(`→ pag. ${dopo.join(", ")}`);
     return parti.join(" · ");
 }
+
+function normalizzaTesto(testo: string): string {
+    return testo.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+/**
+ * Cerca fra i gruppi unibili (I20-1267): tiene quelli la cui etichetta contiene tutte le parole scritte,
+ * senza distinguere maiuscole e accenti, più quelli indicati in `sempre` (già spuntati: non devono sparire).
+ */
+export function filtraGruppiUnibili<T extends { groupId: string; label: string }>(
+    gruppi: readonly T[],
+    ricerca: string,
+    sempre: ReadonlySet<string> = new Set(),
+): T[] {
+    const parole = normalizzaTesto(ricerca).split(/\s+/).filter(Boolean);
+    if (parole.length === 0) return [...gruppi];
+    return gruppi.filter(g => {
+        if (sempre.has(g.groupId)) return true;
+        const etichetta = normalizzaTesto(g.label);
+        return parole.every(parola => etichetta.includes(parola));
+    });
+}
+
+/** Spunta o toglie la spunta a un gruppo dell'elenco dell'unione (clic con Ctrl/Cmd sul gruppo in pagina). */
+export function alternaGruppoDaUnire(scelti: readonly string[], groupId: string): string[] {
+    return scelti.includes(groupId) ? scelti.filter(id => id !== groupId) : [...scelti, groupId];
+}

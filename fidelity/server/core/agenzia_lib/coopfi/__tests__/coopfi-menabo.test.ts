@@ -519,11 +519,11 @@ describe("coopfi menabo: etichette della tendina (I20-1259)", () => {
   });
 });
 
-describe("coopfi menabo: CAMPIONI DEL RISPARMIO per sconto (I20-1255)", () => {
+describe("coopfi menabo: CAMPIONI DEL RISPARMIO come ogni altro tema (I20-1267)", () => {
   const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
-  const campioni = (codice: string, sconto: unknown) => ({
+  const campioni = (codice: string, sconto: unknown, reparto = "Drogheria") => ({
     tema: "CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM",
-    reparto: "Drogheria",
+    reparto,
     txt_sconto: sconto as string,
     "Scatto.CodiceGruppo": `G${codice}`,
     codice_referenza: codice,
@@ -551,155 +551,53 @@ describe("coopfi menabo: CAMPIONI DEL RISPARMIO per sconto (I20-1255)", () => {
     }],
   });
 
-  it("nel menabò il tema segue lo sconto, dal più alto al più basso, vuoto in fondo", async () => {
-    const result = await sut.getDatoPerMenabo([
-      buildTracciato("canale-1", "area-1", [
-        campioni("1", "20"),
-        campioni("2", ""),
-        campioni("3", "40"),
-        campioni("4", "30"),
-        campioni("5", "0"),
-      ]),
-    ], { tipoDivisione: "canale", dataDivisione: [] });
-
-    const gruppo = result.risultati[0].raggruppamento.find(g => g.valore_campo.startsWith("CAMPIONI"));
-    expect(gruppo?.records.map(r => r.codice_referenza)).toEqual(["3", "4", "1", "2", "5"]);
-  });
-
-  it("a parità di sconto resta l'ordine di arrivo (merceologico)", async () => {
-    const result = await sut.getDatoPerMenabo([
-      buildTracciato("canale-1", "area-1", [campioni("1", "30"), campioni("2", "40"), campioni("3", "30")]),
-    ], { tipoDivisione: "canale", dataDivisione: [] });
-
-    const gruppo = result.risultati[0].raggruppamento.find(g => g.valore_campo.startsWith("CAMPIONI"));
-    expect(gruppo?.records.map(r => r.codice_referenza)).toEqual(["2", "1", "3"]);
-  });
-
-  it("gli altri temi non cambiano ordine", async () => {
-    const altro = (codice: string, sconto: string) => ({
-      tema: "Ortofrutta", txt_sconto: sconto, "Scatto.CodiceGruppo": `G${codice}`, codice_referenza: codice,
-    });
-    const result = await sut.getDatoPerMenabo([
-      buildTracciato("canale-1", "area-1", [altro("1", "10"), altro("2", "50")]),
-    ], { tipoDivisione: "canale", dataDivisione: [] });
-
-    const gruppo = result.risultati[0].raggruppamento.find(g => g.valore_campo === "Ortofrutta");
-    expect(gruppo?.records.map(r => r.codice_referenza)).toEqual(["1", "2"]);
-  });
-
-  it("verso il Plugin esporta un filtro per sconto, dal più alto al più basso, con il vuoto in fondo", () => {
-    const payload = sut.buildIndesignPluginJson(pagina([
-      { id: "campioni", records: [campioni("1", "20"), campioni("2", ""), campioni("3", "40"), campioni("4", "40")] },
-    ]));
-
-    const filtri = payload.source[0].filtri;
-    expect(filtri.map(f => f.criteri.map(c => c.valore))).toEqual([
-      ["CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM", "40"],
-      ["CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM", "20"],
-      ["CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM", ""],
-    ]);
-    expect(filtri.map(f => f.limite)).toEqual([2, 1, 1]);
-    expect(filtri.map(f => f.ordine)).toEqual([1, 2, 3]);
-    expect(filtri[0].criteri[1]).toEqual({ chiave: "txt_sconto", operatore: "=", valore: "40" });
-  });
-
-  // Task 17ac016e: sottogruppi a fasce di dieci punti, poi lo sconto preciso.
-  const gruppoCampioni = async (sconti: unknown[]) => {
-    const result = await sut.getDatoPerMenabo([
-      buildTracciato("canale-1", "area-1", sconti.map((s, i) => campioni(String(i + 1), s))),
-    ], { tipoDivisione: "canale", dataDivisione: [] });
+  const gruppoCampioni = async (records: Array<Record<string, string>>) => {
+    const result = await sut.getDatoPerMenabo([buildTracciato("canale-1", "area-1", records)], { tipoDivisione: "canale", dataDivisione: [] });
     return result.risultati[0].raggruppamento.find(g => g.valore_campo.startsWith("CAMPIONI"))!;
   };
 
-  it("i sottogruppi di CAMPIONI sono la sola fascia di sconto, senza lo sconto preciso", async () => {
-    const gruppo = await gruppoCampioni(["40", "45"]);
-    expect(gruppo.chiavi_sottogruppi).toEqual([
-      { nome_campo: "fascia_sconto", label: "Fascia di sconto" },
-    ]);
+  it("i sottogruppi sono i reparti, non le fasce di sconto", async () => {
+    const gruppo = await gruppoCampioni([campioni("1", "40"), campioni("2", "20", "Latticini")]);
+    expect(gruppo.chiavi_sottogruppi).toEqual([{ nome_campo: "reparto", label: "Reparto" }]);
   });
 
-  it("ogni referenza porta la sua fascia da cinque punti: 47 e 45 in 45-49, 42 in 40-44, vuoto e zero senza sconto", async () => {
-    const gruppo = await gruppoCampioni(["47", "45", "42", "", "0"]);
-    expect(gruppo.records.map(r => [r.txt_sconto, r.fascia_sconto])).toEqual([
-      ["47", "45-49"], ["45", "45-49"], ["42", "40-44"], ["", "Senza sconto"], ["0", "Senza sconto"],
-    ]);
+  it("le referenze restano nell'ordine merceologico di arrivo, senza ordinarle per sconto", async () => {
+    const gruppo = await gruppoCampioni([campioni("1", "20"), campioni("2", ""), campioni("3", "40"), campioni("4", "30")]);
+    expect(gruppo.records.map(r => r.codice_referenza)).toEqual(["1", "2", "3", "4"]);
   });
 
-  it("lo sconto decimale, con «%» o con il segno meno sta nella fascia giusta", async () => {
-    const gruppo = await gruppoCampioni(["32,5", "-30%", "9", "100"]);
-    expect(gruppo.records.map(r => r.fascia_sconto)).toEqual(["100-104", "30-34", "30-34", "5-9"]);
-  });
-
-  it("le fasce restano in ordine decrescente, con «Senza sconto» in fondo", async () => {
-    const gruppo = await gruppoCampioni(["", "20", "45", "35", "40"]);
-    expect([...new Set(gruppo.records.map(r => r.fascia_sconto))]).toEqual(["45-49", "40-44", "35-39", "20-24", "Senza sconto"]);
-  });
-
-  it("la fascia non diventa un campo filtro e non cambia i record del tracciato", async () => {
+  it("la fascia di sconto non viene aggiunta ai record e non cambia il tracciato", async () => {
     const origine = [campioni("1", "40"), campioni("2", "20")];
-    const result = await sut.getDatoPerMenabo([buildTracciato("canale-1", "area-1", origine)], { tipoDivisione: "canale", dataDivisione: [] });
-    expect(result.risultati[0].campi_filtro.map(c => c.nome_campo)).not.toContain("fascia_sconto");
+    const gruppo = await gruppoCampioni(origine);
+    expect(gruppo.records.every(r => !("fascia_sconto" in r))).toBe(true);
     expect(origine.every(r => !("fascia_sconto" in r))).toBe(true);
   });
 
-  it("gli altri temi tengono i sottogruppi per reparto, senza fascia", async () => {
-    const result = await sut.getDatoPerMenabo([
-      buildTracciato("canale-1", "area-1", [{ tema: "Ortofrutta", reparto: "Frutta", txt_sconto: "40", "Scatto.CodiceGruppo": "G1", codice_referenza: "1" }]),
-    ], { tipoDivisione: "canale", dataDivisione: [] });
-    const gruppo = result.risultati[0].raggruppamento.find(g => g.valore_campo === "Ortofrutta")!;
-    expect(gruppo.chiavi_sottogruppi?.map(c => c.nome_campo)).toEqual(["reparto"]);
-    expect(gruppo.records[0]).not.toHaveProperty("fascia_sconto");
-  });
-
-  it("una fascia trascinata sulla pagina esporta un filtro per sconto, senza il criterio della fascia", () => {
-    const records = [campioni("1", "45"), campioni("2", "40"), campioni("3", "40")].map(r => ({ ...r, fascia_sconto: "40-49" }));
-    const payload = sut.buildIndesignPluginJson({
-      ...pagina([{ id: "campioni", records }]),
-      pages: [{
-        pageIndex: 0, pageNumber: 1, referenzePerPagina: 20,
-        groups: [{
-          id: "f", groupId: "f", label: "CAMPIONI · 40-49", colorIdx: 0,
-          sourceKey: JSON.stringify(["canale-1", "sub", "fascia_sconto", "40-49"]),
-          recordKeys: records.map((_, i) => String(i)), records, recordCount: records.length,
-        }],
-      }],
-    } as never);
-
-    const filtri = payload.source[0].filtri;
-    expect(filtri.map(f => f.criteri.map(c => c.chiave))).toEqual([
-      ["tema", "txt_sconto"], ["tema", "txt_sconto"],
+  it("verso il Plugin esporta un solo filtro per il tema, senza criterio di sconto", () => {
+    const payload = sut.buildIndesignPluginJson(pagina([
+      { id: "campioni", records: [campioni("1", "20"), campioni("2", ""), campioni("3", "40"), campioni("4", "40")] },
+    ]));
+    expect(payload.source[0].filtri).toEqual([
+      { limite: 4, ordine: 1, criteri: [{ chiave: "tema", operatore: "=", valore: "CAMPIONI DEL RISPARMIO (OS20A) 62UFI+13TDM" }] },
     ]);
-    expect(filtri.map(f => f.criteri[1].valore)).toEqual(["45", "40"]);
-    expect(filtri.map(f => f.limite)).toEqual([1, 2]);
   });
 
-  it("un solo sconto trascinato esporta un filtro con il solo sconto, una volta", () => {
-    const records = [campioni("1", "40"), campioni("2", "40")];
+  it("un sottogruppo per reparto trascinato esporta il criterio del reparto", () => {
+    const records = [campioni("1", "20", "Latticini"), campioni("2", "30", "Latticini")];
     const payload = sut.buildIndesignPluginJson({
       divisionId: "canale-1", divisionLabel: "Canale 1", pageCount: 1, updatedAt: new Date().toISOString(),
       pages: [{
         pageIndex: 0, pageNumber: 1, referenzePerPagina: 20,
         groups: [{
-          id: "s", groupId: "s", label: "CAMPIONI · 40%", colorIdx: 0,
-          sourceKey: JSON.stringify(["canale-1", "sub", "txt_sconto", "40"]),
+          id: "r", groupId: "r", label: "CAMPIONI · Latticini", colorIdx: 0,
+          sourceKey: JSON.stringify(["canale-1", "sub", "reparto", "Latticini"]),
           recordKeys: ["0", "1"], records, recordCount: 2,
         }],
       }],
     } as never);
-
     expect(payload.source[0].filtri).toHaveLength(1);
-    expect(payload.source[0].filtri[0].criteri.map(c => c.chiave)).toEqual(["tema", "txt_sconto"]);
+    expect(payload.source[0].filtri[0].criteri.map(c => c.chiave)).toEqual(["tema", "reparto"]);
     expect(payload.source[0].filtri[0].limite).toBe(2);
-  });
-
-  it("un tema normale resta un solo filtro, senza criterio di sconto", () => {
-    const payload = sut.buildIndesignPluginJson(pagina([
-      { id: "orto", records: [{ tema: "Ortofrutta", txt_sconto: "10" }, { tema: "Ortofrutta", txt_sconto: "20" }] },
-    ]));
-
-    expect(payload.source[0].filtri).toEqual([
-      { limite: 2, ordine: 1, criteri: [{ chiave: "tema", operatore: "=", valore: "Ortofrutta" }] },
-    ]);
   });
 });
 
@@ -772,17 +670,11 @@ describe("coopfi menabo: unione di gruppi (I20-1255)", () => {
     ]);
   });
 
-  it("un'unione con CAMPIONI DEL RISPARMIO tiene a parte quel tema, ordinato per sconto", () => {
-    const campioni = { ...gruppo("CAMPIONI DEL RISPARMIO", 0, "u1"), records: [
-      { tema: "CAMPIONI DEL RISPARMIO", reparto: "Drogheria", txt_sconto: "30" },
-      { tema: "CAMPIONI DEL RISPARMIO", reparto: "Drogheria", txt_sconto: "40" },
-    ], recordCount: 2 };
-    const payload = sut.buildIndesignPluginJson(layout([[gruppo("TEMA A", 2, "u1"), campioni]]));
+  it("un'unione con CAMPIONI DEL RISPARMIO lo tratta come ogni altro tema, in un solo ordine merceologico", () => {
+    const payload = sut.buildIndesignPluginJson(layout([[gruppo("TEMA A", 2, "u1"), gruppo("CAMPIONI DEL RISPARMIO", 2, "u1")]]));
 
-    expect(payload.source[0].filtri.map(f => [f.criteri.map(c => c.valore).join("/"), f.limite, f.ordine])).toEqual([
-      ["TEMA A", 2, 1],
-      ["CAMPIONI DEL RISPARMIO/40", 1, 2],
-      ["CAMPIONI DEL RISPARMIO/30", 1, 3],
+    expect(payload.source[0].filtri.map(f => [f.criteri[0].valore, f.limite, f.ordine])).toEqual([
+      ["TEMA A||CAMPIONI DEL RISPARMIO", 4, 1],
     ]);
   });
 
@@ -850,8 +742,7 @@ describe("coopfi menabo: filtri esportati conformi al Plugin", () => {
           expect(OPERATORI_DEL_PLUGIN).toContain(criterio.operatore);
           expect(CHIAVI_DEL_PLUGIN).toContain(criterio.chiave);
           expect(typeof criterio.valore).toBe("string");
-          // Il solo valore che può essere vuoto è lo sconto di una referenza senza sconto (il Plugin lo legge <VUOTO>).
-          if (criterio.chiave !== "txt_sconto") expect(criterio.valore.trim()).not.toBe("");
+          expect(criterio.valore.trim()).not.toBe("");
         }
       }
     }
@@ -885,17 +776,19 @@ describe("coopfi menabo: filtri esportati conformi al Plugin", () => {
     expect(p2.filtri.find(f => f.criteri[0].valore === "TEMA B")?.limite).toBe(1);
   });
 
-  it("CAMPIONI DEL RISPARMIO: un filtro per sconto, dal più alto al più basso, vuoto in fondo", () => {
+  it("CAMPIONI DEL RISPARMIO: un solo filtro per il tema, senza criterio di sconto", () => {
     const filtri = esportazioneMista().source[0].filtri
       .filter(f => f.criteri[0].valore === "CAMPIONI DEL RISPARMIO");
-    expect(filtri.map(f => f.criteri[1].valore)).toEqual(["40", "20", ""]);
+    expect(filtri).toHaveLength(1);
+    expect(filtri[0].criteri).toHaveLength(1);
+    expect(filtri[0].limite).toBe(3);
   });
 });
 
 describe("coopfi menabo: retrocompatibilità dei sottogruppi di CAMPIONI salvati", () => {
   const sut = new CoopfiAgenziaLib({} as ConstructorParameters<typeof CoopfiAgenziaLib>[0]);
 
-  it("un sottogruppo salvato per sconto preciso esporta ancora il filtro dello sconto", () => {
+  it("un sottogruppo salvato per sconto preciso non diventa un criterio di filtro", () => {
     const records = [{
       tema: "CAMPIONI DEL RISPARMIO (OS20A)", reparto: "Drogheria", txt_sconto: "40",
       "Scatto.CodiceGruppo": "G1", codice_referenza: "1",
@@ -911,6 +804,6 @@ describe("coopfi menabo: retrocompatibilità dei sottogruppi di CAMPIONI salvati
         }],
       }],
     } as never);
-    expect(payload.source[0].filtri[0].criteri.map(c => c.chiave)).toEqual(["tema", "txt_sconto"]);
+    expect(payload.source[0].filtri[0].criteri.map(c => c.chiave)).toEqual(["tema"]);
   });
 });
