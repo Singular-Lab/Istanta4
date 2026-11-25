@@ -474,7 +474,7 @@ export class KitRuntimeController extends BaseController {
       }
       const aree = await this.kitRuntimeService.getAreeKitByPromo(idPromo);
       res.status(HttpStatusCode.OK).json({ aree });
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }

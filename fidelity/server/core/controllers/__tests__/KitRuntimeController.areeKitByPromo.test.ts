@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { type NextFunction, type Request, type Response } from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -6,13 +6,13 @@ import { describe, expect, it, vi } from 'vitest';
 // dividere per canale le promo attive. Qui conta come la route legge gli id e cosa risponde;
 // l'autenticazione col bearer e' quella di getKitByPromo (authMiddleware.bearer.test.ts).
 
-const passa = vi.hoisted(() => (_req: any, _res: any, next: any) => next());
+const passa = vi.hoisted(() => (_req: Request, _res: Response, next: NextFunction) => next());
 const permessi = vi.hoisted(() => [] as string[]);
 const middleware = vi.hoisted(() => [] as string[]);
 
 vi.mock('../../middleware/authMiddleware', () => ({
   authMiddleware: passa,
-  integrationAuthMiddleware: (req: any, res: any, next: any) => {
+  integrationAuthMiddleware: (req: Request, _res: Response, next: NextFunction) => {
     // dentro il router montato su /api req.path e' relativo: la route completa e' baseUrl + path
     middleware.push(`${req.method} ${req.baseUrl}${req.path}`);
     return next();
@@ -30,6 +30,8 @@ vi.mock('../../logger', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+import type { IDesignKitService } from '../../interfaces/IDesignKitService';
+import type { IKitRuntimeService } from '../../interfaces/IKitRuntimeService';
 import { KitRuntimeController } from '../KitRuntimeController';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
@@ -37,7 +39,7 @@ const P2 = '22222222-2222-4222-8222-222222222222';
 
 function app(getAreeKitByPromo = vi.fn(async (ids: string[]) => Object.fromEntries(ids.map(id => [id, ['B', 'B1']])))) {
   const a = express();
-  new KitRuntimeController({ getAreeKitByPromo } as any, {} as any).registerRoutes(a);
+  new KitRuntimeController({ getAreeKitByPromo } as unknown as IKitRuntimeService, {} as IDesignKitService).registerRoutes(a);
   return { app: a, getAreeKitByPromo };
 }
 
