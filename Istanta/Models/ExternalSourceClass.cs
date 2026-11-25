@@ -2754,6 +2754,11 @@ namespace Istanta.Models
         public int IdProg { get; set; }
         public ClassificazioneBinding? bindings;
         public List<ClassificazioneUniversale> lista { get; set; } = new List<ClassificazioneUniversale>();
+        /// I20-1269: l'associazione campo -> colonna dell'Excel (o %PROG%, %NOW%) usata per generare lo
+        /// schema dalla sezione Excel della pagina Ordinamento (Utility/OrdinamentoDaExcel). Si conserva
+        /// qui perche' il salvataggio della vista Visual riscrive il file da questo modello.
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public JObject? mappaturaExcel;
     }
     public class ClassificazioneUniversale
     {

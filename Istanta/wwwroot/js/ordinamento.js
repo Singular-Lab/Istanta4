@@ -427,3 +427,187 @@
 
     }
 }
+
+
+//I20-1269: la sezione Excel della pagina Ordinamento. Si carica un Excel, si sceglie l'addestramento
+//lista che ne descrive le colonne e si associa ogni campo del primo elemento dello schema a una
+//colonna o a un valore automatico (%PROG% 1, 2, 3..., %NOW% data e ora). Proposta e generazione le fa
+//Istanta (MenaboSettings/proponiOrdinamentoDaExcel e generaOrdinamentoDaExcel, Utility/OrdinamentoDaExcel):
+//il risultato va nella sezione Source e si salva solo con il suo Salva.
+class OrdinamentoExcel {
+
+    static PROGRESSIVO = "%PROG%";
+    static ADESSO = "%NOW%";
+    //I20-1269: valore della voce "Formula" nella tendina; nella mappatura c'e' la formula stessa, che comincia con "="
+    static FORMULA = "__formula__";
+
+    constructor() {
+        this.source = null;
+        this.proposta = null;
+        this.aperta = false;
+    }
+
+    //Si genera solo quando ogni campo ha la sua associazione.
+    static campiCompleti(proposta) {
+        return proposta != null && Array.isArray(proposta.campi) && proposta.campi.length > 0
+            && proposta.campi.every(c => OrdinamentoExcel.valoreCompleto((proposta.mappatura || {})[c]));
+    }
+
+    static eFormula(valore) {
+        return typeof valore === "string" && valore.trim().startsWith("=");
+    }
+
+    //Una formula conta solo se c'e' qualcosa dopo l'"=".
+    static valoreCompleto(valore) {
+        if (!valore) {
+            return false;
+        }
+        return !OrdinamentoExcel.eFormula(valore) || valore.trim().length > 1;
+    }
+
+    static esc(s) {
+        return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    apri() {
+        if (this.aperta) {
+            return;
+        }
+        this.aperta = true;
+        let me = this;
+
+        let rndVersion = Math.floor(Math.random() * 999999);
+        $.getJSON('/' + getWebAppRootFolder() + 'external_source' + exPathCustom + '/SourceOrdinamentoLista.json?v1.' + rndVersion, function (data) {
+            me.source = data;
+            me.proponi();
+        });
+        Call.do("Tracciati", "getAddestramenti", "GET", null, this, function (result, sender) {
+            sender.disegnaAddestramenti(result);
+        });
+
+        $("#cmbAddestramentoOrdinamento").on("change", function () { me.proponi(); });
+        $("#fileOrdinamentoExcel").on("change", function () { me.aggiornaGenera(); });
+        $("#btnGeneraOrdinamento").on("click", function () { me.genera(); });
+    }
+
+    disegnaAddestramenti(lista) {
+        let html = '<option value="">Scegli l\'addestramento lista</option>';
+        (Array.isArray(lista) ? lista : []).forEach(a => {
+            html += '<option value="' + a.id + '">' + OrdinamentoExcel.esc(a.titolo || a.fileAddestramento || ("Addestramento " + a.id)) + '</option>';
+        });
+        $("#cmbAddestramentoOrdinamento").html(html);
+    }
+
+    messaggio(testo, tipo = "warning") {
+        $("#esitoOrdinamentoExcel").html(testo ? '<div class="alert alert-' + tipo + '" role="alert">' + OrdinamentoExcel.esc(testo) + '</div>' : "");
+    }
+
+    proponi() {
+        let id = Number($("#cmbAddestramentoOrdinamento").val());
+        this.proposta = null;
+        $("#mappaturaOrdinamento").empty();
+        this.aggiornaGenera();
+        if (!id || this.source == null) {
+            return;
+        }
+        this.messaggio("");
+        Call.doWithLargePayload("MenaboSettings", "proponiOrdinamentoDaExcel", "PUT",
+            { source: JSON.stringify(this.source), idAddestramento: id }, this,
+            function (result, sender) {
+                if (!result || !result.esito) {
+                    sender.messaggio(result && result.error ? result.error : "Proposta non riuscita.");
+                    return;
+                }
+                sender.proposta = result.proposta;
+                sender.disegnaMappatura();
+            });
+    }
+
+    disegnaMappatura() {
+        let p = this.proposta;
+        let esc = OrdinamentoExcel.esc;
+        let opzioni = ['<option value="">— da associare —</option>']
+            .concat(p.colonne.map(c => '<option value="' + esc(c) + '">' + esc(c) + '</option>'))
+            .concat(['<option value="' + OrdinamentoExcel.PROGRESSIVO + '">' + OrdinamentoExcel.PROGRESSIVO + ' – numero progressivo</option>',
+                     '<option value="' + OrdinamentoExcel.ADESSO + '">' + OrdinamentoExcel.ADESSO + ' – data e ora di adesso</option>',
+                     '<option value="' + OrdinamentoExcel.FORMULA + '">ƒ Formula…</option>']);
+        let html = '<table class="table table-sm"><thead><tr><th>Campo dello schema</th><th>Colonna (nome dato in Training), valore o formula</th></tr></thead><tbody>';
+        p.campi.forEach(campo => {
+            html += '<tr><td>' + esc(campo) + '</td><td><select class="form-select form-select-sm selMappatura" data-campo="' +
+                esc(campo) + '">' + opzioni.join("") + '</select>' +
+                '<input type="text" class="form-control form-control-sm mt-1 txtFormula" data-campo="' + esc(campo) +
+                '" placeholder="' + esc('=SE([Food]="X";"FOOD";"NO FOOD")') + '" style="display:none;font-family:monospace;" /></td></tr>';
+        });
+        html += '</tbody></table>' +
+            '<div class="small text-muted">Formula come in Excel, in italiano (SE, ;) o in inglese (IF, ,): le colonne si scrivono tra quadre col nome dato in Training, ' +
+            'per esempio <code>' + esc('=SE([Food]="X";"FOOD";SE([NoFood]="X";"NO FOOD";""))') + '</code>, e valgono per la riga che si calcola.</div>';
+        $("#mappaturaOrdinamento").html(html);
+
+        let me = this;
+        let casella = (campo) => $("#mappaturaOrdinamento .txtFormula[data-campo=\"" + campo.replace(/"/g, '\\"') + "\"]");
+        $("#mappaturaOrdinamento .selMappatura").each(function () {
+            let campo = $(this).attr("data-campo");
+            let valore = p.mappatura[campo] || "";
+            if (OrdinamentoExcel.eFormula(valore)) {
+                $(this).val(OrdinamentoExcel.FORMULA);
+                casella(campo).val(valore).show();
+            } else {
+                $(this).val(valore);
+            }
+        }).on("change", function () {
+            let campo = $(this).attr("data-campo");
+            if ($(this).val() === OrdinamentoExcel.FORMULA) {
+                let testo = casella(campo).val() || "=";
+                casella(campo).val(testo).show().trigger("focus");
+                p.mappatura[campo] = testo;
+            } else {
+                casella(campo).hide();
+                p.mappatura[campo] = $(this).val() || "";
+            }
+            me.aggiornaGenera();
+        });
+        $("#mappaturaOrdinamento .txtFormula").on("input", function () {
+            me.impostaFormula($(this).attr("data-campo"), $(this).val());
+        });
+        this.aggiornaGenera();
+    }
+
+    impostaFormula(campo, testo) {
+        if (this.proposta == null) {
+            return;
+        }
+        this.proposta.mappatura[campo] = testo || "";
+        this.aggiornaGenera();
+    }
+
+    aggiornaGenera() {
+        let file = document.getElementById("fileOrdinamentoExcel");
+        let conFile = !!(file && file.files && file.files.length > 0);
+        $("#btnGeneraOrdinamento").prop("disabled", !(conFile && OrdinamentoExcel.campiCompleti(this.proposta)));
+    }
+
+    async genera() {
+        let file = document.getElementById("fileOrdinamentoExcel").files[0];
+        if (!file || !OrdinamentoExcel.campiCompleti(this.proposta)) {
+            return;
+        }
+        showLoading();
+        let richiesta = {
+            source: JSON.stringify(this.source),
+            idAddestramento: Number($("#cmbAddestramentoOrdinamento").val()),
+            mappatura: this.proposta.mappatura,
+            file: await convertBase64(file),
+            filename: file.name
+        };
+        Call.doWithLargePayload("MenaboSettings", "generaOrdinamentoDaExcel", "PUT", richiesta, this, function (result, sender) {
+            hideLoading();
+            if (!result || !result.esito) {
+                sender.messaggio(result && result.error ? result.error : "Generazione non riuscita.");
+                return;
+            }
+            sender.messaggio("Generati " + result.elementi + " elementi: controllali nella sezione Source e premi Salva per salvarli.", "success");
+            exSourceEditor.impostaValore(result.jsoncode);
+            menuSource();
+        });
+    }
+}

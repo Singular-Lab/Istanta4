@@ -493,6 +493,77 @@ namespace Istanta.Controllers
             return Ok(bRes);
         }
 
+        /// I20-1269: la proposta della sezione Excel della pagina Ordinamento. Lo schema arriva dal
+        /// browser com'e' nella pagina; le colonne sono quelle dell'addestramento scelto.
+        [HttpPut]
+        [Route("MenaboSettings/proponiOrdinamentoDaExcel")]
+        public async Task<IActionResult> proponiOrdinamentoDaExcel([FromBody] RichiestaOrdinamentoDaExcel? r)
+        {
+            try
+            {
+                if (r == null || string.IsNullOrWhiteSpace(r.source))
+                    return Ok(new { esito = false, error = "Lo schema di ordinamento non e' arrivato." });
+                var source = JObject.Parse(r.source);
+                if (OrdinamentoDaExcel.ChiaveElenco(source) == null)
+                    return Ok(new { esito = false, error = "Lo schema attuale non ha un elenco di elementi da cui prendere i campi." });
+                var proposta = OrdinamentoDaExcel.Proponi(source, await ColonneAddestramentoAsync(r.idAddestramento));
+                if (proposta.Colonne.Count == 0)
+                    return Ok(new { esito = false, error = "L'addestramento scelto non ha colonne con un nome: dagliene uno in Tracciati → Training." });
+                return Ok(new { esito = true, proposta });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "I20-1269 proposta dell'ordinamento da Excel non riuscita");
+                return Ok(new { esito = false, error = "Proposta non riuscita: " + ex.Message });
+            }
+        }
+
+        /// I20-1269: genera lo schema dall'Excel con l'associazione scelta e lo restituisce senza salvarlo:
+        /// la pagina lo mette nella sezione Source, e si salva con il suo Save.
+        [HttpPut]
+        [Route("MenaboSettings/generaOrdinamentoDaExcel")]
+        [RequestSizeLimit(200_000_000)]
+        public async Task<IActionResult> generaOrdinamentoDaExcel([FromBody] RichiestaOrdinamentoDaExcel? r)
+        {
+            try
+            {
+                if (r == null || string.IsNullOrWhiteSpace(r.source))
+                    return Ok(new { esito = false, error = "Lo schema di ordinamento non e' arrivato." });
+                if (string.IsNullOrWhiteSpace(r.file))
+                    return Ok(new { esito = false, error = "Scegli il file Excel." });
+                string estensione = Path.GetExtension(r.filename ?? "").ToLowerInvariant();
+                if (estensione != ".xls" && estensione != ".xlsx")
+                    return Ok(new { esito = false, error = "Il file deve essere .xls o .xlsx." });
+
+                byte[] contenuto = Convert.FromBase64String(r.file.Substring(r.file.IndexOf(',') + 1));
+                OrdinamentoDaExcel.TabellaExcel tabella;
+                using (var stream = new MemoryStream(contenuto))
+                    tabella = OrdinamentoDaExcel.Leggi(stream);
+
+                var esito = OrdinamentoDaExcel.Genera(JObject.Parse(r.source), tabella, r.mappatura,
+                    await ColonneAddestramentoAsync(r.idAddestramento), r.idAddestramento, DateTime.Now);
+                if (!esito.Ok)
+                    return Ok(new { esito = false, error = esito.Errore });
+                return Ok(new { esito = true, jsoncode = esito.Source!.ToString(Formatting.None), elementi = esito.Elementi });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "I20-1269 generazione dell'ordinamento da Excel non riuscita");
+                return Ok(new { esito = false, error = "Generazione non riuscita: " + ex.Message });
+            }
+        }
+
+        /// Le colonne dell'addestramento con il titolo nell'Excel e il nome dato in Training: la sezione Excel
+        /// mostra e salva il nome, e offre solo le colonne che ne hanno uno.
+        private async Task<List<OrdinamentoDaExcel.ColonnaAddestramento>> ColonneAddestramentoAsync(int idAddestramento) =>
+            (await this.ctx2.SchemaCampiExcels.AsNoTracking()
+                .Where(s => s.IdAddestramento == idAddestramento)
+                .OrderBy(s => s.Indice)
+                .Select(s => new { s.NomeColonnaOriginale, s.NomeColonna })
+                .ToListAsync())
+            .Select(s => new OrdinamentoDaExcel.ColonnaAddestramento(s.NomeColonnaOriginale ?? "", s.NomeColonna ?? ""))
+            .ToList();
+
         public IActionResult Formati()
         {
             return View("Formati");
@@ -505,5 +576,15 @@ namespace Istanta.Controllers
         {
             return View("NamingConventions");
         }
+    }
+
+    /// I20-1269: la richiesta della sezione Excel della pagina Ordinamento.
+    public class RichiestaOrdinamentoDaExcel
+    {
+        public string source { get; set; } = "";
+        public int idAddestramento { get; set; }
+        public Dictionary<string, string>? mappatura { get; set; }
+        public string? file { get; set; }
+        public string? filename { get; set; }
     }
 }

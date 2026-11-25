@@ -25,6 +25,7 @@
 <div class="btn-group">
     <a href="#" id="aMenuVisual" class="btn btn-primary toggleVisual active" aria-current="page">Visual</a>
     <a href="#" id="aMenuSource" class="btn btn-primary toggleSource">Source</a>
+    <a href="#" id="aMenuExcel" class="btn btn-primary toggleExcel">Excel</a>
 </div>
 
 
@@ -85,6 +86,27 @@
             <div id="editor"></div>
         </div>
     </div>
+    @* I20-1269: lo schema generato da un Excel, con le colonne di un addestramento lista *@
+    <div id="contentExcel" class="pt-3" style="display:none;">
+        <div class="container">
+            <p>Carica l'Excel, scegli l'addestramento lista che ne descrive le colonne e associa ogni campo dello schema a una colonna, a %PROG% (1, 2, 3…) o a %NOW% (data e ora di adesso). Lo schema generato si apre nella sezione Source: si salva solo con il suo Salva.</p>
+            <div class="row mb-3">
+                <div class="col-6">
+                    <label for="fileOrdinamentoExcel" class="form-label">File Excel</label>
+                    <input type="file" class="form-control" id="fileOrdinamentoExcel" accept=".xls,.xlsx" />
+                </div>
+                <div class="col-6">
+                    <label for="cmbAddestramentoOrdinamento" class="form-label">Addestramento lista</label>
+                    <select class="form-select" id="cmbAddestramentoOrdinamento"></select>
+                </div>
+            </div>
+            <div id="mappaturaOrdinamento"></div>
+            <div id="esitoOrdinamentoExcel"></div>
+            <div style="text-align:right;">
+                <button id="btnGeneraOrdinamento" class="btn btn-primary" disabled>Genera</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <template id="record">
@@ -143,6 +165,10 @@
         $("#aMenuSource").on("click", function() {
             menuSource();
         });
+
+        $("#aMenuExcel").on("click", function() {
+            menuExcel();
+        });
         
 
 
@@ -178,22 +204,28 @@
 <script nonce="@HttpContextAccessor.HttpContext?.Items["ScriptNonce"]" type="text/javascript">
 
     let exSourceEditor = new ExternalSourceEditor();
+    //I20-1269: ordinamento.js lo carica il layout in asincrono, quindi la sezione Excel si crea solo quando si apre.
+    let ordinamentoExcel = null;
     
 
     function menuVisual() {
         document.getElementById("contentSource").style.display = "none";
+        document.getElementById("contentExcel").style.display = "none";
         document.getElementById("contentVisual").style.display = "block";
 
         $(".toggleVisual").addClass("active");
         $(".toggleSource").removeClass("active");
+        $(".toggleExcel").removeClass("active");
 
     }
     function menuSource() {
         document.getElementById("contentSource").style.display = "block";
         document.getElementById("contentVisual").style.display = "none";
+        document.getElementById("contentExcel").style.display = "none";
 
         $(".toggleSource").addClass("active");
         $(".toggleVisual").removeClass("active");
+        $(".toggleExcel").removeClass("active");
 
         //prima ridimensiono l'editor
         $("#editor").css("width", $("#container").css("width"));
@@ -202,6 +234,21 @@
 
         exSourceEditor.init("SourceOrdinamentoLista");
 
+    }
+    //I20-1269: la sezione Excel (ordinamento.js, OrdinamentoExcel)
+    function menuExcel() {
+        document.getElementById("contentExcel").style.display = "block";
+        document.getElementById("contentVisual").style.display = "none";
+        document.getElementById("contentSource").style.display = "none";
+
+        $(".toggleExcel").addClass("active");
+        $(".toggleVisual").removeClass("active");
+        $(".toggleSource").removeClass("active");
+
+        if (ordinamentoExcel == null) {
+            ordinamentoExcel = new OrdinamentoExcel();
+        }
+        ordinamentoExcel.apri();
     }
 
 </script>
