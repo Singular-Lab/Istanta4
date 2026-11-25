@@ -1079,6 +1079,7 @@ namespace IstantaLib
         public List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto> regoleEsclusioneCambioFoto { get; set; } = new List<AgenziaCustomPlugin_RegolaEsclusioneCambioFoto>();//Regole che tolgono alcune foto dalle proposte della schermata Cambia foto del Plugin; vuota = tutte le foto, come prima
         public List<AgenziaCustomPlugin_SegnalazionePersonalizzata> segnalazioniPersonalizzate { get; set; } = new List<AgenziaCustomPlugin_SegnalazionePersonalizzata>();//I20-1200: segnalazioni di impaginazione decise dal cliente (Edro21: le foto che non sono psd); vuota = nessuna, come prima
         public List<AgenziaCustomPlugin_FiltroSegnalazioni> filtriSegnalazioni { get; set; } = new List<AgenziaCustomPlugin_FiltroSegnalazioni>();//I20-1211: filtri della schermata delle segnalazioni del Plugin (Edro21: "Solo foto"); vuota = nessun filtro, come prima
+        public List<AgenziaCustomPlugin_CondizioneFiltroSegnalazioni> segnalazioniEscluse { get; set; } = new List<AgenziaCustomPlugin_CondizioneFiltroSegnalazioni>();//I20-1264: avvisi di impaginazione che il cliente non vuole nel bollino, con le condizioni dei filtri (Coopfi: CSF-008 e CSF-013 su loghi e bolli); gli errori restano sempre; vuota = tutti, come prima
         /// TASK-60aaf10d: la foto della referenza indicata dal tracciato, quando l'agenzia la fa
         /// comandare. Assente: tutto come prima, vale solo Foto.SelezioneDaTracciato.
         public AgenziaCustomPlugin_FotoDaTracciato fotoDaTracciato { get; set; }

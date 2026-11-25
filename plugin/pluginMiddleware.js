@@ -895,6 +895,26 @@ const pluginMiddleware = {
             .filter(f => f.nome !== "" && f.condizioni.length > 0);
     },
 
+    /// I20-1264: gli avvisi di impaginazione che il cliente non vuole nel bollino
+    /// (AgenziaCustomPlugin.segnalazioniEscluse), come [{ codice, testoContiene }], le stesse
+    /// condizioni dei filtri. Senza la chiave, o se non e' una lista, nessuno: tutto come prima. Una
+    /// condizione senza codice non vale.
+    getSegnalazioniEscluse() {
+        let me = this;
+
+        const valore = me.callCustom
+            ? (typeof customAgenzia !== "undefined" && customAgenzia != null ? customAgenzia.segnalazioniEscluse : null)
+            : me.customPluginDB?.segnalazioniEscluse;
+        if (!Array.isArray(valore)) {
+            return [];
+        }
+        const testo = (v) => typeof v === "string" ? v.trim() : "";
+        return valore
+            .filter(c => c != null && typeof c === "object")
+            .map(c => ({ codice: testo(c.codice), testoContiene: testo(c.testoContiene) }))
+            .filter(c => c.codice !== "");
+    },
+
     /// TASK-60aaf10d: come il cliente usa la foto indicata dal tracciato
     /// (AgenziaCustomPlugin_FotoDaTracciato). Per il Plugin conta solo se la foto della lista si
     /// cambia solo per la lavorazione. Senza la chiave, o se non e' un oggetto, null: tutto come prima.
