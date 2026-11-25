@@ -78,7 +78,17 @@ export type TrasformazioneNomeMenabo = (typeof TRASFORMAZIONI_NOME_MENABO)[numbe
  * I campi che non stanno nei dati della referenza ma si ricavano dal box: `@pagina`, `@prima_pagina`,
  * `@ultima_pagina` e `@reparto_nome` (il nome del reparto come nelle Impostazioni GDO, uguale in ogni volantino).
  */
-export const CAMPI_DERIVATI_MENABO = ['@pagina', '@prima_pagina', '@ultima_pagina', '@reparto_nome'] as const;
+export const CAMPI_DERIVATI_MENABO = [
+  '@pagina', '@prima_pagina', '@ultima_pagina', '@reparto_nome',
+  '@mastro_prevalente', '@reparto_prevalente', '@quota_reparto_prevalente', '@sezione_precedente',
+] as const;
+
+/**
+ * I campi che si calcolano su tutta la pagina e valgono solo nelle regole di livello pagina: il dato di sezione
+ * (per Conad CNO la mastro) e il reparto con più referenze, la quota di quel reparto (0-100) e la sezione
+ * della pagina prima.
+ */
+export const CAMPI_DI_PAGINA_MENABO = ['@mastro_prevalente', '@reparto_prevalente', '@quota_reparto_prevalente', '@sezione_precedente'] as const;
 
 /**
  * Una condizione semplice su un campo della referenza (es. mastro, tema, reparto) o su un campo derivato.
@@ -118,6 +128,11 @@ export interface RegolaMenabo {
   /** Colore esadecimale (#rrggbb) della sezione; null: automatico. */
   colore: string | null;
   condizione: GruppoRegolaMenabo;
+  /**
+   * Solo per le regole di livello box: la regola vale per una pagina soltanto se almeno questa percentuale
+   * (1-100) dei suoi box la soddisfa; sotto, i box tornano alla sezione di prima. Assente o null: sempre.
+   */
+  quotaMinima?: number | null;
 }
 
 /** Un campo che compare nelle referenze dei volantini della GDO, con quante referenze lo hanno. */

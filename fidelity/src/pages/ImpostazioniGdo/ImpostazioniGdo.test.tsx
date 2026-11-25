@@ -189,6 +189,24 @@ describe("Impostazioni GDO", () => {
       expect(within(menabo).getByTestId("rinvio-campo")).toHaveTextContent("{mastro|parte-2|spazi|titolo}");
     });
 
+    it("la quota minima di pagina si imposta sulle regole per box e si salva; per pagina non c'è", async () => {
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      await userEvent.click(within(menabo).getByRole("button", { name: "Nuova regola" }));
+      await userEvent.type(within(menabo).getByRole("textbox", { name: "Nome della sezione della regola 1" }), "La Dispensa");
+      await userEvent.type(within(menabo).getByRole("combobox", { name: "Valore" }), "DISPENSA");
+      await userEvent.type(within(menabo).getByRole("spinbutton", { name: "Quota minima di pagina della regola 1" }), "60");
+      await userEvent.click(within(menabo).getByRole("button", { name: "Salva regole" }));
+
+      await waitFor(() => expect(chiamatePut()).toContain("/impostazioni-gdo/menabo"));
+      const corpo = finti.servizio.put.mock.calls.find(([url]) => url === "/impostazioni-gdo/menabo")?.[1] as { regole: Array<Record<string, unknown>> };
+      expect(corpo.regole[0]).toMatchObject({ livello: "box", quotaMinima: 60 });
+
+      await userEvent.selectOptions(within(menabo).getByRole("combobox", { name: "Livello della regola 1" }), "pagina");
+      expect(within(menabo).queryByRole("spinbutton", { name: "Quota minima di pagina della regola 1" })).not.toBeInTheDocument();
+    });
+
     it("«non è una sezione» toglie il nome e salva sezione null", async () => {
       apri();
       const menabo = await sezione("Menabò del volantino");
