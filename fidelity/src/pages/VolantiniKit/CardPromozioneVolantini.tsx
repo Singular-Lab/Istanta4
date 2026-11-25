@@ -111,12 +111,15 @@ function CardPromozioneVolantini({
         className
       )}
     >
-      <CollageCopertine kit={kit} massimo={COPERTINE_SCHEDA} />
+      {/* Il codice dell'iniziativa in alto a sinistra, sopra le copertine */}
+      <div className="relative">
+        <CollageCopertine kit={kit} massimo={COPERTINE_SCHEDA} />
+        <BadgeIniziativa codice={promo.codiceIniziativa} className="absolute left-3 top-3 z-30" />
+      </div>
 
       <div className="flex flex-1 flex-col gap-1.5 px-4 pb-4 pt-3.5">
         {/* I nomi delle promo sono spesso codici senza spazi (P2622_VOL_05-11-26): vanno a capo */}
         <span className="title-eyebrow flex flex-wrap items-center gap-1.5 [overflow-wrap:anywhere] dark:text-slate-400">
-          <BadgeIniziativa codice={promo.codiceIniziativa} />
           <span>{promo.nome}</span>
         </span>
         <div className="flex flex-wrap items-start justify-between gap-x-2.5 gap-y-1.5">

@@ -1,4 +1,5 @@
 import {
+  CAMPI_DI_PAGINA_MENABO,
   OPERATORI_REGOLA_MENABO,
   TRASFORMAZIONI_NOME_MENABO,
   type CondizioneRegolaMenabo,
@@ -22,6 +23,9 @@ export interface RisultatoRegolaMenabo {
   colore: string | null;
   /** Il titolo della regola, o il suo id. */
   regola: string;
+  /** L'id della regola e la sua quota minima di pagina (solo regole di box), per chi deve verificarla. */
+  idRegola: string;
+  quotaMinima: number | null;
 }
 
 /** Come si legge un campo del box che la regola sta valutando (campi derivati compresi). */
@@ -182,6 +186,16 @@ function leggiNodo(valore: unknown, profondita: number, conta: { nodi: number })
   };
 }
 
+/** Una quota minima (percentuale intera da 1 a 100). */
+const quotaValida = (valore: unknown): boolean => typeof valore === 'number' && Number.isInteger(valore) && valore >= 1 && valore <= 100;
+
+/** I campi della pagina che una regola di box non può usare. */
+const eCampoDiPagina = (campo: string): boolean => (CAMPI_DI_PAGINA_MENABO as readonly string[]).includes(campo.trim());
+
+function campiDelNodo(nodo: NodoRegolaMenabo): string[] {
+  return nodo.tipo === 'condizione' ? [nodo.campo] : nodo.figli.flatMap(campiDelNodo);
+}
+
 /** Le regole lette dal JSONB: solo quelle ben formate, le altre si scartano senza rompere il menabò. */
 export function regoleMenaboDa(valore: unknown): RegolaMenabo[] {
   if (!Array.isArray(valore)) return [];
@@ -199,6 +213,7 @@ export function regoleMenaboDa(valore: unknown): RegolaMenabo[] {
       sezione: regola.sezione === null || sezione === '' ? null : sezione,
       colore: COLORE.test(colore) ? colore : null,
       condizione: radice,
+      ...(regola.livello !== 'pagina' && quotaValida(regola.quotaMinima) ? { quotaMinima: Number(regola.quotaMinima) } : {}),
     }];
   });
 }
@@ -295,12 +310,22 @@ export function verificaRegoleMenabo(dati: unknown): EsitoRegoleMenabo {
     }
     const colore = testoPulito(regola.colore);
     if (colore !== '' && !COLORE.test(colore)) errori.push(`${dove}: il colore deve essere #rrggbb`);
+    const quotaGrezza = regola.quotaMinima;
+    const conQuota = quotaGrezza !== undefined && quotaGrezza !== null && quotaGrezza !== '';
+    if (conQuota && !quotaValida(quotaGrezza)) errori.push(`${dove}: la quota minima deve essere un numero intero da 1 a 100`);
+    else if (conQuota && livello === 'pagina') errori.push(`${dove}: la quota minima vale solo per le regole per box`);
     const grezza = oggetto(regola.condizione);
     const dentro = errori.length;
     const radice = grezza && grezza.tipo === 'gruppo'
       ? verificaNodo(grezza, dove, 0, { nodi: 0 }, errori)
       : (errori.push(`${dove}: manca la condizione`), null);
     if (radice && radice.tipo === 'gruppo' && radice.figli.length === 0 && errori.length === dentro) errori.push(`${dove}: serve almeno una condizione`);
+    // I campi calcolati sulla pagina non esistono per un singolo box
+    if (livello === 'box' && radice) {
+      const usati = [...campiDelNodo(radice), ...(nonSezione ? [] : [...sezione.matchAll(SEGNAPOSTO)].flatMap(trovato => campiDelSegnaposto(trovato[1].split('|')[0])))];
+      const dellaPagina = usati.find(eCampoDiPagina);
+      if (dellaPagina) errori.push(`${dove}: il campo ${dellaPagina} si calcola sulla pagina e vale solo per le regole per pagina`);
+    }
     const id = testoPulito(regola.id) || `regola-${indice + 1}`;
     if (idVisti.has(id)) errori.push(`${dove}: l'id «${id}» è già usato`);
     idVisti.add(id);
@@ -312,6 +337,7 @@ export function verificaRegoleMenabo(dati: unknown): EsitoRegoleMenabo {
         sezione: nonSezione ? null : sezione,
         colore: colore === '' ? null : colore,
         condizione: radice,
+        ...(conQuota && livello === 'box' && quotaValida(quotaGrezza) ? { quotaMinima: Number(quotaGrezza) } : {}),
       });
     }
   });
@@ -370,6 +396,8 @@ export function nodoVale(nodo: NodoRegolaMenabo, leggi: LeggiCampoRegola): boole
 export const gruppoVale = (gruppo: GruppoRegolaMenabo, leggi: LeggiCampoRegola): boolean => nodoVale(gruppo, leggi);
 
 export interface OpzioniValutazione {
+  /** Gli id delle regole da saltare, per esempio quelle che non hanno raggiunto la quota minima della pagina. */
+  escluse?: ReadonlySet<string>;
   /** Il nome leggibile che dichiara la libreria agenzia, per la trasformazione «leggibile». */
   leggibile?: (valore: string) => string | null;
 }
@@ -386,12 +414,12 @@ export function primaRegolaChe(
   opzioni: OpzioniValutazione = {},
 ): RisultatoRegolaMenabo | null {
   for (const regola of regole) {
-    if (regola.livello !== livello) continue;
+    if (regola.livello !== livello || opzioni.escluse?.has(regola.id)) continue;
     const contesto = contesti.find(leggi => gruppoVale(regola.condizione, leggi));
     if (!contesto) continue;
     const nome = regola.sezione === null ? null : nomeDaModello(regola.sezione, contesto, opzioni.leggibile);
     if (nome === '') continue;
-    return { nome, colore: regola.colore, regola: regola.titolo ?? regola.id };
+    return { nome, colore: regola.colore, regola: regola.titolo ?? regola.id, idRegola: regola.id, quotaMinima: regola.quotaMinima ?? null };
   }
   return null;
 }

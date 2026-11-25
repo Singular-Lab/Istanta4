@@ -1,7 +1,7 @@
 import type { InsightVolantinoAgenzia } from '../agenzia_lib/types';
 import type { OpzioniInsight } from './insightVolantino';
 import { regoleLinee, sigleAssegnate } from './lineeDistributore';
-import type { RegolaMenabo } from '../../../lib/impostazioniGdo/tipi';
+import { CAMPI_DI_PAGINA_MENABO, type RegolaMenabo } from '../../../lib/impostazioniGdo/tipi';
 import { datoDellaRiga, type RigaReferenza } from './referenzaStampata';
 import type { PosizioneMenabo } from './insightVolantino';
 import { primaRegolaChe, type LeggiCampoRegola } from './regoleMenabo';
@@ -77,10 +77,51 @@ export function opzioniDellAgenzia(
         const riga = perId.get(idReferenza);
         return riga ? datoDellaRiga(riga, campo) : null;
       };
-      opzioni.regolaSezione = (idReferenza, posizione) =>
-        primaRegolaChe(regoleMenabo, 'box', [lettore(idReferenza, posizione)], { leggibile });
-      opzioni.regolaPagina = (idReferenze, posizione) =>
-        primaRegolaChe(regoleMenabo, 'pagina', idReferenze.map(id => lettore(id, posizione)), { leggibile });
+      /** I campi calcolati su tutta la pagina: uguali per ogni referenza della pagina. */
+      const lettorePagina = (idReferenze: readonly string[], posizione: PosizioneMenabo): LeggiCampoRegola => {
+        const piu = (valoriDelleReferenze: Array<string | null>): { valore: string | null; quota: number } => {
+          const conti = new Map<string, number>();
+          for (const valore of valoriDelleReferenze) if (valore) conti.set(valore, (conti.get(valore) ?? 0) + 1);
+          let migliore: [string, number] | null = null;
+          for (const voce of conti) if (!migliore || voce[1] > migliore[1]) migliore = voce;
+          // La quota si calcola sulle referenze che hanno il dato, se almeno metà della pagina lo ha; sotto, su tutte
+          const conDato = valoriDelleReferenze.filter(Boolean).length;
+          const base = conDato * 2 >= valoriDelleReferenze.length ? conDato : valoriDelleReferenze.length;
+          return { valore: migliore?.[0] ?? null, quota: migliore && base > 0 ? Math.round((migliore[1] * 100) / base) : 0 };
+        };
+        let sezioneDiPrima: string | null | undefined;
+        let repartoPrevalente: { valore: string | null; quota: number } | undefined;
+        return campo => {
+          switch (campo) {
+            case '@mastro_prevalente':
+              sezioneDiPrima ??= piu(idReferenze.map(id => (perId.get(id) ? datoDellaRiga(perId.get(id)!, menabo.campo!) : null))).valore;
+              return sezioneDiPrima;
+            case '@reparto_prevalente':
+            case '@quota_reparto_prevalente':
+              repartoPrevalente ??= piu(idReferenze.map(id => nomeRepartoDellaReferenza(id, perId.get(id), reparti)));
+              return campo === '@reparto_prevalente' ? repartoPrevalente.valore : String(repartoPrevalente.quota);
+            case '@sezione_precedente':
+              return posizione.sezionePrecedente;
+            default:
+              return null;
+          }
+        };
+      };
+      opzioni.regolaSezione = (idReferenza, posizione, escluse) =>
+        primaRegolaChe(regoleMenabo, 'box', [lettore(idReferenza, posizione)], { leggibile, escluse });
+      // I campi della pagina e quelli della referenza si leggono insieme: i primi dalla pagina, gli altri da ogni box
+      opzioni.regolaPagina = (idReferenze, posizione) => {
+        const dellaPagina = lettorePagina(idReferenze, posizione);
+        return primaRegolaChe(
+          regoleMenabo,
+          'pagina',
+          idReferenze.map(id => {
+            const dellaReferenza = lettore(id, posizione);
+            return campo => ((CAMPI_DI_PAGINA_MENABO as readonly string[]).includes(campo) ? dellaPagina(campo) : dellaReferenza(campo));
+          }),
+          { leggibile },
+        );
+      };
     }
   }
   return opzioni;

@@ -1,7 +1,7 @@
 import { Request } from 'express';
 import 'express-session';
 import { Op, Transaction } from 'sequelize';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, validate as isUuid } from 'uuid';
 import { Colorize } from '../../../lib/Colorize';
 import { EVENTI_WEBHOOK, EXPORT_DI_SISTEMA, STATO_COMBINAZIONI, STATO_LAVORAZIONE_KIT_RUNTIME, STATO_LOG_FILE, TIPO_KIT_DESIGN, TIPO_LAVORAZIONE } from '../../../lib/enums';
 import { BusinessError, DatabaseError, ExternalApiError, ForbiddenError, isAppError, NotFoundError, ServiceUnavailableError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/errors';
@@ -860,6 +860,51 @@ export class KitRuntimeService implements IKitRuntimeService {
       throw wrapDatabaseError(new Error("Errore durante la creazione della combinazione di design"), {
         message: "Errore durante la creazione della combinazione di design",
         operation: 'findOne',
+        entity: 'RuntimeKit',
+        details: { error }
+      });
+    }
+  }
+
+  /**
+   * I20-1271: per ogni promo i codici distinti delle aree dei suoi kit, per Correggo4, che li usa per
+   * dividere per canale la colonna Promo attive (per la Coop le aree sono A, A-, B, B1).
+   * Il codice viene dall'anagrafica delle aree (aree.codice_aree); se l'area non c'e' piu', da quello
+   * copiato sul kit. I kit eliminati non contano. Una promo senza kit, o che Fidelity non conosce,
+   * torna con l'elenco vuoto.
+   */
+  async getAreeKitByPromo(idPromo: string[]): Promise<Record<string, string[]>> {
+    const ids = [...new Set(idPromo.filter(id => isUuid(id)))];
+    const risultato: Record<string, string[]> = Object.fromEntries(ids.map(id => [id, []]));
+    if (ids.length === 0) return risultato;
+    try {
+      const kit = await RuntimeKit.findAll({
+        where: {
+          id_promo: { [Op.in]: ids },
+          stato_lavorazione: { [Op.ne]: STATO_LAVORAZIONE_KIT_RUNTIME.ELIMINATO },
+        },
+        attributes: ['id_promo', 'id_area', 'codice_area'],
+        raw: true,
+      }) as unknown as { id_promo: string; id_area: string | null; codice_area: string | null }[];
+      const idAree = [...new Set(kit.map(k => k.id_area).filter((a): a is string => !!a))];
+      const aree = idAree.length === 0 ? [] : await Area.findAll({
+        where: { id_aree: { [Op.in]: idAree } },
+        attributes: ['id_aree', 'codice_aree'],
+        raw: true,
+      }) as unknown as { id_aree: string; codice_aree: string | null }[];
+      const codiceArea = new Map(aree.map(a => [a.id_aree, a.codice_aree]));
+
+      for (const k of kit) {
+        const codice = ((k.id_area ? codiceArea.get(k.id_area) : null) ?? k.codice_area ?? '').trim();
+        const elenco = risultato[k.id_promo];
+        if (codice && elenco && !elenco.includes(codice)) elenco.push(codice);
+      }
+      for (const elenco of Object.values(risultato)) elenco.sort();
+      return risultato;
+    } catch (error) {
+      throw wrapDatabaseError(new Error("Errore durante il recupero delle aree dei kit delle promo"), {
+        message: "Errore durante il recupero delle aree dei kit delle promo",
+        operation: 'findAll',
         entity: 'RuntimeKit',
         details: { error }
       });

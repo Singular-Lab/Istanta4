@@ -19,6 +19,7 @@ export interface IKitRuntimeService {
   getKitRuntimeById(id: string): Promise<RUNTIME_KIT>;
   getKitRuntimeByIdPerWebhook(id: string): Promise<any>;
   getAllKitRuntimeByIdPromo(idPromo: string): Promise<RUNTIME_KIT[]>;
+  getAreeKitByPromo(idPromo: string[]): Promise<Record<string, string[]>>;
   getAllKitByAreaCanalePV(data: {
     idArea?: string | string[]; idCanale?: string | string[]; idPv?: string;
     idPromo?: string; idFormato?: string; id?: string;

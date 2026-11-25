@@ -487,21 +487,28 @@ describe("Codice iniziativa nelle schede e in vetrina (task 1f340bec)", () => {
     await apri("/volantini/attivi");
 
     const conCodice = screen.getByRole("link", { name: /^P2620_KIT_TOSCANA,/ });
-    expect(within(conCodice).getByTestId("badge-iniziativa")).toHaveTextContent("P2620");
+    const badgeScheda = within(conCodice).getByTestId("badge-iniziativa");
+    expect(badgeScheda).toHaveTextContent("P2620");
+    // In alto a sinistra sopra le copertine, non nella riga del nome
+    expect(badgeScheda).toHaveClass("absolute", "left-3", "top-3");
+    expect(badgeScheda.nextElementSibling).toBeNull();
+    expect(badgeScheda.previousElementSibling).toHaveAttribute("aria-hidden", "true");
+    expect(within(conCodice).getByText("P2620_KIT_TOSCANA").parentElement).not.toContainElement(badgeScheda);
     const senzaCodice = screen.getByRole("link", { name: /^Speciale Colazione,/ });
     expect(within(senzaCodice).queryByTestId("badge-iniziativa")).not.toBeInTheDocument();
   });
 
-  it("la promozione in vetrina mostra il badge prima del nome", async () => {
+  it("la promozione in vetrina mostra il badge in alto a sinistra sopra le copertine", async () => {
     finti.risultato = caricato(pagina({ vetrina: vetrina("piu_punti_vendita", { nome: "P2620_GRANDE", codiceIniziativa: "P2620" }), totaleSenzaFiltri: 2 }));
     await apri("/volantini/attivi");
 
     const banda = screen.getByRole("region", { name: "Promozione in vetrina" });
     const badge = within(banda).getByTestId("badge-iniziativa");
     expect(badge).toHaveTextContent("P2620");
-    // Per primo nella riga del nome: «P2620» e poi «In vetrina · P2620_GRANDE»
-    expect(badge.parentElement).toHaveTextContent(/Iniziativa P2620.*In vetrina · P2620_GRANDE/);
-    expect(badge.parentElement?.firstElementChild).toBe(badge);
+    // Sopra le copertine, in alto a sinistra: il codice non sta più nella riga del nome
+    expect(badge).toHaveClass("absolute", "left-0", "top-0");
+    expect(badge.previousElementSibling).toHaveAttribute("aria-hidden", "true");
+    expect(within(banda).getByText(/In vetrina · P2620_GRANDE/)).not.toContainElement(badge);
   });
 });
 

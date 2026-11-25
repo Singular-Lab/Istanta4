@@ -168,6 +168,20 @@ h2.sec small{font-size:12.5px;font-weight:500;color:var(--ink-3)}
 
 /* ---------- Promo attive ---------- */
 .camps{display:flex;flex-direction:column;gap:12px}
+/* I20-1271: una cartellina per canale (A, A-, B & B1...): riquadro con la barra in cima, si apre e
+   si chiude dalla barra; chiusa resta solo la barra con il numero delle promo */
+.canale{border:1px solid var(--line);border-radius:var(--r);background:#e9eef0;overflow:hidden}
+.canale-head{
+  display:flex;align-items:center;gap:8px;width:100%;border:0;background:#dfe6e9;cursor:pointer;text-align:left;
+  padding:10px 12px;font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-2);
+}
+.canale-head:hover{background:var(--teal-50);color:var(--teal-700)}
+.canale-head svg.i{width:18px;height:18px}
+.canale-head .n{margin-left:auto;font-weight:600;letter-spacing:0;color:var(--ink-3);
+  background:var(--card);border:1px solid var(--line);border-radius:999px;padding:0 8px;font-size:11.5px}
+.canale-head .chev{transition:transform .18s}
+.canale-head[aria-expanded="true"] .chev{transform:rotate(180deg)}
+.canale-promo{display:flex;flex-direction:column;gap:12px;padding:12px 10px}
 .camp{
   position:relative;width:100%;
   background:var(--card);border:1px solid var(--line);border-radius:var(--r);
@@ -407,6 +421,8 @@ a.act,a.v-thumb{text-decoration:none;color:inherit}
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="i-folder-open" viewBox="0 0 24 24"><path d="M3 17V7a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v1"/><path d="M3 17l2.4-6.2A2 2 0 0 1 7.3 9.5H21l-2.6 7.1A2 2 0 0 1 16.5 18H5a2 2 0 0 1-2-1Z"/></symbol>
   <symbol id="i-files" viewBox="0 0 24 24"><path d="M15 2H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V6Z"/><path d="M15 2v4h4"/><path d="M5 6H4a1 1 0 0 0-1 1v13a2 2 0 0 0 2 2h10a1 1 0 0 0 1-1v-1"/></symbol>
 </svg>
 
@@ -566,6 +582,7 @@ const TIMONE_DA_FARE = new Set();
 
 const CAMPAGNE = DATI.promo.map(p => ({
   classificazione: p.classificazione,
+  idPromoFp: p.idPromoFp || null,
   aggiornato: tempoFa(p.aggiornata),
   validita: p.validitaInizio ? `valida ${dataBreve(p.validitaInizio)} – ${dataBreve(p.validitaFine)}` : "",
   volantini: p.volantini.map(v => ({
@@ -588,6 +605,42 @@ const correzioniAperte = n => n === 1 ? "1 correzione" : `${n} correzioni`;
 const PRIMA = CAMPAGNE.length ? CAMPAGNE[0].classificazione : null;
 const S = { filtro:"tutte", q:"", sel:PRIMA, canale:"", area:"", hl:null,
             aperta:PRIMA };  // una sola tendina PDF aperta alla volta
+
+/* I20-1271: le promo divise per canale. Il canale lo dice Fidelity dalle aree dei kit della promo
+   (VolantiniController.CanaliPromo, chiamata in fondo al file): finche' non risponde, o se non
+   risponde, la colonna resta senza intestazioni, come prima. CANALI_PROMO.canali: idPromoFp ->
+   nome del canale; CANALI_PROMO.ordine: i canali in ordine. Chi non ha canale va in «Altre promo».
+   Dentro un canale le promo restano nell'ordine del server (primo caricamento, I20-1270). */
+let CANALI_PROMO = null;
+let selezioneToccata = false;   // finche' l'utente non sceglie, si seleziona la prima promo della colonna
+const ALTRE_PROMO = "Altre promo";
+function nomeCanale(c){ const can = canaleDi(c); return can ? `Canale ${can}` : ALTRE_PROMO; }
+/* Le cartelline chiuse le ricorda il browser (solo su questo computer). Senza memoria del browser
+   (finestra privata, dati bloccati) si parte tutte aperte e la pagina funziona lo stesso. */
+const CHIAVE_CANALI_CHIUSI = "correggo.home.canaliChiusi";
+const CANALI_CHIUSI = new Set((() => {
+  try { const v = JSON.parse(localStorage.getItem(CHIAVE_CANALI_CHIUSI) || "[]"); return Array.isArray(v) ? v : []; }
+  catch { return []; }
+})());
+function salvaCanaliChiusi(){
+  try { localStorage.setItem(CHIAVE_CANALI_CHIUSI, JSON.stringify([...CANALI_CHIUSI])); } catch {}
+}
+// cercando, le cartelline si aprono tutte: un risultato non deve restare nascosto in una chiusa
+const canaleChiuso = nome => !S.q && CANALI_CHIUSI.has(nome);
+function canaleDi(c){
+  return CANALI_PROMO && c.idPromoFp && CANALI_PROMO.canali[c.idPromoFp] || null;
+}
+function posizioneCanale(c){
+  const can = canaleDi(c);
+  const i = can ? CANALI_PROMO.ordine.indexOf(can) : -1;
+  return i < 0 ? CANALI_PROMO.ordine.length : i;
+}
+function perCanale(list){
+  if(!CANALI_PROMO) return list;
+  return list.map((c, i) => ({ c, i, p: posizioneCanale(c) }))
+             .sort((a, b) => a.p - b.p || a.i - b.i)
+             .map(x => x.c);
+}
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[ch]));
@@ -741,7 +794,7 @@ function matchQ(c){
   return c.classificazione.toLowerCase().includes(q) || c.volantini.some(v => v.titolo.toLowerCase().includes(q));
 }
 function campagneVisibili(){
-  return CAMPAGNE.filter(c => (S.filtro==="tutte" || statoCampagna(c)===S.filtro) && matchQ(c));
+  return perCanale(CAMPAGNE.filter(c => (S.filtro==="tutte" || statoCampagna(c)===S.filtro) && matchQ(c)));
 }
 
 // DEPRECATO (11/9/2026) - statoCampagna, pillStato, approvati e renderTabs servivano allo stato
@@ -770,7 +823,7 @@ function renderCamps(list){
     return;
   }
   const q = S.q.toLowerCase();
-  $("#camps").innerHTML = list.map(c => {
+  const card = c => {
     const k = c.classificazione;
     const st = statoCampagna(c), ap = aperteCampagna(c), n = c.volantini.length, ok = approvati(c);
     const col = st==="approvato" ? "var(--ok-fg)" : "#e5a200";
@@ -791,6 +844,25 @@ function renderCamps(list){
       </button>
       ${open ? `<div class="pdfs">${pdfPerCanale(c, pdfVis)}</div>` : ""}
     </div>`;
+  };
+  if(!CANALI_PROMO){ $("#camps").innerHTML = list.map(card).join(""); return; }
+
+  // I20-1271: le promo arrivano gia' in ordine di canale (perCanale): una cartellina per canale
+  const gruppi = [];
+  list.forEach(c => {
+    const nome = nomeCanale(c);
+    if(!gruppi.length || gruppi[gruppi.length-1].nome !== nome) gruppi.push({ nome, promo: [] });
+    gruppi[gruppi.length-1].promo.push(c);
+  });
+  $("#camps").innerHTML = gruppi.map(g => {
+    const aperta = !canaleChiuso(g.nome);
+    return `<section class="canale">
+      <button class="canale-head" type="button" data-canale="${esc(g.nome)}" aria-expanded="${aperta}">
+        ${ico(aperta ? "folder-open" : "folder")}<span>${esc(g.nome)}</span>
+        <span class="n" title="${g.promo.length} promo">${g.promo.length}</span>${ico("chev").replace('class="i"','class="i chev"')}
+      </button>
+      ${aperta ? `<div class="canale-promo">${g.promo.map(card).join("")}</div>` : ""}
+    </section>`;
   }).join("");
 }
 
@@ -997,6 +1069,13 @@ $("#tabs")?.addEventListener("click", e => {   // tab tolti l'11/9: resta innocu
   S.filtro = t.dataset.f; render();
 });
 $("#camps").addEventListener("click", e => {
+  selezioneToccata = true;
+  const cartellina = e.target.closest("[data-canale]");
+  if(cartellina){
+    const nome = cartellina.dataset.canale;
+    if(CANALI_CHIUSI.has(nome)) CANALI_CHIUSI.delete(nome); else CANALI_CHIUSI.add(nome);
+    salvaCanaliChiusi(); render(); return;
+  }
   const tog = e.target.closest("[data-tog]");
   if(tog){ const k = tog.dataset.tog; S.aperta = (S.aperta===k) ? null : k; render(); return; }
   // I20-1148: il clic sul PDF dell'elenco lo lascia al link (apre l'editor): qui non si
@@ -1227,6 +1306,30 @@ const STILE_NOTIFICHE = `
       if (!j || !j.ok || !j.dati) return;
       (j.dati.volantini || []).forEach(id => TIMONE_DA_FARE.add(Number(id)));
       if (TIMONE_DA_FARE.size) render();
+    })
+    .catch(() => {});
+})();
+
+/* ---------- I20-1271: il canale delle promo, da Fidelity ----------
+   Una chiamata sola, dopo il primo disegno: la home non aspetta Fidelity. Appena risponde la
+   colonna si divide per canale e, se l'utente non ha ancora scelto, si seleziona la prima promo
+   del primo canale. Se Fidelity non e' configurato o non risponde non cambia niente. */
+(function () {
+  if (!DATI.canaliVisibili) return;   // solo Agenzia e Marketing: gli altri vedono la colonna come prima
+  const ids = [...new Set(CAMPAGNE.map(c => c.idPromoFp).filter(Boolean))];
+  if (!ids.length) return;
+  fetch(C4_BASE + "Volantini/CanaliPromo?" + ids.map(id => "id=" + encodeURIComponent(id)).join("&"),
+        { credentials: "same-origin" })
+    .then(r => r.json())
+    .then(j => {
+      if (!j || !j.ok || !j.dati || !j.dati.ordine || !j.dati.ordine.length) return;
+      CANALI_PROMO = { canali: j.dati.canali || {}, ordine: j.dati.ordine };
+      if (!selezioneToccata) {
+        const visibili = campagneVisibili();
+        const prima = visibili.find(c => !canaleChiuso(nomeCanale(c))) || visibili[0];
+        if (prima) { S.sel = S.aperta = prima.classificazione; S.canale = S.area = ""; }
+      }
+      render();
     })
     .catch(() => {});
 })();
