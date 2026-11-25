@@ -7,7 +7,6 @@ import StatusBadge from "@/components/Base/StatusBadge";
 import { FlyerInsights as FlyerInsightsComponent } from "@/components/FlyerInsights";
 import { DistribuzionePagine, MarchiDistributore, MenaboVolantino, SintesiInsight } from "@/components/FlyerInsights/analisi";
 import { sezioneAttiva } from "@/components/FlyerInsights/configurazione";
-import { ScaricaReportPdf } from "@/components/FlyerInsights/report";
 import { ReferenzeVolantino } from "@/components/FlyerInsights/referenze";
 import { ATTRIBUTO_LETTORE, VolantinoSfogliabile } from "@/components/FlyerInsights/volantino";
 import withSessionCheck from "@/components/SessionChecker";
@@ -45,7 +44,11 @@ function useIndietro(idPromo: string | undefined): Indietro {
   return VOLANTINI_ATTIVI;
 }
 
-/** Il report PDF del volantino è disattivato per tutti: il pulsante resta, disattivato, con questo motivo. */
+/**
+ * Il report PDF del volantino è nascosto per tutti (il codice resta: componente ScaricaReportPdf in
+ * "@/components/FlyerInsights/report"). Per riattivarlo basta rimettere nelle azioni della pagina
+ * <ScaricaReportPdf idKit={idKit} titolo={titolo} motivoDisattivato={REPORT_DISATTIVATO} />.
+ */
 export const REPORT_DISATTIVATO = "Il report PDF è disattivato";
 
 const numeroPagina = (valore: string | null): number | undefined => {
@@ -195,9 +198,8 @@ function DettaglioVolantino({ idKit }: { idKit: string }) {
       meta={meta}
       indietro={indietro}
       azioni={
-        // Il report PDF è disattivato per tutti ma resta visibile; accanto si scarica il PDF del volantino
+        // Il report PDF è nascosto (vedi REPORT_DISATTIVATO): si scarica solo il PDF del volantino
         <div className="flex flex-wrap items-start justify-end gap-2">
-          <ScaricaReportPdf idKit={idKit} titolo={titolo} motivoDisattivato={REPORT_DISATTIVATO} />
           <ScaricaVolantino
             puoScaricare={puoScaricare}
             file={file.data?.file}
