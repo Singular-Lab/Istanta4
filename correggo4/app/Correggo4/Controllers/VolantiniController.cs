@@ -152,7 +152,7 @@ public class VolantiniController : Controller
             var noteCorrenti = note.Where(n => idCorrenti.Contains(n.IdPagina)).ToList();
 
             var (canale, area) = CanaleArea(v.Titolo, v.Classificazione);
-            bool bloccato = v.IdAutoreBlocco != null && v.DataScadenzaBlocco > adesso;
+            bool bloccato = ServizioCorrezioni.BloccatoFino(v.DataScadenzaBlocco, adesso);
 
             var pdf = new PdfHub
             {

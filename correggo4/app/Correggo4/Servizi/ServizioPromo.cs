@@ -20,6 +20,21 @@ public sealed class ServizioPromo
 {
     public const int MinutiBlocco = 60;   // Service.cs:8075, data_scadenza_blocco = now + 1 ora
 
+    /// <summary>I20-1265: chi ha bloccato, in Gestisci promo, quando il blocco l'ha messo la pubblicazione.</summary>
+    public const string BloccatoDallaPubblicazione = "nuova versione";
+
+    /// <summary>
+    /// I20-1265: alla fine di una pubblicazione riuscita il volantino si blocca per un'ora, come nel
+    /// Correggo originale: l'Agenzia controlla la versione nuova e la sblocca col lucchetto. Il blocco
+    /// non ha autore (la pubblicazione arriva da fidelity o da Istanta, non da un utente di Correggo4).
+    /// </summary>
+    public static void BloccaPerPubblicazione(Volantini v, DateTime adesso)
+    {
+        v.IdAutoreBlocco = null;
+        v.DataRegistrazioneBlocco = adesso;
+        v.DataScadenzaBlocco = adesso.AddMinutes(MinutiBlocco);
+    }
+
     private readonly Correggo4Context ctx;
     private readonly ServizioCorrezioni correzioni;
     private readonly EstrattorePagine estrattore;
@@ -81,7 +96,10 @@ public sealed class ServizioPromo
                 Scadenza = FinestreCategory.Locale(v.DataScadenza).Date,
                 Bloccato = bloccato,
                 BloccoMinuti = bloccato ? (int)Math.Ceiling((v.DataScadenzaBlocco!.Value - adesso).TotalMinutes) : null,
-                BloccatoDa = bloccato && v.IdAutoreBlocco != null && nomi.TryGetValue(v.IdAutoreBlocco.Value, out var n) ? n : ""
+                // I20-1265: il blocco senza autore e' quello della pubblicazione di una versione.
+                BloccatoDa = !bloccato ? ""
+                    : v.IdAutoreBlocco == null ? BloccatoDallaPubblicazione
+                    : nomi.TryGetValue(v.IdAutoreBlocco.Value, out var n) ? n : ""
             });
         }
         return modello;

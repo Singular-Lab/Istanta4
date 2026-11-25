@@ -310,6 +310,9 @@ public sealed class ImportatorePack
         vol.StatoPubblicazione = PubblicazioneCompletata;
         vol.UltimaPubblicazione = DateTime.UtcNow;   // l'originale se ne dimentica
         vol.DataPubblicazione ??= DateTime.UtcNow;
+        // I20-1265: la versione appena pubblicata resta bloccata un'ora, finche' l'Agenzia non la
+        // sblocca. Solo qui, a pubblicazione riuscita: una pubblicazione fallita non blocca.
+        ServizioPromo.BloccaPerPubblicazione(vol, DateTime.UtcNow);
         await ctx.SaveChangesAsync();
 
         esito.Esito = true;
