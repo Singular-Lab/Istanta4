@@ -249,8 +249,7 @@ public sealed class ServizioPromo
                      && c.Stato != ServizioCorrezioni.StatoEliminata && c.Stato != ServizioCorrezioni.StatoArchiviato).ToListAsync())
             c.Stato = ServizioCorrezioni.StatoArchiviato;
         var idElementi = await ctx.VolantiniPagineElementis.Where(e => idPagine.Contains(e.IdPagina)).Select(e => e.Id).ToListAsync();
-        foreach (var r in await ctx.VolantiniPagineElementiVersionis.Where(r => idElementi.Contains(r.IdElemento)
-                     && (r.Stato == ServizioCorrezioni.EaRegistrato || ServizioCorrezioni.Confermata(r.Stato))).ToListAsync())
+        foreach (var r in await EditAvanzatoDaAnnullare(ctx, idElementi).ToListAsync())
             r.Stato = ServizioCorrezioni.EaAnnullato;
 
         // 2. la versione esce di scena. L'originale le dava versione 0; qui un numero negativo sempre
@@ -278,6 +277,14 @@ public sealed class ServizioPromo
         await tx.CommitAsync();
         return null;
     }
+
+    /// <summary>
+    /// Le correzioni di Edit avanzato ancora vive degli elementi dati, che la revoca annulla. A parte, perche'
+    /// i test verifichino che Npgsql la traduca in SQL (QueryTraducibiliTests).
+    /// </summary>
+    public static IQueryable<VolantiniPagineElementiVersioni> EditAvanzatoDaAnnullare(Correggo4Context ctx, List<long> idElementi) =>
+        ctx.VolantiniPagineElementiVersionis.Where(r => idElementi.Contains(r.IdElemento)
+                                                        && ServizioCorrezioni.StatiEaVivi.Contains(r.Stato));
 
     // ------------------------------------------------------------------ aggiornamento da fidelity
 

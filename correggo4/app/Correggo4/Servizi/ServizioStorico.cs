@@ -274,11 +274,7 @@ public sealed partial class ServizioStorico
             .Where(c => pagine.Contains(c.IdPagina) && c.Simbolo != "penna"
                         && c.Stato != ServizioCorrezioni.StatoEliminata && c.Stato != ServizioCorrezioni.StatoArchiviato)
             .Select(c => (long?)c.IdElemento).Distinct().ToListAsync());
-        ids.AddRange(await (from v in ctx.VolantiniPagineElementiVersionis.AsNoTracking()
-                            join e in ctx.VolantiniPagineElementis.AsNoTracking() on v.IdElemento equals e.Id
-                            where pagine.Contains(e.IdPagina)
-                                  && (v.Stato == ServizioCorrezioni.EaRegistrato || ServizioCorrezioni.Confermata(v.Stato))
-                            select (long?)e.Id).Distinct().ToListAsync());
+        ids.AddRange(await ElementiConEditAvanzato(ctx, pagine).ToListAsync());
         var idElementi = ids.Where(x => x != null).Select(x => x!.Value).Distinct().ToList();
         if (idElementi.Count == 0) return new();
 
@@ -292,6 +288,17 @@ public sealed partial class ServizioStorico
         return elementi.Where(x => x.IdParent == null).Select(x => x.Basecode).Concat(radici)
                        .Where(bc => !string.IsNullOrWhiteSpace(bc)).Distinct().OrderBy(bc => bc).ToList();
     }
+
+    /// <summary>
+    /// Gli elementi delle pagine date con una correzione di Edit avanzato ancora viva. A parte, perche' i test
+    /// verifichino che Npgsql la traduca in SQL (QueryTraducibiliTests): con il database in memoria passerebbe
+    /// anche una query che su PostgreSQL si ferma.
+    /// </summary>
+    public static IQueryable<long?> ElementiConEditAvanzato(Correggo4Context ctx, List<int> pagine) =>
+        (from v in ctx.VolantiniPagineElementiVersionis.AsNoTracking()
+         join e in ctx.VolantiniPagineElementis.AsNoTracking() on v.IdElemento equals e.Id
+         where pagine.Contains(e.IdPagina) && ServizioCorrezioni.StatiEaVivi.Contains(v.Stato)
+         select (long?)e.Id).Distinct();
 
     private static string EsitoNotaTimbro(short stato, bool ultima) =>
         stato == ServizioCorrezioni.StatoAccettata ? "accettata" : (ultima ? "attesa" : "irrisolta");

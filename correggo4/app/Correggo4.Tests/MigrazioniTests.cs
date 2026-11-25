@@ -87,4 +87,41 @@ public class MigrazioniTests
         var errore = Record.Exception(() => Migrazioni.ApplicaAllAvvio(servizi, conf, NullLogger.Instance));
         Assert.Null(errore);
     }
+
+    // Una migration su una tabella grande supera i 30 secondi predefiniti di Npgsql e fermerebbe l'avvio
+    // con "Timeout during reading attempt", come e' successo a Istanta: le migration girano senza limite.
+    [Fact]
+    public void Le_migration_girano_senza_limite_di_tempo()
+    {
+        using var ctx = Contesto();
+        Assert.NotEqual(0, ctx.Database.GetCommandTimeout() ?? 30);
+
+        Migrazioni.SenzaLimiteDiTempo(ctx);
+
+        Assert.Equal(0, ctx.Database.GetCommandTimeout());
+    }
+
+    // Il limite si toglie prima di Migrate(), non dopo: l'avvio non si prova senza database, si legge il sorgente.
+    [Fact]
+    public void Il_limite_si_toglie_prima_di_applicare_le_migration()
+    {
+        string sorgente = File.ReadAllText(Path.Combine(RadiceApplicazione(), "Data", "Migrazioni.cs"));
+        int toglie = sorgente.IndexOf("SenzaLimiteDiTempo(ctx);", StringComparison.Ordinal);
+        int applica = sorgente.IndexOf("ctx.Database.Migrate();", StringComparison.Ordinal);
+
+        Assert.True(toglie >= 0, "ApplicaAllAvvio non toglie il limite di tempo");
+        Assert.True(applica > toglie, "il limite di tempo va tolto prima di Migrate()");
+    }
+
+    // Come IndirizziNelleVisteTests: la cartella del progetto risalendo da quella dei test.
+    private static string RadiceApplicazione()
+    {
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d != null; d = d.Parent)
+        {
+            string candidata = Path.Combine(d.FullName, "Correggo4");
+            if (File.Exists(Path.Combine(candidata, "Correggo4.csproj")))
+                return candidata;
+        }
+        throw new DirectoryNotFoundException("Cartella del progetto Correggo4 non trovata sopra " + AppContext.BaseDirectory);
+    }
 }

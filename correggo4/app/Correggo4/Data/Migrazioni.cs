@@ -58,8 +58,20 @@ public static class Migrazioni
         }
 
         logger.LogInformation("Correggo4Context: applico {Quante} migration: {Elenco}.", pendenti.Count, string.Join(", ", pendenti));
+        SenzaLimiteDiTempo(ctx);
         ctx.Database.Migrate();
         logger.LogInformation("Correggo4Context: migration applicate.");
+    }
+
+    /// <summary>
+    /// Toglie al contesto il limite di tempo dei comandi (0 = nessun limite), come in Istanta. Il limite
+    /// predefinito di Npgsql e' 30 secondi: una migration che aggiorna una tabella grande lo supera e
+    /// l'avvio si ferma con "Timeout during reading attempt". Vale solo per questo contesto, che si chiude
+    /// alla fine dell'avvio: le richieste tengono il limite normale.
+    /// </summary>
+    public static void SenzaLimiteDiTempo(DbContext ctx)
+    {
+        ctx.Database.SetCommandTimeout(TimeSpan.Zero);
     }
 }
 
