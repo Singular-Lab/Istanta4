@@ -2493,7 +2493,7 @@ export default function MenaboCanvas({
                                         className="mt-2 !py-1.5 text-xs"
                                         data-testid="menabo-unione-ricerca"
                                     />
-                                    <p className="mt-1 text-[11px] text-slate-400">Ctrl/Cmd + clic su un gruppo in pagina lo spunta qui.</p>
+                                    <p className="mt-1 text-2xs text-slate-400">Ctrl/Cmd + clic su un gruppo in pagina lo spunta qui.</p>
                                     <div ref={unioneRef} className="mt-1.5 max-h-[45vh] min-h-40 overflow-y-auto rounded-control border border-slate-200/80 dark:border-darkmode-400">
                                         {gruppiUnibili.length === 0 ? (
                                             <div className="px-2.5 py-2 text-slate-400">Nessun altro gruppo nel menabò.</div>
