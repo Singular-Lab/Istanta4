@@ -32,6 +32,16 @@ describe('operatori delle condizioni', () => {
     expect(vale(cond('mastro', 'finisce', 'doppia'), dati)).toBe(false);
   });
 
+  it('due numeri si confrontano come numeri: «1» e «01» sono lo stesso reparto', () => {
+    expect(vale(cond('reparto', 'uguale', '1'), { reparto: '01' })).toBe(true);
+    expect(vale(cond('reparto', 'uguale', '03'), { reparto: '3' })).toBe(true);
+    expect(vale(cond('reparto', 'uguale', '24'), { reparto: '01' })).toBe(false);
+    expect(vale(cond('reparto', 'diverso', '1'), { reparto: '01' })).toBe(false);
+    expect(vale(cond('reparto', 'uno_di', '', ['1', '24']), { reparto: '024' })).toBe(true);
+    // Il testo resta testo: niente confronto numerico se un lato non è un numero
+    expect(vale(cond('mastro', 'uguale', '1'), { mastro: '1a' })).toBe(false);
+  });
+
   it('campo mancante: uguale, contiene, inizia, finisce e uno_di non valgono; diverso e non_contiene sì', () => {
     expect(vale(cond('mastro', 'uguale', 'x'), {})).toBe(false);
     expect(vale(cond('mastro', 'contiene', 'x'), {})).toBe(false);
@@ -89,6 +99,16 @@ describe('nome da modello', () => {
 
   it('un testo fisso resta com\'è', () => {
     expect(nomeDaModello('Pulizia casa', leggi)).toBe('Pulizia casa');
+  });
+
+  it('parte-N tiene la parte N del valore separata da « - »; se manca il nome è vuoto', () => {
+    const letto = da({ tema: 'GRUPPO F - FRESCHISSIMI - POP_LS', altro: 'GRUPPO H - DISPENSA - POP_DAL', semplice: 'Bevande' });
+    expect(nomeDaModello('{tema|parte-2|titolo}', letto)).toBe('Freschissimi');
+    expect(nomeDaModello('{altro|parte-2|titolo}', letto)).toBe('Dispensa');
+    expect(nomeDaModello('{tema|parte-1}', letto)).toBe('GRUPPO F');
+    expect(nomeDaModello('{tema|parte-3}', letto)).toBe('POP_LS');
+    expect(nomeDaModello('{semplice|parte-1}', letto)).toBe('Bevande');
+    expect(nomeDaModello('{semplice|parte-2}', letto)).toBe('');
   });
 
   it('segnaposto con trasformazioni: senza-sigla, spazi, titolo', () => {

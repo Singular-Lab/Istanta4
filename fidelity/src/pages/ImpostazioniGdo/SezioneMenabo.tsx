@@ -1,8 +1,9 @@
 import Button from "@/components/Base/Button";
-import { FormInput } from "@/components/Base/Form";
+import { FormCheck, FormInput } from "@/components/Base/Form";
 import FormSelect from "@/components/Base/Form/FormSelect";
 import Lucide from "@/components/Base/Lucide";
 import Sezione from "@/components/Base/Sezione";
+import Segmenti from "@/components/Base/Segmenti";
 import Spinner from "@/components/Base/Spinner";
 import StatusBadge from "@/components/Base/StatusBadge";
 import EmptyState from "@/components/EmptyState";
@@ -15,7 +16,7 @@ import {
   useSuggerimentiValoriMenabo,
   useVolantiniPerProvaMenabo,
 } from "@/query/impostazioniGdo";
-import { useId, useRef, useState, type ChangeEvent } from "react";
+import { createContext, useContext, useId, useRef, useState, type ChangeEvent } from "react";
 import {
   CAMPI_DERIVATI_MENABO,
   OPERATORI_REGOLA_MENABO,
@@ -56,6 +57,51 @@ const ETICHETTE_LOGICA: Record<GruppoRegolaMenabo["logica"], string> = {
 
 /** Campi della referenza che si propongono per primi; si può scrivere qualunque altro campo. */
 const CAMPI_COMUNI = ["mastro", "tema", "reparto", "ruolo", "codice_referenza", ...CAMPI_DERIVATI_MENABO];
+
+/** I campi che la regola può usare: i veri delle referenze (con quante ne hanno) e i comuni. */
+interface CampoProposto { campo: string; referenze: number | null }
+const CampiProposti = createContext<CampoProposto[]>(CAMPI_COMUNI.map((campo) => ({ campo, referenze: null })));
+
+const ALTRO_CAMPO = "__altro__";
+
+/** Il campo si sceglie da un elenco; «Altro campo…» lascia scrivere un nome libero (anche `tema/mastro`). */
+function SelettoreCampo({ valore, onChange, etichetta, segnaposto, className }: { valore: string; onChange: (campo: string) => void; etichetta: string; segnaposto?: string; className?: string }) {
+  const proposti = useContext(CampiProposti);
+  const [libero, setLibero] = useState(() => !proposti.some((p) => p.campo === valore));
+  return (
+    <>
+      <FormSelect
+        formSelectSize="sm"
+        aria-label={etichetta}
+        value={libero ? ALTRO_CAMPO : valore}
+        onChange={(e) => {
+          if (e.target.value === ALTRO_CAMPO) setLibero(true);
+          else {
+            setLibero(false);
+            onChange(e.target.value);
+          }
+        }}
+        className={className}
+      >
+        {proposti.map(({ campo, referenze }) => (
+          <option key={campo} value={campo}>{referenze === null ? campo : `${campo} (${referenze} referenze)`}</option>
+        ))}
+        <option value={ALTRO_CAMPO}>Altro campo…</option>
+      </FormSelect>
+      {libero && (
+        <FormInput
+          type="text"
+          formInputSize="sm"
+          aria-label={`${etichetta}, nome libero`}
+          placeholder={segnaposto ?? "Nome del campo"}
+          value={valore}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-48"
+        />
+      )}
+    </>
+  );
+}
 
 const SENZA_VALORE: readonly OperatoreRegolaMenabo[] = ["vuoto", "non_vuoto"];
 
@@ -115,16 +161,7 @@ function CondizioneEditor({ condizione, onChange, onElimina }: { condizione: Con
   const idElenco = useId();
   return (
     <div className="flex flex-wrap items-center gap-2" data-testid="condizione">
-      <FormInput
-        type="text"
-        formInputSize="sm"
-        list="campi-menabo"
-        aria-label="Campo"
-        placeholder="Campo"
-        value={condizione.campo}
-        onChange={(e) => onChange({ ...condizione, campo: e.target.value })}
-        className="w-40"
-      />
+      <SelettoreCampo etichetta="Campo" valore={condizione.campo} onChange={(campo) => onChange({ ...condizione, campo })} className="w-48" />
       <FormSelect
         formSelectSize="sm"
         aria-label="Operatore"
@@ -276,6 +313,16 @@ function GruppoEditor({ gruppo, onChange, onElimina, profondita = 0 }: { gruppo:
   );
 }
 
+const PARTI_VALORE = TRASFORMAZIONI_NOME_MENABO.filter((t) => t.startsWith("parte-"));
+const ALTRE_TRASFORMAZIONI = TRASFORMAZIONI_NOME_MENABO.filter((t) => !t.startsWith("parte-"));
+
+/** Il nome della sezione in una riga, per la regola chiusa. */
+const nomeInRiga = (regola: RegolaMenabo): string => {
+  if (regola.sezione === null) return "non è una sezione";
+  if (regola.sezione.trim() === "") return "senza nome";
+  return regola.sezione;
+};
+
 function RegolaEditor({
   regola,
   indice,
@@ -294,29 +341,32 @@ function RegolaEditor({
   const nonSezione = regola.sezione === null;
   // La sezione che è un solo segnaposto rinvia a un altro campo: si scrive scegliendo campo e trasformazioni
   const rinvio = leggiRinvio(regola.sezione);
+  const idTrasformazioni = useId();
+  // Una regola appena aggiunta (senza nome) si apre da sola; le salvate restano in una riga
+  const [aperta, setAperta] = useState(() => regola.sezione === "" && !regola.titolo);
+  const parte = rinvio?.trasformazioni.find((t) => t.startsWith("parte-")) ?? "";
+  const scriviTrasformazioni = (nuova: { parte: string; altre: readonly string[] }) =>
+    scriviRinvio(rinvio?.campi ?? "", [...(nuova.parte ? [nuova.parte] : []), ...ALTRE_TRASFORMAZIONI.filter((t) => nuova.altre.includes(t))]);
+  const altreAttive = rinvio?.trasformazioni.filter((t) => !t.startsWith("parte-")) ?? [];
   return (
-    <li className="flex flex-col gap-3 rounded-card border border-slate-200 bg-white p-4 dark:border-darkmode-400 dark:bg-darkmode-600" data-testid="regola">
-      <div className="flex flex-wrap items-center gap-2">
+    <li className="rounded-card border border-slate-200 bg-white dark:border-darkmode-400 dark:bg-darkmode-600" data-testid="regola">
+      <div className="flex flex-wrap items-center gap-2 px-3 py-2">
         <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-theme-1/10 text-xs font-bold tabular-nums text-primary">{indice + 1}</span>
-        <FormInput
-          type="text"
-          formInputSize="sm"
-          aria-label={`Titolo della regola ${indice + 1}`}
-          placeholder="Titolo (facoltativo, compare nel motivo delle pagine)"
-          value={regola.titolo ?? ""}
-          onChange={(e) => onChange({ ...regola, titolo: e.target.value || null })}
-          className="min-w-48 flex-1"
-        />
-        <FormSelect
-          formSelectSize="sm"
-          aria-label={`Livello della regola ${indice + 1}`}
-          value={regola.livello}
-          onChange={(e) => onChange({ ...regola, livello: e.target.value as RegolaMenabo["livello"] })}
-          className="w-44"
+        <button
+          type="button"
+          aria-expanded={aperta}
+          aria-label={`${aperta ? "Chiudi" : "Apri"} la regola ${indice + 1}`}
+          onClick={() => setAperta(!aperta)}
+          className="flex min-w-48 flex-1 items-center gap-2 text-left"
         >
-          <option value="box">Per box</option>
-          <option value="pagina">Per pagina</option>
-        </FormSelect>
+          <Lucide icon={aperta ? "ChevronDown" : "ChevronRight"} aria-hidden="true" className="h-4 w-4 flex-none text-slate-500" />
+          <span className="min-w-0 flex-1 truncate text-sm">
+            <span className="font-medium">{regola.titolo || riassuntoCondizione(regola.condizione)}</span>
+            <span className="text-slate-500"> → {nomeInRiga(regola)}</span>
+          </span>
+          <span className="flex-none rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 dark:bg-darkmode-700">{regola.livello === "box" ? "box" : "pagina"}</span>
+          {regola.colore && <span aria-hidden="true" className="h-4 w-4 flex-none rounded-full border border-slate-200" style={{ backgroundColor: regola.colore }} />}
+        </button>
         <Button variant="outline-secondary" size="sm" aria-label={`Sposta su la regola ${indice + 1}`} disabled={indice === 0} onClick={() => onSposta(-1)}>
           <Lucide icon="ArrowUp" aria-hidden="true" className="h-3.5 w-3.5" />
         </Button>
@@ -327,74 +377,54 @@ function RegolaEditor({
           <Lucide icon="Trash2" aria-hidden="true" className="h-3.5 w-3.5" />
         </Button>
       </div>
-      <p className="text-xs text-slate-500">
-        {regola.livello === "box"
-          ? "Per box: vale per il box con una referenza che soddisfa la condizione."
-          : "Per pagina: vale se la condizione è soddisfatta da almeno un box della pagina, e decide la sezione di tutta la pagina."}
-      </p>
-      <GruppoEditor gruppo={regola.condizione} onChange={(condizione) => onChange({ ...regola, condizione })} />
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-slate-600">Allora</span>
-        <FormSelect
-          formSelectSize="sm"
-          aria-label={`Esito della regola ${indice + 1}`}
-          value={nonSezione ? "no" : rinvio ? "campo" : "si"}
-          onChange={(e) =>
-            onChange({
-              ...regola,
-              sezione: e.target.value === "no" ? null : e.target.value === "campo" ? scriviRinvio("mastro", ["senza-sigla", "spazi", "titolo"]) : "",
-            })
-          }
-          className="w-72"
-        >
-          <option value="si">la sezione è il testo scritto</option>
-          <option value="campo">la sezione è il valore di un altro campo</option>
-          <option value="no">non è una sezione</option>
-        </FormSelect>
-        {rinvio && (
-          <div className="flex w-full flex-col gap-2 rounded-control border border-slate-200 bg-slate-50/60 p-3 dark:border-darkmode-400 dark:bg-darkmode-700/40" data-testid="rinvio-campo">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-slate-500">Campo</span>
-              <FormInput
-                type="text"
-                formInputSize="sm"
-                list="campi-menabo"
-                aria-label={`Campo da cui prendere la sezione della regola ${indice + 1}`}
-                placeholder="es. tema, oppure tema/mastro (il primo che ha un valore)"
-                value={rinvio.campi}
-                onChange={(e) => onChange({ ...regola, sezione: scriviRinvio(e.target.value, rinvio.trasformazioni) })}
-                className="min-w-64 flex-1"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1" role="group" aria-label={`Trasformazioni del valore della regola ${indice + 1}`}>
-              <span className="text-xs font-medium text-slate-500">Poi</span>
-              {TRASFORMAZIONI_NOME_MENABO.map((trasformazione) => (
-                <label key={trasformazione} className="inline-flex items-center gap-1.5 text-xs text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={rinvio.trasformazioni.includes(trasformazione)}
-                    onChange={(e) =>
-                      onChange({
-                        ...regola,
-                        sezione: scriviRinvio(
-                          rinvio.campi,
-                          e.target.checked
-                            ? TRASFORMAZIONI_NOME_MENABO.filter((t) => t === trasformazione || rinvio.trasformazioni.includes(t))
-                            : rinvio.trasformazioni.filter((t) => t !== trasformazione)
-                        ),
-                      })
-                    }
-                  />
-                  {trasformazione}
-                </label>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500">Modello: <code>{regola.sezione}</code> — se il campo è vuoto la regola non decide e si passa alla successiva.</p>
+      {aperta && (
+        <div className="flex flex-col gap-3 border-t border-dashed border-slate-200 p-3 dark:border-darkmode-400">
+          <div className="flex flex-wrap items-center gap-2">
+            <FormInput
+              type="text"
+              formInputSize="sm"
+              aria-label={`Titolo della regola ${indice + 1}`}
+              placeholder="Titolo (facoltativo, compare nel motivo delle pagine)"
+              value={regola.titolo ?? ""}
+              onChange={(e) => onChange({ ...regola, titolo: e.target.value || null })}
+              className="min-w-48 flex-1"
+            />
+            <FormSelect
+              formSelectSize="sm"
+              aria-label={`Livello della regola ${indice + 1}`}
+              value={regola.livello}
+              onChange={(e) => onChange({ ...regola, livello: e.target.value as RegolaMenabo["livello"] })}
+              className="w-44"
+              title={
+                regola.livello === "box"
+                  ? "Per box: vale per il box con una referenza che soddisfa la condizione."
+                  : "Per pagina: vale se la condizione è soddisfatta da almeno un box della pagina, e decide la sezione di tutta la pagina."
+              }
+            >
+              <option value="box">Per box</option>
+              <option value="pagina">Per pagina</option>
+            </FormSelect>
           </div>
-        )}
-        {!nonSezione && (
-          <>
-            {!rinvio && (
+          <GruppoEditor gruppo={regola.condizione} onChange={(condizione) => onChange({ ...regola, condizione })} />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">Allora</span>
+            <FormSelect
+              formSelectSize="sm"
+              aria-label={`Esito della regola ${indice + 1}`}
+              value={nonSezione ? "no" : rinvio ? "campo" : "si"}
+              onChange={(e) =>
+                onChange({
+                  ...regola,
+                  sezione: e.target.value === "no" ? null : e.target.value === "campo" ? scriviRinvio("mastro", ["senza-sigla", "spazi", "titolo"]) : "",
+                })
+              }
+              className="w-72"
+            >
+              <option value="si">la sezione è il testo scritto</option>
+              <option value="campo">la sezione è il valore di un altro campo</option>
+              <option value="no">non è una sezione</option>
+            </FormSelect>
+            {!nonSezione && !rinvio && (
               <FormInput
                 type="text"
                 formInputSize="sm"
@@ -405,24 +435,77 @@ function RegolaEditor({
                 className="min-w-56 flex-1"
               />
             )}
-            <input
-              type="color"
-              aria-label={`Colore della sezione della regola ${indice + 1}`}
-              value={regola.colore ?? "#94a3b8"}
-              onChange={(e) => onChange({ ...regola, colore: e.target.value.toLowerCase() })}
-              className="h-8 w-10 cursor-pointer rounded-control border border-slate-200 bg-white p-0.5"
-            />
-            {regola.colore ? (
-              <Button variant="outline-secondary" size="sm" aria-label={`Togli il colore della regola ${indice + 1}`} onClick={() => onChange({ ...regola, colore: null })}>
-                <Lucide icon="X" aria-hidden="true" className="h-3.5 w-3.5" />
-              </Button>
-            ) : (
-              <span className="text-xs text-slate-500">colore automatico</span>
+            {!nonSezione && (
+              <>
+                <input
+                  type="color"
+                  aria-label={`Colore della sezione della regola ${indice + 1}`}
+                  value={regola.colore ?? "#94a3b8"}
+                  onChange={(e) => onChange({ ...regola, colore: e.target.value.toLowerCase() })}
+                  className="h-8 w-10 cursor-pointer rounded-control border border-slate-200 bg-white p-0.5"
+                />
+                {regola.colore ? (
+                  <Button variant="outline-secondary" size="sm" aria-label={`Togli il colore della regola ${indice + 1}`} onClick={() => onChange({ ...regola, colore: null })}>
+                    <Lucide icon="X" aria-hidden="true" className="h-3.5 w-3.5" />
+                  </Button>
+                ) : (
+                  <span className="text-xs text-slate-500">colore automatico</span>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
-      <p className="text-xs text-slate-500">Se la regola vale: {riassuntoCondizione(regola.condizione)}</p>
+          </div>
+          {rinvio && (
+            <div className="flex flex-col gap-2 rounded-control border border-slate-200 bg-slate-50/60 p-3 dark:border-darkmode-400 dark:bg-darkmode-700/40" data-testid="rinvio-campo">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-slate-500">Campo</span>
+                <SelettoreCampo
+                  etichetta={`Campo da cui prendere la sezione della regola ${indice + 1}`}
+                  segnaposto="es. tema/mastro (il primo che ha un valore)"
+                  valore={rinvio.campi}
+                  onChange={(campi) => onChange({ ...regola, sezione: scriviRinvio(campi, rinvio.trasformazioni) })}
+                  className="w-56"
+                />
+                <span className="text-xs font-medium text-slate-500">Parte</span>
+                <FormSelect
+                  formSelectSize="sm"
+                  aria-label={`Parte del valore della regola ${indice + 1}`}
+                  value={parte}
+                  onChange={(e) => onChange({ ...regola, sezione: scriviTrasformazioni({ parte: e.target.value, altre: altreAttive }) })}
+                  className="w-56"
+                >
+                  <option value="">tutto il valore</option>
+                  {PARTI_VALORE.map((voce) => (
+                    <option key={voce} value={voce}>{`${voce.slice(-1)}ª parte (separata da « - »)`}</option>
+                  ))}
+                </FormSelect>
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1" role="group" aria-label={`Trasformazioni del valore della regola ${indice + 1}`}>
+                <span className="text-xs font-medium text-slate-500">Poi</span>
+                {ALTRE_TRASFORMAZIONI.map((trasformazione) => (
+                  <FormCheck key={trasformazione} className="text-xs text-slate-600">
+                    <FormCheck.Input
+                      id={`${idTrasformazioni}-${trasformazione}`}
+                      type="checkbox"
+                      checked={altreAttive.includes(trasformazione)}
+                      onChange={(e) =>
+                        onChange({
+                          ...regola,
+                          sezione: scriviTrasformazioni({
+                            parte,
+                            altre: e.target.checked ? [...altreAttive, trasformazione] : altreAttive.filter((t) => t !== trasformazione),
+                          }),
+                        })
+                      }
+                    />
+                    <FormCheck.Label htmlFor={`${idTrasformazioni}-${trasformazione}`}>{trasformazione}</FormCheck.Label>
+                  </FormCheck>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">Modello: <code>{regola.sezione}</code> — se il campo o la parte è vuoto la regola non decide e si passa alla successiva.</p>
+            </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }
@@ -489,6 +572,7 @@ function ProvaRegole({ regole }: { regole: RegolaMenabo[] }) {
               <thead className="sticky top-0 bg-slate-50 text-left text-xs text-slate-500 dark:bg-darkmode-700">
                 <tr>
                   <th className="px-3 py-2">Pagina</th>
+                  <th className="px-3 py-2">Reparto</th>
                   <th className="px-3 py-2">Prima</th>
                   <th className="px-3 py-2">Con le regole</th>
                   <th className="px-3 py-2">Regola</th>
@@ -498,6 +582,7 @@ function ProvaRegole({ regole }: { regole: RegolaMenabo[] }) {
                 {esito.pagine.map((pagina) => (
                   <tr key={pagina.pagina} data-cambia={pagina.cambia ? "si" : "no"} className={pagina.cambia ? "bg-amber-50/70 dark:bg-amber-400/10" : undefined}>
                     <td className="px-3 py-1.5 tabular-nums">{pagina.pagina}</td>
+                    <td className="px-3 py-1.5 text-slate-600">{pagina.reparto ?? "—"}</td>
                     <td className="px-3 py-1.5 text-slate-600">{pagina.prima ?? "—"}</td>
                     <td className="px-3 py-1.5 font-medium">{pagina.dopo ?? "—"}</td>
                     <td className="px-3 py-1.5 text-xs text-slate-500">{pagina.regola ?? ""}</td>
@@ -523,11 +608,16 @@ function SezioneMenabo({ regole }: { regole: RegolaMenabo[] }) {
   const { bozza, setBozza, modificata, annulla } = useBozza(regole);
   const inputFile = useRef<HTMLInputElement>(null);
   const [errori, setErrori] = useState<string | null>(null);
+  const [scheda, setScheda] = useState<"regole" | "prova">("regole");
   const campiSuggeriti = useSuggerimentiCampiMenabo();
   const caricaValori = useCaricaValoriMenabo();
   const campoMenabo = campiSuggeriti.data?.campoMenabo ?? null;
   // I campi veri delle referenze, dal più usato; quelli comuni e della pagina restano sempre proposti
-  const campiProposti = [...new Set([...(campiSuggeriti.data?.campi ?? []).map((c) => c.campo), ...CAMPI_COMUNI])];
+  const campiVeri = campiSuggeriti.data?.campi ?? [];
+  const campiProposti: CampoProposto[] = [
+    ...campiVeri.map((c) => ({ campo: c.campo, referenze: c.referenze })),
+    ...CAMPI_COMUNI.filter((campo) => !campiVeri.some((c) => c.campo === campo)).map((campo) => ({ campo, referenze: null })),
+  ];
 
   const generaDalCampo = () => {
     if (!campoMenabo) return;
@@ -597,7 +687,7 @@ function SezioneMenabo({ regole }: { regole: RegolaMenabo[] }) {
         <>
           Regole che dicono a quale sezione appartiene un box, o una pagina, nel menabò degli insight. Vale la prima regola
           che soddisfa la condizione; senza regola vale la sezione di prima (per Conad CNO la mastro). Il nome può essere un
-          testo o un modello come <code>{"{mastro|senza-sigla|spazi|titolo}"}</code>.
+          testo o un modello come <code>{"{tema|parte-2|titolo}"}</code>.
         </>
       }
       azioni={
@@ -611,33 +701,17 @@ function SezioneMenabo({ regole }: { regole: RegolaMenabo[] }) {
         </>
       }
     >
-      <datalist id="campi-menabo">
-        {campiProposti.map((campo) => (
-          <option key={campo} value={campo} />
-        ))}
-      </datalist>
+      <CampiProposti.Provider value={campiProposti}>
       <div className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline-secondary" size="sm" onClick={() => setBozza([...bozza, regolaVuota()])}>
-            <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-            Nuova regola
-          </Button>
-          {campoMenabo && (
-            <Button variant="outline-secondary" size="sm" onClick={generaDalCampo} loading={caricaValori.isPending} disabled={caricaValori.isPending}>
-              <Lucide icon="Wand2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-              {`Genera dalle ${campoMenabo}`}
-            </Button>
-          )}
-          <Button variant="outline-secondary" size="sm" onClick={scarica} disabled={bozza.length === 0}>
-            <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-            Scarica JSON
-          </Button>
-          <Button variant="outline-secondary" size="sm" onClick={() => inputFile.current?.click()}>
-            <Lucide icon="Upload" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
-            Carica JSON
-          </Button>
-          <input ref={inputFile} type="file" accept=".json,application/json" aria-label="File JSON delle regole del menabò" className="hidden" onChange={carica} />
-        </div>
+        <Segmenti
+          etichetta="Parte del menabò"
+          valore={scheda}
+          onChange={setScheda}
+          opzioni={[
+            { valore: "regole", etichetta: "Regole", conteggio: bozza.length },
+            { valore: "prova", etichetta: "Prova su un volantino" },
+          ]}
+        />
 
         {errori && (
           <div role="alert" className="rounded-control border border-danger/30 bg-danger/5 p-3 text-sm text-danger">
@@ -645,34 +719,63 @@ function SezioneMenabo({ regole }: { regole: RegolaMenabo[] }) {
           </div>
         )}
 
-        {bozza.length === 0 ? (
-          <EmptyState
-            compatta
-            icon="LayoutGrid"
-            title="Nessuna regola"
-            description="Il menabò usa la sezione ricavata dai dati del cliente. Aggiungi una regola per correggere le pagine che non coincidono."
-          />
-        ) : (
-          <ol className="flex flex-col gap-3" aria-label="Regole del menabò, in ordine di priorità">
-            {bozza.map((regola, indice) => (
-              <RegolaEditor
-                key={regola.id}
-                regola={regola}
-                indice={indice}
-                totale={bozza.length}
-                onChange={(r) => aggiorna(indice, r)}
-                onElimina={() => setBozza(bozza.filter((_, i) => i !== indice))}
-                onSposta={(verso) => sposta(indice, verso)}
-              />
-            ))}
-          </ol>
-        )}
+        <div hidden={scheda !== "regole"} className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline-secondary" size="sm" onClick={() => setBozza([...bozza, regolaVuota()])}>
+              <Lucide icon="Plus" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+              Nuova regola
+            </Button>
+            {campoMenabo && (
+              <Button variant="outline-secondary" size="sm" onClick={generaDalCampo} loading={caricaValori.isPending} disabled={caricaValori.isPending}>
+                <Lucide icon="Wand2" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                {`Genera dalle ${campoMenabo}`}
+              </Button>
+            )}
+            <span className="ml-auto flex flex-wrap items-center gap-2">
+              <Button variant="outline-secondary" size="sm" onClick={scarica} disabled={bozza.length === 0}>
+                <Lucide icon="Download" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Scarica JSON
+              </Button>
+              <Button variant="outline-secondary" size="sm" onClick={() => inputFile.current?.click()}>
+                <Lucide icon="Upload" aria-hidden="true" className="mr-1.5 h-3.5 w-3.5" />
+                Carica JSON
+              </Button>
+            </span>
+            <input ref={inputFile} type="file" accept=".json,application/json" aria-label="File JSON delle regole del menabò" className="hidden" onChange={carica} />
+          </div>
 
-        <ProvaRegole regole={bozza} />
-        <p className="text-xs text-slate-500">
-          Trasformazioni del nome: {TRASFORMAZIONI_NOME_MENABO.join(", ")}. Campi della pagina: {CAMPI_DERIVATI_MENABO.join(", ")}.
-        </p>
+          {bozza.length === 0 ? (
+            <EmptyState
+              compatta
+              icon="LayoutGrid"
+              title="Nessuna regola"
+              description="Il menabò usa la sezione ricavata dai dati del cliente. Aggiungi una regola per correggere le pagine che non coincidono."
+            />
+          ) : (
+            <ol className="flex flex-col gap-2" aria-label="Regole del menabò, in ordine di priorità">
+              {bozza.map((regola, indice) => (
+                <RegolaEditor
+                  key={regola.id}
+                  regola={regola}
+                  indice={indice}
+                  totale={bozza.length}
+                  onChange={(r) => aggiorna(indice, r)}
+                  onElimina={() => setBozza(bozza.filter((_, i) => i !== indice))}
+                  onSposta={(verso) => sposta(indice, verso)}
+                />
+              ))}
+            </ol>
+          )}
+          <p className="text-xs text-slate-500">
+            Parti del valore: {PARTI_VALORE.join(", ")}. Trasformazioni: {ALTRE_TRASFORMAZIONI.join(", ")}. Campi derivati: {CAMPI_DERIVATI_MENABO.join(", ")} (@reparto_nome è il nome del reparto come nelle Impostazioni GDO, uguale in ogni volantino).
+          </p>
+        </div>
+
+        <div hidden={scheda !== "prova"}>
+          <ProvaRegole regole={bozza} />
+        </div>
       </div>
+      </CampiProposti.Provider>
     </Sezione>
   );
 }

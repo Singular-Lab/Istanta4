@@ -13,6 +13,13 @@ export const SEZIONI_IMPOSTAZIONI_GDO = [
   { id: "aspetto-sito-web", etichetta: "Aspetto del sito web", icona: "Palette" },
 ] as const;
 
+/** Come l'indice raggruppa le sezioni: una sola sezione alla volta si apre dal suo id. */
+export const GRUPPI_IMPOSTAZIONI_GDO: ReadonlyArray<{ titolo: string; sezioni: ReadonlyArray<(typeof SEZIONI_IMPOSTAZIONI_GDO)[number]["id"]> }> = [
+  { titolo: "Generale", sezioni: ["identita", "loghi-insegne", "aspetto-sito-web"] },
+  { titolo: "Dati", sezioni: ["reparti", "marchi-distributore", "campi-referenze"] },
+  { titolo: "Volantino", sezioni: ["insight-volantino", "menabo-volantino"] },
+];
+
 export type IdSezioneImpostazioniGdo = (typeof SEZIONI_IMPOSTAZIONI_GDO)[number]["id"];
 
 /** Indirizzo di una sezione delle Impostazioni GDO, per i collegamenti da altre pagine. */

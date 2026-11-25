@@ -43,6 +43,10 @@ const testoPulito = (valore: unknown): string =>
 export const normalizzaPerRegola = (valore: string): string =>
   valore.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('it-IT').trim();
 
+/** Stesso valore: due numeri si confrontano come numeri ("1" = "01"), il resto senza maiuscole e accenti. */
+const stessoValore = (a: string, b: string): boolean =>
+  /^\d+$/.test(a) && /^\d+$/.test(b) ? Number(a) === Number(b) : a === b;
+
 const eOperatore = (valore: unknown): valore is OperatoreRegolaMenabo =>
   typeof valore === 'string' && (OPERATORI_REGOLA_MENABO as readonly string[]).includes(valore);
 
@@ -106,6 +110,11 @@ export function erroreModelloNome(modello: string): string | null {
 
 function applicaTrasformazione(valore: string, trasformazione: TrasformazioneNomeMenabo, leggibile?: (valore: string) => string | null): string {
   switch (trasformazione) {
+    case 'parte-1':
+    case 'parte-2':
+    case 'parte-3':
+      // Le parti sono quelle separate da « - »; se manca, il nome resta vuoto e la regola non decide
+      return valore.split(' - ')[Number(trasformazione.slice(-1)) - 1]?.trim() ?? '';
     case 'senza-sigla': {
       const trattino = valore.indexOf('-');
       return trattino > 0 ? valore.slice(trattino + 1) : valore;
@@ -318,13 +327,13 @@ function condizioneVale(condizione: CondizioneRegolaMenabo, letto: string | null
   switch (condizione.operatore) {
     case 'vuoto': return dato.trim() === '';
     case 'non_vuoto': return dato.trim() !== '';
-    case 'uguale': return letto !== null && normalizzato === valore;
-    case 'diverso': return normalizzato !== valore;
+    case 'uguale': return letto !== null && stessoValore(normalizzato, valore);
+    case 'diverso': return !stessoValore(normalizzato, valore);
     case 'contiene': return letto !== null && normalizzato.includes(valore);
     case 'non_contiene': return !normalizzato.includes(valore);
     case 'inizia': return letto !== null && normalizzato.startsWith(valore);
     case 'finisce': return letto !== null && normalizzato.endsWith(valore);
-    case 'uno_di': return letto !== null && condizione.valori.some(alternativa => normalizzato === normalizzaPerRegola(alternativa));
+    case 'uno_di': return letto !== null && condizione.valori.some(alternativa => stessoValore(normalizzato, normalizzaPerRegola(alternativa)));
     case 'regex': {
       const regex = compilata(condizione.valore);
       return letto !== null && regex !== null && regex.test(dato);

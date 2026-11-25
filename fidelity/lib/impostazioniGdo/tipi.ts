@@ -70,12 +70,15 @@ export type OperatoreRegolaMenabo = (typeof OPERATORI_REGOLA_MENABO)[number];
 
 /** Le trasformazioni di un campo in un modello di nome: `{mastro|senza-sigla|spazi|titolo}`. */
 export const TRASFORMAZIONI_NOME_MENABO = [
-  'senza-sigla', 'spazi', 'minuscolo', 'maiuscolo', 'titolo', 'taglia', 'leggibile',
+  'parte-1', 'parte-2', 'parte-3', 'senza-sigla', 'spazi', 'minuscolo', 'maiuscolo', 'titolo', 'taglia', 'leggibile',
 ] as const;
 export type TrasformazioneNomeMenabo = (typeof TRASFORMAZIONI_NOME_MENABO)[number];
 
-/** I campi che non stanno nei dati della referenza ma si ricavano dal box: `@pagina`, `@prima_pagina`, `@ultima_pagina`. */
-export const CAMPI_DERIVATI_MENABO = ['@pagina', '@prima_pagina', '@ultima_pagina'] as const;
+/**
+ * I campi che non stanno nei dati della referenza ma si ricavano dal box: `@pagina`, `@prima_pagina`,
+ * `@ultima_pagina` e `@reparto_nome` (il nome del reparto come nelle Impostazioni GDO, uguale in ogni volantino).
+ */
+export const CAMPI_DERIVATI_MENABO = ['@pagina', '@prima_pagina', '@ultima_pagina', '@reparto_nome'] as const;
 
 /**
  * Una condizione semplice su un campo della referenza (es. mastro, tema, reparto) o su un campo derivato.
@@ -145,6 +148,8 @@ export interface SuggerimentiValoriMenabo {
 /** La prova delle regole su un volantino reale (POST /menabo/prova). */
 export interface PaginaProvaMenabo {
   pagina: number;
+  /** Il reparto con più box nella pagina (nome come nelle Impostazioni GDO); null se non si legge. */
+  reparto?: string | null;
   prima: string | null;
   dopo: string | null;
   cambia: boolean;

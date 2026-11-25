@@ -139,3 +139,41 @@ describe('regole senza la dichiarazione del menabò del cliente', () => {
     expect(menaboDi(BOX, opzioniDellAgenzia({} as never, RIGHE, r))).toBeNull();
   });
 });
+
+describe('@reparto_nome: il nome del reparto, uguale in ogni volantino', () => {
+  // Stesso reparto scritto come nei tre formati di sigla_reparto dei volantini veri
+  const righe = [
+    riga('l1', { sigla_reparto: 'GRUPPO F  - FRESCHISSIMI - POP_LS', reparto: '24', mastro: 'Og-OFFERTE generiche' }),
+    riga('l2', { sigla_reparto: 'LS', reparto: '24', mastro: 'Og-OFFERTE generiche' }),
+    riga('l3', { sigla_reparto: '1', reparto: '01', mastro: 'Og-OFFERTE generiche' }),
+  ];
+  const lettura = {
+    repartoConfigurato: (id: string) => ({ l1: { codice: '24', descrizione: 'FRESCHI' }, l2: { codice: '24', descrizione: 'FRESCHI' }, l3: { codice: '01', descrizione: 'DROGHERIA ALIMENTARE' } } as Record<string, { codice: string; descrizione: string }>)[id] ?? null,
+    risolviReparto: (r: { codice: string; descrizione: string }) =>
+      r.codice === '24' ? { ...r, codice: '24', descrizione: 'Freschissimi', marketing: true }
+        : /^0?1$/.test(r.codice) ? { ...r, codice: '1', descrizione: 'Dispensa', marketing: true } : r,
+  };
+  const regolaReparto = regole({ id: 'r', livello: 'box', sezione: '{@reparto_nome}', condizione: gruppo(['@reparto_nome', 'non_vuoto']) });
+  const conReparti = (box: BoxKit[], r: RegolaMenabo[]) => menaboDi(box, opzioniDellAgenzia(agenzia, righe, r, lettura as never));
+
+  it('la sezione è il nome del reparto, qualunque sia la scrittura di sigla_reparto', () => {
+    const esito = conReparti([scatola('l1', 11), scatola('l2', 12), scatola('l3', 13)], regolaReparto)!;
+    expect(esito.pagine.map(p => [p.pagina, p.nome])).toEqual([[11, 'Freschissimi'], [12, 'Freschissimi'], [13, 'Dispensa']]);
+  });
+
+  it('la pagina con più reparti prende quello con più box', () => {
+    const esito = conReparti([scatola('l1', 11), scatola('l2', 11), scatola('l3', 11)], regolaReparto)!;
+    expect(esito.pagine[0].nome).toBe('Freschissimi');
+  });
+
+  it('senza nome per il marketing il reparto è la descrizione come frase; senza reparto la regola non decide', () => {
+    const senzaNomi = { repartoConfigurato: lettura.repartoConfigurato };
+    expect(menaboDi([scatola('l3', 13)], opzioniDellAgenzia(agenzia, righe, regolaReparto, senzaNomi as never))!.pagine[0].nome).toBe('Drogheria alimentare');
+    const nessuno = menaboDi([scatola('l3', 13)], opzioniDellAgenzia(agenzia, [riga('l3', { mastro: 'DIS-DISPENSA_doppia' })], regolaReparto))!;
+    expect(nessuno.pagine[0].nome).toBe('Dispensa');
+  });
+
+  it('senza regole il menabò è quello di prima anche con la lettura dei reparti', () => {
+    expect(conReparti([scatola('l1', 11)], [])).toEqual(menabo(righe, [scatola('l1', 11)]));
+  });
+});

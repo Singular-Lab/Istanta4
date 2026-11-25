@@ -143,7 +143,7 @@ export function contestoDallaConfig(config: unknown): ContestoConfig {
 const sorgenteConfig = (riga: RigaReferenza): Record<string, unknown> => ({ ...riga, dataFields: riga.data_fields });
 
 /** Il reparto della riga secondo la config, ricondotto all'anagrafica ("1" e "01" sono lo stesso). */
-function repartoConfigurato(riga: RigaReferenza, contesto: ContestoConfig): RepartoInsight | null {
+export function repartoConfigurato(riga: RigaReferenza, contesto: ContestoConfig): RepartoInsight | null {
   if (!contesto.percorsoReparto) return null;
   const sorgente = sorgenteConfig(riga);
   const voce: Record<string, unknown> = {
@@ -202,7 +202,10 @@ export function opzioniDelKit(
     urlFoto: guid => urlFotoOlimpo(guid, { performante: true }),
     origine: kit.storico ? codiceBox => (fuoriListino.has(codiceBox) ? 'fuori_listino' : 'listino') : undefined,
     risolviReparto: contesto.risolviReparto,
-    ...opzioniDellAgenzia(agenzia, righe, contesto.regoleMenabo),
+    ...opzioniDellAgenzia(agenzia, righe, contesto.regoleMenabo, {
+      repartoConfigurato: idReferenza => reparti.get(idReferenza) ?? null,
+      risolviReparto: contesto.risolviReparto,
+    }),
   };
 }
 

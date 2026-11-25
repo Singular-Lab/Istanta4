@@ -25,7 +25,7 @@ import type { IImpostazioniGdoService } from '../interfaces/IImpostazioniGdoServ
 import { log } from '../logger';
 import type { IConfigWebpliantGdoRepository } from '../repositories/ConfigWebpliantGdoRepository';
 import type { IImpostazioniGdoRepository, ImpostazioniGdoSalvate } from '../repositories/ImpostazioniGdoRepository';
-import { opzioniDellAgenzia } from '../utils/insightAgenzia';
+import { type LetturaReparti, nomeRepartoDellaReferenza, opzioniDellAgenzia } from '../utils/insightAgenzia';
 import { menaboDi } from '../utils/insightVolantino';
 import { boxDelKit } from '../utils/analisiKit';
 import { leggiReferenza, type RigaReferenza } from '../utils/referenzaStampata';
@@ -36,7 +36,7 @@ import { COLORE_ESADECIMALE, dizionarioNormalizzato, repartiDellaGdo, verificaRe
 import { verificaRegoleMenabo } from '../utils/regoleMenabo';
 import { isUrlOlimpo, urlFotoOlimpo, urlOlimpo } from '../utils/urlOlimpo';
 import { dimenticaConfigInsight } from './cacheConfigInsight';
-import { contestoDallaConfig } from './InsightConfrontiService';
+import { contestoDallaConfig, contestoDellaGdo, repartoConfigurato } from './InsightConfrontiService';
 
 /**
  * Impostazioni GDO (spec impostazioni-gdo, contratto in lib/impostazioniGdo/tipi.ts): identita',
@@ -410,8 +410,27 @@ export class ImpostazioniGdoService implements IImpostazioniGdoService {
     }
     const righe = await this.lettureKit.righeDelKit(kit.id);
     const box = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
-    const prima = menaboDi(box, opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe, []));
-    const dopo = menaboDi(box, opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe, regole));
+    // I reparti come li vedono gli insight: quello della config e i nomi per il marketing della GDO
+    const contesto = await contestoDellaGdo(this.configInsight, this.repository, idGdo, 'Prova delle regole del menabò');
+    const repartiDelleRighe = new Map(righe.map(riga => [String(riga.id), repartoConfigurato(riga, contesto)] as const));
+    const lettura: LetturaReparti = {
+      repartoConfigurato: idReferenza => repartiDelleRighe.get(idReferenza) ?? null,
+      risolviReparto: contesto.risolviReparto,
+    };
+    const prima = menaboDi(box, opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe, [], lettura));
+    const dopo = menaboDi(box, opzioniDellAgenzia(this.agenziaLib.insightVolantino, righe, regole, lettura));
+    const rigaPerId = new Map(righe.map(riga => [String(riga.id), riga] as const));
+    // Il reparto con più box nella pagina, per capire perché una pagina ha quel nome
+    const repartoDellaPagina = (pagina: number): string | null => {
+      const conteggi = new Map<string, number>();
+      for (const scatola of box.filter(voce => voce.pagina === pagina)) {
+        for (const referenza of scatola.referenze) {
+          const nome = nomeRepartoDellaReferenza(String(referenza.id), rigaPerId.get(String(referenza.id)), lettura);
+          if (nome) conteggi.set(nome, (conteggi.get(nome) ?? 0) + 1);
+        }
+      }
+      return [...conteggi.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    };
     const perPagina = (menabo: typeof prima) => new Map((menabo?.pagine ?? []).map(voce => [voce.pagina, voce] as const));
     const vistaPrima = perPagina(prima);
     const vistaDopo = perPagina(dopo);
@@ -421,6 +440,7 @@ export class ImpostazioniGdoService implements IImpostazioniGdoService {
       const nomeDopo = vistaDopo.get(pagina)?.nome ?? null;
       return {
         pagina,
+        reparto: repartoDellaPagina(pagina),
         prima: nomePrima,
         dopo: nomeDopo,
         cambia: (nomePrima ?? '').toLocaleLowerCase('it-IT') !== (nomeDopo ?? '').toLocaleLowerCase('it-IT'),

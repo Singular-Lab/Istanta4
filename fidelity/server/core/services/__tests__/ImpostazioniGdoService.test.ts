@@ -375,7 +375,7 @@ describe('prova delle regole del menabò', () => {
   const riga = (id: string, mastro: string, pag: number) => ({
     id, pag, x: 0, y: 0, w: 100, h: 100, w_page: 600, h_page: 800, codice_box: id, foto: [], foto_extra: [],
     compiled_fields: [], deleted_fields: [], group_elements: [], meccanica: '', perc_ingombro: null, aspect_ratio: null,
-    data_fields: { codice_referenza: id, descrizione_uno: id, mastro },
+    data_fields: { codice_referenza: id, descrizione_uno: id, mastro, reparto: pag === 22 ? '01' : '24' },
   });
 
   function conProva(kit: { id: string; storico: boolean; gdo: string | null } | null) {
@@ -385,6 +385,11 @@ describe('prova delle regole del menabò', () => {
     };
     const agenzia = { insightVolantino: { menabo: { campo: 'mastro', nome: (v: string) => v.slice(v.indexOf('-') + 1) } } } as never;
     const fatto = crea({ agenzia });
+    // I nomi per il marketing dei reparti, come nelle Impostazioni GDO: "01" è la Dispensa
+    (fatto.repository as unknown as { repartiSalvati: unknown }).repartiSalvati = vi.fn(async () => [
+      { codice: '1', nomeDati: 'DROGHERIA', nomeMarketing: 'Dispensa', colore: null },
+      { codice: '24', nomeDati: 'FRESCHI', nomeMarketing: 'Freschissimi', colore: null },
+    ]);
     const servizio = new ImpostazioniGdoService(
       fatto.repository, fatto.righeConfig, fatto.configInsight, agenzia, fatto.catalogo,
       { dizionario: async () => ({}), caricaSuOlimpo: fatto.caricaSuOlimpo, dimenticaConfigInsight: fatto.dimentica, nomeUtente: fatto.nomeUtente, lettureKit },
@@ -398,8 +403,9 @@ describe('prova delle regole del menabò', () => {
     const esito = await servizio.provaRegoleMenabo(ID_GDO, { idKit: 'kit-1', regole });
 
     expect(esito.pagine).toEqual([
-      { pagina: 14, prima: 'DISPENSA_doppia', dopo: 'DISPENSA_doppia', cambia: false, regola: null },
-      { pagina: 22, prima: 'PULIZIA_singola', dopo: 'Pulizia casa', cambia: true, regola: 'Pulizia da regola' },
+      { pagina: 14, reparto: 'Freschissimi', prima: 'DISPENSA_doppia', dopo: 'DISPENSA_doppia', cambia: false, regola: null },
+      // «01» e «1» sono lo stesso reparto: la Dispensa
+      { pagina: 22, reparto: 'Dispensa', prima: 'PULIZIA_singola', dopo: 'Pulizia casa', cambia: true, regola: 'Pulizia da regola' },
     ]);
     expect(esito.cambiate).toBe(1);
     // La prova non salva niente

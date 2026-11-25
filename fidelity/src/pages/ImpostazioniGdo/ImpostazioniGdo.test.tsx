@@ -74,7 +74,12 @@ const apri = (indirizzo = "/impostazioni-gdo") =>
     </QueryClientProvider>
   );
 
-const sezione = async (titolo: string) => screen.findByRole("region", { name: titolo });
+/** Una sezione alla volta: si apre dal suo collegamento nell'indice, poi se ne prende il riquadro. */
+const sezione = async (titolo: string) => {
+  const indice = await screen.findByRole("navigation", { name: "Sezioni delle impostazioni" });
+  await userEvent.click(within(indice).getByRole("link", { name: new RegExp(`^${titolo}`) }));
+  return screen.findByRole("region", { name: titolo });
+};
 const chiamatePut = () => finti.servizio.put.mock.calls.map(([url]) => url);
 
 describe("Impostazioni GDO", () => {
@@ -139,7 +144,8 @@ describe("Impostazioni GDO", () => {
       await userEvent.selectOptions(within(menabo).getByRole("combobox", { name: "Esito della regola 1" }), "campo");
       // Il nome scritto a mano lascia il posto a campo e trasformazioni
       expect(within(menabo).queryByRole("textbox", { name: "Nome della sezione della regola 1" })).not.toBeInTheDocument();
-      const campo = within(menabo).getByRole("combobox", { name: "Campo da cui prendere la sezione della regola 1" });
+      await userEvent.selectOptions(within(menabo).getByRole("combobox", { name: "Campo da cui prendere la sezione della regola 1" }), "Altro campo…");
+      const campo = within(menabo).getByRole("textbox", { name: "Campo da cui prendere la sezione della regola 1, nome libero" });
       await userEvent.clear(campo);
       await userEvent.type(campo, "tema/mastro");
       await userEvent.click(within(menabo).getByRole("checkbox", { name: "senza-sigla" }));
@@ -150,6 +156,37 @@ describe("Impostazioni GDO", () => {
       await waitFor(() => expect(chiamatePut()).toContain("/impostazioni-gdo/menabo"));
       const corpo = finti.servizio.put.mock.calls.find(([url]) => url === "/impostazioni-gdo/menabo")?.[1] as { regole: Array<{ sezione: string }> };
       expect(corpo.regole[0].sezione).toBe("{tema/mastro|spazi|titolo}");
+    });
+
+    it("il campo della condizione si sceglie da un elenco; un campo non in elenco si scrive a mano e si conserva", async () => {
+      finti.stato = {
+        ...structuredClone(IMPOSTAZIONI),
+        regoleMenabo: [
+          { id: "a", titolo: null, livello: "box", sezione: "Uno", colore: null, condizione: { tipo: "gruppo", logica: "tutte", figli: [{ tipo: "condizione", campo: "campo_strano", operatore: "contiene", valore: "X", valori: [] }] } },
+        ],
+      };
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      // Il campo salvato fuori elenco non si perde: «Altro campo…» con il suo nome
+      await userEvent.click(within(menabo).getByRole("button", { name: "Apri la regola 1" }));
+      expect(within(menabo).getByRole("combobox", { name: "Campo" })).toHaveValue("__altro__");
+      expect(within(menabo).getByRole("textbox", { name: "Campo, nome libero" })).toHaveValue("campo_strano");
+      await userEvent.selectOptions(within(menabo).getByRole("combobox", { name: "Campo" }), "reparto");
+      expect(within(menabo).getByRole("combobox", { name: "Campo" })).toHaveValue("reparto");
+      expect(within(menabo).queryByRole("textbox", { name: "Campo, nome libero" })).not.toBeInTheDocument();
+    });
+
+    it("la parte del valore si sceglie da una selezione e va prima delle altre trasformazioni nel modello", async () => {
+      apri();
+      const menabo = await sezione("Menabò del volantino");
+
+      await userEvent.click(within(menabo).getByRole("button", { name: "Nuova regola" }));
+      await userEvent.selectOptions(within(menabo).getByRole("combobox", { name: "Esito della regola 1" }), "campo");
+      await userEvent.selectOptions(within(menabo).getByRole("combobox", { name: "Parte del valore della regola 1" }), "parte-2");
+      await userEvent.click(within(menabo).getByRole("checkbox", { name: "senza-sigla" }));
+
+      expect(within(menabo).getByTestId("rinvio-campo")).toHaveTextContent("{mastro|parte-2|spazi|titolo}");
     });
 
     it("«non è una sezione» toglie il nome e salva sezione null", async () => {
@@ -174,8 +211,14 @@ describe("Impostazioni GDO", () => {
 
       expect(within(menabo).getAllByTestId("regola")).toHaveLength(2);
       await userEvent.click(within(menabo).getByRole("button", { name: "Sposta giù la regola 1" }));
-      const titoli = within(menabo).getAllByRole("textbox", { name: /^Titolo della regola/ }).map((t) => (t as HTMLInputElement).value);
-      expect(titoli).toEqual(["Seconda", "Prima"]);
+      // Le regole salvate sono righe chiuse: titolo e sezione si leggono nella riga
+      const righe = within(menabo).getAllByTestId("regola").map((r) => r.textContent ?? "");
+      expect(righe[0]).toContain("Seconda");
+      expect(righe[0]).toContain("→ Due");
+      expect(righe[1]).toContain("Prima");
+      // La riga si apre per modificarla
+      await userEvent.click(within(menabo).getByRole("button", { name: "Apri la regola 1" }));
+      expect(within(menabo).getByRole("textbox", { name: "Titolo della regola 1" })).toHaveValue("Seconda");
     });
 
     describe("autocompilazione dai dati dei volantini", () => {
@@ -204,7 +247,11 @@ describe("Impostazioni GDO", () => {
         const menabo = await sezione("Menabò del volantino");
         await userEvent.click(within(menabo).getByRole("button", { name: "Nuova regola" }));
 
-        await waitFor(() => expect(menabo.querySelector("#campi-menabo option[value='codice_referenza']")).not.toBeNull());
+        const campo = within(menabo).getByRole("combobox", { name: "Campo" });
+        await waitFor(() => expect(within(campo).getByRole("option", { name: "codice_referenza (118 referenze)" })).toBeInTheDocument());
+        // Con «mastro» già scelto restano tutti i campi possibili, più «Altro campo…»
+        expect(within(campo).getAllByRole("option").length).toBeGreaterThan(3);
+        expect(within(campo).getByRole("option", { name: "Altro campo…" })).toBeInTheDocument();
         await userEvent.click(within(menabo).getByRole("combobox", { name: "Valore" }));
 
         await waitFor(() => expect(finti.servizio.get).toHaveBeenCalledWith(expect.stringContaining("/impostazioni-gdo/menabo/suggerimenti?campo=mastro")));
@@ -220,6 +267,9 @@ describe("Impostazioni GDO", () => {
         await userEvent.click(await within(menabo).findByRole("button", { name: "Genera dalle mastro" }));
 
         await waitFor(() => expect(within(menabo).getAllByTestId("regola")).toHaveLength(2));
+        // Le regole generate sono chiuse in una riga: si aprono per vederle
+        await userEvent.click(within(menabo).getByRole("button", { name: "Apri la regola 1" }));
+        await userEvent.click(within(menabo).getByRole("button", { name: "Apri la regola 2" }));
         expect(within(menabo).getByRole("textbox", { name: "Nome della sezione della regola 1" })).toHaveValue("Dispensa");
         expect(within(menabo).getByRole("combobox", { name: "Esito della regola 2" })).toHaveValue("no");
         expect(within(menabo).getByRole("button", { name: "Salva regole" })).toBeEnabled();
@@ -263,6 +313,7 @@ describe("Impostazioni GDO", () => {
       apri();
       const menabo = await sezione("Menabò del volantino");
 
+      await userEvent.click(within(menabo).getByRole("radio", { name: "Prova su un volantino" }));
       await userEvent.click(await within(menabo).findByRole("button", { name: "Prova le regole" }));
 
       expect(await within(menabo).findByText("1 pagina cambia")).toBeInTheDocument();
@@ -279,6 +330,8 @@ describe("Impostazioni GDO", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Impostazioni GDO" })).toBeInTheDocument();
     // Il titolo c'è già mentre le impostazioni si caricano: le sezioni arrivano con i dati
     expect(await screen.findByRole("region", { name: "Identità della GDO" })).toBeInTheDocument();
+    const indice = screen.getByRole("navigation", { name: "Sezioni delle impostazioni" });
+    // L'indice elenca tutte le sezioni, raggruppate; se ne apre una sola alla volta, la prima
     for (const titolo of [
       "Identità della GDO",
       "Loghi delle insegne",
@@ -289,16 +342,20 @@ describe("Impostazioni GDO", () => {
       "Menabò del volantino",
       "Aspetto del sito web",
     ]) {
-      expect(screen.getByRole("region", { name: titolo })).toBeInTheDocument();
+      expect(within(indice).getByRole("link", { name: new RegExp(`^${titolo}`) })).toBeInTheDocument();
     }
-    const indice = screen.getByRole("navigation", { name: "Sezioni delle impostazioni" });
+    for (const gruppo of ["Generale", "Dati", "Volantino"]) expect(within(indice).getByText(gruppo)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Identità della GDO" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Reparti" })).not.toBeInTheDocument();
     expect(within(indice).getByRole("link", { name: /Reparti/ })).toHaveTextContent("1 da nominare");
     expect(await within(indice).findByText("1 da sincronizzare")).toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: "Nome" })).toHaveValue("Conad Nord Ovest");
+    await sezione("Private Labels");
     expect(within(screen.getByRole("list", { name: "Private Labels" })).getByText("Verso Natura")).toBeInTheDocument();
     // TASK-7b68e012: la sezione delle linee del distributore si chiama Private Labels
     expect(screen.queryByRole("region", { name: "Marchi del distributore" })).not.toBeInTheDocument();
     expect(within(indice).getByRole("link", { name: /Private Labels/ })).toBeInTheDocument();
+    await sezione("Insight del volantino");
     expect(screen.getByText(/Salvata per la GDO il 09\/11\/2026 alle 16:42 da Mario Rossi/)).toBeInTheDocument();
   });
 
@@ -332,7 +389,6 @@ describe("Impostazioni GDO", () => {
 
     await waitFor(() => expect(finti.servizio.put).toHaveBeenCalledWith("/impostazioni-gdo/identita", { colore: "#123456" }));
     expect(chiamatePut()).toEqual(["/impostazioni-gdo/identita"]);
-    expect(within(screen.getByRole("region", { name: "Loghi delle insegne" })).getByRole("button", { name: "Salva loghi" })).toBeDisabled();
   });
 
   it("i reparti propongono il suggerimento, filtrano quelli da nominare e salvano solo i reparti", async () => {
@@ -542,7 +598,17 @@ describe("Impostazioni GDO", () => {
     apri("/impostazioni-gdo?sezione=aspetto-sito-web");
 
     const indice = await screen.findByRole("navigation", { name: "Sezioni delle impostazioni" });
-    expect(within(indice).getByRole("link", { name: "Aspetto del sito web" })).toHaveAttribute("aria-current", "location");
+    expect(within(indice).getByRole("link", { name: "Aspetto del sito web" })).toHaveAttribute("aria-current", "page");
     expect(within(indice).getByRole("link", { name: "Identità della GDO" })).not.toHaveAttribute("aria-current");
+    // Una sola sezione alla volta
+    expect(screen.getByRole("region", { name: "Aspetto del sito web" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Identità della GDO" })).not.toBeInTheDocument();
+  });
+
+  it("senza ?sezione=, o con una sezione che non esiste, si apre la prima", async () => {
+    apri("/impostazioni-gdo?sezione=non-esiste");
+
+    expect(await screen.findByRole("region", { name: "Identità della GDO" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Menabò del volantino" })).not.toBeInTheDocument();
   });
 });
