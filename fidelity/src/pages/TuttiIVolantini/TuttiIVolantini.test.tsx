@@ -4,7 +4,6 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fileInOrdine, NESSUN_FILE, SERVE_IL_PERMESSO } from "./ScaricaVolantino";
-import { REPORT_DISATTIVATO } from "./index";
 
 // jsdom non implementa ResizeObserver, usato da Headless UI all'apertura del menu dei file
 globalThis.ResizeObserver ??= class {
@@ -54,7 +53,7 @@ vi.mock("@/query/consultazione", () => ({
 vi.mock("@/utils/scaricaFileConsultazione", () => ({
   useScaricaFileConsultazione: () => ({ inCorso: null, scarica: finti.scarica }),
 }));
-// Il report PDF lo disegna il suo componente (con i suoi test): qui conta dove sta e che è disattivato
+// Il report PDF lo disegna il suo componente (con i suoi test): qui conta che la pagina non lo mostra
 vi.mock("@/components/FlyerInsights/report", () => ({
   ScaricaReportPdf: ({ idKit, titolo, disabled, motivoDisattivato }: { idKit: string; titolo: string; disabled?: boolean; motivoDisattivato?: string }) => (
     <button type="button" disabled={disabled || Boolean(motivoDisattivato)} title={motivoDisattivato}>
@@ -200,7 +199,7 @@ describe("Dettaglio del volantino", () => {
     finti.scarica.mockReset();
   });
 
-  it("intestazione compatta: insegna e area come titolo, periodo e stato del volantino dagli insight, con il report PDF disattivato e Scarica il volantino", () => {
+  it("intestazione compatta: insegna e area come titolo, periodo e stato del volantino dagli insight, senza il report PDF e con Scarica il volantino", () => {
     // Le date vengono dagli insight, non dalla consultazione
     finti.file = caricato(undefined);
     apri();
@@ -212,12 +211,8 @@ describe("Dettaglio del volantino", () => {
     expect(screen.queryByText("Volantino ottobre")).not.toBeInTheDocument();
     expect(screen.getByTitle("1 – 14 gennaio 2020")).toBeInTheDocument();
     expect(screen.getByTitle("Concluso")).toHaveAttribute("data-tono", "neutral");
-    const report = screen.getByRole("button", { name: "Report PDF di k1: Super · Nord" });
-    expect(report).toBeDisabled();
-    expect(report).toHaveAttribute("title", REPORT_DISATTIVATO);
-    // Accanto al report si scarica il PDF del volantino
-    const scarica = screen.getByRole("button", { name: /Scarica il volantino/ });
-    expect(report.parentElement).toContainElement(scarica);
+    expect(screen.queryByRole("button", { name: /Report PDF/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scarica il volantino/ })).toBeInTheDocument();
   });
 
   it("senza le date negli insight (server non aggiornato) non c'è periodo né stato, ma il resto dell'intestazione sì", () => {
@@ -589,17 +584,16 @@ describe("Dettaglio del volantino: report PDF disattivato", () => {
     finti.file = caricato(PUBBLICATO);
   });
 
-  it("il report PDF si vede ma è sempre disattivato: mentre gli insight caricano e dopo", () => {
+  it("il report PDF non si vede mai: mentre gli insight caricano e dopo", () => {
     finti.insights = inCaricamento();
     const { unmount } = apri();
-    expect(screen.getByRole("button", { name: /^Report PDF/ })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /^Report PDF/ })).not.toBeInTheDocument();
     unmount();
 
     finti.insights = caricato(datiInsight);
     apri();
-    const report = screen.getByRole("button", { name: /^Report PDF/ });
-    expect(report).toBeDisabled();
-    expect(report).toHaveAttribute("title", REPORT_DISATTIVATO);
+    expect(screen.queryByRole("button", { name: /^Report PDF/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Scarica il volantino/ })).toBeInTheDocument();
   });
 
   it("niente rendimento, previsione né simulazione", () => {
