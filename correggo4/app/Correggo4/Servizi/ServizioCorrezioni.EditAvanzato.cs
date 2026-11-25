@@ -104,6 +104,14 @@ public sealed partial class ServizioCorrezioni
     public static bool Confermata(short stato) => stato is EaCorretto or EaConfermataDaApplicare;
     public const short EaAnnullato = 4;    // StatoEditAvanzato.Annullato
 
+    /// <summary>
+    /// Le correzioni di Edit avanzato ancora vive: registrate o confermate (EaRegistrato o Confermata).
+    /// Nelle query EF si usa questa, con StatiEaVivi.Contains(x.Stato): Confermata() e' un metodo C# che
+    /// Npgsql non sa tradurre in SQL, e la query si fermerebbe con InvalidOperationException. Confermata()
+    /// resta per il codice che lavora su oggetti gia' caricati.
+    /// </summary>
+    public static readonly short[] StatiEaVivi = { EaRegistrato, EaCorretto, EaConfermataDaApplicare };
+
     public const string ParteOfferta = "offerta";
     public const string ParteDescrizione = "descrizione";
     /// <summary>I20-1164: i loghi della parte descrizione, che si salvano e si annullano da soli.</summary>
