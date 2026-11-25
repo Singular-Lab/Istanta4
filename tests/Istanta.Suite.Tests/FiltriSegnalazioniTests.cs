@@ -18,6 +18,35 @@ public class FiltriSegnalazioniTests
 
         Assert.NotNull(agenzia);
         Assert.Empty(agenzia!.filtriSegnalazioni);
+        Assert.Empty(agenzia.segnalazioniEscluse);
+    }
+
+    /// I20-1264: le segnalazioni escluse dal cliente si leggono e non si perdono al salvataggio.
+    [Fact]
+    public void Le_segnalazioni_escluse_sopravvivono_al_salvataggio()
+    {
+        const string json = "{\"segnalazioniEscluse\":[{\"codice\":\"CSF-008\",\"testoContiene\":\"foto_extra$\"},{\"codice\":\"CSF-013\"}]}";
+
+        var agenzia = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(json);
+        var riletto = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(JsonConvert.SerializeObject(agenzia));
+
+        Assert.Equal(new[] { "CSF-008", "CSF-013" }, riletto!.segnalazioniEscluse.Select(c => c.codice));
+        Assert.Equal("foto_extra$", riletto.segnalazioniEscluse[0].testoContiene);
+        Assert.Equal("", riletto.segnalazioniEscluse[1].testoContiene);
+    }
+
+    /// I20-1264: Coopfi non vuole nel bollino le CSF-008 e CSF-013 di loghi (foto_extra$) e bolli
+    /// (simbolo$); Edro21 non esclude niente.
+    [Fact]
+    public void Coopfi_esclude_le_segnalazioni_di_loghi_e_bolli()
+    {
+        var coopfi = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/wwwroot/external_source/Coopfi/SourceCustomPlugin.json")));
+        var edro21 = JsonConvert.DeserializeObject<AgenziaCustomPlugin>(File.ReadAllText(DllAgenziaLibTests.TrovaFile("Istanta/wwwroot/external_source/Edro21/SourceCustomPlugin.json")));
+
+        Assert.Equal(
+            new[] { "CSF-008|foto_extra$", "CSF-008|simbolo$", "CSF-013|foto_extra$", "CSF-013|simbolo$" },
+            coopfi!.segnalazioniEscluse.Select(c => c.codice + "|" + c.testoContiene));
+        Assert.Empty(edro21!.segnalazioniEscluse);
     }
 
     [Fact]

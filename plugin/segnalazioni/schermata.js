@@ -161,6 +161,15 @@ const SchermataSegnalazioni = {
             && (!condizione.testoContiene || testo.indexOf(String(condizione.testoContiene).toLowerCase()) >= 0));
     },
 
+    /// I20-1264: se una segnalazione e' fra quelle che il cliente non vuole nel bollino: soddisfa una
+    /// delle condizioni, come nei filtri, e non e' un errore. Gli errori si vedono sempre.
+    voceEsclusa(voce, condizioni) {
+        if (voce == null || voce.g === "error" || !Array.isArray(condizioni) || condizioni.length === 0) {
+            return false;
+        }
+        return SchermataSegnalazioni.voceNelFiltro(voce, { condizioni: condizioni });
+    },
+
     /// I20-1211: se una segnalazione cade in almeno uno dei filtri: e' una di quelle viola.
     voceDeiFiltri(voce, filtri) {
         return (Array.isArray(filtri) ? filtri : []).some(filtro => SchermataSegnalazioni.voceNelFiltro(voce, filtro));

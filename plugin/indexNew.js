@@ -5454,12 +5454,32 @@ function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollin
     if (verifica != null) {
         segnalazione.verifica = verifica;
     }
+    //I20-1264: gli avvisi che il cliente non vuole (Coopfi: CSF-008 e CSF-013 su loghi e bolli) non
+    //entrano nel bollino, e quindi nemmeno nella schermata, nella scheda ref e nel report. Gli errori si'.
+    if (segnalazioneEsclusaDalCliente(segnalazione)) {
+        return;
+    }
     //I20-1029: il motore CSS ripassa piu' volte sugli stessi controlli; la stessa segnalazione
     //(stessa chiave o stesso testo) entra una volta sola.
     if (etichettaSegnalazioni.giaPresente(segnalazioniBoxImpaginato, segnalazione)) {
         return;
     }
     segnalazioniBoxImpaginato.push(segnalazione);
+}
+
+/// I20-1264: se il cliente ha escluso questa segnalazione (pluginMiddleware.getSegnalazioniEscluse,
+/// valutata come i filtri della schermata). La console la registra, cosi' si sa che e' nata.
+function segnalazioneEsclusaDalCliente(segnalazione) {
+    try {
+        if (SchermataSegnalazioni.voceEsclusa(etichettaSegnalazioni.daSegnalazione(segnalazione), pluginMiddleware.getSegnalazioniEscluse())) {
+            console.log("Code IDX-207 Segnalazione esclusa dal cliente, non va nel bollino: " + segnalazione.msg);
+            return true;
+        }
+    }
+    catch (e) {
+        console.error("Code IDX-208 Segnalazioni escluse dal cliente non valutate: " + e);
+    }
+    return false;
 }
 
 /// I20-1200: le segnalazioni personalizzate del cliente sul nome di una foto primaria o secondaria
