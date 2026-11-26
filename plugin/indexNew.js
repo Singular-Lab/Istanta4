@@ -9270,17 +9270,17 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
             color = "darkorange";
         }
 
-        //se il messaggio è più lungo di 200 caratteri lo tronchiamo e aggiungiamo i tre puntini
-        if (msg.length > 200) {
-            msg = msg.substring(0, 200) + "...";
-        }
-
-        var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%;">' + msg + '</h4></div>';
+        //I20-1275: il messaggio esce intero. Prima oltre i 200 caratteri si tagliava e finiva con "...",
+        //e l'errore non si capiva piu'. Un messaggio lungo (per esempio la pagina d'errore del server)
+        //si legge scorrendo il riquadro, alto al massimo 120px, cosi' non copre il pannello.
+        //Il testo va come testo e non come HTML: un "<" in un'eccezione si mangiava il resto.
+        var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%; max-height: 120px; overflow-y: auto;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%; overflow-wrap: break-word; word-break: break-word;"></h4></div>';
         //I20-981: col modal aperto i messaggi finivano dietro, nel contenitore della schermata
         //principale, e non si leggevano. Il parametro modal esiste da sempre ma quasi nessuno
         //lo passa: invece di rincorrere le chiamate, il contenitore lo sceglie la funzione,
         //guardando se c'e' un overlay aperto.
         contenitoreMessaggi(modal).append(html);
+        $("#messaggioUtente h4").text(String(msg));
         //usiamo uno spinner per il caricamento, poichè non supporta le gif dobbiamo creare noi un effetto che possa sembrare un caricamento
         if (loading) {
 
@@ -10544,9 +10544,9 @@ async function svuotaMenabo() {
 /// Aggiorna anche il contatore dei non letti e il colore dell'icona della console, che
 /// peggiora e non migliora: un warning non cancella un errore gia' segnato in rosso.
 ///
-/// NOTA (I20-1002): il messaggio viene inserito come HTML, e finisce anche dentro
-/// l'attributo msg del pulsante di copia. I messaggi contengono testi di eccezione: uno con
-/// dentro un apice o un < rompe il markup. Andrebbe messo con .text e .attr.
+/// I20-1275: il messaggio entra come testo (.text) e nel pulsante di copia con .attr. Prima
+/// entrava come HTML (NOTA I20-1002): un testo d'eccezione con un < perdeva il resto, e la copia
+/// si fermava al primo doppio apice. Gli errori uscivano interrotti.
 function writeFileInConsole(logMessage) {
     //logMessage è un oggetto di forma
     // var logMessage = {
@@ -10569,7 +10569,7 @@ function writeFileInConsole(logMessage) {
     }
     var div = $('<div class="logMessage" style="width:100%; background-color: ' + color + '; color: white; margin-left:0px; padding: 5px; margin-top: 5px; display: flex; justify-content: space-between; text-align: left;"></div>');
     var orario = $('<span style="font-size: 10px; margin-right: 10px;">' + logMessage.orario + '</span>');
-    var messaggio = $('<span style="flex-grow: 1;">' + msg + '</span>');
+    var messaggio = $('<span style="flex-grow: 1; min-width: 0; overflow-wrap: break-word; word-break: break-word;"></span>').text(String(msg));
     //I20-1033: canale e area della lavorazione, sotto il testo e piu' piccoli. Come testo, non come
     //HTML. Ci sono anche nei log riletti con leggiLog, se il messaggio li aveva.
     if (logMessage.lavorazione) {
@@ -10593,7 +10593,8 @@ function writeFileInConsole(logMessage) {
         messaggio.append(rigaBox);
     }
     var x = $('<span style="font-size: 10px; cursor: pointer; margin-left:5px;">X</span>');
-    var copyButton = $('<img src="images/copyToClipBoard.png" style="height: 10px; margin-left:5px;" msg="' + msg + '">');
+    var copyButton = $('<img src="images/copyToClipBoard.png" style="height: 10px; margin-left:5px;">');
+    copyButton.attr("msg", String(msg));
     copyButton.msg = msg;
     //I20-1033: chi copia il messaggio si porta dietro anche canale e area.
     //I20-1104: e il box da cui viene.
