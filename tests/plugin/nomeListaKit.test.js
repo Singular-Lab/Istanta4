@@ -39,7 +39,8 @@ function costanti() {
 
 function utilityCon(ambiente) {
     const membri = ["nomeFileListaKit(", "eFileListaKit(", "_sigleListaKit(", "percorsoNuovaListaKit(", "percorsoListaKit(",
-        "_senzaBarraFinale(", "_vociDellaCartella(", "cartellaDatiMacchina(", "cartellaDati(", "percorsoDati("].map(corpoMembro);
+        "_senzaBarraFinale(", "_vociDellaCartella(", "nomeUtenteInDesign(", "nomeCartellaPostazione(", "cartellaDatiMacchina(",
+        "cartellaDati(", "percorsoDati("].map(corpoMembro);
     const fabbrica = new Function("pathLavorazione", "idKitLavorazione", "ficoProcess", "SingularPath", "idMacchina", "require",
         "const Utility = ({\n" + costanti() + ",\n" + membri.join(",\n") + "\n});\nreturn Utility;");
     return fabbrica(

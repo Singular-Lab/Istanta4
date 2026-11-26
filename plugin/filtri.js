@@ -657,8 +657,8 @@ const filtri = {
 
         //Al body adesso creiamo le varie righe, avremo una riga per ogni pagina del documento
         let lastElement = null;
-        const listaRefConteggio = readFile(Utility.percorsoDati("listaRefConteggio.json"));
-        const listaEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
+        const listaRefConteggio = readFile(Utility.percorsoConteggio());
+        const listaEscluse = readFile(Utility.percorsoRefEscluse());
         //I20-1031: i box impaginati di ogni pagina secondo Istanta, chiesti una volta per ridisegno.
         //null se la chiamata non riesce: la colonna dira' "?" invece di un "Nessuna" che non e' vero.
         //TASK-22d7fad2: derivati compresi: sono box della pagina come gli altri.
@@ -2664,18 +2664,10 @@ const filtri = {
         return filtri_arr;
     },
 
+    /// TASK-0c931089: la regola (per documento se controlloNomeFileFiltri) e' in Utility.percorsoFiltri,
+    /// la stessa del conteggio e delle referenze escluse.
     getNomeFileFiltriJson(){
-        var controlloNomeFile = false;
-        if (pluginMiddleware.getCampo("controlloNomeFileFiltri") !== null) {
-            controlloNomeFile = pluginMiddleware.getCampo("controlloNomeFileFiltri");
-        }
-
-        var nomeFileSenzaEstensione = docInLavorazione.name.replace(/\.[^/.]+$/, "");
-
-        if (!controlloNomeFile) {
-            nomeFileSenzaEstensione = "";
-        }
-        return Utility.percorsoDati("Filtri" + nomeFileSenzaEstensione + ".json");
+        return Utility.percorsoFiltri();
     },
 
     /// I20-1216: dove Copia filtri mette i filtri della pagina. Il localStorage del Plugin resta anche

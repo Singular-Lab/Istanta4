@@ -193,7 +193,8 @@ let defaultPercorsoLinks = "/Links/";
 let defaultPercorsoLoghi = "/Links/Loghi/";
 /// I20-1065: le cartelle che il Plugin crea da solo sotto quella del documento, all'apertura
 /// (preparaCartelleDiSistema): logs ed export, con la barra finale, e la cartella dei dati di
-/// questa postazione, SingularData/<idMacchina>, senza. Vuote finche' non sono pronte.
+/// questa postazione, SingularData/<utente>_<idMacchina>, senza. Vuote finche' non sono pronte.
+/// TASK-0c931089: logPath e' la cartella di questa postazione dentro logs, con lo stesso nome.
 /// Al posto di percorsoLogs, percorsoEsportazione e percorsoLavorazioni (I20-1057), che sceglieva
 /// l'operatore.
 var logPath = "";
@@ -3274,7 +3275,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
             var req = "";
             var filterIndex = 0;
             if (docInLavorazione != null) {
-                var listaRefEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
+                var listaRefEscluse = readFile(Utility.percorsoRefEscluse());
                 var filtriJson = readFile(filtriJs.getNomeFileFiltriJson());
 
                 var pagineRange = "";
@@ -3325,7 +3326,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         continue;
                     }
 
-                    //leggiamo in var listaRefEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
+                    //leggiamo in var listaRefEscluse = readFile(Utility.percorsoRefEscluse());
                     //cerchiamo se la pagina corrente è presente in listaRefEscluse
                     //se c'è prendiamo tutti i codici gruppo degli elementi in listaEscluse e li mettiamo in un array
 
@@ -3779,7 +3780,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         showLoading("Compilazione del risultato di conteggio");
                         await Utility.sleep(100);
                         //var boxConteggioTemplate = libreria.assets.itemByName("Box Conteggio").placeAsset(docInLavorazione)[0];
-                        var filePath = Utility.percorsoDati("listaRefConteggio.json");
+                        var filePath = Utility.percorsoConteggio();
                         clearFile(filePath);
                         logContent += "ripulisco la lista di ref avanzate\n ";
                         let date = new Date().toLocaleString('it-IT')
@@ -8872,6 +8873,8 @@ var cartellaAssenteCheck = false;
 /// (preparaCartelleDiSistema), con la barra finale. Vuota finche' non e' pronta: in quel momento
 /// i messaggi vanno solo in console, senza dire che la cartella manca (lo direbbe una volta sola,
 /// e poi non lo direbbe piu' quando manca davvero).
+/// TASK-0c931089: dentro logs, la cartella di questa postazione (Utility.nomeCartellaPostazione):
+/// ogni postazione scrive solo nei suoi log.
 function cartellaDeiLog() {
     return logPath || "";
 }
@@ -9150,16 +9153,47 @@ function contestoLavorazioneMessaggio(canale, area) {
 /// log. Null senza una lavorazione: idKitLavorazione torna a 0 quando il documento non ne ha una,
 /// mentre i dettagli di ficoProcess restano quelli della lavorazione di prima. Non fallisce mai:
 /// un messaggio non deve perdersi per colpa del suo contesto.
+/// TASK-0c931089: davanti a canale e area, quale lavorazione era aperta: il documento e il kit. Il
+/// libro no: cercarlo scorre i libri aperti in InDesign, troppo per ogni messaggio. Ogni parte che
+/// non si legge resta fuori, senza far perdere le altre.
 function contestoLavorazioneCorrente() {
     try {
         if (!idKitLavorazione) {
             return null;
         }
-        return contestoLavorazioneMessaggio(ficoProcess.getCanaleLavorazioneCorrente(), ficoProcess.getAreaLavorazioneCorrente());
+        var documento = null;
+        try {
+            documento = docInLavorazione != null ? docInLavorazione.name : null;
+        }
+        catch (e) {
+            //il documento puo' essere stato chiuso: resta il kit
+        }
+        var canaleArea = null;
+        try {
+            canaleArea = contestoLavorazioneMessaggio(ficoProcess.getCanaleLavorazioneCorrente(), ficoProcess.getAreaLavorazioneCorrente());
+        }
+        catch (e) {
+            canaleArea = null;
+        }
+        return [documentoLavorazioneMessaggio(documento, idKitLavorazione), canaleArea]
+            .filter(function (t) { return t; }).join(" · ") || null;
     }
     catch (e) {
         return null;
     }
+}
+
+/// TASK-0c931089: il documento e il kit della lavorazione, come li legge l'operatore:
+/// "Volantino_12.indd · Kit 345". Null se non c'e' niente.
+function documentoLavorazioneMessaggio(documento, kit) {
+    var parti = [];
+    if (documento) {
+        parti.push(String(documento));
+    }
+    if (kit) {
+        parti.push("Kit " + kit);
+    }
+    return parti.length > 0 ? parti.join(" · ") : null;
 }
 
 /// I20-1104: il riferimento al box di un messaggio, dal contesto dell'impaginazione in corso:
@@ -10951,7 +10985,7 @@ function azzeraCartelleDiSistema() {
     SingularPath = "";
 }
 
-/// I20-1065: crea, se mancano, le cartelle logs, export e SingularData/<idMacchina> sotto base (la
+/// I20-1065: crea, se mancano, le cartelle logs/<postazione>, export e SingularData/<postazione> sotto base (la
 /// cartella del documento, o quella del libro), senza chiedere niente all'operatore, e ne fissa i
 /// percorsi: logPath, exportPath, SingularPath. Va chiamata all'apertura, prima di leggere
 /// qualsiasi file della lavorazione: il file delle lavorazioni, la lista del kit e i filtri stanno
