@@ -36,14 +36,17 @@ function costanti() {
     return utility.substring(inizio, fine).replace(/,\s*$/, "");
 }
 
+//TASK-0c931089: app e' quello di InDesign, per il nome utente; senza, la cartella ha il solo
+//identificativo, come prima.
 function utilityCartelle(globali = {}) {
-    const membri = ["_senzaBarraFinale(", "cartellaDatiMacchina(", "cartellaDati(", "percorsoDati(",
-        "async preparaCartelleDiSistema(", "async _cartellaFiglia("].map(corpoMembro);
-    const fabbrica = new Function("SingularPath", "pathLavorazione", "idMacchina", "require",
+    const membri = ["_senzaBarraFinale(", "nomeUtenteInDesign(", "nomeCartellaPostazione(", "eCartellaDellaMacchina(",
+        "cartellaDatiMacchina(", "recuperaCartelleDellaMacchina(", "_vociDellaCartella(", "copiaFileDiLavoro(",
+        "cartellaDati(", "percorsoDati(", "async preparaCartelleDiSistema(", "async _cartellaFiglia("].map(corpoMembro);
+    const fabbrica = new Function("SingularPath", "pathLavorazione", "idMacchina", "require", "app",
         "const Utility = ({\n" + costanti() + ",\n" + membri.join(",\n") + "\n});\nreturn Utility;");
     return fabbrica(globali.SingularPath || "", globali.pathLavorazione || "", () => ID, () => {
         throw new Error("il file system va passato dal test");
-    });
+    }, globali.app);
 }
 
 //Un file system UXP finto: le cartelle che esistono, per percorso. Come su Mac, i nomi non
@@ -92,8 +95,9 @@ test("un documento nuovo: logs, export, SingularData e la cartella della postazi
 
     const cartelle = await utilityCartelle().preparaCartelleDiSistema("/doc", ID, lfs);
 
-    assert.deepStrictEqual(cartelle, { logPath: "/doc/logs/", exportPath: "/doc/export/", SingularPath: "/doc/SingularData/" + ID });
-    assert.deepStrictEqual(lfs.create, ["/doc/logs", "/doc/export", "/doc/SingularData", "/doc/SingularData/" + ID]);
+    //TASK-0c931089: i log nella cartella della postazione dentro logs.
+    assert.deepStrictEqual(cartelle, { logPath: "/doc/logs/" + ID + "/", exportPath: "/doc/export/", SingularPath: "/doc/SingularData/" + ID });
+    assert.deepStrictEqual(lfs.create, ["/doc/logs", "/doc/logs/" + ID, "/doc/export", "/doc/SingularData", "/doc/SingularData/" + ID]);
 });
 
 test("le cartelle che ci sono gia' si riusano, anche con le maiuscole diverse", async () => {
@@ -101,14 +105,55 @@ test("le cartelle che ci sono gia' si riusano, anche con le maiuscole diverse", 
 
     const cartelle = await utilityCartelle().preparaCartelleDiSistema("/doc/", ID, lfs);
 
-    assert.deepStrictEqual(cartelle, { logPath: "/doc/Logs/", exportPath: "/doc/Export/", SingularPath: "/doc/SingularData/" + ID });
-    //Si crea solo la cartella di questa postazione, accanto a quella dell'altra.
-    assert.deepStrictEqual(lfs.create, ["/doc/SingularData/" + ID]);
+    assert.deepStrictEqual(cartelle, { logPath: "/doc/Logs/" + ID + "/", exportPath: "/doc/Export/", SingularPath: "/doc/SingularData/" + ID });
+    //Si crea solo la cartella di questa postazione, accanto a quella dell'altra, in logs e in SingularData.
+    assert.deepStrictEqual(lfs.create, ["/doc/Logs/" + ID, "/doc/SingularData/" + ID]);
 });
 
 test("se la cartella del documento non si puo' scrivere, l'errore arriva a chi chiama", async () => {
     const lfs = fileSystemUxp(["/doc"], { soloLettura: true });
     await assert.rejects(() => utilityCartelle().preparaCartelleDiSistema("/doc", ID, lfs), /permesso negato/);
+});
+
+/* ---- TASK-0c931089: il nome utente di InDesign nella cartella della postazione ---- */
+
+test("il nome utente di InDesign sta davanti al nome della macchina, in SingularData e in logs", async () => {
+    const lfs = fileSystemUxp(["/doc"]);
+    const u = utilityCartelle({ app: { userName: "Marco Rossi" } });
+
+    const cartelle = await u.preparaCartelleDiSistema("/doc", ID, lfs);
+
+    assert.deepStrictEqual(cartelle, {
+        logPath: "/doc/logs/Marco-Rossi_" + ID + "/",
+        exportPath: "/doc/export/",
+        SingularPath: "/doc/SingularData/Marco-Rossi_" + ID
+    });
+    assert.strictEqual(u.cartellaDatiMacchina("/doc", ID), "/doc/SingularData/Marco-Rossi_" + ID);
+});
+
+test("senza nome utente, o con quello predefinito di InDesign, la cartella ha il solo identificativo", () => {
+    assert.strictEqual(utilityCartelle({ app: { userName: "" } }).nomeCartellaPostazione(ID), ID);
+    assert.strictEqual(utilityCartelle({ app: { userName: "Unknown User Name" } }).nomeCartellaPostazione(ID), ID);
+    assert.strictEqual(utilityCartelle({ app: { userName: "  " } }).nomeCartellaPostazione(ID), ID);
+    //I20-1045: app non c'e'.
+    assert.strictEqual(utilityCartelle({}).nomeCartellaPostazione(ID), ID);
+});
+
+test("il nome utente si legge una volta sola: la cartella non cambia a sessione aperta", () => {
+    const app = { userName: "Marco" };
+    const u = utilityCartelle({ app });
+    assert.strictEqual(u.nomeCartellaPostazione(ID), "Marco_" + ID);
+    app.userName = "Luca";
+    assert.strictEqual(u.nomeCartellaPostazione(ID), "Marco_" + ID);
+});
+
+test("una cartella e' della macchina col solo identificativo o con un nome utente davanti", () => {
+    const u = utilityCartelle();
+    assert.strictEqual(u.eCartellaDellaMacchina(ID, ID), true);
+    assert.strictEqual(u.eCartellaDellaMacchina("Marco_" + ID, ID), true);
+    assert.strictEqual(u.eCartellaDellaMacchina("pc-ufficio_Zx81QwErTy", ID), false);
+    assert.strictEqual(u.eCartellaDellaMacchina("Marco_pc-ufficio_Zx81QwErTy", ID), false);
+    assert.strictEqual(u.eCartellaDellaMacchina("x" + ID, ID), false);
 });
 
 /* ---- i file di lavoro ---- */
@@ -231,7 +276,9 @@ test("nessun file di lavoro si scrive piu' nella cartella del documento", () => 
         const codice = leggiFileDelPlugin(file).replace(/\r/g, "").split("\n").filter(r => !/^\s*\/\//.test(r)).join("\n");
         assert.doesNotMatch(codice, fileDiLavoro, file);
     }
-    assert.match(leggiFileDelPlugin("filtri.js"), /return Utility\.percorsoDati\("Filtri" \+ nomeFileSenzaEstensione \+ "\.json"\);/);
+    //TASK-0c931089: i filtri, come conteggio ed escluse, li colloca Utility nella cartella dei dati.
+    assert.match(leggiFileDelPlugin("filtri.js"), /return Utility\.percorsoFiltri\(\);/);
+    assert.match(leggiFileDelPlugin("utility.js"), /return Utility\.percorsoDati\("Filtri" \+ Utility\._suffissoDocumentoInLavorazione\(\) \+ "\.json"\);/);
     assert.match(leggiFileDelPlugin("reportIntegrita/reportIntegrita.js"), /return Utility\.percorsoDati\(Utility\.nomeFileReportIntegrita\(kit\)\);/);
     assert.match(leggiFileDelPlugin("reportIntegrita/reportIntegrita.js"), /return Utility\.percorsoDati\(Utility\.nomeFileWhitelistIntegrita\(kit\)\);/);
 });

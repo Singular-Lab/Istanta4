@@ -511,11 +511,80 @@ const Utility=
     CARTELLA_LOGS: "logs",
     CARTELLA_EXPORT: "export",
     CARTELLA_DATI: "SingularData",
+    /// TASK-0c931089: i nomi che InDesign da' all'utente quando nessuno l'ha impostato. Non dicono
+    /// chi lavora: la cartella resta col solo identificativo.
+    NOMI_UTENTE_PREDEFINITI: ["unknown user name", "nome utente sconosciuto"],
     NOME_FILE_LAVORAZIONI: "lavorazioni.json",
 
+    /// TASK-0c931089: il nome utente di InDesign letto da nomeUtenteInDesign; null finche' non si legge.
+    _utenteInDesign: null,
+
+    /// TASK-0c931089: il nome utente di InDesign (app.userName), ripulito per stare nel nome di una
+    /// cartella; "" se non c'e', non si legge o e' quello predefinito. Si legge una volta sola, quando
+    /// app c'e': il nome della cartella della postazione non deve cambiare a sessione aperta. Se app
+    /// manca (I20-1045) non si ricorda niente e si riprova alla chiamata dopo.
+    nomeUtenteInDesign() {
+        if (typeof Utility._utenteInDesign === "string") {
+            return Utility._utenteInDesign;
+        }
+        const applicazione = typeof app !== "undefined" ? app : null;
+        if (applicazione == null) {
+            return "";
+        }
+        let nome = "";
+        try {
+            nome = String(applicazione.userName == null ? "" : applicazione.userName).trim();
+        }
+        catch (e) {
+            nome = "";
+        }
+        if (Utility.NOMI_UTENTE_PREDEFINITI.indexOf(nome.toLowerCase()) >= 0) {
+            nome = "";
+        }
+        nome = nome.replace(/[^A-Za-z0-9À-ÿ-]+/g, "-").replace(/^-+|-+$/g, "");
+        Utility._utenteInDesign = nome;
+        return nome;
+    },
+
+    /// TASK-0c931089: il nome della cartella di una postazione, in SingularData e in logs: il nome
+    /// utente di InDesign davanti all'identificativo della macchina (che comincia col nome della
+    /// macchina), per riconoscerla a occhio. Senza nome utente, il solo identificativo, come prima.
+    nomeCartellaPostazione(idMacchina) {
+        const utente = Utility.nomeUtenteInDesign();
+        return utente !== "" ? utente + "_" + idMacchina : String(idMacchina);
+    },
+
+    /// TASK-0c931089: se una cartella di SingularData e' di questa macchina, con qualunque nome utente
+    /// davanti o senza: l'identificativo, che sta in fondo, e' unico.
+    eCartellaDellaMacchina(nome, idMacchina) {
+        const voce = String(nome);
+        const id = String(idMacchina);
+        return id !== "" && (voce === id || voce.endsWith("_" + id));
+    },
+
     /// I20-1065: la cartella dei dati di una postazione sotto base, senza barra finale.
+    /// TASK-0c931089: col nome utente di InDesign davanti (nomeCartellaPostazione).
     cartellaDatiMacchina(base, idMacchina) {
-        return Utility._senzaBarraFinale(base) + "/" + Utility.CARTELLA_DATI + "/" + idMacchina;
+        return Utility._senzaBarraFinale(base) + "/" + Utility.CARTELLA_DATI + "/" + Utility.nomeCartellaPostazione(idMacchina);
+    },
+
+    /// TASK-0c931089: le cartelle di questa macchina in SingularData con un altro nome - quella col
+    /// solo identificativo, di prima, o con un altro nome utente -: se ne copiano nella cartella
+    /// attuale i file che le mancano, cosi' il lavoro prosegue senza richiedere il kit. Le cartelle
+    /// di prima restano come sono. Restituisce i nomi copiati.
+    recuperaCartelleDellaMacchina(cartellaDati, idMacchina) {
+        const radice = Utility._senzaBarraFinale(cartellaDati);
+        const attuale = Utility.nomeCartellaPostazione(idMacchina);
+        const copiati = [];
+        Utility._vociDellaCartella(radice).slice().sort().forEach(voce => {
+            if (String(voce) === attuale || !Utility.eCartellaDellaMacchina(voce, idMacchina)) {
+                return;
+            }
+            const da = radice + "/" + voce;
+            Utility.copiaFileDiLavoro(da, radice + "/" + attuale, Utility._vociDellaCartella(da))
+                .forEach(nome => copiati.push(nome));
+        });
+        return copiati;
     },
 
     /// I20-1065: la cartella dei dati di questa postazione per la lavorazione aperta: SingularPath,
@@ -534,6 +603,72 @@ const Utility=
         return Utility.cartellaDati() + "/" + nomeFile;
     },
 
+    /// TASK-0c931089: la parte del nome dei file di lavoro che li separa per documento: il nome del
+    /// documento senza estensione quando l'agenzia separa i filtri per documento
+    /// (controlloNomeFileFiltri), altrimenti "" e il file e' uno per tutti i documenti, come prima.
+    suffissoFileDocumento(nomeDocumento, perDocumento) {
+        if (!perDocumento) {
+            return "";
+        }
+        return String(nomeDocumento == null ? "" : nomeDocumento).replace(/\.[^/.]+$/, "");
+    },
+
+    /// TASK-0c931089: il suffisso per il documento in lavorazione, con la regola dell'agenzia.
+    _suffissoDocumentoInLavorazione() {
+        let perDocumento = false;
+        try {
+            const valore = pluginMiddleware.getCampo("controlloNomeFileFiltri");
+            if (valore !== null && valore !== undefined) {
+                perDocumento = valore;
+            }
+        }
+        catch (e) {
+            perDocumento = false;
+        }
+        let nome = "";
+        try {
+            nome = typeof docInLavorazione !== "undefined" && docInLavorazione ? docInLavorazione.name : "";
+        }
+        catch (e) {
+            nome = "";
+        }
+        return Utility.suffissoFileDocumento(nome, perDocumento);
+    },
+
+    /// TASK-0c931089: il file di lavoro radice + suffisso + ".json" nella cartella dei dati. Quando e'
+    /// separato per documento e ancora non c'e', nasce come copia del file unico di prima, se c'e':
+    /// cosi' il conteggio e le referenze escluse fatti fino a ora non si perdono. Il file unico resta.
+    _percorsoPerDocumento(radiceNome, suffisso) {
+        const percorso = Utility.percorsoDati(radiceNome + suffisso + ".json");
+        if (suffisso !== "") {
+            try {
+                const fs = require('fs');
+                const nomi = Utility._vociDellaCartella(Utility.cartellaDati());
+                if (nomi.indexOf(radiceNome + suffisso + ".json") < 0 && nomi.indexOf(radiceNome + ".json") >= 0) {
+                    fs.writeFileSync(percorso, fs.readFileSync(Utility.percorsoDati(radiceNome + ".json"), 'utf8'));
+                }
+            }
+            catch (e) {
+                console.error("TASK-0c931089: " + radiceNome + " del documento non ricavato dal file unico: " + e);
+            }
+        }
+        return percorso;
+    },
+
+    /// TASK-0c931089: i filtri, il conteggio e le referenze escluse del documento in lavorazione, con
+    /// la stessa regola: separati per documento se l'agenzia separa i filtri.
+    percorsoFiltri() {
+        return Utility.percorsoDati("Filtri" + Utility._suffissoDocumentoInLavorazione() + ".json");
+    },
+
+    percorsoConteggio() {
+        return Utility._percorsoPerDocumento("listaRefConteggio", Utility._suffissoDocumentoInLavorazione());
+    },
+
+    percorsoRefEscluse() {
+        return Utility._percorsoPerDocumento("listaRefEscluse", Utility._suffissoDocumentoInLavorazione());
+    },
+
     /// I20-1065: crea sotto base, se mancano, logs, export, SingularData e la cartella di questa
     /// postazione, senza chiedere niente all'operatore. Con fullAccess il Plugin crea cartelle
     /// partendo da quella del documento (getEntryWithUrl e createFolder, provato in console
@@ -541,15 +676,28 @@ const Utility=
     /// che c'e' gia' si riusa, anche se ha le maiuscole diverse (Logs, Export).
     /// Restituisce logPath ed exportPath con la barra finale, come li usano log ed esportazione, e
     /// SingularPath senza. Se una cartella non si crea, lancia l'errore.
+    /// TASK-0c931089: anche i log hanno una cartella per postazione, dentro logs, con lo stesso nome
+    /// di quella in SingularData (nomeCartellaPostazione). Se la cartella della postazione e' nuova e
+    /// questa macchina ne aveva una con un altro nome, se ne recuperano i file
+    /// (recuperaCartelleDellaMacchina).
     async preparaCartelleDiSistema(base, idMacchina, fileSystem = null) {
         const lfs = fileSystem || require('uxp').storage.localFileSystem;
+        const nomePostazione = Utility.nomeCartellaPostazione(idMacchina);
         const radice = await lfs.getEntryWithUrl("file://" + Utility._senzaBarraFinale(base));
         const logs = await Utility._cartellaFiglia(radice, Utility.CARTELLA_LOGS);
+        const logsPostazione = await Utility._cartellaFiglia(logs, nomePostazione);
         const esportazione = await Utility._cartellaFiglia(radice, Utility.CARTELLA_EXPORT);
         const dati = await Utility._cartellaFiglia(radice, Utility.CARTELLA_DATI);
-        const postazione = await Utility._cartellaFiglia(dati, idMacchina);
+        const postazione = await Utility._cartellaFiglia(dati, nomePostazione);
+        try {
+            Utility.recuperaCartelleDellaMacchina(dati.nativePath, idMacchina);
+        }
+        catch (e) {
+            //le cartelle ci sono: i file mancanti si ritrovano comunque da fileLavorazioniAltri
+            console.error("TASK-0c931089: file della postazione di prima non recuperati: " + e);
+        }
         return {
-            logPath: Utility._senzaBarraFinale(logs.nativePath) + "/",
+            logPath: Utility._senzaBarraFinale(logsPostazione.nativePath) + "/",
             exportPath: Utility._senzaBarraFinale(esportazione.nativePath) + "/",
             SingularPath: Utility._senzaBarraFinale(postazione.nativePath)
         };
@@ -590,13 +738,23 @@ const Utility=
         const postazioni = [];
         const altreDiPrima = [];
         const vecchi = [];
+        //TASK-0c931089: le cartelle di questa macchina con un altro nome (senza nome utente, o con un
+        //altro) sono sue: valgono come "mia", prima delle altre postazioni. Quella attuale si salta.
+        const attuale = Utility.nomeCartellaPostazione(idMacchina);
+        const mieInSingularData = [];
         for (const voce of Utility._vociDellaCartella(cartellaDati).slice().sort()) {
-            if (String(voce) === String(idMacchina)) {
+            if (String(voce) === attuale) {
                 continue;
             }
             const cartella = cartellaDati + "/" + voce;
             const file = Utility._vociDellaCartella(cartella).find(n => String(n).toLowerCase() === Utility.NOME_FILE_LAVORAZIONI);
-            if (file != null) {
+            if (file == null) {
+                continue;
+            }
+            if (Utility.eCartellaDellaMacchina(voce, idMacchina)) {
+                mieInSingularData.push({ percorso: cartella + "/" + file, cartella: cartella, origine: "mia" });
+            }
+            else {
                 postazioni.push({ percorso: cartella + "/" + file, cartella: cartella, origine: "postazione" });
             }
         }
@@ -615,7 +773,7 @@ const Utility=
                 }
             }
         }
-        return mie.concat(postazioni, altreDiPrima, vecchi);
+        return mieInSingularData.concat(mie, postazioni, altreDiPrima, vecchi);
     },
 
     /// Le voci di un file delle lavorazioni; un elenco vuoto se il file manca o non si legge.
@@ -665,7 +823,9 @@ const Utility=
         const nomi = ["allineamenti.json", "listaRefConteggio.json", "listaRefEscluse.json", "Filtri.json"];
         const senzaEstensione = String(nomeFile == null ? "" : nomeFile).replace(/\.[^/.]+$/, "");
         if (senzaEstensione !== "") {
-            nomi.push("Filtri" + senzaEstensione + ".json");
+            //TASK-0c931089: anche conteggio e referenze escluse possono essere del documento.
+            nomi.push("Filtri" + senzaEstensione + ".json", "listaRefConteggio" + senzaEstensione + ".json",
+                "listaRefEscluse" + senzaEstensione + ".json");
         }
         if (tutti) {
             nomi.push(Utility.nomeFileReportIntegrita(idKit), Utility.nomeFileWhitelistIntegrita(idKit),

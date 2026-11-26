@@ -47,6 +47,41 @@ test("senza canale e area non c'e' niente da scrivere", () => {
     assert.strictEqual(contestoLavorazioneMessaggio({ sigla: "" }, {}), null);
 });
 
+/* ---- TASK-0c931089: documento e kit della lavorazione ---- */
+
+const documentoLavorazioneMessaggio = (function () {
+    const corpo = corpoFunzione("function documentoLavorazioneMessaggio(documento, kit) {");
+    return new Function("documento", "kit", corpo.substring(corpo.indexOf("{") + 1));
+})();
+
+test("il documento e il kit si scrivono come li legge l'operatore", () => {
+    assert.strictEqual(documentoLavorazioneMessaggio("Volantino_12.indd", 345), "Volantino_12.indd · Kit 345");
+});
+
+test("se manca il documento resta il kit, e senza niente non c'e' niente da scrivere", () => {
+    assert.strictEqual(documentoLavorazioneMessaggio(null, 345), "Kit 345");
+    assert.strictEqual(documentoLavorazioneMessaggio("A.indd", 0), "A.indd");
+    assert.strictEqual(documentoLavorazioneMessaggio(null, 0), null);
+});
+
+test("documento, kit, canale e area insieme in una riga, nell'ordine", () => {
+    const corpo = corpoFunzione("function contestoLavorazioneCorrente() {");
+    const corrente = new Function("idKitLavorazione", "docInLavorazione", "ficoProcess", "contestoLavorazioneMessaggio", "documentoLavorazioneMessaggio",
+        corpo.substring(corpo.indexOf("{") + 1));
+    const fico = { getCanaleLavorazioneCorrente: () => ({ sigla: "CN" }), getAreaLavorazioneCorrente: () => ({ sigla: "TO" }) };
+
+    assert.strictEqual(corrente(345, { name: "Volantino_12.indd" }, fico, contestoLavorazioneMessaggio, documentoLavorazioneMessaggio),
+        "Volantino_12.indd · Kit 345 · Canale CN · Area TO");
+    //Senza lavorazione aperta niente, anche col documento davanti.
+    assert.strictEqual(corrente(0, { name: "Volantino_12.indd" }, fico, contestoLavorazioneMessaggio, documentoLavorazioneMessaggio), null);
+    //Un documento chiuso non fa perdere il resto.
+    const chiuso = { get name() { throw new Error("documento non valido"); } };
+    assert.strictEqual(corrente(345, chiuso, fico, contestoLavorazioneMessaggio, documentoLavorazioneMessaggio), "Kit 345 · Canale CN · Area TO");
+    //Senza canale e area restano documento e kit.
+    const rotto = { getCanaleLavorazioneCorrente: () => { throw new Error("x"); }, getAreaLavorazioneCorrente: () => 0 };
+    assert.strictEqual(corrente(345, { name: "A.indd" }, rotto, contestoLavorazioneMessaggio, documentoLavorazioneMessaggio), "A.indd · Kit 345");
+});
+
 /* ---- dove si applica ---- */
 
 test("senza una lavorazione aperta non si usa il contesto rimasto dalla lavorazione di prima", () => {
@@ -54,6 +89,9 @@ test("senza una lavorazione aperta non si usa il contesto rimasto dalla lavorazi
 
     assert.match(corrente, /if \(!idKitLavorazione\) \{\s*return null;/);
     assert.match(corrente, /contestoLavorazioneMessaggio\(ficoProcess\.getCanaleLavorazioneCorrente\(\), ficoProcess\.getAreaLavorazioneCorrente\(\)\)/);
+    //TASK-0c931089: davanti a canale e area, il documento e il kit della lavorazione.
+    assert.match(corrente, /documento = docInLavorazione != null \? docInLavorazione\.name : null;/);
+    assert.match(corrente, /return \[documentoLavorazioneMessaggio\(documento, idKitLavorazione\), canaleArea\]\s*\.filter\(function \(t\) \{ return t; \}\)\.join\(" · "\) \|\| null;/);
     //Un messaggio non deve perdersi per colpa del suo contesto.
     assert.match(corrente, /catch \(e\) \{\s*return null;/);
 });
