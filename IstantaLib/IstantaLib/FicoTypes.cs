@@ -626,6 +626,14 @@ namespace IstantaLib
         /// forzatura precedente, e si decide solo qui, nell'external source del plugin di agenzia.
         /// </summary>
         public bool Locked { get; set; } = true;
+
+        /// <summary>
+        /// I20-1278: se l'azione rifa' il box confrontandolo con quello di prima (true, come sempre e
+        /// se non dichiarato) o senza confronto (false: resta il box rifatto, il vecchio va da parte
+        /// come versione precedente). E' il valore di partenza del parametro "confronto" sotto i
+        /// parametri dell'azione nel Plugin, che l'operatore puo' cambiare per quella volta.
+        /// </summary>
+        public bool Confronto { get; set; } = true;
     }
 
     public class CampoInddCoinvolto
