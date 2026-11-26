@@ -3130,38 +3130,38 @@ namespace AgenziaLib
                         if (codiceBox == "BOX1")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
                                 interprete.removeCompiledField("prezzo_offerta");
                             }
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_norm", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm);
+                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm, VeicolatureEdro21.ScontoMM);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_fid", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid);
+                            interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid, VeicolatureEdro21.ScontoFID);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "PezzConf_NM", codiceBox, canale);
-                            interprete.assignCompiledField("PezzConf_NM", paragraphName, PezzConf_NM);
+                            interprete.assignCompiledField("PezzConf_NM", paragraphName, PezzConf_NM, VeicolatureEdro21.PezziMeccanicaBis(recItem[key_combinazioneAssegnata]));
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                             if (canale != "SC")
                             {
                                 if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_EURprima", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima);
+                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima, VeicolatureEdro21.PrezzoOfferta);
                                 }
                                 else
                                 {
@@ -3179,35 +3179,35 @@ namespace AgenziaLib
                         else if (codiceBox == "BOX12")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
                                 interprete.removeCompiledField("prezzo_offerta");
                             }
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_norm", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm);
+                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm, VeicolatureEdro21.ScontoMM);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_fid", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid);
+                            interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid, VeicolatureEdro21.ScontoFID);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                             if (canale != "SC")
                             {
                                 if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_EURprima", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima);
+                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima, VeicolatureEdro21.PrezzoOfferta);
                                 }
                                 else
                                 {
@@ -3218,21 +3218,21 @@ namespace AgenziaLib
                         else if (codiceBox == "BOX6")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto", codiceBox, canale);
-                            interprete.assignCompiledField("prezzo_offerta_etto", paragraphName, prezzo_offerta_etto);
+                            interprete.assignCompiledField("prezzo_offerta_etto", paragraphName, prezzo_offerta_etto, VeicolatureEdro21.PrezzoOfferta);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_norm", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm);
+                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm, VeicolatureEdro21.ScontoMM);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_etto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_etto", paragraphName, campo_offerta_etto);
+                            interprete.assignCompiledField("campo_offerta_etto", paragraphName, campo_offerta_etto, VeicolatureEdro21.PrezzoAnziche);
 
                             if (canale != "SC")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto_EURprima", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta_etto_EURprima", paragraphName, prezzo_offerta_etto_EURprima);
+                                interprete.assignCompiledField("prezzo_offerta_etto_EURprima", paragraphName, prezzo_offerta_etto_EURprima, VeicolatureEdro21.PrezzoOfferta);
                             }
 
                             if (!(meccanica_tradotta.IndexOf("_sdb") >= 0))
@@ -3251,22 +3251,22 @@ namespace AgenziaLib
                         else if (codiceBox == "BOX40")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
                                 interprete.removeCompiledField("prezzo_offerta");
                             }
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, "campo_offerta");
+                            interprete.assignCompiledField("campo_offerta", paragraphName, "campo_offerta", VeicolatureEdro21.TestoFisso);
 
                             if (sezione == "B&F RICHIAMO VOLANTINO")
                             {
@@ -3283,22 +3283,22 @@ namespace AgenziaLib
                         else if (codiceBox == "BOX41")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
                                 interprete.removeCompiledField("prezzo_offerta");
                             }
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, "campo_offerta");
+                            interprete.assignCompiledField("campo_offerta", paragraphName, "campo_offerta", VeicolatureEdro21.TestoFisso);
 
                             if (sezione == "B&F RICHIAMO VOLANTINO")
                             {
@@ -3315,50 +3315,50 @@ namespace AgenziaLib
                         else if (codiceBox == "BOX4")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
                                 interprete.removeCompiledField("prezzo_offerta");
                             }
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
                         }
                         else if (codiceBox == "BOX7")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             //Il box bis non ha sconto_effettivo_grande (BoxBisEdro21): fornirlo faceva segnalare
                             //al Plugin un campo mancante che nel box non deve esserci.
                             if (BoxBisEdro21.PrevedeScontoEffettivoGrande(codiceBox))
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                                interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                                interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
                             }
 
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
                                 interprete.removeCompiledField("prezzo_offerta");
                             }
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "PezzConf_NM", codiceBox, canale);
-                            interprete.assignCompiledField("PezzConf_NM", paragraphName, PezzConf_NM);
+                            interprete.assignCompiledField("PezzConf_NM", paragraphName, PezzConf_NM, VeicolatureEdro21.PezziMeccanicaBis(recItem[key_combinazioneAssegnata]));
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "M_MM", codiceBox, canale);
-                            interprete.assignCompiledField("M_MM", paragraphName, recItem["M_MM"].ToString());
+                            interprete.assignCompiledField("M_MM", paragraphName, recItem["M_MM"].ToString(), VeicolatureEdro21.M_MM);
                         }
                         else if (codiceBox == "BOX14")
                         {
@@ -3366,32 +3366,32 @@ namespace AgenziaLib
                             if (recItem.ContainsKey("range_2"))
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "range2", codiceBox, canale);
-                                interprete.assignCompiledField("range2", paragraphName, range2);
+                                interprete.assignCompiledField("range2", paragraphName, range2, VeicolatureEdro21.Range2);
                             }
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "tipo_punti2", codiceBox, canale);
-                            interprete.assignCompiledField("tipo_punti2", paragraphName, tipo_punti2);
+                            interprete.assignCompiledField("tipo_punti2", paragraphName, tipo_punti2, VeicolatureEdro21.TipoPunti2);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "punti2", codiceBox, canale);
-                            interprete.assignCompiledField("punti2", paragraphName, recItem["punti_2"].ToString());
+                            interprete.assignCompiledField("punti2", paragraphName, recItem["punti_2"].ToString(), VeicolatureEdro21.Punti2);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "range1", codiceBox, canale);
-                            interprete.assignCompiledField("range1", paragraphName, range1);
+                            interprete.assignCompiledField("range1", paragraphName, range1, VeicolatureEdro21.Range1);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "tipo_punti1", codiceBox, canale);
-                            interprete.assignCompiledField("tipo_punti1", paragraphName, tipo_punti1);
+                            interprete.assignCompiledField("tipo_punti1", paragraphName, tipo_punti1, VeicolatureEdro21.TipoPunti1);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "punti1", codiceBox, canale);
-                            interprete.assignCompiledField("punti1", paragraphName, recItem["punti_1"].ToString());
+                            interprete.assignCompiledField("punti1", paragraphName, recItem["punti_1"].ToString(), VeicolatureEdro21.Punti1);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_fid", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid);
+                            interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid, VeicolatureEdro21.ScontoFID);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             //Console.WriteLine("combinazioneAssegnata: " + combinazioneAssegnata);
                             //Console.WriteLine("Suffix: " + suffix_plus);
@@ -3399,7 +3399,7 @@ namespace AgenziaLib
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
@@ -3410,7 +3410,7 @@ namespace AgenziaLib
 
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                             if (combinazioneAssegnata == "PUNTI_minicoll" || combinazioneAssegnata == "PUNTI_KgL_minicoll")
                             {
@@ -3421,35 +3421,35 @@ namespace AgenziaLib
                         else if (codiceBox == "BOX2")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             if (prezzoOfferta != null && prezzoOfferta != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
                                 interprete.removeCompiledField("prezzo_offerta");
                             }
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_norm", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm);
+                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm, VeicolatureEdro21.ScontoMM);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_fid", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid);
+                            interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid, VeicolatureEdro21.ScontoFID);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                             if (canale != "SC")
                             {
                                 if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_EURprima", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima);
+                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima, VeicolatureEdro21.PrezzoOfferta);
                                 }
                                 else
                                 {
@@ -3461,28 +3461,28 @@ namespace AgenziaLib
                         {
                             //interprete.assignCompiledField("campo_offerta_KgL_sconto", "campo_offerta_KgL_sconto", recItem["campo_offerta_KgL_sconto"].ToString());
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                            interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
                             if (paghi_etto != "")
                             {
-                                interprete.assignCompiledField("prezzo_offerta_etto", paragraphName, paghi_etto);
+                                interprete.assignCompiledField("prezzo_offerta_etto", paragraphName, paghi_etto, VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
-                                interprete.assignCompiledField("prezzo_offerta_etto", paragraphName, recItem["prezzo_offerta"].ToString());
+                                interprete.assignCompiledField("prezzo_offerta_etto", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                             }
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_norm", codiceBox, canale);
-                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm);
+                            interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm, VeicolatureEdro21.ScontoMM);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_etto", paragraphName, campo_offerta);
+                            interprete.assignCompiledField("campo_offerta_etto", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                             if (canale != "SC")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto_EURprima", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta_etto_EURprima", paragraphName, prezzo_offerta_etto_EURprima);
+                                interprete.assignCompiledField("prezzo_offerta_etto_EURprima", paragraphName, prezzo_offerta_etto_EURprima, VeicolatureEdro21.PrezzoOfferta);
                             }
                         }
                         else if (codiceBox == "BOX3")
@@ -3490,22 +3490,22 @@ namespace AgenziaLib
                             if (canale != "SC")
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_norm", codiceBox, canale);
-                                interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm);
+                                interprete.assignCompiledField("sconto_norm", paragraphName, sconto_norm, VeicolatureEdro21.ScontoMM);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_fid", codiceBox, canale);
-                                interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid);
+                                interprete.assignCompiledField("sconto_fid", paragraphName, sconto_fid, VeicolatureEdro21.ScontoFID);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
 
                                 if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_EURprima", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima);
+                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima, VeicolatureEdro21.PrezzoOfferta);
                                 }
                                 else
                                 {
@@ -3522,22 +3522,22 @@ namespace AgenziaLib
                             if (canale != "SC")
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_secondo_EURprima", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta_secondo_EURprima", paragraphName, prezzo_offerta_secondo_EURprima);
+                                interprete.assignCompiledField("prezzo_offerta_secondo_EURprima", paragraphName, prezzo_offerta_secondo_EURprima, VeicolatureEdro21.PrezzoSecondoPezzo);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_NOofferta_1pezzo_EURprima", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_NOofferta_1pezzo_EURprima", paragraphName, prezzo_NOofferta_1pezzo_EURprima);
+                                interprete.assignCompiledField("prezzo_NOofferta_1pezzo_EURprima", paragraphName, prezzo_NOofferta_1pezzo_EURprima, VeicolatureEdro21.PrezzoOfferta);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "PezzConf", codiceBox, canale);
-                                interprete.assignCompiledField("PezzConf", paragraphName, PezzConf);
+                                interprete.assignCompiledField("PezzConf", paragraphName, PezzConf, VeicolatureEdro21.UnPezzo);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "PezzConf_NM", codiceBox, canale);
-                                interprete.assignCompiledField("PezzConf_NM", paragraphName, PezzConf_NM);
+                                interprete.assignCompiledField("PezzConf_NM", paragraphName, PezzConf_NM, VeicolatureEdro21.PezziMeccanicaBis(recItem[key_combinazioneAssegnata]));
                             }
                             else
                             {
@@ -3547,15 +3547,15 @@ namespace AgenziaLib
                         else if (codiceBox == "BOX11")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                             if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_EURprima", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima);
+                                interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_EURprima, VeicolatureEdro21.PrezzoOfferta);
                             }
                             else
                             {
@@ -3766,7 +3766,7 @@ namespace AgenziaLib
                                 if (temaContesto.ToUpper().IndexOf("LOC") < 0)
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL);
+                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL, VeicolatureEdro21.PrezzoAlKg);
                                 }
 
                                 else
@@ -3789,14 +3789,14 @@ namespace AgenziaLib
                                 if (temaContesto.ToUpper().IndexOf("LOC") < 0)
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf);
+                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf, VeicolatureEdro21.PrezzoOfferta);
 
                                 }
                                 else
                                 {
                                     interprete.removeCompiledField("campo_offerta_KgL_sconto");
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta_KgL", paragraphName, campo_offerta_conf);
+                                    interprete.assignCompiledField("campo_offerta_KgL", paragraphName, campo_offerta_conf, VeicolatureEdro21.PrezzoOfferta);
 
                                 }
 
@@ -3805,7 +3805,7 @@ namespace AgenziaLib
                                     if (prezzo_offerta_KgL != null && prezzo_offerta_KgL != "")
                                     {
                                         var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL", codiceBox, canale);
-                                        interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL);
+                                        interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL, VeicolatureEdro21.PrezzoOffertaKgl);
                                     }
                                     else
                                     {
@@ -3817,7 +3817,7 @@ namespace AgenziaLib
                                     if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                     {
                                         var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL_EURprima", codiceBox, canale);
-                                        interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima);
+                                        interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima, VeicolatureEdro21.PrezzoOffertaKgl);
                                     }
                                     else
                                     {
@@ -3830,7 +3830,7 @@ namespace AgenziaLib
                                 if (temaContesto.ToUpper().IndexOf("LOC") < 0)
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL);
+                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL, VeicolatureEdro21.PrezzoAlKg);
                                 }
                                 else
                                 {
@@ -3842,7 +3842,7 @@ namespace AgenziaLib
                                 if (meccanica_tradotta.IndexOf("_KgL") > 0)
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_KgL);
+                                    interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_KgL, VeicolatureEdro21.PrezzoAlKg);
                                 }
 
                                 if (meccanica_tradotta.IndexOf("_boxetto") >= 0 && meccanica_tradotta.IndexOf("_evento") < 0 && materiale != "EV")
@@ -3917,25 +3917,25 @@ namespace AgenziaLib
                             {
 
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf_sconto", codiceBox, canale);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto, VeicolatureEdro21.PrezzoAnzicheEOfferta);
                                 if (prezzo_offerta_KgL != null && prezzo_offerta_KgL != "")
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL);
+                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL, VeicolatureEdro21.PrezzoOffertaKgl);
                                 }
                                 else
                                 {
                                     interprete.removeCompiledField("prezzo_offerta");
                                 }
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_ofalkg", codiceBox, canale);
-                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_ofalkg);
+                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_ofalkg, VeicolatureEdro21.PrezzoAnzicheKgl);
 
                                 if (materiale == "EV")
                                 {
                                     if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                     {
                                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL_EURprima", codiceBox, canale);
-                                        interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima);
+                                        interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima, VeicolatureEdro21.PrezzoOffertaKgl);
                                     }
                                     else
                                     {
@@ -3982,13 +3982,13 @@ namespace AgenziaLib
                         else if (meccanica_tradotta.IndexOf("NM_MM") >= 0 || meccanica_tradotta.IndexOf("NM_MIX") >= 0 || meccanica_tradotta.IndexOf("NM_FID") >= 0)
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "M_MM", codiceBox, canale);
-                            interprete.assignCompiledField("M_MM", paragraphName, M_MM_str);
+                            interprete.assignCompiledField("M_MM", paragraphName, M_MM_str, VeicolatureEdro21.PezziMMConPrezzo);
 
                             if (meccanica_tradotta.IndexOf("FID") > 0)
                             {
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "M_fid", codiceBox, canale);
-                                interprete.assignCompiledField("M_MM", paragraphName, M_FID_str);
+                                interprete.assignCompiledField("M_MM", paragraphName, M_FID_str, VeicolatureEdro21.PezziFIDConPrezzo);
                             }
                             else if (meccanica_tradotta.IndexOf("_123") > 0)
                             {
@@ -4002,7 +4002,7 @@ namespace AgenziaLib
                                 if (meccanica_tradotta.IndexOf("_KgL") > 0)
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL);
+                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL, VeicolatureEdro21.PrezzoAlKg);
                                 }
                             }
                         }
@@ -4161,10 +4161,10 @@ namespace AgenziaLib
                                 (meccanica_tradotta.IndexOf("TP_MM") >= 0 || meccanica_tradotta.IndexOf("PERCENTO_MM") >= 0 || meccanica_tradotta.IndexOf("sir_sconto") >= 0))
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto_EURprima", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_etto_EURprima);
+                                interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_etto_EURprima, VeicolatureEdro21.PrezzoOfferta);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_etto", codiceBox, canale);
-                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_etto);
+                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_etto, VeicolatureEdro21.PrezzoAnziche);
                             }
 
                             if (meccanica_tradotta.IndexOf("PERCENTO") >= 0)
@@ -4290,14 +4290,14 @@ namespace AgenziaLib
                                 if (meccanica_tradotta.IndexOf("_ofalkg") >= 0)
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL_EURprima", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima);
+                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima, VeicolatureEdro21.PrezzoOffertaKgl);
 
                                     if (canale == "SC")
                                     {
                                         if (prezzo_offerta_KgL != null && prezzo_offerta_KgL != "")
                                         {
                                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL", codiceBox, canale);
-                                            interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL);
+                                            interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL, VeicolatureEdro21.PrezzoOffertaKgl);
                                         }
                                         else
                                         {
@@ -4306,10 +4306,10 @@ namespace AgenziaLib
                                     }
 
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf_sconto", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto);
+                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto, VeicolatureEdro21.PrezzoAnzicheEOfferta);
 
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_ofalkg", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_ofalkg);
+                                    interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_ofalkg, VeicolatureEdro21.PrezzoAnzicheKgl);
                                 }
                             }
                         }
@@ -4404,7 +4404,7 @@ namespace AgenziaLib
                             else
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto);
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto, VeicolatureEdro21.PrezzoOfferta);
                             }
 
                             if (meccanica_tradotta.IndexOf("NM_") < 0)
@@ -4449,12 +4449,12 @@ namespace AgenziaLib
                                 if (meccanica_tradotta.IndexOf("_ofalkg") >= 0)
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf_sconto", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto);
+                                    interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto, VeicolatureEdro21.PrezzoAnzicheEOfferta);
 
                                     if (prezzo_offerta_KgL != null && prezzo_offerta_KgL != "")
                                     {
                                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL", codiceBox, canale);
-                                        interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL);
+                                        interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL, VeicolatureEdro21.PrezzoOffertaKgl);
                                     }
                                     else
                                     {
@@ -4485,7 +4485,7 @@ namespace AgenziaLib
                             if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL_EURprima", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima);
+                                interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima, VeicolatureEdro21.PrezzoOffertaKgl);
                             }
                             else
                             {
@@ -4506,10 +4506,10 @@ namespace AgenziaLib
                                 if (meccanica_tradotta.IndexOf("TP_MM") >= 0 || meccanica_tradotta.IndexOf("PERCENTO_MM") >= 0 || meccanica_tradotta.IndexOf("sir_sconto") >= 0)
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto);
+                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto, VeicolatureEdro21.PrezzoOfferta);
 
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_etto", codiceBox, canale);
-                                    interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_etto);
+                                    interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_etto, VeicolatureEdro21.PrezzoAnziche);
 
                                 }
                             }
@@ -4549,7 +4549,7 @@ namespace AgenziaLib
                                 else
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto);
+                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto, VeicolatureEdro21.PrezzoOfferta);
 
                                 }
                             }
@@ -4963,7 +4963,7 @@ descrizioneEsempio.EndsWith("\r\n");
                         {
                             Debug.WriteLine(ex);
                         }
-                        interprete.assignCompiledField("descrizione", descrizioneParagraphStyle, descrizione);
+                        interprete.assignCompiledField("descrizione", descrizioneParagraphStyle, descrizione, VeicolatureEdro21.Descrizione);
 
 
                         #endregion descrizione
@@ -6175,15 +6175,15 @@ descrizioneEsempio.EndsWith("\r\n");
                     if (codiceBox == "BOX1_PoP")
                     {
                         var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                        interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                        interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                         if (prezzoOfferta != null && prezzoOfferta != "")
                         {
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                            interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                         }
                         else
                         {
@@ -6206,20 +6206,20 @@ descrizioneEsempio.EndsWith("\r\n");
                         if (combinazioneAssegnata.ToLower().Contains("_all") ||
                             combinazioneAssegnata.ToLower().Contains("_kgl"))
                         {
-                            interprete.assignCompiledField("val_sconto", "", "<" + characterName + ">" + sconto + "</" + characterName + ">");
+                            interprete.assignCompiledField("val_sconto", "", "<" + characterName + ">" + sconto + "</" + characterName + ">", VeicolatureEdro21.ScontoPoP(combinazioneAssegnata));
                             interprete.removeCompiledField("gruppo_sconto_grande");
                         }
                         else
                         {
                             interprete.removeCompiledField("gruppo_sconto");
-                            interprete.assignCompiledField("val_sconto_grande", paragraphName, "<" + characterName + ">" + sconto + "</" + characterName + ">");
+                            interprete.assignCompiledField("val_sconto_grande", paragraphName, "<" + characterName + ">" + sconto + "</" + characterName + ">", VeicolatureEdro21.ScontoPoP(combinazioneAssegnata));
                         }
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "PezzConf_NM", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("PezzConf_NM", paragraphName, PezzConf_NM);
+                        interprete.assignCompiledField("PezzConf_NM", paragraphName, PezzConf_NM, VeicolatureEdro21.PezziMeccanicaBis(recItem[key_combinazioneAssegnata]));
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                        interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                         //if (canale != "SC")
                         //{
@@ -6263,28 +6263,28 @@ descrizioneEsempio.EndsWith("\r\n");
                     else if (codiceBox == "BOX2_PoP")
                     {
                         var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale); // ✔
-                        interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                        interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("prezzo_offerta_etto", paragraphName, prezzo_offerta_etto);
+                        interprete.assignCompiledField("prezzo_offerta_etto", paragraphName, prezzo_offerta_etto, VeicolatureEdro21.PrezzoOfferta);
 
 
                         if (!combinazioneAssegnata.ToLower().Contains("_fid"))
                         {
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_norm", codiceBox, canale, 2); // ✔
-                            interprete.assignCompiledField("val_sconto", paragraphName, sconto_norm);
+                            interprete.assignCompiledField("val_sconto", paragraphName, sconto_norm, VeicolatureEdro21.ScontoMM);
                         }
                         else
                         {
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_fid", codiceBox, canale, 2); // ✔
-                            interprete.assignCompiledField("val_sconto", paragraphName, sconto_fid);
+                            interprete.assignCompiledField("val_sconto", paragraphName, sconto_fid, VeicolatureEdro21.ScontoFID);
                         }
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_etto", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("campo_offerta_etto", paragraphName, campo_offerta_etto);
+                        interprete.assignCompiledField("campo_offerta_etto", paragraphName, campo_offerta_etto, VeicolatureEdro21.PrezzoAnziche);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto_EURprima", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("prezzo_offerta_etto_EURprima", paragraphName, prezzo_offerta_etto_EURprima);
+                        interprete.assignCompiledField("prezzo_offerta_etto_EURprima", paragraphName, prezzo_offerta_etto_EURprima, VeicolatureEdro21.PrezzoOfferta);
                         //if (canale != "SC")
                         //{
                         //    paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto_EURprima", codiceBox, canale); // ✔
@@ -6296,59 +6296,59 @@ descrizioneEsempio.EndsWith("\r\n");
                         string paragraphName = "";
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "range1", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("range1", paragraphName, range1);
+                        interprete.assignCompiledField("range1", paragraphName, range1, VeicolatureEdro21.Range1);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "punti1", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("punti1", paragraphName, recItem["punti_1"].ToString());
+                        interprete.assignCompiledField("punti1", paragraphName, recItem["punti_1"].ToString(), VeicolatureEdro21.Punti1);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                        interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                        interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                         if (prezzoOfferta != null && prezzoOfferta != "")
                         {
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                            interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                         }
                         else
                         {
                             interprete.removeCompiledField("prezzo_offerta");
                         }
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale, 2); // ✔
-                        interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                        interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
                     }
                     else if (codiceBox == "BOX4_PoP")
                     {
                         string paragraphName = "";
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "range1", codiceBox, canale, 2);
-                        interprete.assignCompiledField("range1", paragraphName, range1);
+                        interprete.assignCompiledField("range1", paragraphName, range1, VeicolatureEdro21.Range1);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "punti1", codiceBox, canale, 2);
-                        interprete.assignCompiledField("punti1", paragraphName, recItem["punti_1"].ToString());
+                        interprete.assignCompiledField("punti1", paragraphName, recItem["punti_1"].ToString(), VeicolatureEdro21.Punti1);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "tipo_punti1", codiceBox, canale, 2);
-                        interprete.assignCompiledField("tipo_punti1", paragraphName, tipo_punti1);
+                        interprete.assignCompiledField("tipo_punti1", paragraphName, tipo_punti1, VeicolatureEdro21.TipoPunti1);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL_sconto", codiceBox, canale, 2);
-                        interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto);
+                        interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL_sconto, VeicolatureEdro21.PrezzoAlKgConSconto);
 
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "sconto_effettivo_grande", codiceBox, canale, 2);
-                        interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande);
+                        interprete.assignCompiledField("sconto_effettivo_grande", paragraphName, sconto_effettivo_grande, VeicolatureEdro21.ScontoAgenzia);
 
                         if (prezzoOfferta != null && prezzoOfferta != "")
                         {
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta", codiceBox, canale);
-                            interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString());
+                            interprete.assignCompiledField("prezzo_offerta", paragraphName, recItem["prezzo_offerta"].ToString(), VeicolatureEdro21.PrezzoOfferta);
                         }
                         else
                         {
                             interprete.removeCompiledField("prezzo_offerta");
                         }
                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta", codiceBox, canale, 2);
-                        interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta);
+                        interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta, VeicolatureEdro21.PrezzoAnziche);
 
                         if (combinazioneAssegnata == "PUNTI_minicoll" || combinazioneAssegnata == "PUNTI_KgL_minicoll")
                         {
@@ -6563,7 +6563,7 @@ descrizioneEsempio.EndsWith("\r\n");
                             if (temaContesto.ToUpper().IndexOf("LOC") < 0)
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL, VeicolatureEdro21.PrezzoAlKg);
                             }
 
                             else
@@ -6586,14 +6586,14 @@ descrizioneEsempio.EndsWith("\r\n");
                             if (temaContesto.ToUpper().IndexOf("LOC") < 0)
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf, VeicolatureEdro21.PrezzoOfferta);
 
                             }
                             else
                             {
                                 interprete.removeCompiledField("campo_offerta_KgL_sconto");
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta_KgL", paragraphName, campo_offerta_conf);
+                                interprete.assignCompiledField("campo_offerta_KgL", paragraphName, campo_offerta_conf, VeicolatureEdro21.PrezzoOfferta);
 
                             }
 
@@ -6602,7 +6602,7 @@ descrizioneEsempio.EndsWith("\r\n");
                                 if (prezzo_offerta_KgL != null && prezzo_offerta_KgL != "")
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL);
+                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL, VeicolatureEdro21.PrezzoOffertaKgl);
                                 }
                                 else
                                 {
@@ -6614,7 +6614,7 @@ descrizioneEsempio.EndsWith("\r\n");
                                 if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                 {
                                     var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL_EURprima", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima);
+                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima, VeicolatureEdro21.PrezzoOffertaKgl);
                                 }
                                 else
                                 {
@@ -6627,7 +6627,7 @@ descrizioneEsempio.EndsWith("\r\n");
                             if (temaContesto.ToUpper().IndexOf("LOC") < 0)
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL, VeicolatureEdro21.PrezzoAlKg);
                             }
                             else
                             {
@@ -6639,7 +6639,7 @@ descrizioneEsempio.EndsWith("\r\n");
                             if (meccanica_tradotta.IndexOf("_KgL") > 0)
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_KgL);
+                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_KgL, VeicolatureEdro21.PrezzoAlKg);
                             }
 
                             if (meccanica_tradotta.IndexOf("_boxetto") >= 0 && meccanica_tradotta.IndexOf("_evento") < 0 && materiale != "EV")
@@ -6716,25 +6716,25 @@ descrizioneEsempio.EndsWith("\r\n");
                         {
 
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf_sconto", codiceBox, canale, 2);
-                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto);
+                            interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto, VeicolatureEdro21.PrezzoAnzicheEOfferta);
                             if (prezzo_offerta_KgL != null && prezzo_offerta_KgL != "")
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL", codiceBox, canale);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL);
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL, VeicolatureEdro21.PrezzoOffertaKgl);
                             }
                             else
                             {
                                 interprete.removeCompiledField("prezzo_offerta");
                             }
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_ofalkg", codiceBox, canale, 2);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_ofalkg);
+                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_ofalkg, VeicolatureEdro21.PrezzoAnzicheKgl);
 
                             if (materiale == "EV")
                             {
                                 if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL_EURprima", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima);
+                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima, VeicolatureEdro21.PrezzoOffertaKgl);
                                 }
                                 else
                                 {
@@ -6781,13 +6781,13 @@ descrizioneEsempio.EndsWith("\r\n");
                     else if (meccanica_tradotta.IndexOf("NM_MM") >= 0 || meccanica_tradotta.IndexOf("NM_MIX") >= 0 || meccanica_tradotta.IndexOf("NM_FID") >= 0)
                     {
                         var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "M_MM", codiceBox, canale, 2);
-                        interprete.assignCompiledField("M_MM", paragraphName, M_MM_str);
+                        interprete.assignCompiledField("M_MM", paragraphName, M_MM_str, VeicolatureEdro21.PezziMMConPrezzo);
 
                         if (meccanica_tradotta.IndexOf("FID") > 0)
                         {
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "M_fid", codiceBox, canale, 2);
-                            interprete.assignCompiledField("M_MM", paragraphName, M_FID_str);
+                            interprete.assignCompiledField("M_MM", paragraphName, M_FID_str, VeicolatureEdro21.PezziFIDConPrezzo);
                         }
                         else if (meccanica_tradotta.IndexOf("_123") > 0)
                         {
@@ -6802,7 +6802,7 @@ descrizioneEsempio.EndsWith("\r\n");
                             if (meccanica_tradotta.IndexOf("_KgL") > 0)
                             {
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_KgL", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_KgL, VeicolatureEdro21.PrezzoAlKg);
                             }
                         }
                     }
@@ -6961,10 +6961,10 @@ descrizioneEsempio.EndsWith("\r\n");
                             (meccanica_tradotta.IndexOf("TP_MM") >= 0 || meccanica_tradotta.IndexOf("PERCENTO_MM") >= 0 || meccanica_tradotta.IndexOf("sir_sconto") >= 0))
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto_EURprima", codiceBox, canale, 2);
-                            interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_etto_EURprima);
+                            interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_etto_EURprima, VeicolatureEdro21.PrezzoOfferta);
 
                             paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_etto", codiceBox, canale, 2);
-                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_etto);
+                            interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_etto, VeicolatureEdro21.PrezzoAnziche);
                         }
 
                         if (meccanica_tradotta.IndexOf("PERCENTO") >= 0)
@@ -7095,7 +7095,7 @@ descrizioneEsempio.EndsWith("\r\n");
                                 if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL_EURprima", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima);
+                                    interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima, VeicolatureEdro21.PrezzoOffertaKgl);
                                 }
                                 else
                                 {
@@ -7107,7 +7107,7 @@ descrizioneEsempio.EndsWith("\r\n");
                                     if (prezzo_offerta_KgL != null && prezzo_offerta_KgL != "")
                                     {
                                         paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL", codiceBox, canale);
-                                        interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL);
+                                        interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL, VeicolatureEdro21.PrezzoOffertaKgl);
                                     }
                                     else
                                     {
@@ -7116,10 +7116,10 @@ descrizioneEsempio.EndsWith("\r\n");
                                 }
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf_sconto", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto, VeicolatureEdro21.PrezzoAnzicheEOfferta);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_ofalkg", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_ofalkg);
+                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_ofalkg, VeicolatureEdro21.PrezzoAnzicheKgl);
                             }
                         }
                     }
@@ -7215,7 +7215,7 @@ descrizioneEsempio.EndsWith("\r\n");
                         else
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto", codiceBox, canale, 2);
-                            interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto);
+                            interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto, VeicolatureEdro21.PrezzoOfferta);
                         }
 
                         if (meccanica_tradotta.IndexOf("NM_") < 0)
@@ -7260,12 +7260,12 @@ descrizioneEsempio.EndsWith("\r\n");
                             if (meccanica_tradotta.IndexOf("_ofalkg") >= 0)
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_conf_sconto", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto);
+                                interprete.assignCompiledField("campo_offerta_KgL_sconto", paragraphName, campo_offerta_conf_sconto, VeicolatureEdro21.PrezzoAnzicheEOfferta);
 
                                 if (prezzo_offerta_KgL != null && prezzo_offerta_KgL != "")
                                 {
                                     paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL", codiceBox, canale);
-                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL);
+                                    interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_KgL, VeicolatureEdro21.PrezzoOffertaKgl);
                                 }
                                 else
                                 {
@@ -7291,7 +7291,7 @@ descrizioneEsempio.EndsWith("\r\n");
                         if (prezzo_offerta_EURprima != null && prezzo_offerta_EURprima != "")
                         {
                             var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_KgL_EURprima", codiceBox, canale);
-                            interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima);
+                            interprete.assignCompiledField("prezzo_offerta_EURprima", paragraphName, prezzo_offerta_KgL_EURprima, VeicolatureEdro21.PrezzoOffertaKgl);
                         }
                         else
                         {
@@ -7312,10 +7312,10 @@ descrizioneEsempio.EndsWith("\r\n");
                             if (meccanica_tradotta.IndexOf("TP_MM") >= 0 || meccanica_tradotta.IndexOf("PERCENTO_MM") >= 0 || meccanica_tradotta.IndexOf("sir_sconto") >= 0)
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto", codiceBox, canale, 2);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto);
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto, VeicolatureEdro21.PrezzoOfferta);
 
                                 paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "campo_offerta_etto", codiceBox, canale, 2);
-                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_etto);
+                                interprete.assignCompiledField("campo_offerta", paragraphName, campo_offerta_etto, VeicolatureEdro21.PrezzoAnziche);
 
                             }
                         }
@@ -7355,7 +7355,7 @@ descrizioneEsempio.EndsWith("\r\n");
                             else
                             {
                                 var paragraphName = GetStileForField(mappaStili, combinazioneAssegnata + suffix_plus, "prezzo_offerta_etto", codiceBox, canale, 2);
-                                interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto);
+                                interprete.assignCompiledField("prezzo_offerta", paragraphName, prezzo_offerta_etto, VeicolatureEdro21.PrezzoOfferta);
 
                             }
                         }
@@ -7607,7 +7607,7 @@ Descrizione3.EndsWith("\r\n");
                     {
                         Debug.WriteLine(ex);
                     }
-                    interprete.assignCompiledField("descrizione", descrizioneParagraphStyle, descrizione);
+                    interprete.assignCompiledField("descrizione", descrizioneParagraphStyle, descrizione, VeicolatureEdro21.Descrizione);
 
 
                     #endregion descrizione
@@ -7774,7 +7774,7 @@ Descrizione3.EndsWith("\r\n");
                                 }
 
                                 interpreteSottogruppo = interprete.Clone();
-                                interpreteSottogruppo.assignCompiledField("descrizione", descrizioneParagraphStyle, descrizione);
+                                interpreteSottogruppo.assignCompiledField("descrizione", descrizioneParagraphStyle, descrizione, VeicolatureEdro21.Descrizione);
                                 interpreteSottogruppo.finalizeFields();
                                 var fieldsSottogruppo = interpreteSottogruppo.getFields();
                                 sottogruppo["compiledFields"] = fieldsSottogruppo.compiledFields;
