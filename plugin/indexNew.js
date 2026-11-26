@@ -166,6 +166,8 @@ const filtriJs = require('./filtri');
 const FuoriVolantino = require('./fuoriVolantino');
 //TASK-ff931e6d: colonne visibili, ordinamento e larghezze della lista del tracciato.
 const ColonneTracciato = require('./colonneTracciato');
+//TASK-e758bd95: "Mostra etichetta veicolata" sotto "Selezionato il campo".
+const EtichettaVeicolata = require('./etichettaVeicolata');
 const CssFramework = require('./CssFramework');
 //I20-1009: la sistemazione delle foto nel box ha un modulo suo. Anche schedaRef la usa da qui.
 const SistemazioneFoto = require('./sistemazioneFoto/sistemazioneFoto');
@@ -1073,10 +1075,10 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_REF_FIELD_SELECTED, asy
             }
         }];
 
-        setNarrow("Selezionato il campo " + Utility.parseLabel(args[0].label), buttons);
+        setNarrow("Selezionato il campo " + Utility.parseLabel(args[0].label), conEtichettaVeicolata(buttons, args[0]));
     }
     else {
-        setNarrow("Selezionato il campo " + Utility.parseLabel(args[0].label))  ;
+        setNarrow("Selezionato il campo " + Utility.parseLabel(args[0].label), conEtichettaVeicolata([], args[0]));
     }
 
 });
@@ -1091,6 +1093,26 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_MULTISELECTION, async f
 
 
 
+
+/// TASK-e758bd95: ai pulsanti di "Selezionato il campo" si aggiunge "Mostra etichetta veicolata", se
+/// l'agenzia lo abilita. Il campo resta selezionato: la scheda del box si scarica a parte.
+function conEtichettaVeicolata(buttons, campo) {
+    if (!EtichettaVeicolata.abilitato(pluginMiddleware)) {
+        return buttons;
+    }
+    return buttons.concat([{
+        buttonText: EtichettaVeicolata.TESTO_PULSANTE,
+        buttonCallback: async function () {
+            try {
+                await EtichettaVeicolata.mostra(campo, { Utility: Utility, schedaRef: schedaRef, Modali: Modali, messaggioUtente: messaggioUtente, $: $ });
+            }
+            catch (e) {
+                console.error("Code ETV-04 Etichetta veicolata non mostrata:", e);
+                messaggioUtente("Code ETV-04 Etichetta veicolata non mostrata: " + e.message, "error", false, 5);
+            }
+        }
+    }]);
+}
 
 /// Toglie il messaggio a tutta larghezza e rimette in vista il pannello.
 ///

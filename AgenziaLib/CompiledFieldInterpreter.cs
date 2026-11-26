@@ -41,8 +41,11 @@ namespace AgenziaLib
             currentFields.deletedFields = new List<string>();
         }
 
-        public void assignCompiledField(string labelName, string paragraphName, string content)
+        /// TASK-e758bd95: veicolatoDa sono i campi del record da cui viene il contenuto, se l'agenzia li
+        /// dichiara (Edro21); senza, il campo resta come prima.
+        public void assignCompiledField(string labelName, string paragraphName, string content, IEnumerable<string> veicolatoDa = null)
         {
+            List<string> veicolatura = veicolatoDa?.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
             CompiledField nuovoElemento = currentFields.compiledFields.FirstOrDefault(f => f.labelName == labelName);
 
             //for (int i = 0; i < currentFields.compiledFields.Count; i++)
@@ -60,7 +63,8 @@ namespace AgenziaLib
                 {
                     labelName = labelName,
                     paragraphName = paragraphName,
-                    content = content
+                    content = content,
+                    veicolatoDa = veicolatura
                 };
 
                 currentFields.compiledFields.Add(nuovoElemento);
@@ -69,6 +73,8 @@ namespace AgenziaLib
             {
                 nuovoElemento.paragraphName = paragraphName;
                 nuovoElemento.content = content;
+                //Il contenuto nuovo viene da un altro ramo: vale la sua veicolatura, anche se non dichiarata.
+                nuovoElemento.veicolatoDa = veicolatura;
             }
         }
 
@@ -117,7 +123,7 @@ namespace AgenziaLib
             var validField = getFields();
             foreach (var field in validField.compiledFields)
             {
-                clone.assignCompiledField(field.labelName, field.paragraphName, field.content);
+                clone.assignCompiledField(field.labelName, field.paragraphName, field.content, field.veicolatoDa);
             }
             foreach(var deleted in validField.deletedFields)
             {

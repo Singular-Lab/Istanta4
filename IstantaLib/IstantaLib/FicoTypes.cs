@@ -484,6 +484,14 @@ namespace IstantaLib
         public string paragraphName { get; set; }//paragraph in InDesign. Se vuoto non viene trattato
         public string labelName { get; set; }//label in InDesign
         public string content { get; set; }
+
+        /// <summary>
+        /// TASK-e758bd95: i campi del record del tracciato da cui l'agenzia ha composto il contenuto (la
+        /// "veicolatura"), per "Mostra etichetta veicolata" del Plugin. Null quando l'agenzia non lo
+        /// dichiara: allora non si serializza, e il JSON dei campi resta quello di prima.
+        /// </summary>
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> veicolatoDa { get; set; }
     }
 
     public class BoxIndd
@@ -990,6 +998,10 @@ namespace IstantaLib
         public List<AgenziaCustomPlugin_ViewColonneTracciato> colonneTracciato { get; set; }
 
         public bool controlloNomeFileFiltri { get; set; } = false;//Se true il plugin cerca il filtro corrispondente al nome file della lavorazione corrente
+
+        /// TASK-e758bd95: se true, selezionando un campo di un box il Plugin offre "Mostra etichetta
+        /// veicolata", che mostra i campi del record da cui e' composto (CompiledField.veicolatoDa).
+        public bool mostraEtichettaVeicolata { get; set; } = false;
 
         public List<AgenziaCustomPlugin_KeyLabel> infoRapide;//Lista delle chiavi da mostrare subito quando dalla scheda ref si preme la icona I di Info
 
