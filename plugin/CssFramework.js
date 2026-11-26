@@ -4925,11 +4925,142 @@ const CssFramework =
 
         pendente.chiaviSegnalate.push(pairKey);
 
-        var boxLabel = box && box.label ? box.label : "senza etichetta";
-        var msg = "Code CSF-013: Conflitto tra elementi nel box " + boxLabel + ": " + elementoA.label + " non dovrebbe toccare " + elementoB.label + ".";
+        var msg = this.testoConflitto(box, elementoA, elementoB);
         var misure = this.misureContatto(elementoA.item, elementoB.item, useTextBounds);
         messaggioUtente(misure != "" ? msg + " " + misure : msg, "warning");
         addSegnalazione(msg, "warning", 2, true, ["CSF-013", "yellow"], null, cssRegoleConflitti.datiDiVerifica(elementoA.label, elementoB.label, useTextBounds));
+    },
+
+    /// Il testo della CSF-013 (lo rilegge cssRegoleConflitti.voceDiConflitto).
+    testoConflitto(box, elementoA, elementoB) {
+        var boxLabel = box && box.label ? box.label : "senza etichetta";
+        return "Code CSF-013: Conflitto tra elementi nel box " + boxLabel + ": " + elementoA.label + " non dovrebbe toccare " + elementoB.label + ".";
+    },
+
+    /// Le coppie di elementi del box che una regola di conflitto vieta e che si toccano: [{ a, b }],
+    /// con a e b come li da' getElementiSegnalazioniConflitti. I20-1276: tolta da
+    /// controllaSegnalazioniConflittiPendenti, perche' serve anche dopo il confronto del box.
+    coppieInConflitto(box, regola) {
+        var coppie = [];
+        var elementiA = this.getElementiSegnalazioniConflitti(box, regola.latoA);
+
+        if (regola.latoB.length == 0) {
+            for (var a = 0; a < elementiA.length; a++) {
+                for (var b = a + 1; b < elementiA.length; b++) {
+                    if (this.elementsTouching(elementiA[a].item, elementiA[b].item, regola.useTextBounds)) {
+                        coppie.push({ a: elementiA[a], b: elementiA[b] });
+                    }
+                }
+            }
+            return coppie;
+        }
+
+        var elementiB = this.getElementiSegnalazioniConflitti(box, regola.latoB);
+        for (var a = 0; a < elementiA.length; a++) {
+            for (var b = 0; b < elementiB.length; b++) {
+                if (elementiA[a].key == elementiB[b].key) {
+                    continue;
+                }
+
+                if (this.elementsTouching(elementiA[a].item, elementiB[b].item, regola.useTextBounds)) {
+                    coppie.push({ a: elementiA[a], b: elementiB[b] });
+                }
+            }
+        }
+        return coppie;
+    },
+
+    /// I20-1276: le segnalazioni del box che resta in pagina dopo il confronto (confronti.confrontoBox).
+    /// Dopo un'azione sul box (Forza a sconto linea, Forza reparto in descrizione) il box rifatto passa
+    /// testi e stili al box vecchio, che tiene le sue foto dove stavano. Prima il bollino si abbinava
+    /// come un campo: se c'erano tutti e due restava quello vecchio (una CSF-013 della forzatura restava
+    /// anche dopo averla tolta), se c'era solo il vecchio si buttava. E il box che resta non lo
+    /// misurava nessuno: una descrizione cresciuta di una riga finiva sopra la foto senza segnalazione.
+    ///
+    /// Ora il bollino ha le segnalazioni del box rifatto (vociDelRifatto), come per ogni box rifatto,
+    /// con le CSF-013 misurate su questo box: quelle che non sono piu' vere si tolgono senza messaggio
+    /// (erano misurate sul box rifatto, con le foto altrove), quelle vere restano una volta sola, quelle
+    /// che mancano si aggiungono con le misure nel registro, salvo quelle che il cliente esclude. Con le
+    /// segnalazioni disattivate il box rifatto non ne ha, e il bollino vecchio se ne va. Restituisce il
+    /// box, che riscrivere il bollino rigruppa: va usato quello restituito.
+    segnalazioniDopoConfronto(box, vociDelRifatto) {
+        try {
+            if (box == null || !box.isValid) {
+                return box;
+            }
+
+            var voci = Array.isArray(vociDelRifatto) ? vociDelRifatto.slice() : [];
+            if (!this.segnalazioniDisattivate()) {
+                voci = this.conflittiMisuratiSulBox(box, voci);
+            }
+
+            return voci.length > 0 ? Segnalazioni.applicaAlBox(box, voci) : Segnalazioni.togliDalBox(box);
+        }
+        catch (error) {
+            console.error("Code CSF-013: segnalazioni dopo il confronto non riuscite per il box " + (box && box.label ? box.label : "") + ": " + error);
+            return box;
+        }
+    },
+
+    /// I20-1276: le voci del bollino con le CSF-013 misurate sul box: tolte quelle che non si toccano
+    /// piu' (nel dubbio restano, come in ricontrollaConflittiDelBox), aggiunte quelle delle regole del
+    /// box (la copia delle regole) che si toccano e non ci sono gia', in un ordine o nell'altro.
+    conflittiMisuratiSulBox(box, voci) {
+        var regole = this.regoleConflittiDallaCopia(box);
+        var me = this;
+        var restanti = [];
+        for (var i = 0; i < voci.length; i++) {
+            var dati = cssRegoleConflitti.voceDiConflitto(voci[i]);
+            if (dati == null) {
+                restanti.push(voci[i]);
+                continue;
+            }
+            var useTextBounds = dati.useTextBounds != null ? dati.useTextBounds
+                : cssRegoleConflitti.modoDiMisura(regole, dati.a, dati.b, (motivo, etichetta) => me.makeRegexFromGroupName(motivo).test(etichetta));
+            if (useTextBounds == null || this.conflittoAncoraPresente(box, dati.a, dati.b, useTextBounds)) {
+                restanti.push(voci[i]);
+                continue;
+            }
+            console.log("Code CSF-013: dopo il confronto " + dati.a + " e " + dati.b + " non si toccano nel box " + box.label + ": la segnalazione del box rifatto non resta.");
+        }
+
+        if (!Array.isArray(regole) || regole.length == 0) {
+            return restanti;
+        }
+
+        var giaNelBollino = restanti.map(v => cssRegoleConflitti.voceDiConflitto(v)).filter(d => d != null);
+        var stessaCoppia = (d, a, b) => (d.a == a && d.b == b) || (d.a == b && d.b == a);
+        for (var r = 0; r < regole.length; r++) {
+            var coppie = this.coppieInConflitto(box, regole[r]);
+            for (var c = 0; c < coppie.length; c++) {
+                var a = coppie[c].a.label;
+                var b = coppie[c].b.label;
+                if (giaNelBollino.some(d => stessaCoppia(d, a, b))) {
+                    continue;
+                }
+                giaNelBollino.push({ a: a, b: b });
+
+                var msg = this.testoConflitto(box, coppie[c].a, coppie[c].b);
+                var segnalazione = {
+                    msg: msg,
+                    typeMessage: "warning",
+                    priority: 2,
+                    applicaBollino: true,
+                    impostazioniBollino: ["CSF-013", "yellow", null, 0, null, false],
+                    key: null,
+                    verifica: cssRegoleConflitti.datiDiVerifica(a, b, regole[r].useTextBounds)
+                };
+                //I20-1264: come addSegnalazione, cio' che il cliente esclude non entra nel bollino.
+                if (typeof segnalazioneEsclusaDalCliente === "function" && segnalazioneEsclusaDalCliente(segnalazione)) {
+                    continue;
+                }
+
+                restanti.push(etichettaSegnalazioni.daSegnalazione(segnalazione));
+                var misure = this.misureContatto(coppie[c].a.item, coppie[c].b.item, regole[r].useTextBounds);
+                messaggioUtente(misure != "" ? msg + " " + misure : msg, "warning");
+            }
+        }
+        return restanti;
     },
 
     /// Il controllo finale: guarda se gli elementi che non dovevano toccarsi si toccano, e
@@ -4948,30 +5079,9 @@ const CssFramework =
 
             for (var i = 0; i < pendente.regole.length; i++) {
                 var regola = pendente.regole[i];
-                var elementiA = this.getElementiSegnalazioniConflitti(box, regola.latoA);
-
-                if (regola.latoB.length == 0) {
-                    for (var a = 0; a < elementiA.length; a++) {
-                        for (var b = a + 1; b < elementiA.length; b++) {
-                            if (this.elementsTouching(elementiA[a].item, elementiA[b].item, regola.useTextBounds)) {
-                                this.segnalaConflittoElementi(box, elementiA[a], elementiA[b], pendente, regola.useTextBounds);
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                var elementiB = this.getElementiSegnalazioniConflitti(box, regola.latoB);
-                for (var a = 0; a < elementiA.length; a++) {
-                    for (var b = 0; b < elementiB.length; b++) {
-                        if (elementiA[a].key == elementiB[b].key) {
-                            continue;
-                        }
-
-                        if (this.elementsTouching(elementiA[a].item, elementiB[b].item, regola.useTextBounds)) {
-                            this.segnalaConflittoElementi(box, elementiA[a], elementiB[b], pendente, regola.useTextBounds);
-                        }
-                    }
+                var coppie = this.coppieInConflitto(box, regola);
+                for (var c = 0; c < coppie.length; c++) {
+                    this.segnalaConflittoElementi(box, coppie[c].a, coppie[c].b, pendente, regola.useTextBounds);
                 }
             }
 

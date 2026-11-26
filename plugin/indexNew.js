@@ -9414,17 +9414,21 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
             color = "darkorange";
         }
 
-        //I20-1275: il messaggio esce intero. Prima oltre i 200 caratteri si tagliava e finiva con "...",
-        //e l'errore non si capiva piu'. Un messaggio lungo (per esempio la pagina d'errore del server)
-        //si legge scorrendo il riquadro, alto al massimo 120px, cosi' non copre il pannello.
+        //I20-1276: il riquadro in cima al pannello e' breve: oltre i 200 caratteri il messaggio si taglia
+        //e finisce con "...", senza barra di scorrimento (la I20-1275 l'aveva messo intero e scorrevole,
+        //ma intero va solo nella console di Utility, nel log e nella copia: logMessage ha gia' msg intero).
         //Il testo va come testo e non come HTML: un "<" in un'eccezione si mangiava il resto.
-        var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%; max-height: 120px; overflow-y: auto;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%; overflow-wrap: break-word; word-break: break-word;"></h4></div>';
+        var testoRiquadro = String(msg);
+        if (testoRiquadro.length > 200) {
+            testoRiquadro = testoRiquadro.substring(0, 200) + "...";
+        }
+        var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%;"></h4></div>';
         //I20-981: col modal aperto i messaggi finivano dietro, nel contenitore della schermata
         //principale, e non si leggevano. Il parametro modal esiste da sempre ma quasi nessuno
         //lo passa: invece di rincorrere le chiamate, il contenitore lo sceglie la funzione,
         //guardando se c'e' un overlay aperto.
         contenitoreMessaggi(modal).append(html);
-        $("#messaggioUtente h4").text(String(msg));
+        $("#messaggioUtente h4").text(testoRiquadro);
         //usiamo uno spinner per il caricamento, poichè non supporta le gif dobbiamo creare noi un effetto che possa sembrare un caricamento
         if (loading) {
 
