@@ -115,7 +115,7 @@ test("un box non piu' valido non si riseleziona, e non si rompe niente", () => {
 
 test("il salvataggio dell'azione in vista controllata si ferma prima di impaginare, anche se la ref esce", () => {
     const scheda = sorgente("schedaRef.js");
-    const inizio = scheda.indexOf("    salvaCambioStrutturaleDo(params) {");
+    const inizio = scheda.indexOf("    salvaCambioStrutturaleDo(params, saltaConfronto = false) {");
     assert.notStrictEqual(inizio, -1);
     const salva = scheda.substring(inizio, scheda.indexOf("\n    leggiCampoAddestramentoDellaRef(", inizio));
 

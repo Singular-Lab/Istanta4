@@ -193,6 +193,43 @@ const schedaRef = {
     azioniStrutturaliDisponibili: [],
     azioniDiGruppo: false,
 
+    /// I20-1278: la riga "confronto" sotto i parametri di un'azione sul box: una tendina true/false
+    /// che parte dal valore dell'azione (il campo Confronto del plugin di agenzia, true se non c'e').
+    /// classe distingue la scheda di un box (confrontoAzioneBox) dalla selezione multipla
+    /// (confrontoAzioneBoxMultipla). Non ha la classe dei campi dell'azione: non va a Istanta.
+    rigaConfrontoAzione(classe, valoreDiBase) {
+        const diBase = CambiStrutturali.confrontoDiBase({ confronto: valoreDiBase });
+        const nome = CambiStrutturali.PARAMETRO_CONFRONTO;
+        const riga = $('<div class="row" style="display:block;"><div class="col" style="display:block;"></div></div>');
+        const colonna = riga.find(".col");
+        colonna.append($('<div style="color: white;width:100%;"></div>').text(nome));
+        //Il valore scelto sta in data-valore: in UXP il valore di un sp-picker non si scrive con .val() (vedi
+        //Menu.setPickerValue), e non e' detto che si legga prima che l'operatore lo tocchi. Il valore di
+        //partenza e' segnato con selected sulla sua voce.
+        const tendina = $('<sp-picker style="vertical-align:middle;"></sp-picker>');
+        tendina.addClass(classe);
+        tendina.attr("data-valore", diBase);
+        const menuTendina = $('<sp-menu slot="options"></sp-menu>');
+        CambiStrutturali.VALORI_CONFRONTO.forEach(v => {
+            menuTendina.append($('<sp-menu-item' + (v === diBase ? " selected" : "") + ' value="' + v + '"></sp-menu-item>').text(v));
+        });
+        tendina.append(menuTendina);
+        tendina.on('change', function (e) {
+            //Il change non deve arrivare ad altri gestori (la tendina delle azioni sta piu' su).
+            e.stopPropagation();
+            const scelto = e.target && e.target.value != null ? String(e.target.value) : "";
+            $(this).attr("data-valore", CambiStrutturali.VALORI_CONFRONTO.includes(scelto) ? scelto : diBase);
+        });
+        colonna.append(tendina);
+        return riga;
+    },
+
+    /// I20-1278: se il confronto va saltato: almeno un'azione aggiunta nel contenitore ha "confronto" a false.
+    confrontoDaSaltare(contenitore, classe) {
+        const valori = $(contenitore).find("." + classe).toArray().map(el => $(el).attr("data-valore"));
+        return CambiStrutturali.confrontoDaSaltare(valori);
+    },
+
     /// I20-1049: le azioni sul box gia' aggiunte, nell'ordine dei pannelli.
     azioniStrutturaliAggiunte() {
         const disponibili = this.azioniStrutturaliDisponibili || [];
@@ -1215,6 +1252,11 @@ const schedaRef = {
             pannello.append(riga);
         });
 
+        //I20-1278: sotto i parametri, il confronto, come nella scheda di un box: dal valore dell'azione,
+        //false se in uno dei box l'azione e' dichiarata senza confronto.
+        const confrontoDiBase = CambiStrutturali.confrontoDaSaltare(azioniDeiBox.map(a => a.confronto)) ? "false" : "true";
+        pannello.append(me.rigaConfrontoAzione("confrontoAzioneBoxMultipla", confrontoDiBase));
+
         $("#azioni_strutturali_multiple").append(pannello);
         me.aggiornaTendinaOpzioniMultipla();
         setTimeout(() => $("#Tab5").scrollTop($("#Tab5")[0].scrollHeight - $("#Tab5")[0].clientHeight), 50);
@@ -1305,6 +1347,8 @@ const schedaRef = {
             valori[$(this).attr("data-field")] = $(this).val();
         });
         const opzione = me.opzioneSelezioneMultipla();
+        //I20-1278: con "confronto" a false in un'azione, ogni box rifatto resta com'e', senza confronto.
+        const saltaConfronto = me.confrontoDaSaltare("#azioni_strutturali_multiple", "confrontoAzioneBoxMultipla");
         const boxes = (me.boxSelezioneMultipla || []).slice();
         const esiti = [];
         const finali = [];
@@ -1317,7 +1361,7 @@ const schedaRef = {
                 showLoading("Azioni sul box " + (i + 1) + " di " + boxes.length);
                 try {
                     const params = me.parametriAzioniDelBox(b.records, aggiunte.map(a => a.voce.azioniPerBox[i]), valori, opzione);
-                    const esito = await me.cambioStrutturaleSulBox(params, b.dettaglio);
+                    const esito = await me.cambioStrutturaleSulBox(params, b.dettaglio, null, saltaConfronto);
                     if (esito.box != null) {
                         finali.push(esito.box);
                     }
@@ -1345,7 +1389,9 @@ const schedaRef = {
     /// in pagina, null se la referenza non va piu' impaginata) e fallisce col motivo.
     /// I20-1233: rifai, se c'e', rifa' il box al posto di impaginaBox e del confronto (il Report
     /// Correggo lo rifa' come Reimpagina box); restituisce il box che resta in pagina.
-    cambioStrutturaleSulBox(params, dettaglio, rifai = null) {
+    /// I20-1278: saltaConfronto (il parametro "confronto" a false) lascia in pagina il box rifatto
+    /// com'e', senza confronto; quello di prima va da parte come versione precedente.
+    cambioStrutturaleSulBox(params, dettaglio, rifai = null, saltaConfronto = false) {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequestClient();
 
@@ -1402,7 +1448,7 @@ const schedaRef = {
                         throw new Error("il box non e' stato reimpaginato");
                     }
                     if (boxPrecedente.isValid) {
-                        const esitoConfronto = await confronti.confrontoBox(boxPrecedente, finale);
+                        const esitoConfronto = await confronti.confrontoBox(boxPrecedente, finale, saltaConfronto === true);
                         if (esitoConfronto != null && esitoConfronto.boxFinale != null) {
                             finale = esitoConfronto.boxFinale;
                         }
@@ -3363,6 +3409,9 @@ const schedaRef = {
 
                             }
 
+
+                            //I20-1278: sotto i parametri, il confronto, dal valore dell'azione.
+                            panelAzioneEl.append(me.rigaConfrontoAzione("confrontoAzioneBox", objCS.confronto));
 
                             //$("#azioni_strutturali").append(contInstr);
                             $("#azioni_strutturali").append(panelAzioneEl);
@@ -5406,7 +5455,8 @@ const schedaRef = {
         }
 
         console.log(params);
-        this.salvaCambioStrutturaleDo(params);
+        //I20-1278: il parametro "confronto" non va fra gli attributi: decide solo come si rifa' il box.
+        this.salvaCambioStrutturaleDo(params, this.confrontoDaSaltare("#azioni_strutturali", "confrontoAzioneBox"));
 
     },
 
@@ -8238,7 +8288,9 @@ const schedaRef = {
         this.salvaCambioStrutturaleDo(params);
     },
 
-    salvaCambioStrutturaleDo(params) {
+    /// I20-1278: saltaConfronto (il parametro "confronto" a false) lascia in pagina il box rifatto
+    /// com'e', senza confronto; quello di prima va da parte come versione precedente.
+    salvaCambioStrutturaleDo(params, saltaConfronto = false) {
         let me = this;
 
         var xhr = new XMLHttpRequestClient();
@@ -8304,7 +8356,7 @@ const schedaRef = {
 
                     if (me.refSelected.item.isValid) {
                         //me.refSelected.item.remove();
-                        var esitoConfronto = await confronti.confrontoBox(me.refSelected.item, res.boxAggiunto);
+                        var esitoConfronto = await confronti.confrontoBox(me.refSelected.item, res.boxAggiunto, saltaConfronto === true);
                         //Il box che resta in pagina si seleziona in ogni caso: il confronto lo faceva solo
                         //quando sopravviveva il box nuovo, non quando sopravvive il duplicato del vecchio.
                         Utility.selezionaBox(esitoConfronto != null && esitoConfronto.boxFinale != null ? esitoConfronto.boxFinale : res.boxAggiunto);
