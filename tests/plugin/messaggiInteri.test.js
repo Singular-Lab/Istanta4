@@ -7,7 +7,11 @@
  *   dentro un "<" ("Unexpected token < in JSON") perdeva il resto.
  * - Il pulsante di copia aveva il testo in msg="...", e la copia si fermava al primo doppio apice.
  *
- * Ora il messaggio esce intero, come testo, e il riquadro si scorre quando e' troppo alto.
+ * Ora il messaggio esce intero, come testo, nella console, nel log e nella copia.
+ *
+ * I20-1276: il riquadro in cima al pannello invece resta breve, come prima della I20-1275: taglia a
+ * 200 caratteri con "...", senza barra di scorrimento. "In utility" voleva dire la console della
+ * scheda Utility, non tutto il Plugin.
  *
  * indexNew.js non si carica sotto Node: si controlla il sorgente, come per gli altri test della
  * console (contestoLavorazioneMessaggi, consoleBoxImpaginazione).
@@ -34,26 +38,24 @@ const scritturaConsole = corpoFunzione("function writeFileInConsole(logMessage) 
 
 /* ---- riquadro in cima al pannello ---- */
 
-test("il riquadro non taglia il messaggio e non aggiunge i puntini", () => {
-    assert.doesNotMatch(messaggioUtente, /msg\.substring\(/);
-    assert.doesNotMatch(messaggioUtente, /msg\.slice\(/);
-    assert.doesNotMatch(messaggioUtente, /msg = msg[^;]*"\.\.\."/);
-    assert.doesNotMatch(messaggioUtente, /msg\.length > \d+/);
+test("il riquadro taglia a 200 caratteri con i puntini, su una copia: msg resta intero", () => {
+    assert.match(messaggioUtente, /var testoRiquadro = String\(msg\);\s*if \(testoRiquadro\.length > 200\) \{\s*testoRiquadro = testoRiquadro\.substring\(0, 200\) \+ "\.\.\.";\s*\}/);
+    //msg non si accorcia: e' quello della console, del log e della copia.
+    assert.doesNotMatch(messaggioUtente, /msg = msg\.(substring|slice|substr)\(/);
 });
 
-test("il riquadro mette il messaggio come testo, non dentro l'HTML", () => {
+test("il riquadro mette il testo tagliato come testo, non dentro l'HTML", () => {
     const riquadro = messaggioUtente.substring(messaggioUtente.indexOf('var html = \'<div class="row" id="messaggioUtente"'));
     const html = riquadro.substring(0, riquadro.indexOf(";\n"));
     assert.doesNotMatch(html, /\+ msg \+/, "il testo non va concatenato nel markup");
-    assert.match(riquadro, /contenitoreMessaggi\(modal\)\.append\(html\);\s*\$\("#messaggioUtente h4"\)\.text\(String\(msg\)\);/);
+    assert.match(riquadro, /contenitoreMessaggi\(modal\)\.append\(html\);\s*\$\("#messaggioUtente h4"\)\.text\(testoRiquadro\);/);
 });
 
-test("un messaggio troppo alto si scorre dentro il riquadro, che resta basso", () => {
+test("il riquadro non ha la barra di scorrimento", () => {
     const riquadro = messaggioUtente.substring(messaggioUtente.indexOf('var html = \'<div class="row" id="messaggioUtente"'));
     const html = riquadro.substring(0, riquadro.indexOf(";\n"));
-    assert.match(html, /max-height: 120px; overflow-y: auto;/);
-    //Una riga lunga senza spazi (un percorso, un URL) va a capo invece di uscire dal riquadro.
-    assert.match(html, /overflow-wrap: break-word;/);
+    assert.doesNotMatch(html, /max-height/);
+    assert.doesNotMatch(html, /overflow-y/);
 });
 
 test("la console riceve il messaggio intero, non quello del riquadro", () => {

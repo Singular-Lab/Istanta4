@@ -25,6 +25,9 @@ const NoRenderElementi = require('./noRenderElementi');
 //I20-1124: la versione precedente di un box rifatto, messa da parte sul suo livello.
 const VersionePrecedente = require('./versionePrecedente');
 const DnaBox = require('./dnaBox');
+//I20-1276: il bollino delle segnalazioni non e' un campo del box: lo decide il box rifatto.
+const Segnalazioni = require('./segnalazioni/segnalazioni');
+const etichettaSegnalazioni = require('./segnalazioni/etichetta');
 
 /// I20-1046: gli elementi del box che decidono le regole e non l'operatore: la base (e gli altri
 /// campi base*, a cui il custom del cliente da' lo stile oggetto del formato) e i loghi e gli sfondi
@@ -54,8 +57,13 @@ const confronti = {
         try {
 
             let useBox2 = false;
+            //I20-1276: le segnalazioni del box rifatto, per il bollino del box che resta in pagina.
+            //Il bollino ("segnalazioni$[...]") non si abbina come un campo: con un bollino in tutti e due
+            //i box restava quello vecchio, con le segnalazioni di prima dell'azione sul box.
+            const vociDelRifatto = Segnalazioni.leggiDalBox(box2);
+            const nonBollino = campo => campo.isValid && !etichettaSegnalazioni.eDiSegnalazioni(campo.label);
             let box2CampiEsclusivi = [];
-            let box2campi = box2.allPageItems.filter(campo => campo.isValid);
+            let box2campi = box2.allPageItems.filter(nonBollino);
             let box2CampiLabels = box2campi.map(campo => Utility.parseLabel(campo.label));
             
             
@@ -63,7 +71,7 @@ const confronti = {
             let box1Duplicate = box1.duplicate();
             //i due box sono gruppi, facciamo una mappatura dei campi tramite label, i campi presenti solo nel primo box vengono messi in una lista chiamata box1CampiEsclusivi e viceversa
             let box1CampiEsclusivi = [];
-            let box1campi = box1Duplicate.allPageItems.filter(campo => campo.isValid);
+            let box1campi = box1Duplicate.allPageItems.filter(nonBollino);
             let box1CampiLabels = box1campi.map(campo => Utility.parseLabel(campo.label));
             let listCampiConDifferenze = [];
             box1campi.forEach(campo => {
@@ -368,6 +376,14 @@ const confronti = {
                 //I20-1124: la versione precedente va da parte: sopra il nuovo, scostata, al 60%, sul
                 //livello non stampabile. Lo stesso che fa Reimpagina box.
                 VersionePrecedente.mettiDaParte(box1, docInLavorazione);
+            }
+
+            //I20-1276: il box che resta in pagina puo' essere il vecchio con i testi del nuovo (un'azione
+            //sul box, come Forza a sconto linea): le foto sono dove stavano, e la descrizione puo' esserci
+            //finita sopra. Il bollino prende le segnalazioni del box rifatto, con le CSF-013 misurate qui:
+            //quelle non piu' vere si tolgono, quelle gia' nel bollino non si ripetono, le altre si aggiungono.
+            if (boxFinale != null && boxFinale.isValid) {
+                boxFinale = CssFramework.segnalazioniDopoConfronto(boxFinale, vociDelRifatto);
             }
 
             return { boxFinale: boxFinale };

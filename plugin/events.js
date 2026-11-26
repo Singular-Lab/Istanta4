@@ -98,6 +98,15 @@ class InddEvents {
     
     INTERVALLO_STATUS = 10000;//valore in millisecondi
     INTERVALLOTIMESTAMP = 3000;
+    //TASK-9d0fffc9: oltre questo tempo www.google.com si considera senza risposta, e quindi la
+    //connessione assente. Sta sotto INTERVALLO_STATUS: il controllo dopo parte all'ora giusta.
+    TEMPO_MASSIMO_PING_MS = 8000;
+    //TASK-9d0fffc9: il primo esito del controllo si comunica sempre, anche se e' offline.
+    primoStatoEmesso = false;
+    //TASK-9d0fffc9: quando e' partito il controllo in corso, per il registro dell'avvio.
+    inizioControlloStato = null;
+    //TASK-9d0fffc9: le uscite anticipate dal ciclo gia' registrate, una volta ciascuna.
+    usciteRegistrate = {};
     //INTERVALLO_SESSIONE = 5000;//valore in millisecondi
 
     //dimensioni finestra del plugin
@@ -127,8 +136,16 @@ class InddEvents {
 
             try {
 
-                if (me.asleep)
+                //TASK-9d0fffc9: il primo giro, nel registro dell'avvio.
+                if (!me.primoGiroRegistrato) {
+                    me.primoGiroRegistrato = true;
+                    me.passoAvvio("Ciclo degli eventi: primo giro");
+                }
+
+                if (me.asleep) {
+                    me.uscitaAvvio("pannello sospeso (asleep)");
                     return;
+                }
 
                 //I20-1045: senza app il ciclo non puo' far niente. Usciva in silenzio, e il pannello
                 //restava su "Avvio in corso" senza un log; ora lo dice, una volta sola.
@@ -136,6 +153,7 @@ class InddEvents {
                     if (!me.avvisoAppMancante) {
                         me.avvisoAppMancante = true;
                         console.error("I20-1045: InDesign non ha reso disponibile app: il ciclo degli eventi non parte.");
+                        me.uscitaAvvio("app di InDesign assente (I20-1045)");
                     }
                     return;
                 }
@@ -151,6 +169,7 @@ class InddEvents {
 
                 if (me.isBusy){
                     //console.warn("IsBusy: "+me.isBusy)
+                    me.uscitaAvvio("Plugin occupato (isBusy)");
                     return;
                 }
 
@@ -191,6 +210,14 @@ class InddEvents {
 
                         //console.log("check status");
                         //console.log("Check ping " + me.pingInProcess);
+                        if (me.checkStatusInProcess) {
+                            //TASK-9d0fffc9: il controllo di prima non ha ancora risposto.
+                            if (!me.usciteRegistrate.controlloInCorso) {
+                                me.usciteRegistrate.controlloInCorso = true;
+                                me.passoAvvio("Controllo connessione: il precedente non ha ancora risposto, non ne parte un altro",
+                                    me.inizioControlloStato != null ? "in corso da " + (Date.now() - me.inizioControlloStato) + " ms" : null, "warning");
+                            }
+                        }
                         if (!me.checkStatusInProcess) {
                             //Effettuo ping per controllare la connesione
                             me.checkStatus(me.checkStatusResonse);
@@ -639,6 +666,8 @@ class InddEvents {
             }catch(err)
             {
                 console.log("INTERVAL ERROR " + err);
+                //TASK-9d0fffc9: un errore nel giro del ciclo, durante l'avvio, una volta per messaggio.
+                me.uscitaAvvio("errore: " + (err != null && err.message ? err.message : String(err)), err != null && err.stack ? String(err.stack) : null);
             }
         }
             , 100);
@@ -710,14 +739,46 @@ class InddEvents {
         return true;
     }
 
+    /// TASK-9d0fffc9: un passo nel registro dell'avvio (indexNew.js), se c'e'. Dopo l'avvio solo con
+    /// ancheDopo: il controllo dello stato gira ogni 10 secondi e riempirebbe il log.
+    passoAvvio(testo, dettagli = null, stile = "info", ancheDopo = false) {
+        try {
+            if (typeof registroAvvio === "undefined" || registroAvvio == null) {
+                return;
+            }
+            if (registroAvvio.concluso && !ancheDopo) {
+                return;
+            }
+            registroAvvio.passo(testo, dettagli, stile);
+        }
+        catch (e) {
+            //il registro non deve fermare il ciclo
+        }
+    }
+
+    /// TASK-9d0fffc9: un'uscita anticipata dal giro del ciclo, registrata una volta per motivo.
+    uscitaAvvio(motivo, dettagli = null) {
+        if (this.usciteRegistrate[motivo]) {
+            return;
+        }
+        this.usciteRegistrate[motivo] = true;
+        this.passoAvvio("Ciclo degli eventi: giro interrotto, " + motivo, dettagli, "warning");
+    }
+
     checkStatusResonse(conn, login, me, params) {
         //console.log("checkStatusResonse " + conn + " - " + login);
         //console.log(this);
 
+        //TASK-9d0fffc9: OFFLINE partiva solo passando da online a offline. Il ciclo parte offline,
+        //quindi senza internet all'avvio non arrivava nessun evento e restava "Avvio del plugin in
+        //corso...". Il primo esito ora si comunica sempre.
+        const primo = !me.primoStatoEmesso;
+        me.primoStatoEmesso = true;
         if (!conn) {
-            if (me.isOnline) {
+            if (me.isOnline || primo) {
                 me.isOnline = false;
                 //console.log("SISTEMA OFFLINE");
+                me.passoAvvio("Evento OFFLINE", primo ? "primo esito del controllo" : "connessione persa", "warning", true);
                 me.fireEvent(me.EVENT_OFFLINE, []);
                 
             }
@@ -727,6 +788,7 @@ class InddEvents {
             if (!me.isOnline) {
                 me.isOnline = me;
                 //console.log("SISTEMA ONLINE");
+                me.passoAvvio("Evento ONLINE", primo ? "primo esito del controllo" : "connessione tornata", "info", true);
                 me.fireEvent(me.EVENT_ONLINE, []);
                 
             }
@@ -740,14 +802,17 @@ class InddEvents {
 
                 if (login == IstantaState.Logged) {
                     console.log("UTENTE LOGGATO");
+                    me.passoAvvio("Evento sessione: utente collegato", null, "info", true);
                     me.fireEvent(me.EVENT_USER_LOGGED, params);
                 }
                 else if (login == IstantaState.NotLogged) {
                     console.log("UTENTE NON LOGGATO");
+                    me.passoAvvio("Evento sessione: utente non collegato", null, "info", true);
                     me.fireEvent(me.EVENT_USER_NOT_LOGGED, []);
                 }
                 else if (login == IstantaState.IstantaDown) {
                     console.log("ISTANTA DOWN");
+                    me.passoAvvio("Evento sessione: Istanta non disponibile", null, "warning", true);
                     me.fireEvent(me.EVENT_ISTANTA_DOWN, []);
                 }
             }
@@ -866,6 +931,13 @@ class InddEvents {
     /// Chiede al server se la connessione c'e' e se la sessione e' ancora valida. L'esito
     /// diventa EVENT_ONLINE / EVENT_OFFLINE, EVENT_USER_LOGGED / EVENT_USER_NOT_LOGGED o
     /// EVENT_ISTANTA_DOWN.
+    /// Il controllo della connessione: www.google.com risponde, allora c'e' internet e si passa alla
+    /// sessione di Istanta (checkSession); altrimenti offline.
+    ///
+    /// TASK-9d0fffc9: la richiesta a Google non aveva un tempo massimo. Se restava appesa,
+    /// checkStatusInProcess restava true e il controllo non ripartiva piu': all'avvio il pannello
+    /// restava su "Avvio del plugin in corso...". Ora, passato TEMPO_MASSIMO_PING_MS, vale come
+    /// offline, e una risposta arrivata dopo si ignora. Ogni esito, durante l'avvio, va nel registro.
     checkStatus(callback) {
 
         //console.log("Check status");    
@@ -873,55 +945,66 @@ class InddEvents {
         let me = this;
 
         this.checkStatusInProcess = true;
+        this.inizioControlloStato = Date.now();
+        const inizio = this.inizioControlloStato;
+        let chiuso = false;
+        const chiudi = function () {
+            if (chiuso) {
+                return false;
+            }
+            chiuso = true;
+            clearTimeout(scadenza);
+            return true;
+        };
+        const offline = function (motivo, stile) {
+            me.passoAvvio("Controllo connessione: www.google.com " + motivo, "dopo " + (Date.now() - inizio) + " ms", stile);
+            me.checkStatusInProcess = false;
+            me.inizioControlloStato = null;
+            callback(false, IstantaState.None, me);
+        };
+
+        this.passoAvvio("Controllo connessione: richiesta a www.google.com");
+        const scadenza = setTimeout(function () {
+            if (chiudi()) {
+                offline("non ha risposto entro " + me.TEMPO_MASSIMO_PING_MS + " ms", "warning");
+            }
+        }, this.TEMPO_MASSIMO_PING_MS);
 
         //Prima faccio il PING
-        fetch('https://www.google.com')
+        let richiesta;
+        try {
+            richiesta = fetch('https://www.google.com');
+        }
+        catch (e) {
+            richiesta = Promise.reject(e);
+        }
+        richiesta
             .then(response => {
 
-                //console.log("Response check status fetch google: " + response.ok);
+                if (!chiudi()) {
+                    me.passoAvvio("Controllo connessione: risposta di www.google.com arrivata dopo il tempo massimo, ignorata",
+                        "dopo " + (Date.now() - inizio) + " ms");
+                    return;
+                }
 
                 if (response.ok) {
-                    // if (!me.isOnline) {
-                    //     me.fireEvent(me.EVENT_ONLINE, []);
-                    //     me.isOnline=true;
-                    //console.log('Connesso a internet!');
-
-                    //     me.checkSession(callback);
-                    // } 
-
                     //Sono online, los tato è per forza 1
                     //Ora vado a vedere la session
+                    me.passoAvvio("Controllo connessione: www.google.com risponde", "stato " + response.status + " dopo " + (Date.now() - inizio) + " ms");
                     me.checkSession(callback);
 
                 }
                 else {
-                    // if (me.isOnline) 
-                    // {
-                    //     me.isOnline=false;
-                    //     me.fireEvent(me.EVENT_OFFLINE, []);
-                    //console.log('Problema di connessione o risposta non valida.', response.status);
-
-                    // }
-
-                    me.checkStatusInProcess = false;
-                    callback(false, IstantaState.None, me);
+                    offline("ha risposto con lo stato " + response.status, "warning");
                 }
 
             })
             .catch(error => {
 
-                //console.error("Errore nella richiesta:", error);
-
-                //console.log("Errore nel ping a google");
-                // if (me.isOnline) 
-                // {
-                //     me.isOnline=false;
-                //     me.fireEvent(me.EVENT_OFFLINE, []);
-                //     console.log('Problema di connessione o risposta non valida.', response.status);
-
-                // }
-                me.checkStatusInProcess = false;
-                callback(false, IstantaState.None, me);
+                if (!chiudi()) {
+                    return;
+                }
+                offline("non raggiungibile: " + (error != null && error.message ? error.message : String(error)), "warning");
             });
 
     }
@@ -955,6 +1038,8 @@ class InddEvents {
                     //console.log("Utente loggato");
 
                     me.checkStatusInProcess = false;
+                    me.inizioControlloStato = null;
+                    me.passoAvvio("Sessione Istanta: utente collegato");
                     callback(true, IstantaState.Logged, me, [objResult]);
                 }
                 else {
@@ -967,6 +1052,8 @@ class InddEvents {
                     //console.log("Utente non loggato");
 
                     me.checkStatusInProcess = false;
+                    me.inizioControlloStato = null;
+                    me.passoAvvio("Sessione Istanta: utente non collegato");
                     callback(true, IstantaState.NotLogged, me);
 
                     // }
@@ -1000,6 +1087,8 @@ class InddEvents {
             clearTimeout(me.sessionCallTimeout);
 
             me.checkStatusInProcess = false;
+            me.inizioControlloStato = null;
+            me.passoAvvio("Sessione Istanta: errore", String(code), "warning");
             callback(true, IstantaState.IstantaDown, me);
 
         };
@@ -1009,11 +1098,14 @@ class InddEvents {
         //this.checkSessionInProgress=true;
 
         _xhrCheckSession.timeout = 5000; // Potrebbe non rispettarlo, allora per paracadute ci procuriamo pure noi un timeout locale
+        this.passoAvvio("Sessione Istanta: richiesta LoginController/getSession");
         _xhrCheckSession.send("LoginController/getSession", null, "GET");
 
         this.sessionCallTimeout = setTimeout(function(){
             
             console.log("TIMEOUT checkSESSIOn FIRED!!!");
+            me.passoAvvio("Sessione Istanta: nessuna risposta entro 7 s", null, "warning");
+            me.inizioControlloStato = null;
 
             if (_xhrCheckSession!=null)
             {

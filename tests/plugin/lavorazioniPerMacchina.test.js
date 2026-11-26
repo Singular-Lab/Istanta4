@@ -103,17 +103,19 @@ function costanti() {
     return utility.substring(inizio, fine).replace(/,\s*$/, "");
 }
 
-function utilityCon(d) {
+//TASK-0c931089: app e' quello di InDesign, per il nome utente davanti alla cartella della postazione.
+function utilityCon(d, app = undefined) {
     const membri = ["eFileListaKit(", "nomiCartellaLavorazioni(", "_senzaBarraFinale(", "cartellaLavorazioni(", "nomeFileLavorazioniMacchina(",
-        "_cartelleFileLavorazioni(", "_vociDellaCartella(", "cartellaDatiMacchina(", "percorsoFileLavorazioniMacchina(",
+        "_cartelleFileLavorazioni(", "_vociDellaCartella(", "nomeUtenteInDesign(", "nomeCartellaPostazione(", "eCartellaDellaMacchina(",
+        "recuperaCartelleDellaMacchina(", "cartellaDatiMacchina(", "percorsoFileLavorazioniMacchina(",
         "fileLavorazioniAltri(", "leggiFileLavorazioni(", "_voceNellElenco(", "nomeFileReportIntegrita(", "nomeFileWhitelistIntegrita(",
         "fileDiLavoro(", "copiaFileDiLavoro(",
         "esisteLavorazione(", "voceLavorazione(", "salvaVoceLavorazione(", "libroDelDocumento("].map(corpoMembro);
-    const fabbrica = new Function("require", "const Utility = ({\n" + costanti() + ",\n" + membri.join(",\n") + "\n});\nreturn Utility;");
+    const fabbrica = new Function("require", "app", "const Utility = ({\n" + costanti() + ",\n" + membri.join(",\n") + "\n});\nreturn Utility;");
     return fabbrica((nome) => {
         assert.strictEqual(nome, "fs");
         return d.fs;
-    });
+    }, app);
 }
 
 const kit = (id, titolo) => ({ guidId: "g-" + id, meta: JSON.stringify({ titolo: titolo }) });
@@ -145,6 +147,82 @@ test("gli altri file: il mio di prima, le altre postazioni, poi i file di prima 
         { percorso: "/doc/.lavorazioni/lavorazioni.json", cartella: "/doc", origine: "vecchia" },
         { percorso: "/doc/lavorazioni.json", cartella: "/doc", origine: "vecchia" }
     ]);
+});
+
+/* ---- TASK-0c931089: la cartella della postazione col nome utente ---- */
+
+const MARCO = { userName: "Marco" };
+const MIA_MARCO = "/doc/SingularData/Marco_" + ID;
+
+test("le cartelle di questa macchina con un altro nome sono sue, non di un'altra postazione", () => {
+    const u = utilityCon(disco({
+        "/doc": ["SingularData"],
+        "/doc/SingularData": ["Marco_" + ID, ID, "Luca_" + ID, ALTRA_ID],
+        [MIA_MARCO]: ["lavorazioni.json"],
+        [MIA]: ["lavorazioni.json"],
+        ["/doc/SingularData/Luca_" + ID]: ["lavorazioni.json"],
+        [ALTRA]: ["lavorazioni.json"]
+    }), MARCO);
+    assert.deepStrictEqual(u.fileLavorazioniAltri("/doc", ID), [
+        { percorso: "/doc/SingularData/Luca_" + ID + "/lavorazioni.json", cartella: "/doc/SingularData/Luca_" + ID, origine: "mia" },
+        { percorso: MIA + "/lavorazioni.json", cartella: MIA, origine: "mia" },
+        { percorso: ALTRA + "/lavorazioni.json", cartella: ALTRA, origine: "postazione" }
+    ]);
+});
+
+test("la cartella col nome utente recupera i file di quella di prima della stessa macchina, che resta com'era", () => {
+    const d = disco({
+        "/doc": ["SingularData"],
+        "/doc/SingularData": [ID, "Marco_" + ID, ALTRA_ID],
+        [MIA]: ["lavorazioni.json", "listaRefEscluse.json", "allineamenti.json"],
+        [MIA_MARCO]: ["allineamenti.json"],
+        [ALTRA]: ["lavorazioni.json", "Filtri.json"]
+    }, {
+        [MIA + "/lavorazioni.json"]: "[{\"file\":\"A.indd\"}]",
+        [MIA + "/listaRefEscluse.json"]: "[2]",
+        [MIA + "/allineamenti.json"]: "[\"di prima\"]",
+        [MIA_MARCO + "/allineamenti.json"]: "[\"nuovo\"]",
+        [ALTRA + "/lavorazioni.json"]: "[]",
+        [ALTRA + "/Filtri.json"]: "[3]"
+    });
+    const prima = Object.assign({}, d.file);
+
+    const copiati = utilityCon(d, MARCO).recuperaCartelleDellaMacchina("/doc/SingularData", ID);
+
+    assert.deepStrictEqual(copiati.sort(), ["listaRefEscluse.json", "lavorazioni.json"].sort());
+    assert.strictEqual(d.file[MIA_MARCO + "/lavorazioni.json"], "[{\"file\":\"A.indd\"}]");
+    assert.strictEqual(d.file[MIA_MARCO + "/listaRefEscluse.json"], "[2]");
+    //Quello che la cartella nuova ha gia' non si sovrascrive, e dall'altra postazione non arriva niente.
+    assert.strictEqual(d.file[MIA_MARCO + "/allineamenti.json"], "[\"nuovo\"]");
+    assert.strictEqual(d.file[MIA_MARCO + "/Filtri.json"], undefined);
+    Object.keys(prima).filter(p => !p.startsWith(MIA_MARCO + "/")).forEach(p => assert.strictEqual(d.file[p], prima[p], p));
+    assert.ok(d.scritture.every(p => p.startsWith(MIA_MARCO + "/")), d.scritture.join(", "));
+});
+
+test("senza nome utente non c'e' niente da recuperare", () => {
+    const d = disco({ "/doc/SingularData": [ID], [MIA]: ["lavorazioni.json"] }, { [MIA + "/lavorazioni.json"]: "[]" });
+    assert.deepStrictEqual(utilityCon(d).recuperaCartelleDellaMacchina("/doc/SingularData", ID), []);
+    assert.deepStrictEqual(d.scritture, []);
+});
+
+test("seconda postazione: arrivano anche conteggio e referenze escluse del documento", () => {
+    const voceAltra = { file: "A.indd", id: 7, details: kit(7, "Kit A") };
+    const d = disco(conDati({
+        "/doc/SingularData": [ALTRA_ID],
+        [ALTRA]: ["lavorazioni.json", "listaRefConteggioA.json", "listaRefEscluseA.json", "listaRefConteggioB.json"]
+    }), {
+        [ALTRA + "/lavorazioni.json"]: JSON.stringify([voceAltra]),
+        [ALTRA + "/listaRefConteggioA.json"]: "[1]",
+        [ALTRA + "/listaRefEscluseA.json"]: "[2]",
+        [ALTRA + "/listaRefConteggioB.json"]: "[9]"
+    });
+
+    utilityCon(d).voceLavorazione("/doc", ID, "A.indd");
+
+    assert.strictEqual(d.file[MIA + "/listaRefConteggioA.json"], "[1]");
+    assert.strictEqual(d.file[MIA + "/listaRefEscluseA.json"], "[2]");
+    //Quelli di un altro documento no.
+    assert.strictEqual(d.file[MIA + "/listaRefConteggioB.json"], undefined);
 });
 
 /* ---- trovare la lavorazione ---- */

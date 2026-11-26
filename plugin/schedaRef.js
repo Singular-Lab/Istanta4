@@ -6747,6 +6747,11 @@ const schedaRef = {
         }
         //I20-1077: e cosi' su ogni altro campo di testo con il contenuto diverso.
         if (this.campoTestoInMismatch(diff) != null) {
+            //TASK-f2c5e6a8: su un derivato "Scegli quella del box" passava dal Salva, cioe' dalla
+            //revisione, e si fermava con SRF-167. Il testo del box diventa il meta del derivato.
+            if (this.idLavRecDelBoxAperto() > 0) {
+                return ["testoServer", "impostaMetaTesto"];
+            }
             return ["testoServer", "testoBox"];
         }
         //Il collegamento della foto e' rotto ma il file sta nei Links: si ricollega da qui.
@@ -7236,6 +7241,7 @@ const schedaRef = {
             aggiornaMetaDescrizione: ["Aggiorna il meta con il box", "Il meta della descrizione prende il testo del box: il box non cambia"],
             testoServer: ["Scegli quella del server", "Il campo nel box riprende il testo del server, con i suoi stili"],
             testoBox: ["Scegli quella del box", "Il testo del box vale per questa lavorazione (come Salva modifiche): il box non cambia"],
+            impostaMetaTesto: ["Imposta come meta", "Il testo del box diventa il meta di questo derivato: il dato, il box e il box originale non cambiano"],
             aggiornaMeta: ["Aggiorna meta", "Il meta resta: il testo del server di adesso diventa il suo valore originale, e il box non cambia"],
             metaServer: ["Usa quella del server", "Il meta si toglie e il campo nel box riprende il testo del server, con i suoi stili"],
             ricollegaLinks: ["Ricollega alla cartella Links", "Il riquadro resta dov'e': cambia solo il file a cui punta, quello della cartella Links della lavorazione"]
@@ -7332,6 +7338,16 @@ const schedaRef = {
                     }
                     else if (azione === "testoBox") {
                         me.tieniTestoDelBox(diff);
+                    }
+                    else if (azione === "impostaMetaTesto") {
+                        //TASK-f2c5e6a8: come "Imposta come meta" della descrizione: registrato il meta la
+                        //scheda sotto si ridisegna, e la finestra si rifa'.
+                        if (await me.impostaTestoComeMeta(diff)) {
+                            await me.ridisegnaSchedaDopoIlMeta();
+                        }
+                        if (typeof dopoAzione === "function") {
+                            await dopoAzione();
+                        }
                     }
                     else if (azione === "aggiornaMeta") {
                         await me.aggiornaMetaDelTesto(diff, dopoAzione);
@@ -7627,6 +7643,16 @@ const schedaRef = {
     /// compone altro (contenutoServer) o la lista si ricarica, il meta si segnala da verificare.
     /// La finestra si chiude: il salvataggio ricarica la scheda.
     tieniTestoDelBox(diff) {
+        //TASK-f2c5e6a8: un derivato non si revisiona: il testo del box diventa il suo meta, senza Salva.
+        if (this.idLavRecDelBoxAperto() > 0) {
+            const me = this;
+            this.impostaTestoComeMeta(diff).then(function (registrato) {
+                return registrato ? me.ridisegnaSchedaDopoIlMeta() : null;
+            }).catch(function (e) {
+                console.error("Code SRF-169 Meta del testo del derivato:", e);
+            });
+            return true;
+        }
         const campoCompilato = this.campoTestoInMismatch(diff);
         const box = this.refSelected != null ? this.refSelected.item : null;
         const campo = campoCompilato != null && box != null ? Utility.getFieldByLabel(Utility.parseLabel(campoCompilato.labelName), box) : null;
@@ -7642,6 +7668,33 @@ const schedaRef = {
         $("#popupCloseButton").trigger("click");
         //Una volta sola, come il pulsante Salva modifiche.
         this.salvaModificheDellaScheda();
+        return true;
+    },
+
+    /// TASK-f2c5e6a8: "Imposta come meta" su un campo di testo di un derivato: il testo del box (come
+    /// lo manderebbe "Scegli quella del box") diventa il meta del campo per questo derivato, con
+    /// valore originale il testo che il server compone ora. Nessuna revisione: il dato della
+    /// referenza, il box e il box originale non cambiano. Vero se il server l'ha registrato; la
+    /// scheda allora e' gia' riscaricata.
+    async impostaTestoComeMeta(diff) {
+        const campoCompilato = this.campoTestoInMismatch(diff);
+        const box = this.refSelected != null ? this.refSelected.item : null;
+        const campo = campoCompilato != null && box != null ? Utility.getFieldByLabel(Utility.parseLabel(campoCompilato.labelName), box) : null;
+        if (campo == null) {
+            messaggioUtente("Code SRF-169 Testo del box o del server non trovato: il meta non e' stato impostato", "error", false, 5);
+            return false;
+        }
+        const registrato = await this.salvaTestiDalBox({ voci: [{
+            label: campoCompilato.labelName,
+            azione: this.AZIONE_TESTO_DAL_BOX.crea,
+            contenuto: this.testoDalBoxPerIlServer(campoCompilato, campo.contents, TestoTag.componiStringTagFromInndTextFrame(campo)),
+            contenutoServer: String(campoCompilato.content == null ? "" : campoCompilato.content)
+        }] });
+        if (!registrato) {
+            return false;
+        }
+        await this.riscaricaDopoIlMeta();
+        messaggioUtente("Testo di " + campoCompilato.labelName + " impostato come meta del derivato", "success", false, 4);
         return true;
     },
 

@@ -59,6 +59,36 @@ if (!AvvioPannello.controlla({
 })) {
     throw new Error("I20-1045: InDesign non ha reso disponibile app, il Plugin non parte (vedi avvioPannello.js).");
 }
+//TASK-9d0fffc9: il registro dell'avvio. Nasce subito dopo il controllo di app: prima di quello non
+//si carica nessun modulo (I20-1045), e senza app avvioPannello.js ha gia' i suoi messaggi.
+//Le funzioni che legge (cartellaDeiLog, nomeMacchina, pathLavorazione, indesignEvents) sono
+//definite piu' sotto: si leggono solo quando servono, e finche' non ci sono valgono vuote.
+const RegistroAvvio = require('./registroAvvio');
+const registroAvvio = RegistroAvvio.crea({
+    fs: require('fs'),
+    console: console,
+    macchina: function () { return typeof nomeMacchina === "function" ? nomeMacchina() : ""; },
+    cartellaLog: function () { return typeof cartellaDeiLog === "function" ? cartellaDeiLog() : ""; },
+    cartellaDocumento: function () { return typeof pathLavorazione !== "undefined" ? pathLavorazione : ""; },
+    stato: function () { return statoDelCicloPerAvvio(); }
+});
+try {
+    registroAvvio.passo("Pannello caricato", "versione " + require('./manifest.json').version);
+}
+catch (e) {
+    registroAvvio.passo("Pannello caricato", "versione non letta: " + e);
+}
+//TASK-9d0fffc9: gli errori che nessuno gestisce, finche' l'avvio non e' concluso.
+if (typeof window !== "undefined" && window != null && typeof window.addEventListener === "function") {
+    window.addEventListener("error", function (evento) {
+        registroAvvio.errore(evento != null && evento.error != null ? evento.error : (evento != null ? evento.message : evento), "error");
+    });
+    window.addEventListener("unhandledrejection", function (evento) {
+        registroAvvio.errore(evento != null ? evento.reason : evento, "promise");
+    });
+}
+
+registroAvvio.passo("app di InDesign presente");
 
 const uxp = require('uxp');
 const { storage } = require('uxp');
@@ -76,11 +106,14 @@ const { app, Justification, FitOptions, LocationOptions, File, ColorModel, Folde
 const ConfigurazioneCliente = require('./configurazioneCliente');
 const configurazioneCliente = ConfigurazioneCliente.carica(function (percorso) { return require('./' + percorso); });
 if (configurazioneCliente.errore != null) {
+    registroAvvio.passo("Configurazione del cliente non caricata", configurazioneCliente.errore, "error");
     console.error("I20-1064: " + configurazioneCliente.errore);
     mostraAvvioPannello(configurazioneCliente.errore, false);
     throw new Error("I20-1064: " + configurazioneCliente.errore);
 }
 const customAgenzia = configurazioneCliente.customAgenzia;
+registroAvvio.passo("Configurazione del cliente caricata", configurazioneCliente.percorsoCustom + ", Istanta " +
+    (configurazioneCliente.ipconfig != null ? (configurazioneCliente.ipconfig.testMode ? configurazioneCliente.ipconfig.istantaIpTestMode : configurazioneCliente.ipconfig.istantaIp) : "?"));
 const XMLHttpRequestClient = require('./XMLHttpRequestClient');
 const { parse, format } = require('path');
 //I20-1015: lo scaricamento delle foto, ex cmd.js. Lo usano come globale schedaFoto e
@@ -193,7 +226,8 @@ let defaultPercorsoLinks = "/Links/";
 let defaultPercorsoLoghi = "/Links/Loghi/";
 /// I20-1065: le cartelle che il Plugin crea da solo sotto quella del documento, all'apertura
 /// (preparaCartelleDiSistema): logs ed export, con la barra finale, e la cartella dei dati di
-/// questa postazione, SingularData/<idMacchina>, senza. Vuote finche' non sono pronte.
+/// questa postazione, SingularData/<utente>_<idMacchina>, senza. Vuote finche' non sono pronte.
+/// TASK-0c931089: logPath e' la cartella di questa postazione dentro logs, con lo stesso nome.
 /// Al posto di percorsoLogs, percorsoEsportazione e percorsoLavorazioni (I20-1057), che sceglieva
 /// l'operatore.
 var logPath = "";
@@ -453,7 +487,9 @@ function checkForLoghiCore(){
 
 // #region EVENTS
 
+registroAvvio.passo("Moduli del Plugin caricati");
 let indesignEvents = new InddEvents();
+registroAvvio.passo("Ciclo degli eventi creato");
 //I20-1205: la scheda Foto P/S con spunte non applicate trattiene la selezione e chiede prima di uscire.
 indesignEvents.impostaGuardiaSelezione(() => schedaRef.trattieniSelezionePerFotoPs());
 //I20-1205: e lo stesso chiede quando si cambia voce dal menu' del pannello.
@@ -543,6 +579,10 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, asyn
     if (xhrInProcess!=null)
         xhrInProcess.abort("Cambio documento attivo");
     
+    //TASK-9d0fffc9: solo durante l'avvio; dopo, il cambio di documento e' cosa di tutti i giorni.
+    if (!registroAvvio.concluso) {
+        registroAvvio.passo("Documento attivo", args[0] != null ? args[0].name : "nessuno");
+    }
     docInLavorazione = args[0];
     
     clearNarrow();
@@ -559,6 +599,10 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_DOCUMENT_SELECTED, asyn
     await initDocumentInLavorazione();
     if (docInLavorazione==null)
         await initLibroInLavorazione();
+    if (!registroAvvio.concluso) {
+        registroAvvio.passo("Documento letto", "cartella " + (pathLavorazione || "nessuna") + ", logs " + (cartellaDeiLog() || "assente") +
+            ", kit " + (idKitLavorazione || "nessuno"));
+    }
 
     //I20-1234: tornando su un documento si ritrova quello che ci si era lasciato aperto. Dopo
     //l'avvio, che chiude le finestre e torna alla Home; prima il report, che come colonna ha la
@@ -594,6 +638,9 @@ indesignEvents.addEventListener(indesignEvents.EVENT_NEW_LIBRO_OPENED, async fun
 indesignEvents.addEventListener(indesignEvents.EVENT_NO_DOCUMENT_OPENED, async function(args){
 
     console.log("EVENT_NO_DOCUMENT_OPENED");
+    if (!registroAvvio.concluso) {
+        registroAvvio.passo("Nessun documento aperto in InDesign");
+    }
     if (app.books.count() > 0)
     {
         console.log("C'è un libro aperto, procedo con l'inizializzazione del libro");
@@ -1148,6 +1195,52 @@ function eliminaArtwork(){
 //     // }
 // }
 
+/// TASK-9d0fffc9: il messaggio dell'avvio quando www.google.com non risponde. Il ciclo degli eventi
+/// riprova da solo ogni 10 secondi (INTERVALLO_STATUS).
+const MESSAGGIO_AVVIO_SENZA_INTERNET = "Nessuna connessione a internet (www.google.com non risponde). Riprovo ogni 10 secondi.";
+
+/// TASK-9d0fffc9: lo stato di Istanta in parole, per il registro dell'avvio.
+function nomeStatoIstanta(stato) {
+    if (stato == IstantaState.Logged) {
+        return "utente collegato";
+    }
+    if (stato == IstantaState.NotLogged) {
+        return "utente non collegato";
+    }
+    if (stato == IstantaState.IstantaDown) {
+        return "non disponibile";
+    }
+    return "non ancora interrogato";
+}
+
+/// TASK-9d0fffc9: lo stato del Plugin e del ciclo degli eventi quando l'avvio si ferma, per capire
+/// perche'. Ogni campo si legge da solo: uno che manca non deve far perdere gli altri.
+function statoDelCicloPerAvvio() {
+    var stato = {};
+    var leggi = function (nome, funzione) {
+        try {
+            stato[nome] = funzione();
+        }
+        catch (e) {
+            stato[nome] = "non leggibile: " + e;
+        }
+    };
+    leggi("appPresente", function () { return app != null; });
+    leggi("isOnline", function () { return !!isOnline; });
+    leggi("istanta", function () { return nomeStatoIstanta(istantaState); });
+    leggi("documento", function () { return docInLavorazione != null ? docInLavorazione.name : null; });
+    leggi("cartellaDocumento", function () { return pathLavorazione; });
+    leggi("cartellaLog", function () { return cartellaDeiLog(); });
+    leggi("cicloOnline", function () { return !!indesignEvents.isOnline; });
+    leggi("cicloIstanta", function () { return nomeStatoIstanta(indesignEvents.istantaState); });
+    leggi("controlloInCorso", function () { return !!indesignEvents.checkStatusInProcess; });
+    leggi("controlloInCorsoDaMs", function () { return indesignEvents.inizioControlloStato != null ? Date.now() - indesignEvents.inizioControlloStato : null; });
+    leggi("occupato", function () { return !!indesignEvents.isBusy; });
+    leggi("sospeso", function () { return !!indesignEvents.asleep; });
+    leggi("documentiAperti", function () { return app.documents.length; });
+    return stato;
+}
+
 /// Il Plugin ha due interruttori indipendenti - c'e' internet (isOnline) e Istanta risponde
 /// (istantaState) - e questa funzione traduce la loro combinazione in cosa si vede.
 ///
@@ -1170,6 +1263,8 @@ async function cambioDiStatoDelSistema()
     $("#istantaState").text(" - OK");
 
     console.log("Cambio di stato del sistema " + [isOnline, istantaState]);
+    //TASK-9d0fffc9: ogni cambio di stato va nel registro, anche dopo l'avvio: e' un passaggio raro.
+    registroAvvio.passo("Cambio di stato del sistema", (isOnline ? "online" : "offline") + ", Istanta " + nomeStatoIstanta(istantaState));
 
     if (isOnline)
     {
@@ -1182,6 +1277,12 @@ async function cambioDiStatoDelSistema()
             $("#statusLoginOp").text("");
             $("#login").css("display","flex");
             clearInfo();
+            //TASK-9d0fffc9: con Istanta non ancora interrogata il login e' di passaggio: l'avvio e'
+            //concluso quando la sessione risponde che l'utente non e' collegato.
+            if (istantaState == IstantaState.NotLogged)
+            {
+                registroAvvio.concludi("modulo di accesso mostrato");
+            }
         }
         else if (istantaState == IstantaState.Logged)
         {
@@ -1192,9 +1293,11 @@ async function cambioDiStatoDelSistema()
             //ricarica della configurazione del cliente (ficoProcess.scaricaFicoData).
             ReperimentoFoto.caricaBolliDiRipiego();
 
+            registroAvvio.passo("Utente collegato: apertura del documento in lavorazione");
             await initDocumentInLavorazione();       
             if (docInLavorazione==null)
                 await initLibroInLavorazione();
+            registroAvvio.concludi("pannello di lavoro" + (idKitLavorazione ? " (kit " + idKitLavorazione + ")" : ""));
         }
         else if (istantaState == IstantaState.IstantaDown)
         {
@@ -1216,6 +1319,7 @@ async function cambioDiStatoDelSistema()
                //Devo recuperare il titolo della lavorazione per metterlo in alto
 
             }
+            registroAvvio.concludi("Istanta non disponibile" + (idKitLavorazione ? ", si lavora sul kit " + idKitLavorazione : ""));
         }
     }
     else
@@ -1224,6 +1328,13 @@ async function cambioDiStatoDelSistema()
         //SOLO se il documento corrente non ha bisogno di essere associato a Kit
         //In tal caso schermata di blocco
         $("#footer").css("background-color", "#d84e4e");
+        //TASK-9d0fffc9: all'avvio, senza internet, restava "Avvio del plugin in corso..." per sempre.
+        //Ora lo si dice; quando la connessione torna arriva ONLINE e l'avvio prosegue da qui.
+        if (!registroAvvio.concluso)
+        {
+            showLoading(MESSAGGIO_AVVIO_SENZA_INTERNET);
+            registroAvvio.passo("Connessione a internet assente: messaggio mostrato all'operatore", null, "warning");
+        }
     }
 }
 
@@ -3274,7 +3385,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
             var req = "";
             var filterIndex = 0;
             if (docInLavorazione != null) {
-                var listaRefEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
+                var listaRefEscluse = readFile(Utility.percorsoRefEscluse());
                 var filtriJson = readFile(filtriJs.getNomeFileFiltriJson());
 
                 var pagineRange = "";
@@ -3325,7 +3436,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         continue;
                     }
 
-                    //leggiamo in var listaRefEscluse = readFile(Utility.percorsoDati("listaRefEscluse.json"));
+                    //leggiamo in var listaRefEscluse = readFile(Utility.percorsoRefEscluse());
                     //cerchiamo se la pagina corrente è presente in listaRefEscluse
                     //se c'è prendiamo tutti i codici gruppo degli elementi in listaEscluse e li mettiamo in un array
 
@@ -3779,7 +3890,7 @@ async function _conteggiaImpaginaConContesto(docInLavorazione, pathLavorazione, 
                         showLoading("Compilazione del risultato di conteggio");
                         await Utility.sleep(100);
                         //var boxConteggioTemplate = libreria.assets.itemByName("Box Conteggio").placeAsset(docInLavorazione)[0];
-                        var filePath = Utility.percorsoDati("listaRefConteggio.json");
+                        var filePath = Utility.percorsoConteggio();
                         clearFile(filePath);
                         logContent += "ripulisco la lista di ref avanzate\n ";
                         let date = new Date().toLocaleString('it-IT')
@@ -8872,6 +8983,8 @@ var cartellaAssenteCheck = false;
 /// (preparaCartelleDiSistema), con la barra finale. Vuota finche' non e' pronta: in quel momento
 /// i messaggi vanno solo in console, senza dire che la cartella manca (lo direbbe una volta sola,
 /// e poi non lo direbbe piu' quando manca davvero).
+/// TASK-0c931089: dentro logs, la cartella di questa postazione (Utility.nomeCartellaPostazione):
+/// ogni postazione scrive solo nei suoi log.
 function cartellaDeiLog() {
     return logPath || "";
 }
@@ -9150,16 +9263,47 @@ function contestoLavorazioneMessaggio(canale, area) {
 /// log. Null senza una lavorazione: idKitLavorazione torna a 0 quando il documento non ne ha una,
 /// mentre i dettagli di ficoProcess restano quelli della lavorazione di prima. Non fallisce mai:
 /// un messaggio non deve perdersi per colpa del suo contesto.
+/// TASK-0c931089: davanti a canale e area, quale lavorazione era aperta: il documento e il kit. Il
+/// libro no: cercarlo scorre i libri aperti in InDesign, troppo per ogni messaggio. Ogni parte che
+/// non si legge resta fuori, senza far perdere le altre.
 function contestoLavorazioneCorrente() {
     try {
         if (!idKitLavorazione) {
             return null;
         }
-        return contestoLavorazioneMessaggio(ficoProcess.getCanaleLavorazioneCorrente(), ficoProcess.getAreaLavorazioneCorrente());
+        var documento = null;
+        try {
+            documento = docInLavorazione != null ? docInLavorazione.name : null;
+        }
+        catch (e) {
+            //il documento puo' essere stato chiuso: resta il kit
+        }
+        var canaleArea = null;
+        try {
+            canaleArea = contestoLavorazioneMessaggio(ficoProcess.getCanaleLavorazioneCorrente(), ficoProcess.getAreaLavorazioneCorrente());
+        }
+        catch (e) {
+            canaleArea = null;
+        }
+        return [documentoLavorazioneMessaggio(documento, idKitLavorazione), canaleArea]
+            .filter(function (t) { return t; }).join(" · ") || null;
     }
     catch (e) {
         return null;
     }
+}
+
+/// TASK-0c931089: il documento e il kit della lavorazione, come li legge l'operatore:
+/// "Volantino_12.indd · Kit 345". Null se non c'e' niente.
+function documentoLavorazioneMessaggio(documento, kit) {
+    var parti = [];
+    if (documento) {
+        parti.push(String(documento));
+    }
+    if (kit) {
+        parti.push("Kit " + kit);
+    }
+    return parti.length > 0 ? parti.join(" · ") : null;
 }
 
 /// I20-1104: il riferimento al box di un messaggio, dal contesto dell'impaginazione in corso:
@@ -9270,17 +9414,21 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
             color = "darkorange";
         }
 
-        //I20-1275: il messaggio esce intero. Prima oltre i 200 caratteri si tagliava e finiva con "...",
-        //e l'errore non si capiva piu'. Un messaggio lungo (per esempio la pagina d'errore del server)
-        //si legge scorrendo il riquadro, alto al massimo 120px, cosi' non copre il pannello.
+        //I20-1276: il riquadro in cima al pannello e' breve: oltre i 200 caratteri il messaggio si taglia
+        //e finisce con "...", senza barra di scorrimento (la I20-1275 l'aveva messo intero e scorrevole,
+        //ma intero va solo nella console di Utility, nel log e nella copia: logMessage ha gia' msg intero).
         //Il testo va come testo e non come HTML: un "<" in un'eccezione si mangiava il resto.
-        var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%; max-height: 120px; overflow-y: auto;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%; overflow-wrap: break-word; word-break: break-word;"></h4></div>';
+        var testoRiquadro = String(msg);
+        if (testoRiquadro.length > 200) {
+            testoRiquadro = testoRiquadro.substring(0, 200) + "...";
+        }
+        var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%;"></h4></div>';
         //I20-981: col modal aperto i messaggi finivano dietro, nel contenitore della schermata
         //principale, e non si leggevano. Il parametro modal esiste da sempre ma quasi nessuno
         //lo passa: invece di rincorrere le chiamate, il contenitore lo sceglie la funzione,
         //guardando se c'e' un overlay aperto.
         contenitoreMessaggi(modal).append(html);
-        $("#messaggioUtente h4").text(String(msg));
+        $("#messaggioUtente h4").text(testoRiquadro);
         //usiamo uno spinner per il caricamento, poichè non supporta le gif dobbiamo creare noi un effetto che possa sembrare un caricamento
         if (loading) {
 
@@ -10567,6 +10715,10 @@ function writeFileInConsole(logMessage) {
     else if (style == "warning") {
         color = "darkorange";
     }
+    //TASK-9d0fffc9: i passi dell'avvio, riletti con Leggi log, non sono errori.
+    else if (style == "info") {
+        color = "dimgray";
+    }
     var div = $('<div class="logMessage" style="width:100%; background-color: ' + color + '; color: white; margin-left:0px; padding: 5px; margin-top: 5px; display: flex; justify-content: space-between; text-align: left;"></div>');
     var orario = $('<span style="font-size: 10px; margin-right: 10px;">' + logMessage.orario + '</span>');
     var messaggio = $('<span style="flex-grow: 1; min-width: 0; overflow-wrap: break-word; word-break: break-word;"></span>').text(String(msg));
@@ -10951,7 +11103,7 @@ function azzeraCartelleDiSistema() {
     SingularPath = "";
 }
 
-/// I20-1065: crea, se mancano, le cartelle logs, export e SingularData/<idMacchina> sotto base (la
+/// I20-1065: crea, se mancano, le cartelle logs/<postazione>, export e SingularData/<postazione> sotto base (la
 /// cartella del documento, o quella del libro), senza chiedere niente all'operatore, e ne fissa i
 /// percorsi: logPath, exportPath, SingularPath. Va chiamata all'apertura, prima di leggere
 /// qualsiasi file della lavorazione: il file delle lavorazioni, la lista del kit e i filtri stanno
@@ -10968,6 +11120,8 @@ async function preparaCartelleDiSistema(base) {
         logPath = cartelle.logPath;
         exportPath = cartelle.exportPath;
         SingularPath = cartelle.SingularPath;
+        //TASK-9d0fffc9: i passi dell'avvio rimasti in memoria vanno nel log, adesso che c'e'.
+        registroAvvio.scarica();
         //la cartella dei log adesso c'e': se mancasse ancora, va detto di nuovo
         cartellaAssenteCheck = false;
         return true;
@@ -12290,3 +12444,25 @@ async function resetIdRec(){
 
 
 showLoading("Avvio del plugin in corso...");
+registroAvvio.passo("Schermata di avvio mostrata");
+
+/// TASK-9d0fffc9: la vigilanza dell'avvio. Ogni 5 secondi, finche' l'avvio non e' concluso: scrive
+/// nel log le righe rimaste in memoria e, passati 30 secondi, registra dove si e' fermato e lo
+/// mostra sotto il messaggio di avvio. Lo stile in linea al posto di :visible, che in UXP non e'
+/// affidabile (vedi contenitoreMessaggi).
+var vigilanzaAvvio = setInterval(function () {
+    try {
+        if (registroAvvio.concluso) {
+            clearInterval(vigilanzaAvvio);
+            return;
+        }
+        var testo = registroAvvio.controllaBlocco();
+        var riquadro = document.getElementById("loadingPanel");
+        if (testo != null && riquadro != null && riquadro.style.display !== "none") {
+            $("#loadingPanel").find(".loadingSopra").text(testo).show();
+        }
+    }
+    catch (e) {
+        console.error("TASK-9d0fffc9: vigilanza dell'avvio:", e);
+    }
+}, 5000);
