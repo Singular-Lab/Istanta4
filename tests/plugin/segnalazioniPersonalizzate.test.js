@@ -168,6 +168,8 @@ test("I20-1211: Edro21 dichiara il filtro Solo foto, con CSF-013 e CSF-008 solo 
         { codice: "CSF-27", testoContiene: "" },
         { codice: "CSF-19", testoContiene: "" },
         { codice: "CSF-013", testoContiene: "foto" },
+        //I20-1276: la descrizione che tocca la foto del prodotto (immagine$...).
+        { codice: "CSF-013", testoContiene: "immagine" },
         { codice: "CSF-008", testoContiene: "foto" },
         //I20-1263: la foto non trovata.
         { codice: "FNF-01", testoContiene: "" }
