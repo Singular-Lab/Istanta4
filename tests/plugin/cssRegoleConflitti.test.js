@@ -101,9 +101,12 @@ test('la chiave distingue le regole anche per la scelta dei bounds', () => {
 
 // Senza questo passaggio l'opzione resterebbe un dato che nessuno guarda.
 test('il controllo passa la scelta dei bounds al confronto fra elementi', () => {
-    const framework = sorgente('plugin/CssFramework.js');
-    const inizio = framework.indexOf('controllaSegnalazioniConflittiPendenti(box) {');
-    const blocco = framework.slice(inizio, inizio + 2500);
+    const framework = sorgente('plugin/CssFramework.js').replace(/\r/g, '');
+    //I20-1276: le coppie che si toccano le cerca coppieInConflitto, che usano sia il controllo
+    //dell'impaginazione sia quello dopo il confronto del box.
+    const inizio = framework.indexOf('    coppieInConflitto(box, regola) {');
+    assert.ok(inizio > 0, 'coppieInConflitto non trovata');
+    const blocco = framework.substring(inizio, framework.indexOf('\n    },\n', inizio));
 
     const chiamate = blocco.match(/elementsTouching\([^)]*\)/g) || [];
 
@@ -111,6 +114,9 @@ test('il controllo passa la scelta dei bounds al confronto fra elementi', () => 
     assert.ok(
         chiamate.every(c => c.includes('regola.useTextBounds')),
         'entrambi i confronti devono usare la scelta dichiarata nella regola');
+
+    const controllo = framework.substring(framework.indexOf('controllaSegnalazioniConflittiPendenti(box) {'));
+    assert.match(controllo.substring(0, 1500), /var coppie = this\.coppieInConflitto\(box, regola\);/);
 });
 
 // La regola chiesta dalla issue, sul cliente indicato.
@@ -378,7 +384,8 @@ test('la CSF-013 porta le misure nel registro, non nel bollino', () => {
     //Il bollino ha il testo di sempre; dal secondo giro di I20-1178 porta anche i dati per rimisurarla.
     assert.match(segnala, /addSegnalazione\(msg, "warning", 2, true, \["CSF-013", "yellow"\], null, cssRegoleConflitti\.datiDiVerifica\(elementoA\.label, elementoB\.label, useTextBounds\)\);/);
     //Le misure si prendono come il controllo prende il contatto: stessa scelta dei bounds.
-    assert.strictEqual((css.match(/this\.segnalaConflittoElementi\([^)]*, pendente, regola\.useTextBounds\);/g) || []).length, 2);
+    //I20-1276: una sola chiamata, sulle coppie trovate da coppieInConflitto.
+    assert.strictEqual((css.match(/this\.segnalaConflittoElementi\([^)]*, pendente, regola\.useTextBounds\);/g) || []).length, 1);
 });
 
 test('il noRender del record si applica prima del controllo dei conflitti', () => {
