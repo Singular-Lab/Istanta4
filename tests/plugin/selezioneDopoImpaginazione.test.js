@@ -97,8 +97,8 @@ test("Reimpagina box attende l'impaginazione e seleziona il box nuovo; il cambio
 
 test("l'azione sul box e il Fix del report lasciano selezionato il box che resta in pagina", () => {
     const scheda = sorgente("schedaRef.js");
-    const cambio = corpoMembro(scheda, "    salvaCambioStrutturaleDo(params) {");
-    assert.match(cambio, /var esitoConfronto = await confronti\.confrontoBox\(me\.refSelected\.item, res\.boxAggiunto\);/);
+    const cambio = corpoMembro(scheda, "    salvaCambioStrutturaleDo(params, saltaConfronto = false) {");
+    assert.match(cambio, /var esitoConfronto = await confronti\.confrontoBox\(me\.refSelected\.item, res\.boxAggiunto, saltaConfronto === true\);/);
     assert.match(cambio, /Utility\.selezionaBox\(esitoConfronto != null && esitoConfronto\.boxFinale != null \? esitoConfronto\.boxFinale : res\.boxAggiunto\);/);
 
     const report = sorgente("reportIntegrita/reportIntegrita.js");

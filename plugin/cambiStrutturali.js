@@ -293,6 +293,8 @@ const cambiStrutturali = {
             })),
             labelELementCorreggo: struttura.labelElementCorreggo ?? null,
             opzioniValide: this._opzioniValide(struttura),
+            //I20-1278: da dove parte la tendina "confronto" dell'azione.
+            confronto: this.confrontoDiBase(struttura),
             //I20-1247: l'Id della configurazione (id qui sopra e' solo la posizione): il server ci
             //legge se i campi dell'azione restano bloccati alla reimportazione.
             idConfig: struttura.id ?? struttura.Id ?? null
@@ -404,6 +406,25 @@ const cambiStrutturali = {
             default:
                 return istruzione.valore;
         }
+    },
+
+    /// I20-1278: il parametro "confronto" che sta sotto i parametri di ogni azione sul box, nella
+    /// scheda ref e nella selezione multipla. Non e' un campo del record: non va a Istanta. true = il
+    /// box rifatto si confronta con quello di prima, come sempre; false = senza confronto.
+    PARAMETRO_CONFRONTO: "confronto",
+    VALORI_CONFRONTO: ["true", "false"],
+
+    /// I20-1278: il valore di partenza della tendina "confronto" di un'azione: il campo Confronto che
+    /// l'azione dichiara nel plugin di agenzia, "true" se non lo dichiara o non si legge.
+    confrontoDiBase(struttura) {
+        const dichiarato = struttura?.confronto ?? struttura?.Confronto;
+        return String(dichiarato == null ? "" : dichiarato).trim().toLowerCase() === "false" ? "false" : "true";
+    },
+
+    /// I20-1278: se il confronto va saltato, dai valori delle tendine "confronto" delle azioni
+    /// aggiunte: basta un false. Un valore che non si legge vale true, cioe' il confronto si fa.
+    confrontoDaSaltare(valori) {
+        return (valori || []).some(v => String(v == null ? "" : v).trim().toLowerCase() === "false");
     },
 }
 

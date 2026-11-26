@@ -519,7 +519,7 @@ test("con le azioni della configurazione i parametri dicono quali sono, per il b
 
 test("anche la scheda di un box manda gli Id delle azioni aggiunte", () => {
     const scheda = fs.readFileSync(path.join(__dirname, '..', '..', 'plugin', 'schedaRef.js'), 'utf8').replace(/\r/g, '');
-    const prepara = scheda.slice(scheda.indexOf("preparaCambioStrutturale() {"), scheda.indexOf("this.salvaCambioStrutturaleDo(params);", scheda.indexOf("preparaCambioStrutturale() {")));
+    const prepara = scheda.slice(scheda.indexOf("preparaCambioStrutturale() {"), scheda.indexOf("this.salvaCambioStrutturaleDo(params", scheda.indexOf("preparaCambioStrutturale() {")));
     assert.match(prepara, /const idAzioni = CambiStrutturali\.idAzioni\(this\.azioniStrutturaliAggiunte\(\)\);/);
     assert.match(prepara, /params \+= "&" \+ kAz \+ "\.idAzioni=" \+ encodeURIComponent\(idAzioni\);/);
 });

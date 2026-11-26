@@ -283,8 +283,8 @@ test("I20-1233: la conferma non scrive la descrizione nella referenza", () => {
 
 test("I20-1233: con rifai il cambio strutturale non impagina e non confronta, rifa' il box chi lo chiede", () => {
     const scheda = leggiFileDelPlugin("schedaRef.js").replace(/\r/g, "");
-    assert.match(scheda, /cambioStrutturaleSulBox\(params, dettaglio, rifai = null\) \{/);
-    const inizio = scheda.indexOf("cambioStrutturaleSulBox(params, dettaglio, rifai = null) {");
+    assert.match(scheda, /cambioStrutturaleSulBox\(params, dettaglio, rifai = null, saltaConfronto = false\) \{/);
+    const inizio = scheda.indexOf("cambioStrutturaleSulBox(params, dettaglio, rifai = null, saltaConfronto = false) {");
     const conRifai = scheda.indexOf("if (typeof rifai === \"function\") {", inizio);
     const impagina = scheda.indexOf("await impaginaBox(", inizio);
     const confronto = scheda.indexOf("confronti.confrontoBox(", inizio);
