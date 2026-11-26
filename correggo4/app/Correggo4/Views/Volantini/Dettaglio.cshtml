@@ -160,9 +160,11 @@
     .zona.aperta { outline: 2px solid red; }
     /* I20-1257: il box derivato (una seconda impaginazione dello stesso record) si vede sempre,
        anche fuori dall'Edit avanzato: bordo arancione tratteggiato ed etichetta DERIVATO, cosi'
-       a colpo d'occhio non si confonde con il suo originale. Si correggono solo note e OK. */
-    .zona[data-derivato] { outline: 2px dashed #e67e00; outline-offset: -2px; }
-    .zona[data-derivato]::before {
+       a colpo d'occhio non si confonde con il suo originale. Si correggono solo note e OK.
+       I20-1274: solo con data-derivato="1". Ogni box ha l'attributo (0 per chi non e' derivato):
+       una regola sulla sola presenza segnava tutti i box. */
+    .zona[data-derivato="1"] { outline: 2px dashed #e67e00; outline-offset: -2px; }
+    .zona[data-derivato="1"]::before {
         content: "DERIVATO"; position: absolute; left: 0; top: 0; padding: 1px 5px;
         background: #e67e00; color: #fff; font: bold 10px/1.4 Arial, sans-serif; pointer-events: none;
     }
@@ -922,8 +924,9 @@
                     var t = ((double)(b.Y / p.Altezza) * 100).ToString("0.###", ci);
                     var w = ((double)(b.Larghezza / p.Larghezza) * 100).ToString("0.###", ci);
                     var h = ((double)(b.Altezza / p.Altezza) * 100).ToString("0.###", ci);
-                    @* I20-1257: data-derivato solo sui derivati (null = Razor non scrive l'attributo) *@
-                    <div class="zona" data-box="@b.Id" title="@b.Basecode" data-derivato="@(b.Derivato ? "1" : null)"
+                    @* I20-1274: 1 sui derivati, 0 sugli altri. Razor scrive sempre gli attributi data-*,
+                       anche con valore null (data-derivato=""): il segno va solo sul valore 1. *@
+                    <div class="zona" data-box="@b.Id" title="@b.Basecode" data-derivato="@(b.Derivato ? "1" : "0")"
                          style="left:@(l)%;top:@(t)%;width:@(w)%;height:@(h)%;"></div>
                 }
             }

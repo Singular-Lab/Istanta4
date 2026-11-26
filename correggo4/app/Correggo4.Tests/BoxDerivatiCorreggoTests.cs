@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Correggo4.Auth;
 using Correggo4.Data;
@@ -5,12 +7,15 @@ using Correggo4.Ingestione;
 using Correggo4.Models;
 using Correggo4.Models.Vista;
 using Correggo4.Servizi;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Correggo4.Tests;
@@ -18,7 +23,8 @@ namespace Correggo4.Tests;
 /// <summary>
 /// I20-1257: i box derivati in Correggo4. Un derivato e' una seconda impaginazione dello stesso record,
 /// con lo stesso codice del suo originale: arriva con l'esportazione segnato come tale (idLavRec), si
-/// vede, porta all'originale, si corregge solo con note e OK, e le propagazioni non lo raggiungono.
+/// vede (e solo lui, I20-1274), porta all'originale, si corregge solo con note e OK, e le propagazioni
+/// non lo raggiungono.
 /// </summary>
 public class BoxDerivatiCorreggoTests
 {
@@ -265,9 +271,10 @@ public class BoxDerivatiCorreggoTests
     {
         string html = Sorgente("Views", "Volantini", "Dettaglio.cshtml");
 
-        // a colpo d'occhio sulla pagina
-        Assert.Contains("title=\"@b.Basecode\" data-derivato=\"@(b.Derivato ? \"1\" : null)\"", html);
-        Assert.Contains(".zona[data-derivato]::before", html);
+        // a colpo d'occhio sulla pagina, solo sui derivati (I20-1274: valore 1, non la sola presenza)
+        Assert.Contains("title=\"@b.Basecode\" data-derivato=\"@(b.Derivato ? \"1\" : \"0\")\"", html);
+        Assert.Contains(".zona[data-derivato=\"1\"]::before", html);
+        Assert.DoesNotContain(".zona[data-derivato]", html);
         Assert.Contains("content: \"DERIVATO\";", html);
         // nella scheda: riquadro, bottone, avviso se l'originale manca
         Assert.Contains("id=\"mVaiOriginale\">VAI AL BOX ORIGINALE</button>", html);
@@ -282,6 +289,115 @@ public class BoxDerivatiCorreggoTests
         // i dati del box
         Assert.Contains("derivato = x.b.Derivato,", html);
         Assert.Contains("idOriginale = x.b.IdOriginale,", html);
+    }
+
+    /// <summary>
+    /// I20-1274: il bordo arancione con DERIVATO compariva su tutti i box, perche' Razor scrive
+    /// sempre gli attributi data-* (data-derivato="" anche con valore null) e la regola guardava la
+    /// sola presenza. Qui si apre l'editor vero e si guarda l'HTML che arriva al browser: il segno
+    /// scatta solo sul derivato, e i dati della finestra del prodotto li distinguono.
+    /// </summary>
+    [Fact]
+    public async Task Sulla_pagina_solo_il_derivato_e_segnato_come_derivato()
+    {
+        using var fabbrica = new FabbricaCorreggo();
+        using var app = AppConUtente(fabbrica);
+        short agenzia = await AgenziaAsync(app);
+        int idPagina = await PaginaAsync(app, "0S24_26_B_TDM_B", IdLavorazione);
+        var originale = await ProdottoAsync(app, idPagina, idLavRec: 0);
+        var derivato = await ProdottoAsync(app, idPagina, idLavRec: 99);
+        int idVol;
+        using (var scope = app.Services.CreateScope())
+        {
+            // l'editor disegna i box solo su una pagina con le misure
+            var ctx = scope.ServiceProvider.GetRequiredService<Correggo4Context>();
+            var pagina = await ctx.VolantiniPagines.FirstAsync(p => p.Id == idPagina);
+            pagina.Larghezza = 1000;
+            pagina.Altezza = 1400;
+            await ctx.SaveChangesAsync();
+            idVol = pagina.IdVol;
+        }
+
+        var c = app.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        c.DefaultRequestHeaders.Add(HeaderUtente, agenzia.ToString());
+        var r = await c.GetAsync($"/Volantini/Dettaglio/{idVol}");
+        Assert.Equal(System.Net.HttpStatusCode.OK, r.StatusCode);
+        string html = await r.Content.ReadAsStringAsync();
+
+        Assert.Contains($"data-box=\"{originale.Box}\" title=\"{Basecode}\" data-derivato=\"0\"", html);
+        Assert.Contains($"data-box=\"{derivato.Box}\" title=\"{Basecode}\" data-derivato=\"1\"", html);
+        Assert.DoesNotContain("data-derivato=\"\"", html);
+        // il bordo e l'etichetta scattano solo sul valore 1
+        Assert.Contains(".zona[data-derivato=\"1\"] {", html);
+        Assert.Contains(".zona[data-derivato=\"1\"]::before", html);
+        Assert.DoesNotContain(".zona[data-derivato]", html);
+
+        // la finestra del prodotto sa ancora chi e' il derivato
+        const string apri = "<script id=\"datiBox\" type=\"application/json\">";
+        int inizio = html.IndexOf(apri, StringComparison.Ordinal) + apri.Length;
+        string json = html[inizio..html.IndexOf("</script>", inizio, StringComparison.Ordinal)];
+        var dati = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json)!;
+        Assert.True(dati[derivato.Box.ToString()].GetProperty("derivato").GetBoolean());
+        Assert.False(dati[originale.Box.ToString()].GetProperty("derivato").GetBoolean());
+    }
+
+    private const string SchemaProva = "Prova";
+    private const string HeaderUtente = "X-Utente-Prova";
+
+    /// <summary>Come <see cref="App"/>, con l'utente letto da un header (come in TestaFinestraProdottoTests).</summary>
+    private static WebApplicationFactory<Program> AppConUtente(FabbricaCorreggo fabbrica)
+    {
+        string nomeDb = "correggo4-box-derivati-editor-" + Guid.NewGuid().ToString("N");
+        return fabbrica.WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        {
+            s.RemoveAll<DbContextOptions<Correggo4Context>>();
+            s.RemoveAll<IDbContextOptionsConfiguration<Correggo4Context>>();
+            s.AddDbContext<Correggo4Context>(o => o.UseInMemoryDatabase(nomeDb));
+            s.AddAuthentication(SchemaProva).AddScheme<AuthenticationSchemeOptions, AutenticazioneDiProva>(SchemaProva, _ => { });
+            s.PostConfigure<AuthenticationOptions>(o =>
+            {
+                o.DefaultScheme = SchemaProva;
+                o.DefaultAuthenticateScheme = SchemaProva;
+                o.DefaultChallengeScheme = SchemaProva;
+                o.DefaultForbidScheme = SchemaProva;
+            });
+        }));
+    }
+
+    private static async Task<short> AgenziaAsync(WebApplicationFactory<Program> app)
+    {
+        using var scope = app.Services.CreateScope();
+        var ctx = scope.ServiceProvider.GetRequiredService<Correggo4Context>();
+        var u = new Utenti
+        {
+            Nome = "Agenzia", Cognome = "Prova", Email = "agenzia@prova.local", Username = "agenzia-prova",
+            Ruolo = Ruoli.CodiceAgenzia, Attivo = true, DataInserimento = DateTime.UtcNow
+        };
+        ctx.Utentis.Add(u);
+        await ctx.SaveChangesAsync();
+        return u.Id;
+    }
+
+    /// <summary>L'utente e' quello dell'header, col ruolo letto dal database.</summary>
+    private sealed class AutenticazioneDiProva(IOptionsMonitor<AuthenticationSchemeOptions> o, ILoggerFactory l, UrlEncoder e)
+        : AuthenticationHandler<AuthenticationSchemeOptions>(o, l, e)
+    {
+        protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
+        {
+            if (!short.TryParse(Request.Headers[HeaderUtente], out short id))
+                return AuthenticateResult.NoResult();
+            var ctx = Context.RequestServices.GetRequiredService<Correggo4Context>();
+            var u = await ctx.Utentis.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id);
+            if (u == null)
+                return AuthenticateResult.Fail("utente di prova sconosciuto");
+            var identita = new ClaimsIdentity(new[]
+            {
+                new Claim(ClaimTypes.NameIdentifier, u.Id.ToString()),
+                new Claim(ClaimTypes.Name, $"{u.Nome} {u.Cognome}"),
+                new Claim(ClaimTypes.Role, Ruoli.Nome(u.Ruolo))
+            }, SchemaProva);
+            return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identita), SchemaProva));
+        }
     }
 
     [Fact]
