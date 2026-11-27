@@ -1,7 +1,7 @@
 {
   "id": "PluginIstantaImpaginazione",
   "name": "IstantaImpaginazione",
-  "version": "2.1.6",
+  "version": "2.1.7",
   "main": "index.html",
   "manifestVersion": 5,
   "host": [
