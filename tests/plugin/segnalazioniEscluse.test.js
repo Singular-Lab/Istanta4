@@ -171,3 +171,46 @@ test("voceEsclusa: come i filtri, ma mai per gli errori e mai senza condizioni",
     assert.strictEqual(SchermataSegnalazioni.voceEsclusa(voce(LOGO_SPOSTATO, "warning"), undefined), false);
     assert.strictEqual(SchermataSegnalazioni.voceEsclusa(null, condizioni), false);
 });
+
+/* ---- I20-1281: il riquadro dei messaggi ---- */
+
+/// avvisoEsclusoDalCliente vera, con le funzioni di indexNew.js da cui dipende.
+function riquadroDel(middlewareFinto) {
+    const sorgente = leggiFileDelPlugin("indexNew.js").replace(/\r/g, "");
+    const crea = new Function("etichettaSegnalazioni", "SchermataSegnalazioni", "pluginMiddleware", "console",
+        funzioneDiIndexNew(sorgente, "segnalazioneEsclusaDalCliente(") + "\n" +
+        funzioneDiIndexNew(sorgente, "avvisoEsclusoDalCliente(") + "\n" +
+        "return avvisoEsclusoDalCliente;");
+    const registro = [];
+    const avvisoEscluso = crea(etichettaSegnalazioni, SchermataSegnalazioni, middlewareFinto,
+        { log: (m) => registro.push(m), error: (m) => registro.push(m), warn: () => {} });
+    avvisoEscluso.registro = registro;
+    return avvisoEscluso;
+}
+
+test("I20-1281: in Coopfi le CSF-008 e CSF-013 di loghi e bolli non vanno nemmeno nel riquadro dei messaggi", () => {
+    const avvisoEscluso = riquadroDel(middleware(customDi("Coopfi")));
+    const logoDelloScreenshot = "Code CSF-008: Elemento foto_extra$logo_senzalattosio$tipo_2 nel box BOX_STD spostato verso sinistra per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.";
+
+    [logoDelloScreenshot, LOGO_SPOSTATO, BOLLO_SPOSTATO, DESCRIZIONE_SU_LOGO, LOGO_SU_BOLLO]
+        .forEach(msg => assert.strictEqual(avvisoEscluso(msg), true, msg));
+    //Il registro lo scrive addSegnalazione, una volta sola.
+    assert.deepStrictEqual(avvisoEscluso.registro, []);
+});
+
+test("I20-1281: nel riquadro restano la descrizione, gli errori e tutto Edro21", () => {
+    const coopfi = riquadroDel(middleware(customDi("Coopfi")));
+    [DESCRIZIONE_CSF008, DESCRIZIONE_SU_QUANTITATIVI, FOTO_EXTRA_PARZIALE, SLOT_IN_ECCESSO]
+        .forEach(msg => assert.strictEqual(coopfi(msg), false, msg));
+    assert.strictEqual(coopfi(LOGO_SPOSTATO, "error"), false);
+
+    const edro21 = riquadroDel(middleware(customDi("Edro21")));
+    [LOGO_SPOSTATO, BOLLO_SPOSTATO, DESCRIZIONE_SU_LOGO].forEach(msg => assert.strictEqual(edro21(msg), false, msg));
+});
+
+test("I20-1281: se le esclusioni non si leggono, il riquadro mostra l'avviso", () => {
+    const avvisoEscluso = riquadroDel({ getSegnalazioniEscluse() { throw new Error("configurazione assente"); } });
+
+    assert.strictEqual(avvisoEscluso(LOGO_SPOSTATO), false);
+    assert.match(avvisoEscluso.registro[0], /^Code IDX-208 /);
+});
