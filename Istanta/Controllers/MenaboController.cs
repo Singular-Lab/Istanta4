@@ -7711,6 +7711,19 @@ NumeroDiRegola.TryLeggi(percorso.ToString(), out double valore16))
                         result.idRecSelezionato = request.elementoDaRicollegare.idRec;
                         //result.error = "IdRec non corrispondente con impossibilità di risalire a quello corretto";
                         //return Ok(result);
+
+                        //I20-1280: un box copiato da un altro documento porta il record dell'altro tracciato,
+                        //e la riga della lavorazione si e' cercata con quello. Col record corretto la si
+                        //cerca di nuovo: se c'e', il box e' gia' impaginato e lo si dice con la sua pagina.
+                        //Prima si passava a impaginaSingolo, che la trovava e rispondeva con un errore.
+                        if (plr == null && request.elementoDaRicollegare.idLavRec <= 0)
+                        {
+                            plr = GetLavorazioneRecordConFratelli(
+                                request.elementoDaRicollegare.codiceGruppo,
+                                request.elementoDaRicollegare.idRec,
+                                request.idLavorazione,
+                                out _);
+                        }
                     }
 
                 }

@@ -1845,8 +1845,11 @@ const schedaRef = {
                             //soprattutto si mostra l'errore che il server scrive dentro al singolo:
                             //prima veniva letto solo l'errore generale, e un ricollegamento fallito
                             //passava per riuscito con la scheda che si aggiornava come se nulla fosse.
+                            //I20-1280: con la pagina del box, per dire se Istanta registra la
+                            //referenza su un'altra pagina.
+                            var paginaDelBox = richiesta != null && richiesta.request != null ? richiesta.request.elementoDaRicollegare.pag : null;
                             for (var iEsito = 0; iEsito < allElementGruppo.length; iEsito++) {
-                                var avviso = RicollegaEsiti.messaggioPerElemento(allElementGruppo[iEsito]);
+                                var avviso = RicollegaEsiti.messaggioPerElemento(allElementGruppo[iEsito], paginaDelBox);
                                 if (avviso != null) {
                                     messaggioUtente(avviso.testo, avviso.tipo, false, 5);
                                     if (avviso.tipo === "error") {
@@ -2009,7 +2012,8 @@ const schedaRef = {
                         if (!parsed) {
                             objResult = JSON.parse(objResult);
                         }
-                        resolve(RicollegaEsiti.esitoDellaRisposta(objResult));
+                        //I20-1280: con la pagina del box, come nel ricollegamento dalla scheda.
+                        resolve(RicollegaEsiti.esitoDellaRisposta(objResult, richiesta.request.elementoDaRicollegare.pag));
                     }
                     catch (e) {
                         resolve({ esito: "errore", messaggio: "Code SRF-14 Errore durante il parsing della risposta: " + e, messaggi: [] });

@@ -410,7 +410,8 @@ test("il ricollegamento atteso dal report usa la stessa richiesta della scheda",
     assert.doesNotMatch(ricollega, /ficoProcess\.getCanaleLavorazioneCorrente/);
     const atteso = corpoMembro(scheda, "    ricollegaBoxImpaginatoAttendendo(box) {");
     assert.match(atteso, /me\.richiestaDiRicollegamento\(box, dna, dna\.codice_gruppo\)/);
-    assert.match(atteso, /RicollegaEsiti\.esitoDellaRisposta\(objResult\)/);
+    //I20-1280: con la pagina del box della stessa richiesta.
+    assert.match(atteso, /RicollegaEsiti\.esitoDellaRisposta\(objResult, richiesta\.request\.elementoDaRicollegare\.pag\)/);
     assert.match(atteso, /xhr\.send\("Menabo\/ricollegaBox", richiesta\.formData, "PUT"\)/);
     assert.doesNotMatch(atteso, /Modali\.confirm|showLoading|initSchedaRef/);
 

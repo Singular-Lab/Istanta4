@@ -137,9 +137,11 @@ test('il CSV si scarica dalle righe visibili, in UTF-8 con BOM', () => {
 
 /* ---- opzioni per cliente ---- */
 
-test('Edro21 non ha la tendina delle azioni dirette ne\' "Salva"; gli altri clienti si', () => {
+test('Edro21 non ha la tendina delle azioni dirette ma ha "Salva"; gli altri clienti hanno tutto', () => {
     assert.strictEqual(dallAgenzia('edro21', 'nascondiAzioniDiretteReport'), true);
-    assert.deepStrictEqual(dallAgenzia('edro21', 'getOpzioniImportazioneEscluse'), [1]);
+    //I20-1280: Edro21 ha di nuovo "Salva" (voluto, commit 7e219216). Le righe sotto provano
+    //il meccanismo per un cliente che lo toglie.
+    assert.deepStrictEqual(dallAgenzia('edro21', 'getOpzioniImportazioneEscluse'), []);
     assert.strictEqual(dallAgenzia('coopfi', 'nascondiAzioniDiretteReport'), undefined);
 
     const edro = Promo.htmlOpzioniImportazione([1]);

@@ -165,6 +165,35 @@ public class ErroriAzioniSulBoxTests
         Assert.Contains("throw new ErroreIstanta(\"lettura del record\", $\"il record {idRec} del gruppo {codiceGruppo} non e' piu' nel tracciato: riscaricare la lista e riprovare.\");", fratelli);
     }
 
+    /// I20-1280: un box copiato da un altro documento porta il record dell'altro tracciato. ricollegaBox
+    /// corregge l'idRec sul record di questa lavorazione, ma la riga l'aveva cercata prima, con quello
+    /// vecchio: non la trovava e passava a impaginaSingolo, che la trovava e rispondeva "gia' impaginato
+    /// a pagina N" come errore. Col record corretto la riga si cerca di nuovo, prima di decidere fra
+    /// "gia' impaginato" e impaginaSingolo.
+    [Fact]
+    public void RicollegaBox_cerca_di_nuovo_la_riga_dopo_aver_corretto_l_idRec()
+    {
+        string metodo = Tratto(Sorgente(Menabo), "\n        public async Task<IActionResult> ricollegaBox(", "\n        [Http");
+
+        int correzione = metodo.IndexOf("request.elementoDaRicollegare.idRec = (int)probabilePrimario.Id;", StringComparison.Ordinal);
+        int nuovaRicerca = metodo.IndexOf("if (plr == null && request.elementoDaRicollegare.idLavRec <= 0)", StringComparison.Ordinal);
+        int decisione = metodo.IndexOf("if (plr != null)", StringComparison.Ordinal);
+        int impaginaSingolo = metodo.IndexOf("await impaginaSingolo(richiesta, FicoCombinazioneKitReadMode.Classic);", StringComparison.Ordinal);
+
+        Assert.True(correzione > 0, "la correzione dell'idRec c'e'");
+        Assert.True(nuovaRicerca > correzione, "la riga si cerca di nuovo dopo la correzione");
+        Assert.True(decisione > nuovaRicerca && impaginaSingolo > decisione, "e prima di scegliere fra gia' impaginato e impaginaSingolo");
+
+        string ricerca = metodo.Substring(nuovaRicerca, decisione - nuovaRicerca);
+        Assert.Contains("plr = GetLavorazioneRecordConFratelli(", ricerca);
+        Assert.Contains("request.elementoDaRicollegare.idRec,", ricerca);
+
+        //Il ramo "gia' impaginato" dice la pagina della riga, che il Plugin confronta con quella del box.
+        string giaImpaginato = metodo.Substring(decisione, impaginaSingolo - decisione);
+        Assert.Contains("item.stato = StatoRicollegamentoBox.GiaImpaginato;", giaImpaginato);
+        Assert.Contains("item.pag = plr.Pagina;", giaImpaginato);
+    }
+
     [Fact]
     public void Il_cambio_strutturale_controlla_sessione_addestramento_e_primario_e_conta_i_salvati()
     {

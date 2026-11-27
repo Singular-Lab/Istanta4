@@ -1007,7 +1007,7 @@ class Promo {
     }
 
     /// TASK-c4fdc17b: le opzioni della scelta d'importazione, meno quelle che l'agenzia esclude
-    /// (getOpzioniImportazioneEscluse: Edro21 toglie "Salva"). Resta scelta "Solo report", o la prima rimasta.
+    /// (getOpzioniImportazioneEscluse, per esempio [1] per togliere "Salva"). Resta scelta "Solo report", o la prima rimasta.
     static htmlOpzioniImportazione(escluse) {
         let fuori = (Array.isArray(escluse) ? escluse : []).map(Number);
         let opzioni = [{ valore: 1, testo: "Salva" }, { valore: 2, testo: "Solo report" }, { valore: 3, testo: "Salva e fai report" }]

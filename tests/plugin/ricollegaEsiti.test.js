@@ -78,6 +78,43 @@ test("la referenza gia' impaginata si segnala come avviso", () => {
     assert.ok(avviso.testo.includes("già impaginata"));
 });
 
+// I20-1280: un box copiato da un altro documento, con la referenza registrata su una pagina dove il
+// box non c'e' piu'. Prima era un errore SRF-16; ora e' un avviso con le due pagine, perche' la
+// riga la allinea il Report Integrita', non il ricollegamento.
+test("la referenza registrata su un'altra pagina si dice con le due pagine", () => {
+    const avviso = RicollegaEsiti.messaggioPerElemento({ stato: RicollegaEsiti.STATO.giaImpaginato, pag: 6 }, "20");
+
+    assert.strictEqual(avviso.tipo, "warning");
+    assert.ok(avviso.testo.startsWith("Code SRF-12"));
+    assert.ok(avviso.testo.includes("pagina 6"), "la pagina su Istanta");
+    assert.ok(avviso.testo.includes("pagina 20"), "la pagina del box");
+    assert.ok(avviso.testo.includes("Report Integrità"), "e come si allinea");
+});
+
+test("sulla stessa pagina resta l'avviso di sempre", () => {
+    const avviso = RicollegaEsiti.messaggioPerElemento({ stato: RicollegaEsiti.STATO.giaImpaginato, pag: 20 }, "20");
+
+    assert.strictEqual(avviso.testo, "Code SRF-12 Referenza già impaginata");
+});
+
+test("senza una pagina del box valida resta l'avviso di sempre", () => {
+    const elemento = { stato: RicollegaEsiti.STATO.giaImpaginato, pag: 6 };
+
+    assert.strictEqual(RicollegaEsiti.messaggioPerElemento(elemento).testo, "Code SRF-12 Referenza già impaginata");
+    assert.strictEqual(RicollegaEsiti.messaggioPerElemento(elemento, "IV").testo, "Code SRF-12 Referenza già impaginata");
+    assert.strictEqual(RicollegaEsiti.messaggioPerElemento({ stato: RicollegaEsiti.STATO.giaImpaginato, pag: 0 }, "20").testo,
+        "Code SRF-12 Referenza già impaginata");
+});
+
+test("dal report il ricollegamento riesce e porta l'avviso con le due pagine", () => {
+    const esito = RicollegaEsiti.esitoDellaRisposta({ codici: [{ stato: RicollegaEsiti.STATO.giaImpaginato, pag: 6 }], idRecSelezionato: 91214 }, "20");
+
+    assert.strictEqual(esito.esito, "ricollegato");
+    assert.strictEqual(esito.idRecSelezionato, 91214);
+    assert.strictEqual(esito.messaggi.length, 1);
+    assert.ok(esito.messaggi[0].testo.includes("pagina 6") && esito.messaggi[0].testo.includes("pagina 20"));
+});
+
 // Il cambio di forma lasciava il box non impaginato senza dire niente, ed era indistinguibile da
 // un successo: adesso si dice in che forma il codice e' gia' in lavorazione.
 test("il cambio di forma si spiega, con i codici", () => {
@@ -184,7 +221,8 @@ test("il box fuori pagina ha un messaggio suo", () => {
 test("l'esito di ogni elemento arriva all'operatore", () => {
     const js = sorgente("plugin/schedaRef.js");
 
-    assert.ok(js.includes("RicollegaEsiti.messaggioPerElemento(allElementGruppo[iEsito])"),
+    //I20-1280: con la pagina del box, per dire quando la referenza e' registrata altrove.
+    assert.ok(js.includes("RicollegaEsiti.messaggioPerElemento(allElementGruppo[iEsito], paginaDelBox)"),
         "si guardano tutti gli elementi, non solo il primo");
 });
 
