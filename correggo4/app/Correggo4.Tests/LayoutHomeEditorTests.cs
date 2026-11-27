@@ -29,6 +29,37 @@ public class LayoutHomeEditorTests
     }
 
     [Fact]
+    public void Canale_e_area_della_card_sono_piu_grandi_delle_altre_etichette()
+    {
+        // I20-1283: l'etichetta "TDM · B" / "UFI · B" delle card dei volantini si leggeva a fatica.
+        string html = Home();
+
+        Assert.Contains(".p-area{background:var(--slate);color:#fff;font-size:15px;padding:6px 12px;border-radius:7px}", html);
+        // le altre etichette (Bloccato, In revisione, Approvato) restano come prima
+        Assert.Contains("font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;\n  padding:4px 9px;border-radius:6px;line-height:1;", html);
+        // ed e' l'etichetta della card: canale e area
+        Assert.Contains("<span class=\"pill p-area${classeArea(v.area)}\">${esc(v.canale)}${v.area ? \" · \" + esc(v.area) : \"\"}</span>", html);
+    }
+
+    [Fact]
+    public void Canale_e_area_della_card_hanno_il_colore_della_loro_area()
+    {
+        // I20-1283, secondo giro: B1 col verde di Correggo4, B col bordeaux del logo Coop, le altre grigie.
+        string html = Home();
+
+        Assert.Contains(".p-area-b1{background:var(--teal-700)}", html);
+        Assert.Contains(".p-area-b{background:#7b0f30}", html);
+        // l'area intera, senza badare a maiuscole e spazi; il canale non conta
+        Assert.Contains("const a = String(area || \"\").trim().toUpperCase();", html);
+        Assert.Contains("if(a === \"B1\") return \" p-area-b1\";", html);
+        Assert.Contains("if(a === \"B\") return \" p-area-b\";", html);
+        // nessuna classe di colore per le altre aree: resta il grigio di .p-area
+        string funzione = html.Substring(html.IndexOf("function classeArea(area){"));
+        funzione = funzione.Substring(0, funzione.IndexOf("\n}\n") + 3);
+        Assert.EndsWith("  return \"\";\n}\n", funzione);
+    }
+
+    [Fact]
     public void La_campanella_e_nascosta_ma_resta_nella_pagina()
     {
         string html = Home();

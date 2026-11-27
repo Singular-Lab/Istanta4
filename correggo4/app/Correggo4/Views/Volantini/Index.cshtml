@@ -265,7 +265,11 @@ h2.sec small{font-size:12.5px;font-weight:500;color:var(--ink-3)}
 .p-rev{background:var(--rev-bg);color:var(--rev-fg)}
 .p-ok{background:var(--ok-bg);color:var(--ok-fg)}
 .p-lock{background:var(--lock);color:#fff}
-.p-area{background:var(--slate);color:#fff}
+/* I20-1283: canale e area della card ("TDM · B") piu' grandi delle altre etichette, che restano a 11px */
+.p-area{background:var(--slate);color:#fff;font-size:15px;padding:6px 12px;border-radius:7px}
+/* I20-1283: colore per area, B1 col verde di Correggo4, B col bordeaux del logo Coop; le altre aree restano grigie */
+.p-area-b1{background:var(--teal-700)}
+.p-area-b{background:#7b0f30}
 .p-soft{background:var(--bg);color:var(--ink-2)}
 
 /* ---------- Testata contenuto ---------- */
@@ -919,6 +923,14 @@ function flyFinta(id){
   </div>`;
 }
 
+// I20-1283: il colore dell'etichetta canale · area della card. Conta l'area intera, non il canale.
+function classeArea(area){
+  const a = String(area || "").trim().toUpperCase();
+  if(a === "B1") return " p-area-b1";
+  if(a === "B") return " p-area-b";
+  return "";
+}
+
 function cardVol(v){
   const puoCorreggere = UTENTE.ruolo === "GDO";
   let stato;
@@ -927,7 +939,7 @@ function cardVol(v){
   } else {
     stato = `<div class="v-state">${v.aperte ? `<span class="dot">${v.aperte}</span> correzion${v.aperte===1?"e":"i"}` : "Nessuna correzione"}</div>`;
   }
-  const tags = [`<span class="pill p-area">${esc(v.canale)}${v.area ? " · " + esc(v.area) : ""}</span>`];
+  const tags = [`<span class="pill p-area${classeArea(v.area)}">${esc(v.canale)}${v.area ? " · " + esc(v.area) : ""}</span>`];
   if(v.stato==="bloccato") tags.push(`<span class="pill p-lock">${ico("lock")} Bloccato</span>`);
   const lock = v.stato==="bloccato" ? `<div class="v-lockinfo">Si sblocca tra ${v.bloccoMin} min</div>` : "";
   // Dall'11/9 anche l'Agenzia lavora nell'editor (accetta le correzioni): per tutti "Apri editor".
