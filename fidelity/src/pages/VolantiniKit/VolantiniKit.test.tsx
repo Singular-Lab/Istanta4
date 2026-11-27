@@ -18,6 +18,8 @@ const finti = vi.hoisted(() => ({
   filtri: [] as unknown[],
   /** Le letture anticipate del dettaglio: [idPromo, filtri] */
   anticipi: [] as unknown[][],
+  /** Le richieste del gruppo successivo di promozioni. */
+  caricaAltre: vi.fn(),
 }));
 
 vi.mock("@/components/SessionChecker", () => ({ default: (Componente: unknown) => Componente }));
@@ -117,12 +119,17 @@ const pagina = (modifiche: Partial<PaginaPromozioniVolantiniConsultazione> = {})
   ...modifiche,
 });
 
-const caricato = <T,>(dati: T) => ({
+const caricato = <T,>(dati: T, altro: Record<string, unknown> = {}) => ({
   data: dati,
   isError: false,
   error: null,
   isPlaceholderData: false,
   refetch: vi.fn(),
+  hasNextPage: false,
+  isFetchingNextPage: false,
+  isFetchNextPageError: false,
+  fetchNextPage: finti.caricaAltre,
+  ...altro,
 });
 
 const apri = async (indirizzo = "/volantini/attivi") => {
@@ -204,7 +211,7 @@ describe("Volantini per periodo", () => {
     const titolo = screen.getByRole("heading", { level: 1 });
     expect(titolo).toHaveTextContent(`Volantini ${etichetta}`);
     expect(titolo).not.toHaveTextContent("·");
-    expect(finti.filtri.at(-1)).toMatchObject({ periodo, pagina: 1, idPromo: "p1" });
+    expect(finti.filtri.at(-1)).toMatchObject({ periodo, idPromo: "p1" });
     // POP è una vista a parte, con le sue voci di menu: da qui non ci si arriva
     expect(screen.queryByRole("link", { name: /POP/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("radiogroup", { name: "Periodo" })).not.toBeInTheDocument();
@@ -690,7 +697,7 @@ describe("Filtri", () => {
 
       await waitFor(() => expect(router.state.location.search).toBe("?area=a1"));
       await waitFor(() => expect(screen.queryByText(/^Promozione:/)).not.toBeInTheDocument());
-      expect(finti.filtri.at(-1)).toMatchObject({ idPromo: undefined, idArea: "a1", pagina: 1 });
+      expect(finti.filtri.at(-1)).toMatchObject({ idPromo: undefined, idArea: "a1" });
     }
   );
 
@@ -742,25 +749,24 @@ describe("Filtri", () => {
     expect(screen.getByText("Promozione: Promozione selezionata")).toBeInTheDocument();
   });
 
-  it("scegliere un filtro aggiorna l'indirizzo e riparte dalla prima pagina", async () => {
-    const router = await apri("/volantini/prossimi?pagina=3");
+  it("scegliere un filtro aggiorna l'indirizzo e riparte dal primo gruppo", async () => {
+    const router = await apri("/volantini/prossimi");
 
     fireEvent.change(screen.getByLabelText("Area"), { target: { value: "a1" } });
 
     await waitFor(() => expect(router.state.location.search).toBe("?area=a1"));
     await waitFor(() => expect(screen.getByLabelText("Area")).toHaveValue("a1"));
-    expect(finti.filtri.at(-1)).toMatchObject({ periodo: "prossimi", idArea: "a1", pagina: 1 });
+    expect(finti.filtri.at(-1)).toMatchObject({ periodo: "prossimi", idArea: "a1" });
   });
 
-  it("nello Storico scegliere un anno aggiorna l'indirizzo, riparte dalla prima pagina e arriva alla richiesta", async () => {
-    const router = await apri("/volantini/storico?pagina=2");
-    expect(finti.filtri.at(-1)).toMatchObject({ periodo: "storico", pagina: 2 });
+  it("nello Storico scegliere un anno aggiorna l'indirizzo, riparte dal primo gruppo e arriva alla richiesta", async () => {
+    const router = await apri("/volantini/storico");
 
     fireEvent.change(screen.getByLabelText("Anno"), { target: { value: "2025" } });
 
     await waitFor(() => expect(router.state.location.search).toBe("?anno=2025"));
     await waitFor(() => expect(screen.getByLabelText("Anno")).toHaveValue("2025"));
-    expect(finti.filtri.at(-1)).toMatchObject({ periodo: "storico", anno: 2025, pagina: 1 });
+    expect(finti.filtri.at(-1)).toMatchObject({ periodo: "storico", anno: 2025 });
   });
 
   it("un anno nell'indirizzo non filtra le promozioni attive o prossime", async () => {
@@ -772,11 +778,119 @@ describe("Filtri", () => {
     expect((finti.filtri.at(-1) as { anno?: number }).anno).toBeUndefined();
   });
 
-  it("una pagina oltre l'ultima torna alla prima", async () => {
-    finti.risultato = caricato(pagina({ promozioni: [], totale: 30, totaleSenzaFiltri: 30 }));
-    const router = await apri("/volantini/attivi?pagina=9");
+  it("un indirizzo vecchio con la pagina e le righe per pagina li perde, tenendo i filtri", async () => {
+    const router = await apri("/volantini/attivi?area=a1&pagina=9&dimensione=48");
 
-    await waitFor(() => expect(router.state.location.search).toBe(""));
+    await waitFor(() => expect(router.state.location.search).toBe("?area=a1"));
+    expect(finti.filtri.at(-1)).not.toHaveProperty("pagina");
+    expect(finti.filtri.at(-1)).not.toHaveProperty("dimensione");
+  });
+});
+
+describe("Scorrimento continuo", () => {
+  const osservatori: Array<{ elemento: Element | null; chiama: (visibile: boolean) => void; fermato: boolean }> = [];
+
+  beforeEach(() => {
+    osservatori.length = 0;
+    finti.caricaAltre.mockReset();
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        voce = { elemento: null as Element | null, chiama: (_visibile: boolean) => {}, fermato: false };
+        constructor(richiamo: (voci: Array<{ isIntersecting: boolean }>) => void) {
+          this.voce.chiama = (visibile) => richiamo([{ isIntersecting: visibile }]);
+          osservatori.push(this.voce);
+        }
+        observe(elemento: Element) {
+          this.voce.elemento = elemento;
+        }
+        disconnect() {
+          this.voce.fermato = true;
+        }
+        unobserve() {}
+        takeRecords() {
+          return [];
+        }
+      }
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const attivi = () => osservatori.filter((voce) => !voce.fermato);
+
+  it("la pagina non offre più la scelta della pagina né delle righe per pagina", async () => {
+    finti.risultato = caricato(pagina({ totale: 30, totaleSenzaFiltri: 30 }), { hasNextPage: true });
+    await apri("/volantini/storico");
+
+    expect(screen.queryByLabelText(/righe per pagina/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: /pagin/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Mostra altre promozioni" })).toBeInTheDocument();
+  });
+
+  it("arrivando in prossimità della fine dell'elenco chiede il gruppo successivo", async () => {
+    finti.risultato = caricato(pagina({ totale: 30, totaleSenzaFiltri: 30 }), { hasNextPage: true });
+    await apri("/volantini/storico");
+
+    expect(attivi()).toHaveLength(1);
+    attivi()[0].chiama(false);
+    expect(finti.caricaAltre).not.toHaveBeenCalled();
+    attivi()[0].chiama(true);
+
+    expect(finti.caricaAltre).toHaveBeenCalledTimes(1);
+  });
+
+  it("il comando «Mostra altre promozioni» chiede il gruppo successivo anche senza scorrere", async () => {
+    finti.risultato = caricato(pagina({ totale: 30, totaleSenzaFiltri: 30 }), { hasNextPage: true });
+    await apri("/volantini/attivi");
+
+    fireEvent.click(screen.getByRole("button", { name: "Mostra altre promozioni" }));
+
+    expect(finti.caricaAltre).toHaveBeenCalledTimes(1);
+  });
+
+  it("a fine elenco non osserva niente e non offre altri gruppi", async () => {
+    finti.risultato = caricato(pagina({ totale: 1 }), { hasNextPage: false });
+    await apri("/volantini/storico");
+
+    expect(attivi()).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: "Mostra altre promozioni" })).not.toBeInTheDocument();
+    expect(finti.caricaAltre).not.toHaveBeenCalled();
+  });
+
+  it("mentre il gruppo arriva lo dice e non ne chiede un altro", async () => {
+    finti.risultato = caricato(pagina({ totale: 30, totaleSenzaFiltri: 30 }), { hasNextPage: true, isFetchingNextPage: true });
+    await apri("/volantini/attivi");
+
+    expect(screen.getByRole("status")).toHaveTextContent("Caricamento delle altre promozioni");
+    expect(screen.queryByRole("button", { name: "Mostra altre promozioni" })).not.toBeInTheDocument();
+    expect(attivi()).toHaveLength(0);
+  });
+
+  it("se il gruppo successivo non arriva mostra il motivo, tiene le schede e permette di riprovare", async () => {
+    finti.risultato = caricato(pagina({ totale: 30, totaleSenzaFiltri: 30 }), {
+      hasNextPage: true,
+      isError: true,
+      isFetchNextPageError: true,
+      error: new Error("Servizio non raggiungibile"),
+    });
+    await apri("/volantini/attivi");
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Servizio non raggiungibile");
+    expect(scheda()).toBeInTheDocument();
+    expect(screen.queryByText("Volantini non caricati")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Riprova" }));
+    expect(finti.caricaAltre).toHaveBeenCalledTimes(1);
+  });
+
+  it("nello Storico un mese continuato fra due gruppi ha una sola intestazione", async () => {
+    const altra = promozione({ promo: { ...promo, id: "p2", nome: "Altra promozione", validitaDal: "2026-10-20", validitaAl: "2026-10-31" } });
+    finti.risultato = caricato(pagina({ promozioni: [promozione(), altra], totale: 4, totaleSenzaFiltri: 4 }), { hasNextPage: true });
+    await apri("/volantini/storico");
+
+    expect(screen.getAllByRole("heading", { level: 3 }).map((titolo) => titolo.textContent)).toEqual(["ottobre 2026"]);
   });
 });
 
