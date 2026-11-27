@@ -1,3 +1,4 @@
+import { segnalaGdoDelCambio } from '../realtime/gdoDelCambio';
 import { createHash } from 'crypto';
 import { Request, Response } from "express";
 import * as fs from "fs";
@@ -212,6 +213,8 @@ export class ExternalApiController extends BaseController {
           message: "Non esiste nessuna promo con questo id"
         })
       }
+      // Il Plugin non ha una sessione: la GDO della promo e' quella che deve vedere il volantino comparire
+      segnalaGdoDelCambio(res, typeof promo.gdo === 'string' ? promo.gdo : null);
       const area = await container.get<IAreaService>(TYPES.AreaService).getAreaById(payload.areaId)
       if (!ServerUtils.checkIfValueIsValid(area)) {
         throw new BadRequestError({

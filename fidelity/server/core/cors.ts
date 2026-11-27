@@ -42,7 +42,7 @@ export function applyCors(app: Express) {
     }
 
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', `Content-Type, Authorization, X-FP-Version, X-Ephemeral-Token, X-Browser-Hash, X-Requested-With, Accept, x-csrf-token, X-Request-ID, x-api-key, x-internal-request, x-internal-request-ts, x-internal-request-signature, ${UXP_CLIENT_TOKEN_HEADER}`);
+    res.setHeader('Access-Control-Allow-Headers', `Content-Type, Authorization, X-FP-Version, X-Ephemeral-Token, X-Browser-Hash, X-Requested-With, Accept, x-csrf-token, X-Request-ID, Idempotency-Key, X-Client-Id, x-api-key, x-internal-request, x-internal-request-ts, x-internal-request-signature, ${UXP_CLIENT_TOKEN_HEADER}`);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Expose-Headers', 'set-cookie, cookie, authorization, x-request-id, x-csrf-token, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset');
 
@@ -124,6 +124,8 @@ export function applyCors(app: Express) {
       'Accept',
       'x-csrf-token',
       'X-Request-ID',
+      'Idempotency-Key',
+      'X-Client-Id',
       'x-api-key',
       UXP_CLIENT_TOKEN_HEADER,
     ],
