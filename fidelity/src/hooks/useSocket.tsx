@@ -3,6 +3,7 @@ import io from 'socket.io-client';
 import { SystemNotification } from '../../lib/types';
 import { useNotification } from '@/context/NotificationContext';
 import Lucide from '@/components/Base/Lucide';
+import { useAggiornamentoDati } from '@/realtime/useAggiornamentoDati';
 type SocketClient = ReturnType<typeof io>;
 const SocketContext = createContext<SocketClient | null>(null);
 
@@ -29,6 +30,12 @@ function getNotificationIconColor(tipo: SystemNotification['tipo']): string {
         default: return 'text-info';
     }
 }
+
+/** Gli avvisi di cambio dati del canale fanno rileggere quello che le pagine aperte mostrano. */
+const AggiornamentoDatiRealtime = ({ canale }: { canale: SocketClient | null }) => {
+    useAggiornamentoDati(canale);
+    return null;
+};
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const [socket, setSocket] = useState<SocketClient | null>(null);
@@ -130,6 +137,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     return (
         <SocketContext.Provider value={socket}>
+            <AggiornamentoDatiRealtime canale={socket} />
             {children}
         </SocketContext.Provider>
     );

@@ -11,7 +11,9 @@ import { log } from './logger';
 import { errorHandler } from './middleware/errorHandler';
 import { jsonGlobale } from './middleware/jsonGrande';
 import { apiRateLimiter } from './middleware/rateLimiter';
+import { cambioDatiRealtime } from './middleware/cambioDatiRealtime';
 import { csrfProtection, PREFISSO_ACS_SAML } from './middleware/csrfProtection';
+import { idempotenza } from './middleware/idempotenza';
 import { applySecurityMiddlewares } from './middleware/securityMiddleware';
 import { compressioneRisposte } from './middleware/staticiPrecompressi';
 import { uxpOriginSessionProtection } from './middleware/uxpOriginSession';
@@ -107,6 +109,11 @@ export function applyMiddlewares(app: Express) {
   });
 
   app.use(requestIdMiddleware);
+
+  // Una scrittura ripetuta (doppio click, nuovo tentativo) si esegue una volta sola; una scrittura
+  // riuscita avvisa le pagine aperte della stessa GDO, che rileggono i dati
+  app.use('/api/', idempotenza());
+  app.use('/api/', cambioDatiRealtime());
   app.use(poweredByMiddleware);
 
   log.info('Middleware applicati con successo');

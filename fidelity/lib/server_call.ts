@@ -15,6 +15,7 @@ import {
   ValidationError
 } from './errors';
 import { condividiInVolo } from './richiesteInVolo';
+import { intestazioniDiScrittura } from './identificativiRichiesta';
 import { segnalaDissincronia } from './dissincronia';
 
 /**
@@ -1342,6 +1343,7 @@ class ServerCall {
     await this.ensureCSRFToken();
 
     const headers = new Headers();
+    Object.entries(intestazioniDiScrittura()).forEach(([chiave, valore]) => headers.set(chiave, valore));
     const isFormData = data instanceof FormData;
 
     // Solo impostare Content-Type se non è FormData
@@ -1468,14 +1470,25 @@ class ServerCall {
     }
   }
 
-  public static put = async <T>(url: string, data: object, customHeaders?: Record<string, string>): Promise<T> => {
+  /**
+   * PUT, DELETE e PATCH identici mentre la prima e' ancora in corso (doppio click su Salva o su
+   * Elimina) partono una volta sola e ricevono la stessa risposta, come i POST.
+   */
+  public static put = <T>(url: string, data: object, customHeaders?: Record<string, string>): Promise<T> =>
+    condividiInVolo(
+      `PUT ${url} ${JSON.stringify(data)} ${JSON.stringify(customHeaders ?? {})}`,
+      () => this.inviaPut<T>(url, data, customHeaders)
+    );
+
+  private static inviaPut = async <T>(url: string, data: object, customHeaders?: Record<string, string>): Promise<T> => {
     try {
       await this.ensureCSRFToken();
 
       const headers = this.addSecurityHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        "Accept-Encoding": "gzip, deflate, br"
+        "Accept-Encoding": "gzip, deflate, br",
+        ...intestazioniDiScrittura(),
       }, 'PUT');
 
       if (customHeaders) {
@@ -1551,14 +1564,21 @@ class ServerCall {
     }
   }
 
-  public static delete = async <T>(url: string, data?: object, customHeaders?: Record<string, string>): Promise<T> => {
+  public static delete = <T>(url: string, data?: object, customHeaders?: Record<string, string>): Promise<T> =>
+    condividiInVolo(
+      `DELETE ${url} ${JSON.stringify(data ?? null)} ${JSON.stringify(customHeaders ?? {})}`,
+      () => this.inviaDelete<T>(url, data, customHeaders)
+    );
+
+  private static inviaDelete = async <T>(url: string, data?: object, customHeaders?: Record<string, string>): Promise<T> => {
     try {
       await this.ensureCSRFToken();
 
       const headers = this.addSecurityHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        "Accept-Encoding": "gzip, deflate, br"
+        "Accept-Encoding": "gzip, deflate, br",
+        ...intestazioniDiScrittura(),
       }, 'DELETE');
 
       if (customHeaders) {
@@ -1733,14 +1753,18 @@ class ServerCall {
     }
   }
 
-  public static patch = async <T>(url: string, data: object): Promise<T> => {
+  public static patch = <T>(url: string, data: object): Promise<T> =>
+    condividiInVolo(`PATCH ${url} ${JSON.stringify(data)}`, () => this.inviaPatch<T>(url, data));
+
+  private static inviaPatch = async <T>(url: string, data: object): Promise<T> => {
     try {
       await this.ensureCSRFToken();
 
       const headers = this.addSecurityHeaders({
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        "Accept-Encoding": "gzip, deflate, br"
+        "Accept-Encoding": "gzip, deflate, br",
+        ...intestazioniDiScrittura(),
       }, 'PATCH');
 
       const request = () => fetch(this.baseUrl + url, {

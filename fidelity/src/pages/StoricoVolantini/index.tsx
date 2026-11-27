@@ -11,6 +11,7 @@ import EmptyState from "@/components/EmptyState";
 import withSessionCheck from "@/components/SessionChecker";
 import { useParametriUrl } from "@/hooks/useParametriUrl";
 import clsx from "clsx";
+import { useCambioDati } from "@/realtime/useAggiornamentoDati";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Skeleton from "@/components/Base/Skeleton";
 import { ServerCall } from "../../../lib/server_call";
@@ -120,6 +121,9 @@ const StoricoVolantiniPage = () => {
         setIsLoading(true);
         fetchData({ id_area: idArea, id_canale: idCanale }, currentPage, pageSize);
     }, [idArea, idCanale, currentPage, pageSize, fetchData]);
+
+    // Un volantino pubblicato o archiviato da un altro utente compare senza ricaricare la pagina
+    useCambioDati(() => fetchData({ id_area: idArea, id_canale: idCanale }, currentPage, pageSize));
 
     const paginatedKits = data?.kit ?? [];
     const totale = data?.totale ?? 0;
