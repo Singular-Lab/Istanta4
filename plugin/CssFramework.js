@@ -2326,6 +2326,18 @@ const CssFramework =
         }
     },
 
+    /// I20-1281: se il cliente ha escluso questo avviso (avvisoEsclusoDalCliente di indexNew.js, le
+    /// stesse condizioni del bollino): allora non va nemmeno nel riquadro dei messaggi. Senza la
+    /// funzione, o se fallisce, l'avviso si mostra come prima.
+    avvisoEsclusoNelRiquadro(msg) {
+        try {
+            return typeof avvisoEsclusoDalCliente === "function" && avvisoEsclusoDalCliente(msg) === true;
+        }
+        catch (e) {
+            return false;
+        }
+    },
+
     /// Il controllo di fine box, dopo il fix foto e le regole dopoFixFoto. Un elemento che sta
     /// ancora dove la correzione l'ha messo e' rimasto nella posizione forzata: CSF-008, nel banner
     /// e nel bollino del box. Se un passaggio successivo l'ha ricollocato, la segnalazione parlava
@@ -2378,7 +2390,10 @@ const CssFramework =
                 }
 
                 var msg = "Code CSF-008: Elemento " + spostamento.label + " nel box " + boxLabel + " spostato " + spostamento.direzione + " per rientrare nei limiti della griglia. Verificare le dimensioni dell'elemento.";
-                messaggioUtente(msg, "warning");
+                //I20-1281: l'avviso escluso dal cliente non va nemmeno nel riquadro dei messaggi.
+                if (!this.avvisoEsclusoNelRiquadro(msg)) {
+                    messaggioUtente(msg, "warning");
+                }
                 addSegnalazione(msg, "warning", 2, true, ["CSF-008", "orange"]);
             }
         }
@@ -4927,7 +4942,10 @@ const CssFramework =
 
         var msg = this.testoConflitto(box, elementoA, elementoB);
         var misure = this.misureContatto(elementoA.item, elementoB.item, useTextBounds);
-        messaggioUtente(misure != "" ? msg + " " + misure : msg, "warning");
+        //I20-1281: l'avviso escluso dal cliente non va nemmeno nel riquadro dei messaggi.
+        if (!this.avvisoEsclusoNelRiquadro(msg)) {
+            messaggioUtente(misure != "" ? msg + " " + misure : msg, "warning");
+        }
         addSegnalazione(msg, "warning", 2, true, ["CSF-013", "yellow"], null, cssRegoleConflitti.datiDiVerifica(elementoA.label, elementoB.label, useTextBounds));
     },
 

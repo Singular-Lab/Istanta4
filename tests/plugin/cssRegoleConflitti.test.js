@@ -388,6 +388,51 @@ test('la CSF-013 porta le misure nel registro, non nel bollino', () => {
     assert.strictEqual((css.match(/this\.segnalaConflittoElementi\([^)]*, pendente, regola\.useTextBounds\);/g) || []).length, 1);
 });
 
+test('I20-1281: la CSF-013 esclusa dal cliente non va nel riquadro dei messaggi, ma resta per il bollino', () => {
+    const css = sorgente('plugin/CssFramework.js').replace(/\r/g, '');
+    const corpo = css.substring(css.indexOf('    segnalaConflittoElementi(box, elementoA, elementoB, pendente, useTextBounds = false) {'));
+    const segnala = corpo.substring(0, corpo.indexOf('\n    },\n'));
+
+    //Il riquadro solo se il cliente non l'ha esclusa, con il testo del bollino (senza misure).
+    assert.match(segnala, /if \(!this\.avvisoEsclusoNelRiquadro\(msg\)\) \{\s*messaggioUtente\(misure != "" \? msg \+ " " \+ misure : msg, "warning"\);\s*\}\s*addSegnalazione\(msg, /);
+});
+
+test('I20-1281: CssFramework chiede l\'esclusione a indexNew e, se non puo\', mostra l\'avviso', () => {
+    const CssFramework = caricaCssFramework();
+    try {
+        delete global.avvisoEsclusoDalCliente;
+        assert.strictEqual(CssFramework.avvisoEsclusoNelRiquadro('Code CSF-013: ...'), false, 'senza la funzione, come prima');
+
+        global.avvisoEsclusoDalCliente = (msg) => msg.includes('simbolo$');
+        assert.strictEqual(CssFramework.avvisoEsclusoNelRiquadro('Code CSF-013: Conflitto tra elementi nel box BOX_STD: descrizione non dovrebbe toccare simbolo$bollo_bio$tipo_2.'), true);
+        assert.strictEqual(CssFramework.avvisoEsclusoNelRiquadro('Code CSF-013: Conflitto tra elementi nel box BOX_STD: descrizione non dovrebbe toccare quantitativi.'), false);
+
+        global.avvisoEsclusoDalCliente = () => { throw new Error('rotto'); };
+        assert.strictEqual(CssFramework.avvisoEsclusoNelRiquadro('Code CSF-013: ...'), false, 'se fallisce, come prima');
+    }
+    finally {
+        delete global.avvisoEsclusoDalCliente;
+    }
+});
+
+/// CssFramework.js con un modulo indesign finto, come in spostamentiGriglia.test.js.
+function caricaCssFramework() {
+    const Module = require('node:module');
+    const caricaOriginale = Module._load;
+    Module._load = function (richiesta) {
+        if (richiesta === 'indesign') {
+            return {};
+        }
+        return caricaOriginale.apply(this, arguments);
+    };
+    try {
+        return require('../../plugin/CssFramework.js');
+    }
+    finally {
+        Module._load = caricaOriginale;
+    }
+}
+
 test('il noRender del record si applica prima del controllo dei conflitti', () => {
     //Il controllo salta gli elementi nascosti: se il noRender arrivasse dopo, un elemento
     //destinato a sparire farebbe nascere una CSF-013 che nel box finito non si vede.

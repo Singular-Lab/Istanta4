@@ -121,6 +121,49 @@ test("un elemento rimasto dove la correzione l'ha messo si segnala, nel bollino 
     assert.deepStrictEqual(segnalazioni[0].impostazioni, ["CSF-008", "orange"]);
 });
 
+test("I20-1281: l'avviso escluso dal cliente non va nel riquadro dei messaggi, ma arriva comunque ad addSegnalazione", () => {
+    azzera();
+    const chiesti = [];
+    //Il cliente esclude i loghi; addSegnalazione (qui finta) fa il suo filtro per il bollino.
+    global.avvisoEsclusoDalCliente = (msg) => { chiesti.push(msg); return msg.includes("foto_extra"); };
+    try {
+        const logo = elemento("foto_extra$logo_senzalattosio$tipo_2", [10, -5, 30, 20]);
+        const foto = elemento("foto_secondaria$7086743", [60, 10, 105, 40]);
+        const b = box("BOX_STD", [logo, foto]);
+
+        CssFramework.fixOverflowFromBox(GRIGLIA, b);
+        CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+        assert.strictEqual(chiesti.length, 2);
+        assert.deepStrictEqual(messaggi.map(m => m.testo), segnalazioni.filter(s => !s.testo.includes("foto_extra")).map(s => s.testo));
+        assert.strictEqual(messaggi.length, 1);
+        assert.match(messaggi[0].testo, /^Code CSF-008: Elemento foto_secondaria nel box BOX_STD/);
+        assert.strictEqual(segnalazioni.length, 2);
+        assert.ok(segnalazioni.some(s => /^Code CSF-008: Elemento foto_extra nel box BOX_STD spostato verso destra/.test(s.testo)), JSON.stringify(segnalazioni));
+    }
+    finally {
+        delete global.avvisoEsclusoDalCliente;
+    }
+});
+
+test("I20-1281: se il controllo delle esclusioni fallisce, il riquadro mostra l'avviso come prima", () => {
+    azzera();
+    global.avvisoEsclusoDalCliente = () => { throw new Error("rotto"); };
+    try {
+        const foto = elemento("foto_secondaria$7086743", [60, 10, 105, 40]);
+        const b = box("BOX1", [foto]);
+
+        CssFramework.fixOverflowFromBox(GRIGLIA, b);
+        CssFramework.controllaSpostamentiGrigliaPendenti(b);
+
+        assert.strictEqual(messaggi.length, 1);
+        assert.strictEqual(segnalazioni.length, 1);
+    }
+    finally {
+        delete global.avvisoEsclusoDalCliente;
+    }
+});
+
 test("lo stesso spostamento ripetuto in piu' passaggi si segnala una volta", () => {
     azzera();
     const prezzo = elemento("prezzo", [10, 90, 20, 104]);

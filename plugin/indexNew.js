@@ -5602,10 +5602,12 @@ function addSegnalazione(msg, typeMessage = "Error", priority = 2, applicaBollin
 
 /// I20-1264: se il cliente ha escluso questa segnalazione (pluginMiddleware.getSegnalazioniEscluse,
 /// valutata come i filtri della schermata). La console la registra, cosi' si sa che e' nata.
-function segnalazioneEsclusaDalCliente(segnalazione) {
+function segnalazioneEsclusaDalCliente(segnalazione, registra = true) {
     try {
         if (SchermataSegnalazioni.voceEsclusa(etichettaSegnalazioni.daSegnalazione(segnalazione), pluginMiddleware.getSegnalazioniEscluse())) {
-            console.log("Code IDX-207 Segnalazione esclusa dal cliente, non va nel bollino: " + segnalazione.msg);
+            if (registra) {
+                console.log("Code IDX-207 Segnalazione esclusa dal cliente, non va nel bollino: " + segnalazione.msg);
+            }
             return true;
         }
     }
@@ -5613,6 +5615,13 @@ function segnalazioneEsclusaDalCliente(segnalazione) {
         console.error("Code IDX-208 Segnalazioni escluse dal cliente non valutate: " + e);
     }
     return false;
+}
+
+/// I20-1281: lo stesso controllo per il riquadro dei messaggi in cima al pannello. CssFramework vi
+/// manda le CSF-008 e CSF-013 prima di addSegnalazione, e l'esclusione della I20-1264 valeva solo
+/// per il bollino: Coopfi vedeva ancora i loghi spostati. Il registro lo dice gia' addSegnalazione.
+function avvisoEsclusoDalCliente(msg, typeMessage = "warning") {
+    return segnalazioneEsclusaDalCliente({ msg: msg, typeMessage: typeMessage }, false);
 }
 
 /// I20-1200: le segnalazioni personalizzate del cliente sul nome di una foto primaria o secondaria
