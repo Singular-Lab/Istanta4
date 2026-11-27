@@ -48,6 +48,14 @@ const ReperimentoFoto = {
         $("#bodySyncPacchettoFoto").hide();
     },
 
+    /// I20-1279: "Avvia sync completo". La casella "Sovrascrivi foto gia' presenti" si legge nella
+    /// finestra aperta, non nel modello di index.html (che resta sempre non spuntato): se spuntata,
+    /// le foto del pacchetto gia' presenti in Links si riscaricano tutte, anche identiche.
+    avviaSyncCompletoDallaFinestra() {
+        const sovrascrivi = $("#overlayModalDownloadFoto").find("#sovrascriviFotoPresenti").is(":checked");
+        return ReperimentoFoto.avviaSyncPacchettoFoto(0, null, [], { sovrascriviPresenti: sovrascrivi });
+    },
+
     //I20-967: presenza del file nella cartella Links. Usa la stessa lettura con cui la
     //scheda ref decide se una foto e' in cartella, cosi' i due controlli non possono discordare.
     /// Se la foto c'e' gia' nella cartella Links.
@@ -320,6 +328,8 @@ const ReperimentoFoto = {
     /// I20-1217: opzioni.dopoPacchettoFoto dice al modo 1 che e' la seconda fase del pacchetto
     /// completo chiesto dall'operatore: alla sua fine vera si controllano le foto cambiate. Non quando
     /// il pacchetto lo scarica l'impaginazione massiva (con la callback): li' si impagina subito dopo.
+    /// I20-1279: opzioni.sovrascriviPresenti, nel modo 0, riscrive le foto gia' presenti in Links;
+    /// non vale per le foto extra e per i loghi, che si scaricano come sempre.
     async avviaSyncPacchettoFoto(mode, callback, codici = [], opzioni = {}){
         // var idTracciato = parseInt($("#idTracciato").val());
         // if(idTracciato == null || idTracciato == "" || idTracciato == 0){
@@ -435,7 +445,7 @@ const ReperimentoFoto = {
                         //Le foto extra delle ref vanno nella cartella Loghi, prima delle foto in Links.
                         var pacchetto = ReperimentoFoto.dividiPacchettoPerCartella(data);
                         if (!await ReperimentoFoto.scaricaFotoExtraNeiLoghi(pacchetto.extra, objProcess, codiceSyncFoto)) {
-                            await scaricamentoFoto.downloadImages(pacchetto.foto, objProcess, folder, codiceSyncFoto);
+                            await scaricamentoFoto.downloadImages(pacchetto.foto, objProcess, folder, codiceSyncFoto, { sovrascriviPresenti: opzioni != null && opzioni.sovrascriviPresenti === true });
                         }
                     }
                     catch (e) {
@@ -808,8 +818,12 @@ const ReperimentoFoto = {
                             let recs = objResult.records.filter(r => r.recordInTracciato["Scatto.CodiceGruppo"] == item.codiceGruppo);
                             let primario = recs.find(r => r.recordInTracciato.StatoSelezione == 1);
                             if (primario == null) {
-                                messaggioUtente("Code IDX-155 Nessun elemento primario trovato per il codice gruppo " + item.codiceGruppo, "error");
-                                throw new Error("Code IDX-155 Nessun elemento primario trovato per il codice gruppo " + item.codiceGruppo);
+                                //I20-1279: un box senza primario nella lista si salta con un errore, e il
+                                //ricollegamento prosegue con gli altri. Prima fermava tutto al primo.
+                                let erroreGruppo = RicollegaEsiti.messaggioGruppoSenzaPrimario(item.codiceGruppo, recs.length);
+                                messaggioUtente(erroreGruppo, "error");
+                                fileEsito.error.push(erroreGruppo);
+                                continue;
                             }
                             let secondari = recs.filter(r => r.recordInTracciato.StatoSelezione == 2);
                             //confrontiamo le foto in mappa, foto è un array di elementi { nomeFoto: nomeFile, element: rect, statoSelezione: statoSelezione, codiceFoto: codiceFoto}
@@ -1174,12 +1188,13 @@ const ReperimentoFoto = {
                     let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
                     let filePath = pathLavorazione + "/" + fileName;
                     fs.writeFileSync(filePath, JSON.stringify(fileEsito));
-                    messaggioUtente("File di esito creato: " + fileName, "success");
+                    //I20-1279: un solo messaggio finale, con quanti errori ci sono stati e il file di esito.
+                    let fine = RicollegaEsiti.messaggioFineRicollegamento(fileEsito.error.length, fileName);
+                    messaggioUtente(fine.testo, fine.tipo);
                     hideLoading();
 
                 }
                 catch (e) {
-                    messaggioUtente("Code IDX-162 Errore durante il ricollegamento foto: " + e, "error");
                     console.error("Code IDX-162 Errore durante il ricollegamento foto: " + e);
                     fileEsito.esito = false;
                     fileEsito.error.push(e.toString());
@@ -1187,13 +1202,14 @@ const ReperimentoFoto = {
                     let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
                     let filePath = pathLavorazione + "/" + fileName;
                     fs.writeFileSync(filePath, JSON.stringify(fileEsito));
-                    messaggioUtente("File di esito creato: " + fileName, "info");
+                    //I20-1279: l'errore e il file di esito in un solo messaggio. Prima il file di esito
+                    //usciva dopo, rosso anche lui, e nel riquadro copriva l'errore.
+                    messaggioUtente("Code IDX-162 Errore durante il ricollegamento foto: " + e + ". " + RicollegaEsiti.testoFileEsito(fileName), "error");
                     hideLoading();
                 }
             })
         }
         catch (e){
-            messaggioUtente("Code IDX-162 Errore generico durante il ricollegamento foto: " + e, "error");
             console.error("Code IDX-162 Errore generico durante il ricollegamento foto: " + e);
             fileEsito.esito = false;
             fileEsito.error.push(e.toString());
@@ -1202,7 +1218,8 @@ const ReperimentoFoto = {
             let fileName = RicollegaEsiti.nomeFileEsito(docInLavorazione.name, new Date());
             let filePath = pathLavorazione + "/" + fileName;
             fs.writeFileSync(filePath, JSON.stringify(fileEsito));
-            messaggioUtente("File di esito creato: " + fileName, "info");
+            //I20-1279: come sopra, errore e file di esito in un solo messaggio.
+            messaggioUtente("Code IDX-162 Errore generico durante il ricollegamento foto: " + e + ". " + RicollegaEsiti.testoFileEsito(fileName), "error");
             hideLoading();
         }
     },

@@ -9435,6 +9435,11 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
         else if (style == "warning") {
             color = "darkorange";
         }
+        //I20-1279: un messaggio informativo e' grigio, come nella console: prima finiva rosso e
+        //sembrava un errore ("File di esito creato").
+        else if (style == "info") {
+            color = "dimgray";
+        }
 
         //I20-1276: il riquadro in cima al pannello e' breve: oltre i 200 caratteri il messaggio si taglia
         //e finisce con "...", senza barra di scorrimento (la I20-1275 l'aveva messo intero e scorrevole,
@@ -9444,7 +9449,7 @@ async function messaggioUtente(msg, style, loading = false, tempo = 0, dontWrite
         if (testoRiquadro.length > 200) {
             testoRiquadro = testoRiquadro.substring(0, 200) + "...";
         }
-        var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%;"><h4 style="margin: 0; display: flex; align-items: center;width: 100%;"></h4></div>';
+        var html = '<div class="row" id="messaggioUtente" style="background-color: ' + color + '; width:90%; display: flex; padding:2px;"> <div class="col" style="color: white; padding-left: 10px; font-size:10px; width:90%;"><h4 style="margin: 0; display: block; width: 100%; min-width: 0; overflow-wrap: anywhere; word-break: break-word;"></h4></div>';
         //I20-981: col modal aperto i messaggi finivano dietro, nel contenitore della schermata
         //principale, e non si leggevano. Il parametro modal esiste da sempre ma quasi nessuno
         //lo passa: invece di rincorrere le chiamate, il contenitore lo sceglie la funzione,

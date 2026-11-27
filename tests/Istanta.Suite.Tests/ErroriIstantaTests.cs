@@ -59,17 +59,34 @@ public class ErroriIstantaTests
         Assert.Equal("Gruppo 12 non trovato", DescrizioneErrori.Breve("impaginaSingolo", ErroreIstanta.Inoltrato(null, "Gruppo 12 non trovato")));
     }
 
+    /// I20-1279: il messaggio va intero, su una riga. Prima si accorciava a 160 caratteri con "...",
+    /// e nella console di Utility l'operatore non leggeva la fine dell'errore.
     [Fact]
-    public void Il_messaggio_breve_sta_su_una_riga_e_nel_limite()
+    public void Il_messaggio_breve_sta_su_una_riga_e_arriva_intero()
     {
-        var lungo = new ErroreIstanta("passo", "riga uno\r\nriga due " + new string('x', 400));
+        string coda = new string('x', 400);
+        var lungo = new ErroreIstanta("passo", "riga uno\r\nriga due " + coda);
 
         string breve = DescrizioneErrori.Breve("getSchedaRef", lungo);
 
-        Assert.True(breve.Length <= DescrizioneErrori.LunghezzaMassima, breve.Length.ToString());
+        Assert.Equal("getSchedaRef, passo: riga uno  riga due " + coda, breve);
         Assert.DoesNotContain("\n", breve);
-        Assert.EndsWith("...", breve);
-        Assert.Equal(160, DescrizioneErrori.LunghezzaMassima);
+        Assert.DoesNotContain("\r", breve);
+        Assert.False(breve.EndsWith("..."), breve);
+    }
+
+    /// I20-1279: l'errore che l'operatore leggeva "Method not found: 'Void IstantaLib.CompiledField.s..."
+    /// (IDX-180, AgenziaLib.dll piu' nuova dell'IstantaLib di Istanta) arriva con la firma intera.
+    [Fact]
+    public void Un_errore_di_AgenziaLib_lungo_arriva_intero()
+    {
+        const string firma = "Method not found: 'Void IstantaLib.CompiledField.set_veicolatoDa(System.Collections.Generic.List`1<System.String>)'.";
+        var errore = new ErroreIstanta("esportazione di agenzia", "processaKit, esportazione di agenzia (esportaVolantino) del tracciato 2551: System.MissingMethodException: " + firma);
+
+        string breve = DescrizioneErrori.Breve("processaKit", errore);
+
+        Assert.True(breve.Length > 200, breve.Length.ToString());
+        Assert.EndsWith(firma, breve);
     }
 
     [Fact]

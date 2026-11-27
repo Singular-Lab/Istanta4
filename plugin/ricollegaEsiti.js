@@ -181,6 +181,36 @@ const RicollegaEsiti = {
         return "EsitoRicollegamentoFoto_" + documento + "_" + quando + ".json";
     },
 
+    /// I20-1279: il box di un gruppo che nella lista del kit non ha il primario. Si salta, con un
+    /// errore, e il ricollegamento prosegue: prima fermava tutto al primo box. Il messaggio dice se il
+    /// gruppo nella lista non c'e' piu' o se c'e' senza un record primario.
+    messaggioGruppoSenzaPrimario(codiceGruppo, recordDelGruppo) {
+        const motivo = recordDelGruppo > 0
+            ? "non ha un record primario nella lista del kit"
+            : "non e' piu' nella lista del kit";
+        return "Code IDX-155 Il gruppo " + codiceGruppo + " " + motivo + ": il suo box e' stato saltato.";
+    },
+
+    /// I20-1279: "Esito in: <file>", la coda dei messaggi finali del ricollegamento.
+    testoFileEsito(nomeFile) {
+        return "Esito in: " + nomeFile;
+    },
+
+    /// I20-1279: il messaggio alla fine del ricollegamento foto, uno solo. Senza errori e' verde; con
+    /// errori (box saltati, foto non ricollegate) e' rosso e dice quanti, cosi' nel riquadro non
+    /// sembra riuscito. Prima "File di esito creato" usciva comunque, e dopo un errore era rosso.
+    messaggioFineRicollegamento(errori, nomeFile) {
+        const quanti = typeof errori === "number" && errori > 0 ? errori : 0;
+        if (quanti === 0) {
+            return { testo: "Ricollegamento foto completato. " + RicollegaEsiti.testoFileEsito(nomeFile), tipo: "success" };
+        }
+        return {
+            testo: "Code IDX-209 Ricollegamento foto finito con " + quanti + (quanti === 1 ? " errore" : " errori")
+                + " (vedi la console). " + RicollegaEsiti.testoFileEsito(nomeFile),
+            tipo: "error"
+        };
+    },
+
     /// Il codice della foto come lo scrive la mappatura dell'impaginato. I messaggi leggevano un
     /// campo che non esiste, e all'operatore arrivava la parola indefinito al posto del codice.
     codiceDellaFoto(foto) {

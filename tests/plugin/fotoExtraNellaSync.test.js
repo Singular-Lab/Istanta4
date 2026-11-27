@@ -83,15 +83,16 @@ test("le foto extra si scaricano nella cartella Loghi, senza dare la fine dell'o
 
 test("pacchetto completo e lista di codici: prima le foto extra in Loghi, le foto solo se non annullato", () => {
     const testo = sorgente();
+    //I20-1279: il pacchetto completo passa alle foto in Links la scelta "Sovrascrivi foto gia' presenti".
     const casi = [
-        ["pacchetto", "data", "codiceSyncFoto"],
-        ["pacchettoCodici", "data.lista", "codiceSyncFotoMode2"]
+        ["pacchetto", "data", "codiceSyncFoto", ", { sovrascriviPresenti: opzioni != null && opzioni.sovrascriviPresenti === true }"],
+        ["pacchettoCodici", "data.lista", "codiceSyncFotoMode2", ""]
     ];
 
-    for (const [variabile, risposta, codice] of casi) {
+    for (const [variabile, risposta, codice, opzioni] of casi) {
         const divisione = testo.indexOf("var " + variabile + " = ReperimentoFoto.dividiPacchettoPerCartella(" + risposta + ");");
         const extra = testo.indexOf("if (!await ReperimentoFoto.scaricaFotoExtraNeiLoghi(" + variabile + ".extra, objProcess, " + codice + ")) {");
-        const foto = testo.indexOf("await scaricamentoFoto.downloadImages(" + variabile + ".foto, objProcess, folder, " + codice + ");");
+        const foto = testo.indexOf("await scaricamentoFoto.downloadImages(" + variabile + ".foto, objProcess, folder, " + codice + opzioni + ");");
 
         assert.ok(divisione > 0, variabile);
         assert.ok(extra > divisione, variabile);

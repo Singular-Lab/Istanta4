@@ -492,6 +492,8 @@ const Modali = {
         CampiARiposo.tuttiARiposo();
         //I20-1105: il controllo della X e' della finestra che lo registra, non passa alla successiva.
         this.controlloPrimaDiChiudere = null;
+        //I20-1279: ogni finestra parte dalla misura di sempre; la compatta la chiede apriModalCompatta.
+        this.misuraFinestraPrincipale(false);
 
         //var dialog = $("#"+modalId).clone();
         var dialog = cloneElementWithEvents($("#"+modalId));
@@ -528,6 +530,26 @@ const Modali = {
             $("#mainContent").hide();
         }
 
+    },
+
+    /// I20-1279: come apriModal, ma la finestra principale e' alta quanto il suo contenuto (al massimo
+    /// l'80% del pannello), per le finestre con poche righe: il Sync massivo foto era una finestra
+    /// enorme e vuota con i pulsanti in fondo. La prossima apriModal la rimette alla misura di sempre.
+    apriModalCompatta(modalId, titolo, bottoneChiusura = true, idElementiInTestata = [], hideBehind = true, scrollRules = null){
+        this.apriModal(modalId, titolo, bottoneChiusura, idElementiInTestata, hideBehind, scrollRules);
+        this.misuraFinestraPrincipale(true);
+    },
+
+    /// I20-1279: la misura della finestra principale (#riquadroModal in #overlayModal): compatta, alta
+    /// quanto il contenuto e al massimo l'80%, oppure quella di sempre, 80% con intestazione e corpo
+    /// in proporzione. Si cerca dentro #overlayModal: headerModal e bodyModal ci sono anche nelle
+    /// altre finestre.
+    misuraFinestraPrincipale(compatta){
+        var riquadro = $("#overlayModal").find("#riquadroModal");
+        riquadro.css("height", compatta ? "auto" : "80%");
+        riquadro.css("max-height", compatta ? "80%" : "none");
+        riquadro.find("#headerModal").css("height", compatta ? "auto" : "5%");
+        riquadro.find("#bodyModal").css("height", compatta ? "auto" : "95%");
     },
 
     /// Come apriModal, ma in un overlay diverso da quello principale, #overlayModal piu' il

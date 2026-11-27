@@ -99,8 +99,6 @@ public class ErroriImpaginazioneListaTests
         Assert.Equal(atteso, breve);
         Assert.DoesNotContain("processaKit", breve);
         Assert.DoesNotContain("scelta dei tracciati", breve);
-        //Sta tutta nei 160 caratteri: Breve non la accorcia.
-        Assert.True(atteso.Length <= DescrizioneErrori.LunghezzaMassima);
         Assert.Equal(Istanta.Models.ErrorCodes.TracciatoNonTrovato, DescrizioneErrori.Codice(errore));
         //Inoltrata da getListaTracciatoNew resta la stessa frase.
         Assert.Equal(atteso, DescrizioneErrori.Breve("getListaTracciatoNew", ErroreIstanta.DiProcessaKit(breve, true, 1)));
