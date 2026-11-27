@@ -21,7 +21,10 @@ const Tooltip = {
     _riquadroTooltip: null,
     _timerTooltip: null,
     _ancoraTooltip: null,
+    _controlloAncora: null,
     RITARDO_TOOLTIP: 350,
+    //I20-1282: ogni quanto, a suggerimento acceso, si guarda se il suo elemento c'e' ancora.
+    INTERVALLO_CONTROLLO_ANCORA: 250,
     ATTRIBUTO_TOOLTIP: "data-tooltip",
     //Larghezza che chiediamo per il riquadro: oltre questa il testo va a capo.
     LARGHEZZA_TOOLTIP: 260,
@@ -120,6 +123,11 @@ const Tooltip = {
 
         this._ancoraTooltip = null;
 
+        if (this._controlloAncora != null) {
+            clearInterval(this._controlloAncora);
+            this._controlloAncora = null;
+        }
+
         if (this._riquadroTooltip != null) {
             this._riquadroTooltip.style.display = "none";
             this._riquadroTooltip.style.visibility = "hidden";
@@ -182,10 +190,45 @@ const Tooltip = {
 
             riquadro.style.visibility = "visible";
             riquadro.style.display = "block";
+
+            this._sorvegliaAncora(elemento);
         }
         catch (err) {
             console.error("Errore durante la posa del tooltip:", err);
             this.nascondiTooltip();
+        }
+    },
+
+    /// I20-1282: un elemento tolto dal pannello mentre il mouse ci sta sopra non manda mouseleave,
+    /// e il suggerimento restava acceso fino a ricaricare il Plugin (il pulsante "Scegli quella del
+    /// server", sparito con la riga risolta). Finche' il suggerimento e' acceso si guarda il suo
+    /// elemento: se non c'e' piu', o non si vede, si nasconde. nascondiTooltip ferma il controllo.
+    _sorvegliaAncora(elemento) {
+        const me = this;
+        if (me._controlloAncora != null) {
+            clearInterval(me._controlloAncora);
+        }
+        me._ancoraTooltip = elemento;
+        me._controlloAncora = setInterval(function () {
+            if (!me._ancoraAncoraVisibile(me._ancoraTooltip)) {
+                me.nascondiTooltip();
+            }
+        }, me.INTERVALLO_CONTROLLO_ANCORA);
+    },
+
+    /// Se l'elemento del suggerimento sta ancora nel pannello e si vede: un rettangolo di misura
+    /// zero e' un elemento nascosto, per esempio in una finestra chiusa. Se non si riesce a
+    /// misurarlo, basta che ci sia.
+    _ancoraAncoraVisibile(elemento) {
+        try {
+            if (elemento == null || !document.body.contains(elemento)) {
+                return false;
+            }
+            const rettangolo = elemento.getBoundingClientRect != null ? elemento.getBoundingClientRect() : null;
+            return rettangolo == null || rettangolo.width > 0 || rettangolo.height > 0;
+        }
+        catch (err) {
+            return false;
         }
     },
 
