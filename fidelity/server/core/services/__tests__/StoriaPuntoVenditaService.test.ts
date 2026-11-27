@@ -185,6 +185,19 @@ afterEach(() => {
 });
 
 describe('StoriaPuntoVenditaService.registraListaVolantino', () => {
+  it('le insegne dichiarate dalla libreria agenzia non diventano la localita\' delle voci; senza dichiarazione valgono solo le parole generiche', async () => {
+    const lista = 'CONAD CITY\rVia Roma 12 - tel. 051 123456';
+    const dichiarata = repositoryInMemoria();
+    const senza = repositoryInMemoria();
+
+    await new StoriaPuntoVenditaService(dichiarata.repository, { attesaRiabbinamentoMs: 50, rinvia: () => false, insegne: /\bCONAD\b/i })
+      .registraListaVolantino({ idKit: KIT, pv: lista });
+    await servizio(senza.repository).registraListaVolantino({ idKit: KIT, pv: lista });
+
+    expect(dichiarata.righe.map(riga => riga.localita)).toEqual([null]);
+    expect(senza.righe.map(riga => riga.localita)).toEqual(['CONAD CITY']);
+  });
+
   it('scrive una riga per voce con le chiavi e i dati del kit, poi la abbina all\'anagrafica della GDO', async () => {
     const { repository, righe } = repositoryInMemoria({ anagrafica: ANAGRAFICA });
 

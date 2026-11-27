@@ -8,6 +8,8 @@ import { DefaultAgenziaLib } from "../default/index.js";
 import type { ExternalAuthContext, ParsedOIDCUtente } from "../types.js";
 import { codiceIniziativaConadCno } from "./codice-iniziativa.js";
 import { insightVolantinoConadCno } from "./insight-volantino.js";
+import { letturaReferenzaConadCno } from "./lettura-referenza.js";
+import { insegneListaPuntiVenditaConadCno } from "./lista-punti-vendita.js";
 import { importPuntiVenditaConadCno } from "./punti-vendita.js";
 
 const DEFAULT_BIRTH_DATE = "1970-01-01";
@@ -95,6 +97,8 @@ export class ConadcnoAgenziaLib extends DefaultAgenziaLib {
   importPuntiVendita = importPuntiVenditaConadCno;
   insightVolantino = insightVolantinoConadCno;
   codiceIniziativaPromo = codiceIniziativaConadCno;
+  letturaReferenza = letturaReferenzaConadCno;
+  insegneListaPuntiVendita = insegneListaPuntiVenditaConadCno;
 
   async parseUtenteOIDC(
     email: string,

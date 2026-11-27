@@ -25,6 +25,7 @@ import { TracciatoService } from "../../services/TracciatoService.js";
 import { ServerUtils } from "../../utils/ServerUtils";
 import type { AgenziaLibScoreRules, AzioniRule, CellaConfronto, FieldChange, IAgenziaLib, InsightVolantinoAgenzia, MatricePromo, ModificaRule, ParsedOIDCUtente, PromoScoreboardInput } from "../types.js";
 import { insightVolantinoCoopFirenze } from "./insight-volantino.js";
+import { letturaReferenzaCoopFirenze } from "./lettura-referenza.js";
 import { buildCoopfiPolicyFromCodeV2 } from "./utility/coopfi-policy-v2";
 import { COOPFI_TRACKED_FIELD_MAP, createCoopfiNormalizer } from "./utility/coopfi-referenza";
 import { resolveRepartoNamesForSettoriFinali } from "./utility/coopfi-settore-finale-map";
@@ -205,6 +206,9 @@ export class CoopfiAgenziaLib implements IAgenziaLib {
 
     /** Palette e intestazione del report PDF del volantino; sezioni nell'ordine standard (insight-volantino.ts). */
     public insightVolantino: InsightVolantinoAgenzia = insightVolantinoCoopFirenze;
+
+    /** Come Coop Firenze scrive prezzo, barrato e sconto nei box (lettura-referenza.ts). */
+    public letturaReferenza = letturaReferenzaCoopFirenze;
 
     /**
      * Campi della referenza mostrati nell'anteprima del menabò, nell'ordine indicato.

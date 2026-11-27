@@ -27,6 +27,7 @@ import type { EsitoRicercaPosizione, IPosizioniRigheRepository } from '../reposi
 import type { IPuntiVenditaVolantinoRepository, PuntoVenditaDellaStoria } from '../repositories/PuntiVenditaVolantinoRepository';
 import { AGGREGATI_VUOTI, type AggregatiKit, boxDelKit, riassumiKit } from '../utils/analisiKit';
 import { regoleLinee, type RegoleLinee, urlImmagineLogo } from '../utils/lineeDistributore';
+import type { LetturaReferenzaAgenzia } from '../agenzia_lib/lettura-referenza';
 import { AnalisiKitService, CHIAVE_PRODOTTO, leggiReferenzeKit as leggi } from './AnalisiKitService';
 import {
   calcolaAnalisiPuntoVendita,
@@ -109,6 +110,8 @@ export interface OpzioniAnalisiPuntoVendita {
   lineeDistributore?: LineeDistributoreAgenzia | null;
   /** Il catalogo dei loghi e bolli di Istanta, per il logo delle linee; senza, le linee non hanno logo. */
   catalogoLoghi?: Pick<ICatalogoLoghiService, 'catalogo'> | null;
+  /** I nomi di prezzo, barrato e sconto dichiarati dalla libreria agenzia (letturaReferenza); senza, lo standard. */
+  letturaReferenza?: LetturaReferenzaAgenzia;
 }
 
 /** Filtri della verifica dei collegamenti. */
@@ -141,6 +144,7 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
   private readonly chiaveMeta: string | null;
   private readonly oggi: () => string;
   private readonly riepiloghi: AnalisiKitService;
+  private readonly lettura: LetturaReferenzaAgenzia | undefined;
   private readonly repartiGdo: FonteRepartiGdo;
   private readonly configInsight: Pick<IConfigService, 'getFlyerInsightsConfig'> | null;
   private readonly posizioni: IPosizioniRigheRepository;
@@ -155,7 +159,8 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
   ) {
     this.chiaveMeta = opzioni.chiaveMetaPuntoVendita?.trim() || null;
     this.oggi = opzioni.oggi ?? (() => oggiARoma());
-    this.riepiloghi = new AnalisiKitService(repository);
+    this.riepiloghi = new AnalisiKitService(repository, undefined, opzioni.letturaReferenza);
+    this.lettura = opzioni.letturaReferenza;
     this.repartiGdo = opzioni.repartiGdo ?? SENZA_REPARTI_GDO;
     this.configInsight = opzioni.configInsight ?? null;
     this.posizioni = opzioni.posizioni ?? SENZA_POSIZIONI;
@@ -300,7 +305,7 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
       this.repartiDellaGdo(puntoVendita.idGdo),
     ]);
     if (!kit) throw nonTrovato();
-    const referenze = leggi(righe);
+    const referenze = leggi(righe, this.lettura);
     const box = boxDelKit(referenze);
     const { dati: riepilogo } = riassumiKit(referenze, box);
     const pagine = numeroPagine(kit.pdf?.pagine ?? null, box);
@@ -360,7 +365,7 @@ export class AnalisiPuntoVenditaService implements IAnalisiPuntoVenditaService {
       const descrizione = trovate.get(chiaveDescrizione(edizione.idKit, chiave));
       return descrizione ? [[edizione.idKit, descrizione] as const] : [];
     }));
-    const box = boxDelKit(leggi(righe));
+    const box = boxDelKit(leggi(righe, this.lettura));
     const dettaglio = dettaglioReferenza(chiave, presenze, { box, pagine: numeroPagine(kit?.pdf?.pagine ?? null, box) }, descrizioni);
     if (reparti.vuoto || !dettaglio.dati.reparto) return dettaglio;
     return { ...dettaglio, dati: { ...dettaglio.dati, reparto: reparti.nome(dettaglio.dati.reparto) } };

@@ -4,6 +4,7 @@ import type { PromoContextValue, PuntoVenditaDaImportareDTO } from "../dto/index
 import type { OidcUserClaims } from "../interfaces/IOidcService.js";
 import type { DatiReportVolantino, IntestazioneReport, PaletteReport, SezioneReport } from "../../../lib/insightVolantino/report.js";
 import type { ParteDescrizione, TestiDescrizioneBox } from "../../../lib/insightVolantino/tipi.js";
+import type { LetturaReferenzaAgenzia } from "./lettura-referenza.js";
 
 // ── Tipi di base ──────────────────────────────────────────────────────────────
 
@@ -518,4 +519,19 @@ export interface IAgenziaLib {
    * null quando il nome non ha un codice.
    */
   codiceIniziativaPromo?: (nomePromo: string) => string | null;
+
+  /**
+   * I nomi con cui l'agenzia scrive prezzo, barrato e sconto nei box stampati (spec insight-volantino,
+   * "Lettura delle referenze stampate dichiarata dalla libreria agenzia"). Opzionale: un campo che
+   * manca vale l'elenco standard (lettura-referenza.ts), che comprende i nomi di tutte le agenzie.
+   */
+  letturaReferenza?: LetturaReferenzaAgenzia;
+
+  /**
+   * Le insegne che si trovano nella lista dei punti vendita stampata nel volantino storico (spec
+   * import-storico-volantino, "Insegne nella lista dei punti vendita dichiarate dalla libreria
+   * agenzia"): un testo che le contiene e' un'insegna, non una localita'. Opzionale: senza, solo le
+   * parole generiche (supermercato, ipermercato, market, discount).
+   */
+  insegneListaPuntiVendita?: RegExp;
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { leggiListaPuntiVendita, MASSIMO_VOCI_LISTA, vociDaPvData, vociDelVolantino } from './listaPuntiVenditaVolantino';
+import { insegneListaPuntiVenditaConadCno } from '../agenzia_lib/conadcno/lista-punti-vendita';
+import { INSEGNA_GENERICA, leggiListaPuntiVendita, MASSIMO_VOCI_LISTA, vociDaPvData, vociDelVolantino } from './listaPuntiVenditaVolantino';
 
 // La lista come arriva da InDesign per un volantino CONAD (paragrafi separati da \r), con dati di prova
 const LISTA_CONAD = [
@@ -112,17 +113,49 @@ describe('leggiListaPuntiVendita', () => {
     ]);
   });
 
-  it('l\'intestazione d\'insegna non diventa la localita\' delle voci', () => {
-    const voci = leggiListaPuntiVendita('CONAD CITY\rVia Roma 12 - tel. 051 123456\rOrari: lun-sab 8.00-20.00');
+  it('l\'intestazione d\'insegna dichiarata dalla libreria agenzia non diventa la localita\' delle voci', () => {
+    const voci = leggiListaPuntiVendita('CONAD CITY\rVia Roma 12 - tel. 051 123456\rOrari: lun-sab 8.00-20.00', insegneListaPuntiVenditaConadCno);
 
     expect(voci).toHaveLength(1);
     expect(voci[0]).toMatchObject({ gruppo: 'CONAD CITY', localita: null, indirizzo: 'Via Roma 12', telefono: '051 123456' });
   });
 
   it('citta e insegna sulla stessa riga d\'intestazione: la localita\' e\' la citta', () => {
-    const [voce] = leggiListaPuntiVendita('FIRENZE - CONAD CITY\rVia Roma 12');
+    const [voce] = leggiListaPuntiVendita('FIRENZE - CONAD CITY\rVia Roma 12', insegneListaPuntiVenditaConadCno);
 
     expect(voce).toMatchObject({ gruppo: 'FIRENZE - CONAD CITY', localita: 'FIRENZE', indirizzo: 'Via Roma 12' });
+  });
+
+  it('senza insegne dichiarate valgono le parole generiche: un\'intestazione "IPERMERCATO" non e\' una localita\'', () => {
+    const voci = leggiListaPuntiVendita('IPERMERCATO\rVia Roma 12 - tel. 051 123456');
+
+    expect(voci[0]).toMatchObject({ gruppo: 'IPERMERCATO', localita: null, indirizzo: 'Via Roma 12' });
+  });
+
+  it('senza insegne dichiarate l\'insegna di un cliente e\' una localita\'', () => {
+    const voci = leggiListaPuntiVendita('CONAD CITY\rVia Roma 12 - tel. 051 123456');
+
+    expect(voci[0]).toMatchObject({ gruppo: 'CONAD CITY', localita: 'CONAD CITY', indirizzo: 'Via Roma 12' });
+  });
+
+  it('il codice comune non contiene insegne di un cliente: solo parole generiche', () => {
+    expect(INSEGNA_GENERICA.test('CONAD')).toBe(false);
+    expect(INSEGNA_GENERICA.test('SUPERSTORE')).toBe(false);
+    expect(INSEGNA_GENERICA.test('Supermercato')).toBe(true);
+  });
+
+  it('la libreria di CONAD CNO riconosce le sue insegne e anche le parole generiche', () => {
+    for (const testo of ['CONAD', 'Superstore', 'CITY', 'Sapori & Dintorni', 'IPERMERCATO', 'Market']) {
+      expect(insegneListaPuntiVenditaConadCno.test(testo)).toBe(true);
+    }
+    expect(insegneListaPuntiVenditaConadCno.test('GENOVA')).toBe(false);
+  });
+
+  it('vociDelVolantino passa le insegne dichiarate alla lettura del testo', () => {
+    const lista = 'CONAD CITY\rVia Roma 12 - tel. 051 123456';
+
+    expect(vociDelVolantino({ pv: lista }, insegneListaPuntiVenditaConadCno)[0]).toMatchObject({ localita: null });
+    expect(vociDelVolantino({ pv: lista })[0]).toMatchObject({ localita: 'CONAD CITY' });
   });
 
   it('citta e indirizzo senza separatore, telefono senza "tel"', () => {
