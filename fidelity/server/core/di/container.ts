@@ -309,7 +309,11 @@ function bindServices() {
     )
   );
   container.bind<IStoriaPuntoVenditaService>(TYPES.StoriaPuntoVenditaService).toDynamicValue(
-    (context) => new StoriaPuntoVenditaService(context.get<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository))
+    (context) => new StoriaPuntoVenditaService(
+      context.get<IPuntiVenditaVolantinoRepository>(TYPES.PuntiVenditaVolantinoRepository),
+      // Le insegne che la libreria agenzia del cliente dichiara per la lista dei punti vendita dei volantini storici
+      { insegne: context.get<IAgenziaLib>(TYPES.AgenziaLib).insegneListaPuntiVendita }
+    )
   );
   container.bind<IAnalisiPuntoVenditaService>(TYPES.AnalisiPuntoVenditaService).toDynamicValue(
     (context) => new AnalisiPuntoVenditaService(
@@ -327,6 +331,7 @@ function bindServices() {
         // Le marche della scheda con la linea del distributore e il suo logo, come negli insight
         lineeDistributore: context.get<IAgenziaLib>(TYPES.AgenziaLib).insightVolantino?.lineeDistributore ?? null,
         catalogoLoghi: context.get<ICatalogoLoghiService>(TYPES.CatalogoLoghiService),
+        letturaReferenza: context.get<IAgenziaLib>(TYPES.AgenziaLib).letturaReferenza,
       }
     )
   );
@@ -514,7 +519,9 @@ function bindServices() {
       context.get<IAnalisiPuntiVenditaRepository>(TYPES.AnalisiPuntiVenditaRepository),
       context.get<IConfigService>(TYPES.ConfigService),
       undefined,
-      context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository)
+      context.get<IImpostazioniGdoRepository>(TYPES.ImpostazioniGdoRepository),
+      // I nomi di prezzo, barrato e sconto che dichiara la libreria agenzia del cliente
+      context.get<IAgenziaLib>(TYPES.AgenziaLib).letturaReferenza
     )
   );
   // Una sola istanza per processo: tiene in memoria per un'ora il catalogo letto da Istanta

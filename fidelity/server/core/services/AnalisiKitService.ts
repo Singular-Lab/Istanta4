@@ -1,3 +1,4 @@
+import { letturaReferenza as letturaDichiarata, type LetturaReferenzaAgenzia } from '../agenzia_lib/lettura-referenza';
 import { log } from '../logger';
 import type { IAnalisiPuntiVenditaRepository, RiepilogoDaSalvare, RigaReferenzaKit } from '../repositories/AnalisiPuntiVenditaRepository';
 import { aggregatiDi, type AggregatiKit, riassumiKit, VERSIONE_ANALISI_KIT } from '../utils/analisiKit';
@@ -25,8 +26,10 @@ export const CHIAVE_PRODOTTO = /^[cd]-[A-Za-z0-9_.~-]{1,1000}$/;
 export type RepositoryRiepiloghiKit = Pick<IAnalisiPuntiVenditaRepository, 'aggregatiKit' | 'referenzeDeiKit' | 'salvaRiepiloghi'>;
 
 /** Le referenze lette com'e' stampate, ognuna secondo l'origine del suo kit (Istanta o storico). */
-export const leggiReferenzeKit = (righe: readonly RigaReferenzaKit[]): ReferenzaStampata[] =>
-  righe.map(riga => leggiReferenza(riga, { storico: riga.storico === true }));
+export const leggiReferenzeKit = (righe: readonly RigaReferenzaKit[], lettura?: LetturaReferenzaAgenzia): ReferenzaStampata[] => {
+  const nomi = letturaDichiarata(lettura);
+  return righe.map(riga => leggiReferenza(riga, { storico: riga.storico === true, lettura: nomi }));
+};
 
 /** L'ultima modifica fra le referenze lette, null se non ce ne sono. */
 export function ultimaModifica(righe: readonly RigaReferenzaKit[]): Date | null {
@@ -46,6 +49,8 @@ export class AnalisiKitService {
   constructor(
     private readonly repository: RepositoryRiepiloghiKit,
     private readonly contesto = 'Analisi PV',
+    /** I nomi di prezzo, barrato e sconto dichiarati dalla libreria agenzia del cliente. */
+    private readonly lettura?: LetturaReferenzaAgenzia,
   ) {}
 
   /**
@@ -68,7 +73,7 @@ export class AnalisiKitService {
       }
       const nuovi: RiepilogoDaSalvare[] = blocco.map((id) => {
         const righe = perKit.get(id) ?? [];
-        const riepilogo = riassumiKit(leggiReferenzeKit(righe));
+        const riepilogo = riassumiKit(leggiReferenzeKit(righe, this.lettura));
         aggregati.set(id, aggregatiDi(riepilogo.dati));
         return { idKit: id, versione: VERSIONE_ANALISI_KIT, riepilogo, referenzeAl: ultimaModifica(righe) };
       });

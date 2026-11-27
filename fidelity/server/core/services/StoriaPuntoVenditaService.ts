@@ -38,7 +38,7 @@ import {
   type RigaConChiavi,
 } from '../utils/chiaviRigheVolantino';
 import { chiaveCombinazione } from '../utils/confrontoPuntiVendita';
-import { type VoceListaPuntiVendita, vociDelVolantino } from '../utils/listaPuntiVenditaVolantino';
+import { INSEGNA_GENERICA, type VoceListaPuntiVendita, vociDelVolantino } from '../utils/listaPuntiVenditaVolantino';
 import { chiaveIndirizzo, chiaveTelefono } from '../utils/puntoVenditaNormalization';
 import { calcolaStoria, insegneNelTempo, ultimaApparizione } from '../utils/storiaPuntoVendita';
 import { importPuntiVenditaJobs } from './ImportPuntiVenditaJob';
@@ -95,6 +95,11 @@ export interface OpzioniStoriaPuntoVendita {
    * riabbinano riga per riga, lo fa l'import quando finisce.
    */
   rinvia?: (idGdo: string) => boolean;
+  /**
+   * Le insegne che la libreria agenzia del cliente dichiara per la lista dei punti vendita stampata
+   * (insegneListaPuntiVendita): senza, solo le parole generiche.
+   */
+  insegne?: RegExp;
 }
 
 const messaggio = (errore: unknown): string => (errore instanceof Error ? errore.message : String(errore));
@@ -149,6 +154,7 @@ const presente = (valore: unknown): boolean => typeof valore === 'string' && val
 export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
   private readonly attesaRiabbinamentoMs: number;
   private readonly rinvia: (idGdo: string) => boolean;
+  private readonly insegne: RegExp;
   /** Riabbinamenti pianificati, per GDO: il timer, o undefined se rimandato alla fine dell'import Excel. */
   private readonly inAttesa = new Map<string, ReturnType<typeof setTimeout> | undefined>();
   /** Ultimo riabbinamento avviato per GDO: il successivo parte quando questo finisce. */
@@ -157,12 +163,13 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
   constructor(private readonly repository: IPuntiVenditaVolantinoRepository, opzioni: OpzioniStoriaPuntoVendita = {}) {
     this.attesaRiabbinamentoMs = opzioni.attesaRiabbinamentoMs ?? ATTESA_RIABBINAMENTO_MS;
     this.rinvia = opzioni.rinvia ?? (idGdo => importPuntiVenditaJobs.inCorsoQui(idGdo));
+    this.insegne = opzioni.insegne ?? INSEGNA_GENERICA;
   }
 
   // ─── Registrazione delle liste ─────────────────────────────────────
 
   async registraListaVolantino(lista: ListaVolantinoDaRegistrare): Promise<EsitoListaVolantino> {
-    const voci = vociDelVolantino(lista);
+    const voci = vociDelVolantino(lista, this.insegne);
     // Una lista vuota non cancella quella gia' registrata: e' piu' probabile un riquadro non trovato
     if (voci.length === 0) return { registrata: false, righe: 0, abbinate: 0, nonAbbinate: 0 };
 
@@ -585,7 +592,7 @@ export class StoriaPuntoVenditaService implements IStoriaPuntoVenditaService {
       return scarta(`Il kit appartiene ad area/canale ${kit.idArea}/${kit.idCanale}, non a ${String(areaId)}/${String(canaleId)}`, riferimenti);
     }
 
-    const voci = vociDelVolantino({ pv, pvData });
+    const voci = vociDelVolantino({ pv, pvData }, this.insegne);
     // Come nel sync: una lista vuota non tocca le righe gia' registrate del kit
     if (voci.length === 0) return scarta(MOTIVI_SCARTO_EXPORT.LISTA_VUOTA, riferimenti);
     await this.scriviRighe(kit, idGdo, voci, presente(fileName) ? String(fileName).trim() : nomeFile);

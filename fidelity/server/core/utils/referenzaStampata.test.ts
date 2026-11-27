@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { letturaReferenzaConadCno } from '../agenzia_lib/conadcno/lettura-referenza';
+import { letturaReferenzaCoopFirenze } from '../agenzia_lib/coopfi/lettura-referenza';
+import { letturaReferenza } from '../agenzia_lib/lettura-referenza';
 import {
   chiaveProdotto,
   DESCRIZIONE_ASSENTE,
@@ -434,6 +437,45 @@ describe('leggiReferenza: i nomi di prezzo, barrato e sconto', () => {
     }), ISTANTA);
 
     expect(referenza).toMatchObject({ prezzo: 7.92, barrato: 19.8, sconto: 60, meccanica: 'sconto' });
+  });
+
+  it('Coop dichiarata: prezzo_continuo e\' il barrato, e i nomi di un altro cliente non contano', () => {
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [
+        campo('prezzo', '€ 7,92', 'PREZZO_PROMO'),
+        campo('prezzo_continuo', 'invece di € 19,80'),
+        campo('sconto', '-60%', 'B.SCONTO'),
+        campo('sconto_fid', '15', 'SCONTO_Fidelity'),
+      ],
+      data_fields: { codice_referenza: '1' },
+    }), { ...ISTANTA, lettura: letturaReferenza(letturaReferenzaCoopFirenze) });
+
+    expect(referenza).toMatchObject({ prezzo: 7.92, barrato: 19.8, sconto: 60 });
+  });
+
+  it('CONAD CNO dichiarata: campo_offerta e\' il barrato e sconto_fid lo sconto, prezzo_continuo non e\' un barrato', () => {
+    const conad = { ...ISTANTA, lettura: letturaReferenza(letturaReferenzaConadCno) };
+    const barrato = leggiReferenza(riga({
+      compiled_fields: [campo('prezzo_offerta', '€ 3,00'), campo('campo_offerta', '€ 5,00', 'PREZ_CampoOfferta_barrato'), campo('sconto_fid', '20', 'SCONTO_Fidelity')],
+      data_fields: { codice_referenza: '1' },
+    }), conad);
+    const altroCliente = leggiReferenza(riga({
+      compiled_fields: [campo('prezzo', '€ 7,92'), campo('prezzo_continuo', 'invece di € 19,80')],
+      data_fields: { codice_referenza: '1' },
+    }), conad);
+
+    expect(barrato).toMatchObject({ prezzo: 3, barrato: 5, sconto: 20 });
+    expect(altroCliente).toMatchObject({ prezzo: 7.92, barrato: null, sconto: null });
+  });
+
+  it('una libreria che dichiara solo lo sconto cambia solo lo sconto: il resto resta lo standard', () => {
+    const lettura = letturaReferenza({ etichetteSconto: ['sconto_speciale'] });
+    const referenza = leggiReferenza(riga({
+      compiled_fields: [campo('prezzo_offerta', '€ 3,00'), campo('sconto_speciale', '25', 'SCONTO_Speciale'), campo('sconto_fid', '15')],
+      data_fields: { codice_referenza: '1' },
+    }), { ...ISTANTA, lettura });
+
+    expect(referenza).toMatchObject({ prezzo: 3, sconto: 25 });
   });
 
   it('storico: il listino dei dati DB1 (prezzo uguale al barrato) non e\' il prezzo in offerta', () => {

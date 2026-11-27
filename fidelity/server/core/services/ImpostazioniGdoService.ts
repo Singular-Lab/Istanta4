@@ -17,6 +17,7 @@ import type {
 import { verificaConfigurazioneInsight } from '../../../lib/insightVolantino/configurazione';
 import { BadRequestError, ExternalApiError, NotFoundError } from '../../../lib/errors';
 import type { ConfigWebpliant } from '../../../lib/types';
+import { letturaReferenza as letturaDichiarata } from '../agenzia_lib/lettura-referenza';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import { inviaFormDataAOlimpo } from '../http/olimpo';
 import type { ICatalogoLoghiService, LogoDelCatalogo } from '../interfaces/ICatalogoLoghiService';
@@ -187,7 +188,7 @@ export class ImpostazioniGdoService implements IImpostazioniGdoService {
     private readonly repository: IImpostazioniGdoRepository,
     private readonly righeConfig: IConfigWebpliantGdoRepository,
     private readonly configInsight: Pick<IConfigService, 'getFlyerInsightsConfig'>,
-    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'>,
+    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino' | 'letturaReferenza'>,
     private readonly catalogoLoghi: Pick<ICatalogoLoghiService, 'catalogo'>,
     opzioni: OpzioniImpostazioniGdo = {},
   ) {
@@ -409,7 +410,7 @@ export class ImpostazioniGdoService implements IImpostazioniGdoService {
       throw new NotFoundError({ message: 'Volantino non trovato', entityType: 'RuntimeKit', entityId: idKit });
     }
     const righe = await this.lettureKit.righeDelKit(kit.id);
-    const box = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
+    const box = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico, lettura: letturaDichiarata(this.agenziaLib.letturaReferenza) })));
     // I reparti come li vedono gli insight: quello della config e i nomi per il marketing della GDO
     const contesto = await contestoDellaGdo(this.configInsight, this.repository, idGdo, 'Prova delle regole del menabò');
     const repartiDelleRighe = new Map(righe.map(riga => [String(riga.id), repartoConfigurato(riga, contesto)] as const));
