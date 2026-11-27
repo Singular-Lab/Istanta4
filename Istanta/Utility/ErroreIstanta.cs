@@ -71,15 +71,14 @@ namespace Istanta.Utility
         }
     }
 
-    /// I20-1062: come si racconta un errore al client. Nel campo error va un messaggio breve, che
-    /// il Plugin mostra per intero; la traccia completa va nel log del server e nel campo
-    /// dettaglio, che il Plugin scrive in console senza mostrarla.
+    /// I20-1062: come si racconta un errore al client. Nel campo error va un messaggio su una riga,
+    /// che il Plugin mostra; la traccia completa va nel log del server e nel campo dettaglio, che il
+    /// Plugin scrive in console senza mostrarla.
+    /// I20-1279: il messaggio va intero. Prima si accorciava a 160 caratteri con "...", per il
+    /// riquadro in cima al pannello: ora quello si accorcia da se' (200 caratteri), e il taglio del
+    /// server lasciava monchi anche la console di Utility, il log e la copia del messaggio.
     public static class DescrizioneErrori
     {
-        /// messaggioUtente del Plugin mostra 200 caratteri, e davanti mette il suo codice
-        /// ("Code SRF-04 Errore sul server durante la richiesta: "): 160 lasciano visibile la coda.
-        public const int LunghezzaMassima = 160;
-
         /// Il messaggio per l'operatore. Un ErroreIstanta dice passo e motivo; un errore imprevisto
         /// dice tipo, punto del codice (file e riga, se ci sono i simboli) e messaggio.
         public static string Breve(string chiamata, Exception ex)
@@ -100,7 +99,7 @@ namespace Istanta.Utility
                 testo = $"{chiamata}: {Motivo(radice)}";
             }
 
-            return Accorcia(testo);
+            return SuUnaRiga(testo);
         }
 
         /// I20-1069: il perche' di un errore senza il nome della chiamata, per chi lo avvolge in un
@@ -196,10 +195,10 @@ namespace Istanta.Utility
             return riga;
         }
 
-        private static string Accorcia(string testo)
+        /// I20-1279: il messaggio su una riga, intero: niente taglio e niente "...".
+        private static string SuUnaRiga(string testo)
         {
-            testo = testo.Replace("\r", " ").Replace("\n", " ");
-            return testo.Length <= LunghezzaMassima ? testo : testo.Substring(0, LunghezzaMassima - 3) + "...";
+            return testo.Replace("\r", " ").Replace("\n", " ");
         }
     }
 

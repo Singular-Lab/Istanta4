@@ -48,6 +48,11 @@ const scaricamentoFoto = {
         }
     },
 
+    /// I20-1279: se lo scaricamento deve riscrivere anche i file gia' presenti e identici.
+    sovrascriviPresenti(opzioni) {
+        return opzioni != null && opzioni.sovrascriviPresenti === true;
+    },
+
     /// I20-1125: l'avviso all'operatore sui file che Olimpo non ha restituito. null se non ce ne sono.
     avvisoNonScaricati(nonScaricati) {
         if (!Array.isArray(nonScaricati) || nonScaricati.length === 0) {
@@ -60,7 +65,10 @@ const scaricamentoFoto = {
 
     /// Scarica nella cartella Links le immagini che non ci sono gia'.
     /// Lo chiamano indexNew, per il cambio foto della scheda e per la sincronizzazione massiva.
-    async downloadImages(listImagesRequired, objProcess, cartella, idOperazione)
+    /// I20-1279: con opzioni.sovrascriviPresenti (la casella "Sovrascrivi foto gia' presenti" del
+    /// sync completo) non si guardano i file presenti: si riscaricano e si riscrivono tutti, anche
+    /// quelli identici. Senza, quelli identici si saltano e quelli cambiati si riscrivono.
+    async downloadImages(listImagesRequired, objProcess, cartella, idOperazione, opzioni = {})
     {
         const folder = cartella;
     
@@ -89,7 +97,11 @@ const scaricamentoFoto = {
         //I20-967: per poche foto (tipicamente una sola, dal cambio foto della scheda ref) chiediamo
         //i file per nome: elencare una cartella Links con migliaia di immagini costerebbe molto di piu'.
         let entriesDaControllare = null;
-        if (nomiRichiesti.size > 0 && nomiRichiesti.size <= scaricamentoFoto.SOGLIA_LETTURA_MIRATA && typeof folder.getEntry === "function") {
+        if (scaricamentoFoto.sovrascriviPresenti(opzioni)) {
+            //I20-1279: nessun file presente vale come gia' scaricato.
+            entriesDaControllare = [];
+        }
+        else if (nomiRichiesti.size > 0 && nomiRichiesti.size <= scaricamentoFoto.SOGLIA_LETTURA_MIRATA && typeof folder.getEntry === "function") {
             entriesDaControllare = [];
             for (const nomeRichiesto of nomiRichiesti.keys()) {
                 try {

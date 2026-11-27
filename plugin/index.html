@@ -485,16 +485,26 @@
           </div>
           <div id="TabSync" class="tabcontent" style="display: none; width: 100%;">
             <div class="panel" id="SyncTracciato">
-              <div class="row">
-                <sp-action-button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
-                  onclick="ReperimentoFoto.apriSchermataSyncPacchettoFoto(0)">Scarica Pacchetto Foto</sp-action-button><hr>
-                  <sp-action-button id="SyncFotoMassivo" name="SyncFotoMassivo" style="margin-top: 24px;"
-                  onclick="Modali.apriModal('dialogSyncFotoMassivo','Impagina');">Sync massivo foto</sp-action-button><hr>
-                  <!-- <sp-action-button id="ScaricaLoghiBolli" name="ScaricaLoghiBolli" style="margin-top: 24px; color: green;"
-                  onclick="ReperimentoFoto.apriSchermataSyncPacchettoFoto(1)">Scarica Loghi/Bolli</sp-action-button><hr> -->
-                <sp-action-button id="syncRimaste" name="syncRimaste" style="margin-top: 24px; color: lightcoral; display: none;"
-                  onclick="apriSchermataSyncModifiche()">Sync rimaste</sp-action-button><hr>
-                <sp-action-button id="svuotaCodaSync" name="svuotaCodaSync" style="margin-top: 24px; color: lightcoral; display: none;"
+              <!-- I20-1279: un paragrafo per pulsante, con titolo e una breve descrizione, invece dei
+                   pulsanti uno accanto all'altro. -->
+              <div id="pulsantiSyncFoto" style="display: flex; flex-direction: column; margin: 16px 12px 0 12px;">
+                <div class="paragrafoSyncFoto" style="padding-bottom: 12px; border-bottom: 1px solid #5a5a5a;">
+                  <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: bold; color: #eeeeee;">Scarica pacchetto foto</p>
+                  <p style="margin: 0 0 8px 0; font-size: 11px; color: #bbbbbb;">Scarica le foto, i loghi e i bolli della lavorazione nelle cartelle del documento. Le foto che hai già non vengono riscaricate, a meno di spuntare «Sovrascrivi foto già presenti».</p>
+                  <sp-action-button id="ScaricaPacchettoFoto" name="downloadFoto"
+                    onclick="ReperimentoFoto.apriSchermataSyncPacchettoFoto(0)">Scarica Pacchetto Foto</sp-action-button>
+                </div>
+                <div class="paragrafoSyncFoto" style="padding-top: 12px; padding-bottom: 12px;">
+                  <p style="margin: 0 0 4px 0; font-size: 13px; font-weight: bold; color: #eeeeee;">Sync massivo foto</p>
+                  <p style="margin: 0 0 8px 0; font-size: 11px; color: #bbbbbb;">Confronta le foto dei box impaginati con quelle del tracciato e ricollega quelle che non corrispondono.</p>
+                  <sp-action-button id="SyncFotoMassivo" name="SyncFotoMassivo"
+                    onclick="Modali.apriModalCompatta('dialogSyncFotoMassivo','Sync massivo foto');">Sync massivo foto</sp-action-button>
+                </div>
+                <!-- <sp-action-button id="ScaricaLoghiBolli" name="ScaricaLoghiBolli" style="margin-bottom: 8px; color: green;"
+                  onclick="ReperimentoFoto.apriSchermataSyncPacchettoFoto(1)">Scarica Loghi/Bolli</sp-action-button> -->
+                <sp-action-button id="syncRimaste" name="syncRimaste" style="margin-bottom: 8px; color: lightcoral; display: none;"
+                  onclick="apriSchermataSyncModifiche()">Sync rimaste</sp-action-button>
+                <sp-action-button id="svuotaCodaSync" name="svuotaCodaSync" style="margin-bottom: 8px; color: lightcoral; display: none;"
                   onclick="svuotaCodaSync()">Svuota coda sync</sp-action-button>
               </div>
             </div> 
@@ -836,7 +846,8 @@
     <div id="overlayModal"
       style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 5000;"
       class="overlayModal">
-      <div
+      <!-- I20-1279: riquadroModal, perche' Modali.apriModalCompatta lo faccia alto quanto il contenuto. -->
+      <div id="riquadroModal"
         style="background-color: white; width: 80%; height: 80%; padding: 10px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column;">
     
         <!-- Header -->
@@ -857,11 +868,12 @@
     <div id="overlayModalDownloadFoto"
     style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); display: none; justify-content: center; align-items: center; z-index: 5000;"
     class="overlayModal">
+    <!-- I20-1279: la finestra e' alta quanto il suo contenuto, al massimo l'80% del pannello. -->
     <div
-      style="background-color: white; width: 80%; height: 80%; padding: 10px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column;">
+      style="background-color: white; width: 80%; max-height: 80%; padding: 10px; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column;">
   
       <!-- Header -->
-      <div id="headerModal" style="display: flex; height: 5%; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+      <div id="headerModal" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
         <div class="row" id="messaggiUtenteModal" style="position: fixed; width:76%; align-self: self-start; z-index: 9999;">
         </div>
         <h2 id="modalTitle" style="margin: 0; display: block;">Titolo</h2>
@@ -869,7 +881,7 @@
       </div>
   
       <!-- Body -->
-      <div id="bodyModal" style="flex-grow: 1; margin: 0; padding: 0; overflow-y: auto; height: 95%;">
+      <div id="bodyModal" style="flex: 1 1 auto; min-height: 0; margin: 0; padding: 0; overflow-y: auto;">
         
       </div>
     </div>
@@ -1030,18 +1042,21 @@
   </div>
 </div>
 
-<div id="dialogSyncFotoMassivo" myname="dialogSyncFotoMassivo" style="display: none; height: 100%; width: 100%;">
-  <div style="height: 90%;">
-    <div style="width: 100%; align-items: center; display: flex;">
-      <input type="checkbox" id="ricollegaFotoPresentiModificate" onclick="console.log('ciao'), toggleAdvancedMode(this.checked)">
-      <label>Ricollega tutte le foto che presentano modifiche incluse quelle presenti.</label>
+<!-- I20-1279: la finestra si apre compatta (Modali.apriModalCompatta) con il titolo "Sync massivo foto";
+     la descrizione sta nella scheda Sync Foto. La seconda casella compare solo con la prima spuntata
+     (toggleAdvancedMode), e gli id sono quelli che legge "Avvia Sync". -->
+<div id="dialogSyncFotoMassivo" myname="dialogSyncFotoMassivo" style="display: none; width: 100%;">
+  <div style="padding: 8px 4px;">
+    <div style="width: 100%; align-items: center; display: flex; margin-bottom: 6px;">
+      <input type="checkbox" id="ricollegaFotoPresentiModificate" onclick="toggleAdvancedMode(this.checked)">
+      <label for="ricollegaFotoPresentiModificate" style="color: #333;">Ricollega anche le foto già presenti che sono cambiate</label>
     </div>
-    <div style="width: 100%; align-items: center; display: none;">
-      <input type="checkbox" id="advancedMode"> <label>AdvancedMode: Rimuovi foto rimosse e impagina foto nuove.</label>
+    <div style="width: 100%; align-items: center; display: none; margin-bottom: 6px;">
+      <input type="checkbox" id="advancedMode"> <label for="advancedMode" style="color: #333;">Modalità avanzata: togli le foto rimosse e impagina quelle nuove</label>
     </div>
   </div>
-  <div>
-    <button onclick="Modali.chiudiModal();">Annulla</button>
+  <div style="display: flex; justify-content: flex-end; border-top: 1px solid #ccc; padding-top: 10px; margin-top: 4px;">
+    <button onclick="Modali.chiudiModal();" style="margin-right: 8px;">Annulla</button>
     <button
       onclick="ReperimentoFoto.ricollegaFotoMassivo($('#ricollegaFotoPresentiModificate').is(':checked'), $('#advancedMode').is(':checked'))">Avvia Sync</button>
   </div>
@@ -1235,14 +1250,23 @@
 </div>
 
 <div id="dialogSyncPacchettoFoto" myname="dialogSyncPacchettoFoto" style="width:100%; display: none; overflow: none;">
-  <div style="height: 90%;" id="avvioOperazioneSyncFoto" style="overflow: none; display: block;">
-    <button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
-    onclick="ReperimentoFoto.avviaSyncPacchettoFoto(0)">Avvia sync completo</button><hr>
-    <button id="ScaricaPacchettoFoto" name="downloadFoto" style="margin-top: 24px;"
-    onclick="ReperimentoFoto.avviaSyncPacchettoFoto(1)">Avvia sync loghi</button><hr>
+  <!-- I20-1279: sotto "Avvia sync completo" la casella "Sovrascrivi foto gia' presenti", sempre non
+       spuntata in questo modello: avviaSyncCompletoDallaFinestra la legge nella finestra aperta. -->
+  <div id="avvioOperazioneSyncFoto" style="display: block; padding: 8px 4px;">
+    <div style="padding-bottom: 12px; border-bottom: 1px solid #ccc;">
+      <button id="avviaSyncCompleto" name="downloadFoto"
+      onclick="ReperimentoFoto.avviaSyncCompletoDallaFinestra()">Avvia sync completo</button>
+      <div style="display: flex; align-items: center; margin-top: 8px;">
+        <input type="checkbox" id="sovrascriviFotoPresenti"> <label for="sovrascriviFotoPresenti" style="color: #333;">Sovrascrivi foto già presenti</label>
+      </div>
+    </div>
+    <div style="padding-top: 12px;">
+      <button id="avviaSyncLoghi" name="downloadFoto"
+      onclick="ReperimentoFoto.avviaSyncPacchettoFoto(1)">Avvia sync loghi</button>
+    </div>
   </div>
-  <div style="height: 90%;" id="bodySyncPacchettoFoto" style="overflow: none; display: none;">
-    <div id="loadingBox" style="display: flex; justify-content: center; align-items: center; height: 10%; width: 100%; margin-top: 10%;">
+  <div id="bodySyncPacchettoFoto" style="display: none; padding: 8px 4px;">
+    <div id="loadingBox" style="display: flex; justify-content: center; align-items: center; width: 100%; margin-top: 8px;">
       <div style="background-color: white; padding: 20px; border-radius: 5px; border-color: #333;">
         <h2 id="messageOperazione" style="text-align: center; color: #333;">Attendere...</h2>
       </div>
