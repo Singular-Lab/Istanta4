@@ -1591,7 +1591,7 @@ class Agenzia extends IAgenzia {
 
     /// TASK-c4fdc17b: le opzioni d'importazione che Edro21 non usa: 1, "Salva" senza report.
     getOpzioniImportazioneEscluse() {
-        return [1];
+        return [];
     }
 
     filtroModePerSingoliOGruppi(mode, currentList) {
