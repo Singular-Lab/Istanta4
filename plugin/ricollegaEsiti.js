@@ -25,7 +25,11 @@ const RicollegaEsiti = {
     /// Il caso che contava: il server scrive l'errore dentro al singolo elemento, e chi chiamava
     /// guardava solo l'errore generale. Un ricollegamento fallito passava quindi per riuscito,
     /// con la scheda che si aggiornava come se fosse andata bene.
-    messaggioPerElemento(elemento) {
+    ///
+    /// I20-1280: paginaDelBox e' la pagina del documento in cui sta il box. Se Istanta registra la
+    /// referenza su un'altra pagina lo si dice, con le due pagine: il ricollegamento non sposta la
+    /// riga, la allinea il Report Integrita'.
+    messaggioPerElemento(elemento, paginaDelBox = null) {
         if (elemento == null) {
             return null;
         }
@@ -35,6 +39,14 @@ const RicollegaEsiti = {
         }
 
         if (elemento.stato === RicollegaEsiti.STATO.giaImpaginato) {
+            const paginaRegistrata = RicollegaEsiti.numeroDiPagina(elemento.pag);
+            const paginaBox = RicollegaEsiti.numeroDiPagina(paginaDelBox);
+            if (paginaRegistrata != null && paginaBox != null && paginaRegistrata !== paginaBox) {
+                return {
+                    testo: "Code SRF-12 Referenza già registrata a pagina " + paginaRegistrata + ", il box è a pagina " + paginaBox + ": allineala con il Report Integrità",
+                    tipo: "warning"
+                };
+            }
             return { testo: "Code SRF-12 Referenza già impaginata", tipo: "warning" };
         }
 
@@ -68,6 +80,20 @@ const RicollegaEsiti = {
         return testo + ".";
     },
 
+    /// I20-1280: una pagina come numero positivo, dal numero del server o dal nome della pagina di
+    /// InDesign; null se non lo e' (pagina mancante, 0, un nome non numerico).
+    numeroDiPagina(valore) {
+        if (valore == null || valore === "") {
+            return null;
+        }
+        const testo = String(valore).trim();
+        if (!/^\d+$/.test(testo)) {
+            return null;
+        }
+        const numero = parseInt(testo, 10);
+        return numero > 0 ? numero : null;
+    },
+
     elencoCodici(codici) {
         return Array.isArray(codici) ? codici.filter(c => c != null && c !== "").join(", ") : "";
     },
@@ -76,14 +102,15 @@ const RicollegaEsiti = {
     /// Report Integrita' e non apre la scheda: "ricollegato" (gia' impaginato, auto impaginato o
     /// cambio di forma non fermano il report), "clonazione" (il server chiede di clonare: lo si
     /// dice e si lascia fare dalla scheda), "errore" con il messaggio da mostrare.
-    esitoDellaRisposta(risposta) {
+    /// I20-1280: paginaDelBox come in messaggioPerElemento.
+    esitoDellaRisposta(risposta, paginaDelBox = null) {
         if (risposta == null) {
             return { esito: "errore", messaggio: "Code SRF-13 Ricollegamento fallito: nessuna risposta", messaggi: [] };
         }
         const messaggi = [];
         const codici = Array.isArray(risposta.codici) ? risposta.codici : [];
         codici.forEach(elemento => {
-            const avviso = RicollegaEsiti.messaggioPerElemento(elemento);
+            const avviso = RicollegaEsiti.messaggioPerElemento(elemento, paginaDelBox);
             if (avviso != null) {
                 messaggi.push(avviso);
             }
