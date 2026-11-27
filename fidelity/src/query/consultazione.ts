@@ -1,4 +1,4 @@
-import { useQuery, keepPreviousData, type QueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, keepPreviousData, type InfiniteData, type QueryClient } from "@tanstack/react-query";
 import {
   PERCORSO_CONSULTAZIONE,
   percorsoPromozioneVolantiniConsultazione,
@@ -116,16 +116,50 @@ const STALE_VISTE = 60 * 1000;
 const percorsoPromoPop = (idPromo: string | undefined) =>
   `${PERCORSO_CONSULTAZIONE}/pop/promozioni/${encodeURIComponent(idPromo ?? "")}`;
 
-/** Volantini pubblicati del periodo per promozione, filtrati e paginati dal server. */
-export const usePromozioniVolantiniConsultazione = (filtri: FiltriPromozioniVolantiniConsultazione) =>
-  useQuery({
+/** Promozioni chieste al server a ogni gruppo dello scorrimento continuo delle viste Volantini. */
+export const DIMENSIONE_GRUPPO_PROMOZIONI_VOLANTINI = 12;
+
+type FiltriGruppoPromozioniVolantini = Omit<FiltriPromozioniVolantiniConsultazione, "pagina" | "dimensione">;
+
+/**
+ * I gruppi arrivati in un'unica pagina: vetrina, opzioni dei filtri e riepilogo sono del primo
+ * gruppo, le promozioni sono tutte quelle caricate, una volta sola anche se fra un gruppo e l'altro
+ * l'elenco si e' spostato (una promo archiviata nel frattempo).
+ */
+export const unisciGruppiPromozioniVolantini = (gruppi: InfiniteData<PaginaPromozioniVolantiniConsultazione, number>): PaginaPromozioniVolantiniConsultazione => {
+  const viste = new Set<string>();
+  const promozioni = gruppi.pages
+    .flatMap((gruppo) => gruppo.promozioni)
+    .filter((promozione) => !viste.has(promozione.promo.id) && viste.add(promozione.promo.id));
+  const ultimo = gruppi.pages[gruppi.pages.length - 1];
+  return { ...gruppi.pages[0], pagina: ultimo.pagina, totale: ultimo.totale, promozioni };
+};
+
+/**
+ * Volantini pubblicati del periodo per promozione, filtrati dal server e caricati a gruppi: ogni
+ * gruppo nuovo si accoda ai precedenti (`data.promozioni` e' l'elenco caricato finora) e la vista
+ * lo chiede con `fetchNextPage` quando serve; cambiando filtro si riparte dal primo gruppo.
+ */
+export const usePromozioniVolantiniConsultazione = (filtri: FiltriGruppoPromozioniVolantini) =>
+  useInfiniteQuery({
     queryKey: [CHIAVE_CONSULTAZIONE, "volantini", "promozioni", filtri],
-    queryFn: () => ServerCall.get<PaginaPromozioniVolantiniConsultazione>(
-      `${PERCORSO_CONSULTAZIONE}/volantini/promozioni?${parametriMateriali({ ...filtri })}`
-    ),
-    // Cambiando pagina o filtro restano le promo precedenti finché arrivano le nuove; mai quelle di un altro periodo
+    initialPageParam: 1,
+    queryFn: ({ pageParam }) =>
+      ServerCall.get<PaginaPromozioniVolantiniConsultazione>(
+        `${PERCORSO_CONSULTAZIONE}/volantini/promozioni?${parametriMateriali({
+          ...filtri,
+          pagina: pageParam,
+          dimensione: DIMENSIONE_GRUPPO_PROMOZIONI_VOLANTINI,
+        })}`
+      ),
+    getNextPageParam: (ultimo, tutti) =>
+      ultimo.promozioni.length > 0 && tutti.reduce((somma, gruppo) => somma + gruppo.promozioni.length, 0) < ultimo.totale
+        ? tutti.length + 1
+        : undefined,
+    select: unisciGruppiPromozioniVolantini,
+    // Cambiando filtro restano le promo precedenti finché arrivano le nuove; mai quelle di un altro periodo
     placeholderData: (precedenti, queryPrecedente) =>
-      (queryPrecedente?.queryKey[3] as FiltriPromozioniVolantiniConsultazione | undefined)?.periodo === filtri.periodo
+      (queryPrecedente?.queryKey[3] as FiltriGruppoPromozioniVolantini | undefined)?.periodo === filtri.periodo
         ? precedenti
         : undefined,
     staleTime: STALE_VISTE,

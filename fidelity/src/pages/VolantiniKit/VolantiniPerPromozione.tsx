@@ -5,7 +5,6 @@ import { FormSelect } from "@/components/Base/Form";
 import Lucide from "@/components/Base/Lucide";
 import PageError from "@/components/Base/PageError";
 import Pagina from "@/components/Base/Pagina";
-import PaginazioneTabella from "@/components/Base/PaginazioneTabella";
 import Sezione from "@/components/Base/Sezione";
 import Skeleton from "@/components/Base/Skeleton";
 import EmptyState from "@/components/EmptyState";
@@ -22,7 +21,6 @@ import type {
   Riferimento,
   RiepilogoPeriodoVolantiniConsultazione,
 } from "../../../lib/consultazione/tipi";
-import { DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI } from "../../../lib/materiali/tipi";
 import CardPromozioneVolantini from "./CardPromozioneVolantini";
 import { POSTI_COLLAGE } from "./collage";
 import { meseDiInizio, plurale } from "./testi";
@@ -43,9 +41,6 @@ const PERIODO_VUOTO: Readonly<Record<PeriodoConsultazione, { titolo: string; des
     descrizione: "Le promozioni con volantini pubblicati compaiono qui quando vengono archiviate.",
   },
 };
-
-const DIMENSIONI_PAGINA = [...DIMENSIONI_PAGINA_PROMOZIONI_VOLANTINI];
-const DIMENSIONE_PREDEFINITA = DIMENSIONI_PAGINA[0];
 
 const PARAMETRI_FILTRO = ["cerca", "promo", "area", "canale", "anno"] as const;
 
@@ -228,6 +223,63 @@ function ElencoSchede({
   );
 }
 
+/**
+ * Fine dell'elenco: finché ci sono altre promozioni, arrivando in prossimità di questo punto parte
+ * il gruppo successivo; il comando fa lo stesso per chi non scorre (tastiera) e dopo un errore.
+ * Il controllo riparte a ogni gruppo accodato: se il punto è ancora in vista, il gruppo dopo si chiede subito.
+ */
+function ContinuaElenco({
+  ancora,
+  caricando,
+  errore,
+  caricate,
+  onCarica,
+}: {
+  ancora: boolean;
+  caricando: boolean;
+  errore: string | null;
+  caricate: number;
+  onCarica: () => void;
+}) {
+  const fine = useRef<HTMLDivElement>(null);
+  const daCaricare = useRef(onCarica);
+  daCaricare.current = onCarica;
+  const attivo = ancora && !caricando && !errore;
+
+  useEffect(() => {
+    const punto = fine.current;
+    if (!attivo || !punto || typeof IntersectionObserver === "undefined") return;
+    const osservatore = new IntersectionObserver(
+      (voci) => {
+        if (voci.some((voce) => voce.isIntersecting)) daCaricare.current();
+      },
+      { rootMargin: "0px 0px 400px 0px" }
+    );
+    osservatore.observe(punto);
+    return () => osservatore.disconnect();
+  }, [attivo, caricate]);
+
+  if (!ancora) return null;
+  return (
+    <div ref={fine} className="flex flex-col items-center gap-2 px-5 pb-6 pt-2">
+      {errore && (
+        <p role="alert" className="text-sm text-danger">
+          {errore}
+        </p>
+      )}
+      {caricando ? (
+        <p role="status" className="text-sm text-slate-500 dark:text-slate-400">
+          Caricamento delle altre promozioni…
+        </p>
+      ) : (
+        <Button type="button" variant="outline-secondary" size="sm" onClick={onCarica}>
+          {errore ? "Riprova" : "Mostra altre promozioni"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export interface VolantiniPerPromozioneProps {
   periodo: PeriodoConsultazione;
   titolo: string;
@@ -251,19 +303,17 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
   // L'anno filtra solo lo Storico: le promo attive e prossime sono quelle di adesso
   const conFiltroAnno = periodo === "storico";
   const anno = conFiltroAnno ? annoDa(parametri.get("anno")) : undefined;
-  const pagina = Math.max(1, Math.trunc(Number(parametri.get("pagina"))) || 1);
-  const dimensioneLetta = Number(parametri.get("dimensione"));
-  const dimensione = DIMENSIONI_PAGINA.includes(dimensioneLetta) ? dimensioneLetta : DIMENSIONE_PREDEFINITA;
 
   const conFiltri = Boolean(cerca || idPromo || idArea || idCanale || anno);
 
-  // Ogni filtro nuovo riparte dalla prima pagina
-  const filtra = (chiave: (typeof PARAMETRI_FILTRO)[number], valore: string) => aggiorna({ [chiave]: valore, pagina: null });
+  // Ogni filtro nuovo riparte dal primo gruppo di promozioni; un ?pagina= o ?dimensione= di un vecchio indirizzo si toglie
+  const filtra = (chiave: (typeof PARAMETRI_FILTRO)[number], valore: string) =>
+    aggiorna({ [chiave]: valore, pagina: null, dimensione: null });
   const [testoRicerca, setTestoRicerca] = useRicercaDifferita(cerca, (testo) => filtra("cerca", testo));
 
   const azzeraFiltri = () => {
     setTestoRicerca("");
-    aggiorna({ ...Object.fromEntries(PARAMETRI_FILTRO.map((chiave) => [chiave, null])), pagina: null });
+    aggiorna({ ...Object.fromEntries(PARAMETRI_FILTRO.map((chiave) => [chiave, null])), pagina: null, dimensione: null });
   };
 
   const query = usePromozioniVolantiniConsultazione({
@@ -273,20 +323,17 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
     idArea: idArea || undefined,
     idCanale: idCanale || undefined,
     anno,
-    pagina,
-    dimensione,
   });
   const dati = query.data;
   // La vetrina è del periodo senza filtri: con un filtro non si mostra, neppure mentre arrivano i
   // dati filtrati. Lo Storico non ce l'ha: tutte le promozioni concluse stanno fra le schede
   const vetrina = conFiltri || periodo === "storico" ? null : (dati?.vetrina ?? null);
 
-  // Una pagina oltre l'ultima (indirizzo vecchio, promo archiviate nel frattempo) torna alla prima
+  // Il vecchio indirizzo con la pagina (?pagina=, ?dimensione=): lo scorrimento continuo non li usa
+  const conParametriDiPagina = parametri.has("pagina") || parametri.has("dimensione");
   useEffect(() => {
-    if (dati && !query.isPlaceholderData && dati.promozioni.length === 0 && dati.totale > 0 && pagina > 1) {
-      aggiorna({ pagina: null });
-    }
-  }, [dati, query.isPlaceholderData, pagina, aggiorna]);
+    if (conParametriDiPagina) aggiorna({ pagina: null, dimensione: null });
+  }, [conParametriDiPagina, aggiorna]);
 
   // I filtri sono incrociati: il valore scelto può non avere più volantini con gli altri filtri e
   // sparire dalle opzioni. Resta nella tendina, con l'ultimo nome visto
@@ -310,10 +357,12 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
     return anno !== undefined && !anni.includes(anno) ? [...anni, anno].sort((a, b) => b - a) : anni;
   }, [dati?.opzioni.anni, anno]);
 
-  const conElenco = Boolean(dati && !query.isError && dati.totale > 0);
+  // Un gruppo successivo che non arriva non cancella l'elenco: l'errore sta sotto le schede
+  const erroreElenco = query.isError && !query.isFetchNextPageError;
+  const conElenco = Boolean(dati && !erroreElenco && dati.totale > 0);
 
   const conteggio = (() => {
-    if (!dati) return query.isError ? null : "Caricamento delle promozioni…";
+    if (!dati) return erroreElenco ? null : "Caricamento delle promozioni…";
     if (dati.totale === 0) {
       // Solo la promo in vetrina: non c'è un elenco da contare
       if (vetrina) return null;
@@ -324,7 +373,7 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
   })();
 
   const contenuto = (() => {
-    if (query.isError) {
+    if (erroreElenco) {
       return (
         <div className="p-5">
           <PageError
@@ -374,7 +423,7 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
 
   // Il riepilogo è del periodo senza filtri; con il periodo vuoto lo dice già lo stato vuoto.
   // Il ?. tiene in piedi la pagina con un server non ancora aggiornato al contratto
-  const riepilogo = query.isError ? undefined : dati?.riepilogo;
+  const riepilogo = erroreElenco ? undefined : dati?.riepilogo;
   const intestazione = (
     <>
       <p>{descrizione}</p>
@@ -485,17 +534,13 @@ function VolantiniPerPromozione({ periodo, titolo, descrizione }: VolantiniPerPr
 
         {contenuto}
 
-        {dati && !query.isError && (
-          <PaginazioneTabella
-            totale={dati.totale}
-            pagina={pagina}
-            dimensionePagina={dimensione}
-            onCambiaPagina={(nuova) => aggiorna({ pagina: nuova === 1 ? null : nuova })}
-            onCambiaDimensione={(nuova) =>
-              aggiorna({ dimensione: nuova === DIMENSIONE_PREDEFINITA ? null : nuova, pagina: null })
-            }
-            opzioniDimensione={DIMENSIONI_PAGINA}
-            className="border-t border-dashed border-slate-200 dark:border-darkmode-400"
+        {dati && !erroreElenco && dati.totale > 0 && (
+          <ContinuaElenco
+            ancora={Boolean(query.hasNextPage)}
+            caricando={query.isFetchingNextPage}
+            errore={query.isFetchNextPageError ? query.error?.message || "Le altre promozioni non sono arrivate." : null}
+            caricate={dati.promozioni.length}
+            onCarica={() => void query.fetchNextPage()}
           />
         )}
       </Sezione>
