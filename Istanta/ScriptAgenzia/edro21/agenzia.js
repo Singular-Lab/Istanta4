@@ -1589,7 +1589,7 @@ class Agenzia extends IAgenzia {
         return true;
     }
 
-    /// TASK-c4fdc17b: le opzioni d'importazione che Edro21 non usa: 1, "Salva" senza report.
+    /// TASK-c4fdc17b: le opzioni d'importazione che Edro21 non usa: nessuna, ha anche "Salva" senza report.
     getOpzioniImportazioneEscluse() {
         return [];
     }
