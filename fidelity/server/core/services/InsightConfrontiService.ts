@@ -30,6 +30,7 @@ import { opzioniDellAgenzia } from '../utils/insightAgenzia';
 import { regoleMenaboDa } from '../utils/regoleMenabo';
 import type { RegolaMenabo } from '../../../lib/impostazioniGdo/tipi';
 import { type OpzioniInsight, sezioniInsight } from '../utils/insightVolantino';
+import { letturaReferenza as letturaDichiarata, type LetturaReferenza, type LetturaReferenzaAgenzia } from '../agenzia_lib/lettura-referenza';
 import { DESCRIZIONE_ASSENTE, leggiReferenza, type RigaReferenza, scontoDaiPrezzi } from '../utils/referenzaStampata';
 import { type FonteRepartiGdo, SENZA_REPARTI_GDO } from '../utils/repartiGdo';
 import { urlFotoOlimpo } from '../utils/urlOlimpo';
@@ -275,6 +276,7 @@ export function limitaTappe(tappe: readonly TappaProdotto[], massimo = MAX_TAPPE
 
 export class InsightConfrontiService implements IInsightConfrontiService {
   private readonly riepiloghi: AnalisiKitService;
+  private readonly lettura: LetturaReferenza;
 
   constructor(
     private readonly repository: IInsightConfrontiRepository,
@@ -282,8 +284,11 @@ export class InsightConfrontiService implements IInsightConfrontiService {
     private readonly config: FonteConfigInsightGdo,
     private readonly letture: LettureKitInsight = LETTURE_PREDEFINITE,
     private readonly reparti: FonteRepartiGdo = SENZA_REPARTI_GDO,
+    /** I nomi di prezzo, barrato e sconto dichiarati dalla libreria agenzia (letturaReferenza); senza, lo standard. */
+    lettura?: LetturaReferenzaAgenzia,
   ) {
-    this.riepiloghi = new AnalisiKitService(analisi, 'Insight volantino');
+    this.lettura = letturaDichiarata(lettura);
+    this.riepiloghi = new AnalisiKitService(analisi, 'Insight volantino', lettura);
   }
 
   // ─── Kit e config ──────────────────────────────────────────────────
@@ -303,7 +308,7 @@ export class InsightConfrontiService implements IInsightConfrontiService {
 
   private async leggiKit(kit: KitInsight, contesto: ContestoConfig): Promise<KitLetto> {
     const [righe, pdf] = await Promise.all([this.letture.righeDelKit(kit.id), this.letture.pdfDelKit(kit.id)]);
-    const box = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
+    const box = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico, lettura: this.lettura })));
     return { kit, pdf, box, opzioni: opzioniDelKit(kit, righe, box, pdf, contesto) };
   }
 
@@ -345,7 +350,7 @@ export class InsightConfrontiService implements IInsightConfrontiService {
     // Prima i riepiloghi di tutti (calcolati e salvati se mancano), poi solo il prodotto in ognuno
     const [, righe] = await Promise.all([this.riepiloghi.aggregati(idVolantini), this.letture.righeDelKit(kit.id)]);
     const presenze = await this.analisi.presenzeProdotto(idVolantini, chiave);
-    const nelKit = trovaNeiBox(chiave, boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico }))));
+    const nelKit = trovaNeiBox(chiave, boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico, lettura: this.lettura }))));
 
     const tutte = volantini.flatMap((volantino): TappaProdotto[] => {
       const prodotto = presenze.get(volantino.id);

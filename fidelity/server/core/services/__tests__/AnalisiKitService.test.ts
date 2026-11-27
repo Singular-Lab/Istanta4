@@ -126,6 +126,17 @@ describe('lettura delle referenze dei kit', () => {
     expect(ultimaModifica([])).toBeNull();
   });
 
+  it('i nomi dichiarati dalla libreria agenzia decidono quale riquadro e\' lo sconto', () => {
+    const campo = (nome: string, valore: string) => ({ label_name: nome, labelName: nome, paragraph_name: '', paragraphName: '', content: valore });
+    const conRiquadri = riga(kit(1), 'S', {
+      compiled_fields: [campo('prezzo_offerta', '€ 3,00'), campo('sconto_speciale', '25')],
+      data_fields: { codice_referenza: 'S', descrizione_uno: 'Prodotto S' },
+    });
+
+    expect(leggiReferenzeKit([conRiquadri])[0].sconto).toBeNull();
+    expect(leggiReferenzeKit([conRiquadri], { etichetteSconto: ['sconto_speciale'] })[0].sconto).toBe(25);
+  });
+
   it('le chiavi dei prodotti valide sono quelle di chiaveProdotto', () => {
     expect(CHIAVE_PRODOTTO.test('c-8001234')).toBe(true);
     expect(CHIAVE_PRODOTTO.test('d-TW96emFyZWxsYXxHcmFuYXJvbG98MTI1IGc')).toBe(true);

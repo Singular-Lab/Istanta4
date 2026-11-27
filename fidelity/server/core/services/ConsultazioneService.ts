@@ -95,6 +95,7 @@ import type {
   RigaVarianteVolantino,
 } from '../repositories/MaterialiRepository';
 import { boxDelKit } from '../utils/analisiKit';
+import { letturaReferenza as letturaDichiarata } from '../agenzia_lib/lettura-referenza';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import { sezioniInsight } from '../utils/insightVolantino';
 import { aggregaPromozioneVolantini, type KitConInsight } from '../utils/promozioneVolantini';
@@ -461,7 +462,7 @@ export class ConsultazioneService implements IConsultazioneService {
     // Loghi delle insegne (Impostazioni GDO) accanto ai nomi delle insegne del dettaglio della promozione
     private readonly loghiInsegne: FonteLoghiInsegne = loghiInsegneDaConfigurazione,
     // Linee del distributore e ruoli dei prodotti dell'assortimento, come negli insight del volantino
-    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino' | 'codiceIniziativaPromo'> = {},
+    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino' | 'codiceIniziativaPromo' | 'letturaReferenza'> = {},
     // Insight dei kit gia' calcolati (Redis): null = si calcolano sempre, come senza Redis
     private readonly cacheInsight: CacheConsultazione | null = CACHE_CONSULTAZIONE_REDIS
   ) { }
@@ -771,7 +772,7 @@ export class ConsultazioneService implements IConsultazioneService {
       this.lettureInsight.righeDelKit(kit.id),
       insieme ? Promise.resolve(insieme[1].get(kit.id) ?? insieme[1].get(chiaveKit) ?? null) : this.lettureInsight.pdfDelKit(kit.id),
     ]);
-    const boxKit = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico })));
+    const boxKit = boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico, lettura: letturaDichiarata(this.agenziaLib.letturaReferenza) })));
     const { sintesi, box } = sezioniInsight(boxKit, opzioniDelKit(kit, righe, boxKit, pdf, contesto, this.agenziaLib.insightVolantino));
     if (chiave && this.cacheInsight) void this.cacheInsight.scrivi(chiave, { sintesi, box }, DURATA_CACHE_INSIGHT_KIT_SECONDI).catch(() => undefined);
     return { variante, sintesi, box };

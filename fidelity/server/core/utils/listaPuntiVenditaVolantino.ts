@@ -64,8 +64,12 @@ const FASCIA_ORARIA = /\b\d{1,2}[.:]\d{2}\s*[-–]\s*\d{1,2}(?:[.:]\d{2})?\b/;
 /** Titoli del riquadro ("PUNTI VENDITA ADERENTI", "Offerta valida dal ... nei punti vendita"). */
 const TITOLO = /\bPUNT[OI]\s+VENDITA\b|\bNEGOZI\b|\bADERENTI\b|\bVALID[AEIO]\b|\bOFFERT[AE]\b|\bELENCO\b|\bINDIRIZZI\b/i;
 const CONTATTI = /@|\bwww\.|https?:/i;
-/** Intestazioni che dicono l'insegna e non la citta': non danno la localita' alle voci che seguono. */
-const INSEGNA = /\b(?:CONAD|SUPERSTORE|SUPERMERCAT\w*|IPERMERCAT\w*|IPER|MARKET|MINIMARKET|DISCOUNT|CITY|SAPORI)\b/i;
+/**
+ * Intestazioni che dicono l'insegna e non la citta': non danno la localita' alle voci che seguono.
+ * Qui solo le parole generiche; le insegne di un cliente le dichiara la sua libreria agenzia
+ * (agenzia_lib/types.ts, insegneListaPuntiVendita) e arrivano come `insegna`.
+ */
+export const INSEGNA_GENERICA = /\b(?:SUPERMERCAT\w*|IPERMERCAT\w*|MARKET|MINIMARKET|DISCOUNT)\b/i;
 /** La sigla della provincia dopo la citta': "PRA (GE)". */
 const SIGLA_PROVINCIA = /\s*\(([A-Za-z]{2})\)\s*$/;
 
@@ -215,9 +219,9 @@ function intestazioneGeografica(riga: string, contesto: Contesto): boolean {
 }
 
 /** Intestazione di citta' o di insegna ("BOLOGNA", "CONAD CITY", "FIRENZE - CONAD CITY"): l'insegna non e' una localita'. */
-function intestazione(segmenti: string[], contesto: Contesto): void {
+function intestazione(segmenti: string[], contesto: Contesto, insegna: RegExp): void {
   contesto.gruppo = segmenti.join(' - ');
-  const citta = segmenti.find(segmento => !INSEGNA.test(segmento));
+  const citta = segmenti.find(segmento => !insegna.test(segmento));
   if (citta) contesto.localita = citta;
 }
 
@@ -236,7 +240,7 @@ function senzaDoppioni(voci: Voce[]): VoceListaPuntiVendita[] {
 }
 
 /** Le voci della lista dei punti vendita di un volantino, nell'ordine in cui sono stampate. */
-export function leggiListaPuntiVendita(lista: unknown): VoceListaPuntiVendita[] {
+export function leggiListaPuntiVendita(lista: unknown, insegna: RegExp = INSEGNA_GENERICA): VoceListaPuntiVendita[] {
   if (typeof lista !== 'string' || lista.trim() === '') return [];
   const contesto: Contesto = { regione: null, provincia: null, gruppo: null, localita: null };
   const voci: Voce[] = [];
@@ -266,10 +270,10 @@ export function leggiListaPuntiVendita(lista: unknown): VoceListaPuntiVendita[] 
         segmenti.forEach(segmento => intestazioneGeografica(segmento, contesto));
         continue;
       }
-      if (segmenti.length === 1 || segmenti.some(segmento => INSEGNA.test(segmento))) {
+      if (segmenti.length === 1 || segmenti.some(segmento => insegna.test(segmento))) {
         // Riga breve senza numeri ne' vie: intestazione di citta' o di insegna. Le frasi lunghe sono note.
         const parole = segmenti.join(' ').split(' ').length;
-        if (parole <= 6 && segmenti.join(' - ').length <= 50) intestazione(segmenti, contesto);
+        if (parole <= 6 && segmenti.join(' - ').length <= 50) intestazione(segmenti, contesto, insegna);
         continue;
       }
     }
@@ -292,7 +296,7 @@ interface PuntoVenditaPvData {
  * Le voci di `pvData.gruppi`, se un plugin le manda gia' divise (oggi non succede): i campi
  * strutturati valgono piu' del testo, che serve solo a ricavare quelli che mancano.
  */
-export function vociDaPvData(pvData: unknown): VoceListaPuntiVendita[] {
+export function vociDaPvData(pvData: unknown, insegna: RegExp = INSEGNA_GENERICA): VoceListaPuntiVendita[] {
   const gruppi = pvData && typeof pvData === 'object' ? (pvData as { gruppi?: unknown }).gruppi : undefined;
   if (!Array.isArray(gruppi)) return [];
   const contesto: Contesto = { regione: null, provincia: null, gruppo: null, localita: null };
@@ -301,7 +305,7 @@ export function vociDaPvData(pvData: unknown): VoceListaPuntiVendita[] {
     if (!gruppo || typeof gruppo !== 'object') continue;
     const { intestazione: titolo, puntiVendita } = gruppo as { intestazione?: unknown; puntiVendita?: unknown };
     const testata = testo(titolo);
-    if (testata && !intestazioneGeografica(testata, contesto)) intestazione([testata], contesto);
+    if (testata && !intestazioneGeografica(testata, contesto)) intestazione([testata], contesto, insegna);
     if (!Array.isArray(puntiVendita)) continue;
     for (const elemento of puntiVendita) {
       if (!elemento || typeof elemento !== 'object') continue;
@@ -327,17 +331,17 @@ export function vociDaPvData(pvData: unknown): VoceListaPuntiVendita[] {
  * Le voci della lista di un volantino, da un payload del Plugin o da un suo export: i gruppi
  * strutturati se ci sono, altrimenti il testo `pv` (o, in mancanza, quello di pvData).
  */
-export function vociDelVolantino(payload: { pv?: unknown; pvData?: unknown }): VoceListaPuntiVendita[] {
-  const daGruppi = vociDaPvData(payload.pvData);
+export function vociDelVolantino(payload: { pv?: unknown; pvData?: unknown }, insegna: RegExp = INSEGNA_GENERICA): VoceListaPuntiVendita[] {
+  const daGruppi = vociDaPvData(payload.pvData, insegna);
   if (daGruppi.length > 0) return daGruppi;
-  if (typeof payload.pv === 'string' && payload.pv.trim() !== '') return leggiListaPuntiVendita(payload.pv);
+  if (typeof payload.pv === 'string' && payload.pv.trim() !== '') return leggiListaPuntiVendita(payload.pv, insegna);
   const pvData = payload.pvData && typeof payload.pvData === 'object' ? payload.pvData as { testo?: unknown; paragrafi?: unknown } : {};
-  if (typeof pvData.testo === 'string' && pvData.testo.trim() !== '') return leggiListaPuntiVendita(pvData.testo);
+  if (typeof pvData.testo === 'string' && pvData.testo.trim() !== '') return leggiListaPuntiVendita(pvData.testo, insegna);
   if (Array.isArray(pvData.paragrafi)) {
     const paragrafi = pvData.paragrafi
       .map(paragrafo => (paragrafo && typeof paragrafo === 'object' ? testo((paragrafo as { text?: unknown }).text) : null))
       .filter((paragrafo): paragrafo is string => paragrafo !== null);
-    return leggiListaPuntiVendita(paragrafi.join('\r'));
+    return leggiListaPuntiVendita(paragrafi.join('\r'), insegna);
   }
   return [];
 }

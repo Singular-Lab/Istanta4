@@ -4,6 +4,7 @@ import { isAppError, wrapDatabaseError, wrapNotFoundError } from '../../../lib/e
 import type { RepartoInsight } from '../../../lib/insightVolantino/tipi';
 import { FileItemKit } from '../../../lib/types';
 import type { AmbitoGdo } from '../accessi/contestoAccesso';
+import { letturaReferenza as letturaDichiarata } from '../agenzia_lib/lettura-referenza';
 import type { IAgenziaLib } from '../agenzia_lib/types';
 import type { ICatalogoLoghiService, LogoDelCatalogo } from '../interfaces/ICatalogoLoghiService';
 import { log } from '../logger';
@@ -92,7 +93,7 @@ export class VolantinoService implements IVolantinoService {
     private readonly configService: IConfigService,
     // Reparti della GDO, linee del distributore e catalogo dei loghi: il container li passa, i test possono non farlo
     private readonly reparti: FonteRepartiGdo = SENZA_REPARTI_GDO,
-    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino'> = {},
+    private readonly agenziaLib: Pick<IAgenziaLib, 'insightVolantino' | 'letturaReferenza'> = {},
     private readonly catalogoLoghi: Pick<ICatalogoLoghiService, 'catalogo'> | null = null,
     // Insight di un kit gia' calcolati (Redis): null = si calcolano sempre, come senza Redis
     private readonly cacheInsight: CacheConsultazione | null = CACHE_CONSULTAZIONE_REDIS
@@ -403,7 +404,7 @@ export class VolantinoService implements IVolantinoService {
       });
       const catalogo = dellAgenzia.lineeDistributore ? await this.catalogo(richiesta) : new Map<string, LogoDelCatalogo>();
       const sezioni = sezioniInsight(
-        boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico }))),
+        boxDelKit(righe.map(riga => leggiReferenza(riga, { storico: kit.storico, lettura: letturaDichiarata(this.agenziaLib.letturaReferenza) }))),
         {
           // Le pagine come nei confronti (InsightConfrontiService.pagineDelKit): quelle del PDF in Olimpo,
           // o fino all'ultima pagina con un box. Cosi' la sintesi e il confronto con l'edizione
